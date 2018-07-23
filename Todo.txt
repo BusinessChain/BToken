@@ -1,0 +1,14 @@
+﻿- Exception Handling bei parsen von Peer messages. Rejection Message Erzeugen bei parser fehler. penalty points hinzufügen, damit nicht endlose rejection loops.
+- Bei jeder Message überprüfen dass Payload nicht länger ist als erwartet.
+- Alles muss thread safe sein
+- Konsensus Regeln wie UnixTime < 2h in Header File auslagern.
+- Alle nested Klassen welche nicht private sind über Namespace organisieren.
+- Header Chain muss auch auf festplatte, damit beim booten vorhanden.
+- Alert werfen wenn lokale zeit kleiner als medianPastTime ist.
+
+- Namespacing wird verwendet, wenn man dem Programmierer zeigen will,
+  ob eine bestimmte Objekt- oder Funktionsgruppe im vorliegenden Code verwendet wird oder nicht. Damit sehe ich unmittelbar, ob im vorliegenden 
+  File z.B. Kryptographie angewendet wird, oder Networking. Für einen Namespace sollte es einen separaten Ordner geben in der Struktur,
+  auf derselben Ebene der höchstwertigen Debendancy (nicht Iinerhalb der Dependancy).
+
+- Leute zahlen bei Hypo Lenzi auf ein Konto ein, und erhalten dabei ein Token der Hypo Lenzi auf einen schweizerFranken redeem.
