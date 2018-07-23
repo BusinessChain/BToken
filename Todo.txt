@@ -6,9 +6,5 @@
 - Header Chain muss auch auf festplatte, damit beim booten vorhanden.
 - Alert werfen wenn lokale zeit kleiner als medianPastTime ist.
 
-- Namespacing wird verwendet, wenn man dem Programmierer zeigen will,
-  ob eine bestimmte Objekt- oder Funktionsgruppe im vorliegenden Code verwendet wird oder nicht. Damit sehe ich unmittelbar, ob im vorliegenden 
-  File z.B. Kryptographie angewendet wird, oder Networking. Für einen Namespace sollte es einen separaten Ordner geben in der Struktur,
-  auf derselben Ebene der höchstwertigen Debendancy (nicht Iinerhalb der Dependancy).
 
 - Leute zahlen bei Hypo Lenzi auf ein Konto ein, und erhalten dabei ein Token der Hypo Lenzi auf einen schweizerFranken redeem.
