@@ -118,6 +118,9 @@ namespace BToken.Chaining
       }
     }
 
-
+    public uint getBestHeight()
+    {
+      return getHeight();
+    }
   }
 }

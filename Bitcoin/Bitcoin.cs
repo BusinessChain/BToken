@@ -21,17 +21,13 @@ namespace BToken
     #region GenesisBlock
     static readonly ChainBlock GenesisBlock = new ChainBlock(
       new ChainHeader(
-        0x10000000,
-        new UInt256("0000000000000000000000000000000000000000000000000000000000000000"),
-        new UInt256("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"),
-        1231006505,
         new UInt256("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"),
         null,
         0,
         new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000"),
         1,
-        1),
-      null,
+        1,
+        1231006505),
       new List<TX>());
     #endregion
 
@@ -48,12 +44,7 @@ namespace BToken
     {
       await NetworkAdapter.startAsync(Blockchain.getBestHeight());
       await Blockchain.startAsync();
-      await UTXO.startAsync().ConfigureAwait(false);
-
-      while (true)
-      {
-        UTXOMessage nextMessageFromUTXO = await UTXO.readMessageAsync();
-      }
+      await UTXO.startAsync();
     }
   }
 }

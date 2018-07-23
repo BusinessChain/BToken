@@ -52,6 +52,6 @@ namespace BToken.Accounting
     //  }
     //}
 
-    
+
   }
 }

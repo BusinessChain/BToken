@@ -42,7 +42,7 @@ namespace BToken.Networking
         try
         {
           await connectTCPClient().ConfigureAwait(false);
-          await handshakeAsync(blockheightLocal, cancellationTimeout).ConfigureAwait(false);
+          await handshakeAsync(blockheightLocal).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -55,7 +55,7 @@ namespace BToken.Networking
         await TCPClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port).ConfigureAwait(false);
         MessageStreamer = new MessageStreamer(TCPClient.GetStream(), cts.Token);
       }
-      async Task handshakeAsync(uint blockheightLocal, CancellationToken cancellation)
+      async Task handshakeAsync(uint blockheightLocal)
       {
         VersionMessage versionMessageLocal = new VersionMessage(blockheightLocal);
         await MessageStreamer.WriteAsync(versionMessageLocal).ConfigureAwait(false);

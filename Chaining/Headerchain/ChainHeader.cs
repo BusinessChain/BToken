@@ -10,7 +10,6 @@ namespace BToken.Chaining
     NetworkHeader NetworkHeader;
 
     UInt256 Hash;
-
     uint Height;
     public UInt256 Target { get; private set; }
     public double Difficulty { get; private set; }
