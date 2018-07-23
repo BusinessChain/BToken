@@ -62,7 +62,6 @@
   <ItemGroup>
     <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
-    <Compile Include="Chaining\Blockchain\MerkelGenerator.cs" />
     <Compile Include="Chaining\Blockchain\TX.cs" />
     <Compile Include="BFrancNode.cs" />
     <Compile Include="Chaining\ChainLink.cs" />
@@ -108,8 +107,7 @@
     <Compile Include="BTokenNode.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Accounting\UTXO\UTXO.cs" />
-    <Compile Include="Chaining\Stackchain\Stackchain.cs" />
+    <Compile Include="UTXO.cs" />
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>
