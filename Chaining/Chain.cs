@@ -39,7 +39,7 @@ namespace BToken.Chaining
     ChainLink getChainLinkPrevious(ChainLink chainLink)
     {
       resetProbes();
-      ChainLink chainLinkPrevious = getChainLink(chainLink.getHashPrevious());
+      ChainLink chainLinkPrevious = getChainLink(chainLink.HashPrevious);
 
       if (chainLinkPrevious == null)
       {
@@ -51,12 +51,9 @@ namespace BToken.Chaining
 
     public uint getHeight()
     {
-      return getChainLink().getHeight();
+      return Socket.ChainLink.Height;
     }
-    public ChainLink getChainLink()
-    {
-      return Socket.ChainLink;
-    }
+
     public ChainLink getChainLink(UInt256 hash)
     {
       ChainSocket socket = Socket;

@@ -6,12 +6,23 @@ namespace BToken.Chaining
 {
   abstract class ChainLink
   {
-    ChainLink ChainLinkPrevious;
-    public List<ChainLink> NextChainLinks { get; private set; } = new List<ChainLink>();
+    public UInt256 Hash { get; private set; }
+    public UInt256 HashPrevious { get; private set; }
+    public uint Height { get; private set; }
 
-    public ChainLink GetChainLink(UInt256 hash)
+    ChainLink ChainLinkPrevious;
+    List<ChainLink> NextChainLinks = new List<ChainLink>();
+
+    protected ChainLink() { }
+    protected ChainLink(UInt256 hash, UInt256 hashPrevious)
     {
-      return NextChainLinks.Find(c => c.getHash() == hash);
+      Hash = hash;
+      HashPrevious = hashPrevious;
+    }
+
+    public ChainLink GetNextChainLink(UInt256 hash)
+    {
+      return NextChainLinks.Find(c => c.Hash == hash);
     }
     public ChainLink getChainLinkPrevious()
     {
@@ -37,15 +48,16 @@ namespace BToken.Chaining
     }
     public bool isConnectedToNext(ChainLink chainLinkNext)
     {
-      return NextChainLinks.Any(c => c.getHash() == chainLinkNext.getHash());
+      return NextChainLinks.Any(c => c.Hash == chainLinkNext.Hash);
     }
     public virtual void connectToPrevious(ChainLink chainLinkPrevious)
     {
+      Height = Height + 1;
       ChainLinkPrevious = chainLinkPrevious;
     }
     public bool isGenesis()
     {
-      return getHeight() == 0;
+      return Height == 0;
     }
 
     public bool isStrongerThan(ChainLink chainLink)
@@ -59,9 +71,6 @@ namespace BToken.Chaining
     }
 
     public abstract void validate();
-    public abstract UInt256 getHashPrevious();
-    public abstract UInt256 getHash();
-    public abstract uint getHeight();
     public abstract double getAccumulatedDifficulty();
   }
 }

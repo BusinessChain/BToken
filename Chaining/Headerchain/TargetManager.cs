@@ -2,7 +2,7 @@
 
 namespace BToken.Chaining
 {
-  partial class ChainHeader
+  partial class ChainHeader : ChainLink
   {
     static class TargetManager
     {
@@ -16,7 +16,7 @@ namespace BToken.Chaining
 
       public static UInt256 getNextTarget(ChainHeader header)
       {
-        uint nextHeight = header.getHeight() + 1;
+        uint nextHeight = header.Height + 1;
 
         if ((nextHeight % RETARGETING_BLOCK_INTERVAL) != 0)
         {
@@ -25,7 +25,7 @@ namespace BToken.Chaining
 
         ChainHeader headerIntervalStart = header.getHeaderPrevious(RETARGETING_BLOCK_INTERVAL - 1);
 
-        ulong actualTimespan = limit(header.getUnixTimeSeconds() - headerIntervalStart.getUnixTimeSeconds());
+        ulong actualTimespan = limit(header.UnixTimeSeconds - headerIntervalStart.UnixTimeSeconds);
         return calculateTarget(header.Target, actualTimespan);
       }
       static ulong limit(ulong actualTimespan)

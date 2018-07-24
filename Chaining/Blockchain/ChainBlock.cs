@@ -30,28 +30,21 @@ namespace BToken.Chaining
 
       ChainBlock blockPrevious = (ChainBlock)chainLinkPrevious;
 
-      Header = blockPrevious.Header.GetNextHeader(getHash());
+      Header = blockPrevious.Header.GetNextHeader(Hash);
+    }
+    
+    public UInt64 getUnixTimeSeconds()
+    {
+      return Header.UnixTimeSeconds;
     }
 
-    public override UInt256 getHashPrevious()
-    {
-      return Header.getHashPrevious();
-    }
-    public override UInt256 getHash()
-    {
-      return Header.getHash();
-    }
-    public override uint getHeight()
-    {
-      return Header.getHeight();
-    }
     public override double getAccumulatedDifficulty()
     {
       return Header.getAccumulatedDifficulty();
     }
     public override void validate()
     {
-      if (!Header.getMerkleRootHash().isEqual(ComputeMerkleRootHash()))
+      if (!Header.MerkleRootHash.isEqual(ComputeMerkleRootHash()))
       {
         throw new ChainLinkException(this, ChainLinkCode.INVALID);
       }

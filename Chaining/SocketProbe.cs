@@ -19,12 +19,13 @@ namespace BToken.Chaining
 
         public SocketProbe(ChainSocket socket)
         {
+          Socket = socket;
           ChainLink = socket.ChainLink;
         }
 
         public UInt256 getHash()
         {
-          return ChainLink.getHash();
+          return ChainLink.Hash;
         }
         public bool isHash(UInt256 hash)
         {

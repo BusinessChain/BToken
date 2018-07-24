@@ -73,12 +73,12 @@ namespace BToken.Chaining
       {
         if(ex.HResult == (int)ChainLinkCode.DUPLICATE)
         {
-          NetworkAdapter.duplicateHash(header.getHash());
+          NetworkAdapter.duplicateHash(header.Hash);
         }
 
         if (ex.HResult == (int)ChainLinkCode.ORPHAN)
         {
-          NetworkAdapter.orphanHeaderHash(header.getHash());
+          NetworkAdapter.orphanHeaderHash(header.Hash);
         }
       }
     }

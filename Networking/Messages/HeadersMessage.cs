@@ -41,7 +41,7 @@ namespace BToken.Networking
       
       public bool attachesToHeaderLocator(IEnumerable<UInt256> headerLocator)
       {
-        return headerLocator.Any(h => h.isEqual(NetworkHeaders.First().PreviousHeaderHash));
+        return headerLocator.Any(h => h.isEqual(NetworkHeaders.First().HashPrevious));
       }
     }
   }

@@ -7,40 +7,46 @@ namespace BToken.Chaining
 {
   partial class ChainHeader : ChainLink
   {
-    NetworkHeader NetworkHeader;
+    public UInt64 UnixTimeSeconds { get; private set; }
+    public UInt256 MerkleRootHash { get; private set; }
 
-    UInt256 Hash;
-    uint Height;
     public UInt256 Target { get; private set; }
     public double Difficulty { get; private set; }
     double AccumulatedDifficulty;
-    public ulong MedianTimePast { get; private set; }
 
 
     public ChainHeader(
-      UInt256 headerHash,
-      ChainHeader previousHeader,
-      uint height,
+      UInt256 hash,
+      UInt256 hashPrevious,
       UInt256 target,
       double difficulty,
       double accumulatedDifficulty,
-      ulong medianTimePast)
+      UInt256 merkleRootHash,
+      UInt64 unixTimeSeconds)
+      : base
+      (
+        hash: hash,
+        hashPrevious: hashPrevious
+      )
     {
-      Hash = headerHash;
-      Height = height;
+      UnixTimeSeconds = unixTimeSeconds;
+      MerkleRootHash = merkleRootHash;
       Target = target;
       Difficulty = difficulty;
       AccumulatedDifficulty = accumulatedDifficulty;
-      MedianTimePast = medianTimePast;
     }
 
     public ChainHeader(NetworkHeader networkHeader)
+      : base
+      (
+          hash: calculateHash(networkHeader.getBytes()),
+          hashPrevious: networkHeader.HashPrevious
+      )
     {
-      NetworkHeader = networkHeader;
-
-      Hash = calculateHeaderHash(networkHeader.getBytes());
+      UnixTimeSeconds = networkHeader.UnixTimeSeconds;
+      MerkleRootHash = networkHeader.MerkleRootHash;
     }
-    static UInt256 calculateHeaderHash(byte[] headerBytes)
+    static UInt256 calculateHash(byte[] headerBytes)
     {
       byte[] hashBytes = Hashing.sha256d(headerBytes);
       return new UInt256(headerBytes);
@@ -52,21 +58,56 @@ namespace BToken.Chaining
 
       ChainHeader headerPrevious = (ChainHeader)chainLinkPrevious;
 
-      Height = headerPrevious.getHeight() + 1;
       Target = TargetManager.getNextTarget(headerPrevious);
       Difficulty = TargetManager.getDifficulty(Target);
       AccumulatedDifficulty = headerPrevious.getAccumulatedDifficulty() + Difficulty;
-      MedianTimePast = getMedianTimePast(headerPrevious);
     }
-    static ulong getMedianTimePast(ChainHeader header)
+
+    public ChainHeader GetNextHeader(UInt256 hash)
+    {
+      return (ChainHeader)GetNextChainLink(hash);
+    }
+    public ChainHeader getHeaderPrevious()
+    {
+      return getHeaderPrevious(0);
+    }
+    public ChainHeader getHeaderPrevious(uint depth)
+    {
+      return (ChainHeader)getChainLinkPrevious(depth);
+    }
+
+    public override double getAccumulatedDifficulty()
+    {
+      return AccumulatedDifficulty;
+    }
+    public override void validate()
+    {
+      if (Hash.isGreaterThan(Target))
+      {
+        throw new ChainLinkException(this, ChainLinkCode.INVALID);
+      }
+
+      if (UnixTimeSeconds <= getMedianTimePast())
+      {
+        throw new ChainLinkException(this, ChainLinkCode.INVALID);
+      }
+
+      if (isTimeTwoHoursPastLocalTime())
+      {
+        throw new ChainLinkException(this, ChainLinkCode.EXPIRED);
+      }
+    }
+    ulong getMedianTimePast()
     {
       const int MEDIAN_TIME_PAST = 11;
+
       List<ulong> timestampsPast = new List<ulong>();
+      ChainHeader header = getHeaderPrevious();
 
       int depth = 0;
       while (depth < MEDIAN_TIME_PAST)
       {
-        timestampsPast.Add(header.getUnixTimeSeconds());
+        timestampsPast.Add(header.UnixTimeSeconds);
 
         if (header.isGenesis())
         { break; }
@@ -79,65 +120,10 @@ namespace BToken.Chaining
 
       return timestampsPast[timestampsPast.Count / 2];
     }
-
-    public ChainHeader GetNextHeader(UInt256 hash)
-    {
-      return (ChainHeader)GetChainLink(hash);
-    }
-    public ChainHeader getHeaderPrevious()
-    {
-      return getHeaderPrevious(0);
-    }
-    public ChainHeader getHeaderPrevious(uint depth)
-    {
-      return (ChainHeader)getChainLinkPrevious(depth);
-    }
-    public UInt256 getMerkleRootHash()
-    {
-      return NetworkHeader.MerkleRootHash;
-    }
-    public UInt64 getUnixTimeSeconds()
-    {
-      return NetworkHeader.UnixTimeSeconds;
-    }
-
-    public override UInt256 getHashPrevious()
-    {
-      return NetworkHeader.PreviousHeaderHash;
-    }
-    public override UInt256 getHash()
-    {
-      return Hash;
-    }
-    public override uint getHeight()
-    {
-      return Height;
-    }
-    public override double getAccumulatedDifficulty()
-    {
-      return AccumulatedDifficulty;
-    }
-    public override void validate()
-    {
-      if (Hash.isGreaterThan(Target))
-      {
-        throw new ChainLinkException(this, ChainLinkCode.INVALID);
-      }
-
-      if (getUnixTimeSeconds() <= MedianTimePast)
-      {
-        throw new ChainLinkException(this, ChainLinkCode.INVALID);
-      }
-
-      if (isTimeTwoHoursPastLocalTime(getUnixTimeSeconds()))
-      {
-        throw new ChainLinkException(this, ChainLinkCode.EXPIRED);
-      }
-    }
-    static bool isTimeTwoHoursPastLocalTime(ulong time)
+    bool isTimeTwoHoursPastLocalTime()
     {
       const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-      return (long)time > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
+      return (long)UnixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
     }
 
   }
