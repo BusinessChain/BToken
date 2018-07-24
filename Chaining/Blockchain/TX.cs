@@ -10,6 +10,10 @@ namespace BToken.Chaining
 {
   class TX
   {
+    public TX()
+    {
+
+    }
     public TX(NetworkTX ntx)
     {
 

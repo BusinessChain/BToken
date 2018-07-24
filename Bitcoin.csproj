@@ -60,6 +60,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Bitcoin\BitcoinGenesisChainBlock.cs" />
     <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
     <Compile Include="Chaining\Blockchain\TX.cs" />
