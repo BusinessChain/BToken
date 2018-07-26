@@ -5,7 +5,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
 using System.Net;
 
@@ -21,7 +21,7 @@ namespace BToken
     private void startButton_Click(object sender, EventArgs e)
     {
       Bitcoin node = new Bitcoin();
-      
+      node.startAsync();
     }
   }
 }

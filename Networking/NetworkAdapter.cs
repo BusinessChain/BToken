@@ -12,39 +12,25 @@ namespace BToken.Networking
   {
     const uint MagicValue = 0xF9BEB4D9; // Bitcoin Main
     const uint MagicValueByteSize = 4;
-    const UInt16 PortLocal = 8333;
+    const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
     const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NETWORK;
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NONE; 
-    private static readonly IPAddress IPAddressLocal = IPAddress.Loopback.MapToIPv6();
     private static readonly UInt64 Nonce = createNonce();
-    const string UserAgent = "/bToken:0.0.0/";
+    const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x01;
 
-    List<IPEndPoint> PeerIPEndPoints = new List<IPEndPoint>();
-    List<Peer> PeerEndPoints = new List<Peer>();
-    List<Peer> PeersConnected = new List<Peer>();
+    Peer PeerEndPoint;
 
 
     public NetworkAdapter()
     {
-      generatePeerEndPoints();
-    }
-    void generatePeerEndPoints()
-    {
-      foreach (IPEndPoint peerIPEndPoint in PeerIPEndPoints)
-      {
-        Peer peer = new Peer(peerIPEndPoint, this);
-        PeerEndPoints.Add(peer);
-      }
+      PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("185.6.124.16"), 8333), this);
     }
 
     public async Task startAsync(uint blockheightLocal)
     {
-      IEnumerable<Task> startPeerTasksQuery = from p in PeerEndPoints select p.startAsync(blockheightLocal);
-      List<Task> startPeerTasks = startPeerTasksQuery.ToList();
-      Task startFirstPeerAsyncTask = await Task.WhenAny(startPeerTasks);
-      await startFirstPeerAsyncTask;
+      await PeerEndPoint.startAsync(blockheightLocal);
     }
 
     public BufferBlock<NetworkBlock> GetBlocks(IEnumerable<UInt256> headerHashes)
@@ -61,7 +47,8 @@ namespace BToken.Networking
     }
     Peer getPeerHighestChain()
     {
-      return PeersConnected.OrderBy(p => p.getChainHeight()).Last();
+      //return PeersConnected.OrderBy(p => p.getChainHeight()).Last();
+      return PeerEndPoint;
     }
 
     public void orphanHeaderHash(UInt256 hash)
@@ -87,15 +74,12 @@ namespace BToken.Networking
       CancellationTokenSource cts = new CancellationTokenSource();
       List<Task<NetworkMessage>> readPeerMessageTasks = new List<Task<NetworkMessage>>();
 
-      foreach (Peer peerConnected in PeersConnected)
-      {
-        Task<NetworkMessage> readPeerMessageTask = peerConnected.readMessageAsync(cts.Token);
+      Task<NetworkMessage> readPeerMessageTask = PeerEndPoint.readMessageAsync(cts.Token);
 
-        if (readPeerMessageTask.Status == TaskStatus.RanToCompletion)
-        {
-          cts.Cancel();
-          return readPeerMessageTask.Result;
-        }
+      if (readPeerMessageTask.Status == TaskStatus.RanToCompletion)
+      {
+        cts.Cancel();
+        return readPeerMessageTask.Result;
       }
 
       Task<NetworkMessage> readFirstPeerMessageTask = await Task.WhenAny(readPeerMessageTasks).ConfigureAwait(false);

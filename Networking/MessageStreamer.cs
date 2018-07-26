@@ -44,9 +44,9 @@ namespace BToken.Networking
       }
       void populateMagicBytes()
       {
-        for(int i = 0; i< MagicBytes.Length; i++)
+        for (int i = 0; i < MagicBytes.Length; i++)
         {
-          MagicBytes[i] = (byte)(MagicValue >> i);
+          MagicBytes[MagicBytes.Length - i - 1] = (byte)(MagicValue >> i * 8);
         }
       }
 
@@ -73,13 +73,13 @@ namespace BToken.Networking
 
       public async Task<NetworkMessage> ReadAsync()
       {
-        await syncStreamToMagicAsync().ConfigureAwait(false);
+        await syncStreamToMagicAsync();
 
-        await readBytesAsync(Header).ConfigureAwait(false);
+        await readBytesAsync(Header);
         getCommand();
         getPayloadLength();
 
-        await parseMessagePayload().ConfigureAwait(false);
+        await parseMessagePayload();
         verifyChecksum();
 
         return new NetworkMessage(Command, Payload);
@@ -91,7 +91,7 @@ namespace BToken.Networking
         {
           byte expectedByte = MagicBytes[i];
 
-          await readBytesAsync(bytes).ConfigureAwait(false);
+          await readBytesAsync(bytes);
 
           byte receivedByte = bytes[0];
           if (expectedByte != receivedByte)
@@ -107,7 +107,7 @@ namespace BToken.Networking
       }
       void getPayloadLength()
       {
-        uint PayloadLength = BitConverter.ToUInt32(Header, CommandSize);
+        PayloadLength = BitConverter.ToUInt32(Header, CommandSize);
 
         if (PayloadLength > 0x02000000)
         {
@@ -117,7 +117,7 @@ namespace BToken.Networking
       async Task parseMessagePayload()
       {
         Payload = new byte[(int)PayloadLength];
-        await readBytesAsync(Payload).ConfigureAwait(false);
+        await readBytesAsync(Payload);
       }
       void verifyChecksum()
       {
@@ -136,7 +136,7 @@ namespace BToken.Networking
 
         while (bytesToRead > 0)
         {
-          int chunkSize = await Stream.ReadAsync(buffer, offset, bytesToRead, CancellationToken).ConfigureAwait(false);
+          int chunkSize = await Stream.ReadAsync(buffer, offset, bytesToRead, CancellationToken);
 
           offset += chunkSize;
           bytesToRead -= chunkSize;

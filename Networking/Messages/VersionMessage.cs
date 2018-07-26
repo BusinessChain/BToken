@@ -86,8 +86,9 @@ namespace BToken.Networking
         UnixTimeSeconds = getUnixTimeSeconds();
         NetworkServicesRemote = (UInt64)NetworkServicesRemoteRequired;
         IPAddressRemote = IPAddress.Loopback.MapToIPv6();
-        IPAddressLocal = NetworkAdapter.IPAddressLocal;
-        PortLocal = NetworkAdapter.PortLocal;
+        PortRemote = NetworkAdapter.Port;
+        IPAddressLocal = IPAddress.Loopback.MapToIPv6();
+        PortLocal = NetworkAdapter.Port;
         Nonce = NetworkAdapter.Nonce;
         UserAgent = NetworkAdapter.UserAgent;
         BlockchainHeight = blockchainHeight;
@@ -104,10 +105,10 @@ namespace BToken.Networking
         versionPayload.AddRange(BitConverter.GetBytes(UnixTimeSeconds));
         versionPayload.AddRange(BitConverter.GetBytes(NetworkServicesRemote));
         versionPayload.AddRange(IPAddressRemote.GetAddressBytes());
-        versionPayload.AddRange(BitConverter.GetBytes(PortRemote));
+        versionPayload.AddRange(GetBytesBigEndian(PortRemote));
         versionPayload.AddRange(BitConverter.GetBytes(NetworkServicesLocal));
         versionPayload.AddRange(IPAddressLocal.GetAddressBytes());
-        versionPayload.AddRange(BitConverter.GetBytes(PortLocal));
+        versionPayload.AddRange(GetBytesBigEndian(PortLocal));
         versionPayload.AddRange(BitConverter.GetBytes(Nonce));
         versionPayload.AddRange(VarString.getBytes(UserAgent));
         versionPayload.AddRange(BitConverter.GetBytes(BlockchainHeight));
@@ -115,7 +116,12 @@ namespace BToken.Networking
 
         Payload = versionPayload.ToArray();
       }
-
+      byte[] GetBytesBigEndian(UInt32 uint32)
+      {
+        byte[] byteArray = BitConverter.GetBytes(uint32);
+        Array.Reverse(byteArray);
+        return byteArray;
+      }
     }
   }
 }

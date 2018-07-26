@@ -33,7 +33,7 @@ namespace BToken.Networking
 
             case "version":
               VersionMessageRemote = new VersionMessage(messageRemote.Payload);
-              await Peer.SendMessageAsync(responseToVersionMessageRemote()).ConfigureAwait(false);
+              await Peer.SendMessageAsync(responseToVersionMessageRemote());
               break;
 
             case "reject":
@@ -53,7 +53,7 @@ namespace BToken.Networking
             rejectionReason = string.Format("Outdated version '{0}', minimum expected version is '{1}'.", VersionMessageRemote.ProtocolVersion, ProtocolVersion);
           }
 
-          if (((ServiceFlags)VersionMessageRemote.NetworkServicesLocal).HasFlag(NetworkServicesRemoteRequired))
+          if (!((ServiceFlags)VersionMessageRemote.NetworkServicesLocal).HasFlag(NetworkServicesRemoteRequired))
           {
             rejectionReason = string.Format("Network services '{0}' do not meet requirement '{1}'.", VersionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
           }

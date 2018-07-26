@@ -26,14 +26,7 @@ namespace BToken.Networking
       {
         ConnectionManager = new PeerConnectionManager(this);
         IPEndPoint = ipEndPoint;
-        initializeTCPClient();
-      }
-      void initializeTCPClient()
-      {
-        TCPClient = new TcpClient(AddressFamily.InterNetworkV6);
-        TCPClient.Client.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-        TCPClient.Client.ReceiveBufferSize = 1000 * 5000;
-        TCPClient.Client.SendBufferSize = 1000 * 1000;
+        TCPClient = new TcpClient();
       }
 
 
@@ -41,8 +34,19 @@ namespace BToken.Networking
       {
         try
         {
-          await connectTCPClient().ConfigureAwait(false);
-          await handshakeAsync(blockheightLocal).ConfigureAwait(false);
+          await TCPClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port);
+        }
+        catch (SocketException ex)
+        {
+          Console.WriteLine(ex.Message);
+          return;
+        }
+
+        MessageStreamer = new MessageStreamer(TCPClient.GetStream(), cts.Token);
+
+        try
+        {
+          await handshakeAsync(blockheightLocal);
         }
         catch (Exception ex)
         {
@@ -50,19 +54,14 @@ namespace BToken.Networking
           Console.WriteLine(ex.Message);
         }
       }
-      async Task connectTCPClient()
-      {
-        await TCPClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port).ConfigureAwait(false);
-        MessageStreamer = new MessageStreamer(TCPClient.GetStream(), cts.Token);
-      }
       async Task handshakeAsync(uint blockheightLocal)
       {
         VersionMessage versionMessageLocal = new VersionMessage(blockheightLocal);
-        await MessageStreamer.WriteAsync(versionMessageLocal).ConfigureAwait(false);
+        await MessageStreamer.WriteAsync(versionMessageLocal);
         
         while (!ConnectionManager.isHandshakeCompleted())
         {
-          NetworkMessage messageRemote = await MessageStreamer.ReadAsync().ConfigureAwait(false);
+          NetworkMessage messageRemote = await MessageStreamer.ReadAsync();
           await ConnectionManager.receiveResponseToVersionMessageAsync(messageRemote);
         }
       }

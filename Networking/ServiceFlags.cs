@@ -7,8 +7,8 @@ namespace BToken.Networking
     [Flags]
     public enum RelayOptionFlags : byte
     {
-      SendTxStandard = 0x00,
-      NoTxUntilFilter = 0x01
+      NoTxUntilFilter = 0x00,
+      SendTxStandard = 0x01 
     }
     [Flags]
     public enum ServiceFlags : UInt64
