@@ -26,7 +26,8 @@ namespace BToken.Networking
       {
         ConnectionManager = new PeerConnectionManager(this);
         IPEndPoint = ipEndPoint;
-        TCPClient = new TcpClient();
+        //TCPClient = new TcpClient();
+        TCPClient = new TcpClient(new IPEndPoint(IPAddress.Any, 8333));
       }
 
 

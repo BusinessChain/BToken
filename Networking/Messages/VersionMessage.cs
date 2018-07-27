@@ -116,9 +116,9 @@ namespace BToken.Networking
 
         Payload = versionPayload.ToArray();
       }
-      byte[] GetBytesBigEndian(UInt32 uint32)
+      byte[] GetBytesBigEndian(UInt16 uint16)
       {
-        byte[] byteArray = BitConverter.GetBytes(uint32);
+        byte[] byteArray = BitConverter.GetBytes(uint16);
         Array.Reverse(byteArray);
         return byteArray;
       }
