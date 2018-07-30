@@ -12,22 +12,22 @@ namespace BToken.Networking
   partial class NetworkAdapter
   {
     partial class Peer
-    {      
+    {
+      NetworkAdapter NetworkAdapter;
       IPEndPoint IPEndPoint;
-      TcpClient TCPClient;
-      MessageStreamer MessageStreamer;
-      CancellationTokenSource cts = new CancellationTokenSource(); // sinnvolle Organisation der cancellation Token finden.
-
       PeerConnectionManager ConnectionManager;
+
+      TcpClient TcpClient;
+      MessageStreamer MessageStreamer;
 
 
       // API
       public Peer(IPEndPoint ipEndPoint, NetworkAdapter networkAdapter)
       {
+        NetworkAdapter = networkAdapter;
+
         ConnectionManager = new PeerConnectionManager(this);
         IPEndPoint = ipEndPoint;
-        //TCPClient = new TcpClient();
-        TCPClient = new TcpClient(new IPEndPoint(IPAddress.Any, 8333));
       }
 
 
@@ -35,38 +35,54 @@ namespace BToken.Networking
       {
         try
         {
-          await TCPClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port);
-        }
-        catch (SocketException ex)
-        {
-          Console.WriteLine(ex.Message);
-          return;
-        }
+          TcpClient = new TcpClient(new IPEndPoint(IPAddress.Any, 8333));
+          await TcpClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port);
+          MessageStreamer = new MessageStreamer(TcpClient.GetStream());
 
-        MessageStreamer = new MessageStreamer(TCPClient.GetStream(), cts.Token);
-
-        try
-        {
           await handshakeAsync(blockheightLocal);
+
+          Task readMessagesTask = ReadMessagesAsync();
         }
         catch (Exception ex)
         {
-          disconnect();
-          Console.WriteLine(ex.Message);
+          TcpClient.Client.Disconnect(true);
+          MessageStreamer.Dispose();
+          TcpClient.Close();
+
+          throw new NetworkProtocolException(string.Format("Connection failed with peer '{0}'", IPEndPoint.Address.ToString()), ex);
         }
       }
-      async Task handshakeAsync(uint blockheightLocal)
+      async Task handshakeAsync(uint blockchainHeightLocal)
       {
-        VersionMessage versionMessageLocal = new VersionMessage(blockheightLocal);
-        await MessageStreamer.WriteAsync(versionMessageLocal);
-        
+        await MessageStreamer.WriteAsync(new VersionMessage(blockchainHeightLocal));
+
         while (!ConnectionManager.isHandshakeCompleted())
         {
           NetworkMessage messageRemote = await MessageStreamer.ReadAsync();
           await ConnectionManager.receiveResponseToVersionMessageAsync(messageRemote);
         }
       }
-             
+      async Task ReadMessagesAsync()
+      {
+        while (true)
+        {
+          NetworkMessage networkMessage = await MessageStreamer.ReadAsync();
+
+          switch (networkMessage.Command)
+          {
+            case "ping":
+              PingMessage pingMessage = new PingMessage(networkMessage.Payload);
+              await MessageStreamer.WriteAsync(new PongMessage(pingMessage.Nonce));
+              break;
+            case "sendheaders":
+              break;
+            default:
+              await NetworkAdapter.WriteMessageToListeners(networkMessage);
+              break;
+          }
+        }
+      }
+
       public async Task SendMessageAsync(NetworkMessage networkMessage)
       {
         await MessageStreamer.WriteAsync(networkMessage);
@@ -74,77 +90,40 @@ namespace BToken.Networking
 
       public async Task GetHeadersAsync(IEnumerable<UInt256> headerLocator, BufferBlock<NetworkHeader> networkHeaderBuffer)
       {
-        HeadersMessage headersMessageRemote;
+        await MessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator));
 
-        do
+        NetworkMessage remoteNetworkMessageHeaders = await WaitUntilMessageType("headers");
+        HeadersMessage headerMessageRemote = new HeadersMessage(remoteNetworkMessageHeaders.Payload);
+              
+        foreach (NetworkHeader header in headerMessageRemote.NetworkHeaders)
         {
-          await MessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator)).ConfigureAwait(false);
-          headersMessageRemote = await readMessageAsync<HeadersMessage>().ConfigureAwait(false);
+          await networkHeaderBuffer.SendAsync(header);
+        }
+        byte[] hashHeaderLast = Hashing.sha256d(headerMessageRemote.NetworkHeaders.Last().getBytes());
+        headerLocator = new List<UInt256>() { new UInt256(hashHeaderLast) };
 
-          if (headersMessageRemote.attachesToHeaderLocator(headerLocator))
-          {
-            foreach (NetworkHeader header in headersMessageRemote.NetworkHeaders)
-            {
-              await networkHeaderBuffer.SendAsync(header);
-            }
-            byte[] lastHashRemote = Hashing.sha256d(headersMessageRemote.NetworkHeaders.Last().getBytes());
-            headerLocator = new List<UInt256>() { new UInt256(lastHashRemote) };
-          }
-          else
-          {
-            disconnect(); // danach mit anderem Peer versuchen.
-          }
-        } while (headersMessageRemote.hasMaxHeaderCount());
+        if (headerMessageRemote.hasMaxHeaderCount())
+        {
+          await GetHeadersAsync(headerLocator, networkHeaderBuffer);
+        }
 
-        networkHeaderBuffer.Post(null); // signal end of buffer
+        networkHeaderBuffer.Post(null);
       }
-
-      public async Task<T> readMessageAsync<T>(CancellationToken cancellationToken = default(CancellationToken)) where T : NetworkMessage
+    
+      async Task<NetworkMessage> WaitUntilMessageType(string messageCommand)
       {
-        while(true)
+        NetworkMessage networkMessage = await MessageStreamer.ReadAsync();
+        if (networkMessage.Command == messageCommand)
         {
-          NetworkMessage networkMessage = await readMessageAsync(cancellationToken).ConfigureAwait(false);
+          return networkMessage;
+        }
 
-          if(networkMessage is T message)
-          {
-            return message;
-          }
-        } 
+        return await WaitUntilMessageType(messageCommand);
       }
       
-      public async Task<NetworkMessage> readMessageAsync(CancellationToken cancellationToken)
-      {
-        while (true)
-        {
-          NetworkMessage networkMessage = await MessageStreamer.ReadAsync().ConfigureAwait(false);
-          
-          switch (networkMessage.Command)
-          {
-            case "version":
-              return new VersionMessage(networkMessage.Payload);
-            case "verack":
-              return new VerAckMessage();
-            case "reject":
-              return new RejectMessage(networkMessage.Payload);
-            case "inv":
-              return new InvMessage(networkMessage.Payload);
-            case "headers":
-              return new HeadersMessage(networkMessage.Payload);
-            default:
-              throw new NotSupportedException(string.Format("Peer '{0}' sent unknown NetworkMessage.", IPEndPoint.Address));
-          }
-        }
-      }
-
       public uint getChainHeight()
       {
         return ConnectionManager.getChainHeight();
-      }
-
-      public void disconnect()
-      {
-        MessageStreamer.Dispose();
-        TCPClient.Dispose();
       }
     }
   }

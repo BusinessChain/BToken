@@ -17,7 +17,6 @@ namespace BToken.Networking
     class MessageStreamer : IDisposable
     {
       Stream Stream;
-      CancellationToken CancellationToken;
 
       const int CommandSize = 12;
       string Command;
@@ -36,10 +35,9 @@ namespace BToken.Networking
 
 
 
-      public MessageStreamer(Stream stream, CancellationToken cancellationToken)
+      public MessageStreamer(Stream stream)
       {
         Stream = stream;
-        CancellationToken = cancellationToken;
         populateMagicBytes();
       }
       void populateMagicBytes()
@@ -111,7 +109,7 @@ namespace BToken.Networking
 
         if (PayloadLength > 0x02000000)
         {
-          throw new ChainException("Message payload too big (over 32MB)");
+          throw new NetworkProtocolException("Message payload too big (over 32MB)");
         }
       }
       async Task parseMessagePayload()
@@ -126,7 +124,7 @@ namespace BToken.Networking
 
         if (checksumMessage != checksumCalculated)
         {
-          throw new ChainException("Invalid Message checksum.");
+          throw new NetworkProtocolException("Invalid Message checksum.");
         }
       }
       async Task readBytesAsync(byte[] buffer)
@@ -136,7 +134,7 @@ namespace BToken.Networking
 
         while (bytesToRead > 0)
         {
-          int chunkSize = await Stream.ReadAsync(buffer, offset, bytesToRead, CancellationToken);
+          int chunkSize = await Stream.ReadAsync(buffer, offset, bytesToRead);
 
           offset += chunkSize;
           bytesToRead -= chunkSize;

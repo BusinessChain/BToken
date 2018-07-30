@@ -12,8 +12,7 @@ namespace BToken.Networking
     {
       List<Inventory> Inventories = new List<Inventory>();
 
-
-
+      
       public InvMessage(byte[] payload) : base("inv")
       {
         deserializePayload();

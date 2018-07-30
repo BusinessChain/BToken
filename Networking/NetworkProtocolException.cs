@@ -6,18 +6,18 @@ using System.Threading.Tasks;
 
 namespace BToken
 {
-  class ChainException : Exception
+  class NetworkProtocolException : Exception
   {
-    public ChainException()
+    public NetworkProtocolException()
     {
     }
 
-    public ChainException(string message)
+    public NetworkProtocolException(string message)
         : base(message)
     {
     }
 
-    public ChainException(string message, Exception inner)
+    public NetworkProtocolException(string message, Exception inner)
         : base(message, inner)
     {
     }

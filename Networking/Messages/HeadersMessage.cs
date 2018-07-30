@@ -12,8 +12,8 @@ namespace BToken.Networking
     {
       public const int MAX_HEADER_COUNT = 2000;
       public List<NetworkHeader> NetworkHeaders { get; private set; } = new List<NetworkHeader>();
-      
-      
+
+
       public HeadersMessage(byte[] payload) : base("headers")
       {
         deserializePayload();
@@ -39,7 +39,7 @@ namespace BToken.Networking
         return NetworkHeaders.Count == MAX_HEADER_COUNT;
       }
       
-      public bool attachesToHeaderLocator(IEnumerable<UInt256> headerLocator)
+      public bool connectsToHeaderLocator(IEnumerable<UInt256> headerLocator)
       {
         return headerLocator.Any(h => h.isEqual(NetworkHeaders.First().HashPrevious));
       }

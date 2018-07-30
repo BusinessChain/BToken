@@ -21,20 +21,70 @@ namespace BToken.Networking
     const Byte RelayOption = 0x01;
 
     Peer PeerEndPoint;
+    List<BufferBlock<NetworkMessage>> NetworkMessageListeners = new List<BufferBlock<NetworkMessage>>();
 
 
     public NetworkAdapter()
     {
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("185.6.124.16"), 8333), this);// Satoshi 0.16.0
       //PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("180.117.10.97"), 8333), this); // Satoshi 0.15.1
-      //PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("49.64.118.12"), 8333), this); // DDos
+      // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("49.64.118.12"), 8333), this); // Satoshi 0.15.1
       //PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this); // Satoshi 0.16.0
       PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this); // Satoshi 0.16.1 
     }
 
     public async Task startAsync(uint blockheightLocal)
     {
-      await PeerEndPoint.startAsync(blockheightLocal);
+      try
+      {
+        await PeerEndPoint.startAsync(blockheightLocal);
+      }
+      catch (NetworkProtocolException ex)
+      {
+        throw new NetworkProtocolException("Connection failed with network", ex);
+      }
+    }
+
+    async Task WriteMessageToListeners(NetworkMessage networkMessage)
+    {
+      NetworkMessage networkMessageCasted = CastNetworkMessage(networkMessage);
+      foreach(BufferBlock<NetworkMessage> networkMessageListener in NetworkMessageListeners)
+      {
+        await networkMessageListener.SendAsync(networkMessageCasted);
+      }
+    }
+    NetworkMessage CastNetworkMessage(NetworkMessage networkMessage)
+    {
+      switch (networkMessage.Command)
+      {
+        case "version":
+          return new VersionMessage(networkMessage.Payload);
+        case "verack":
+          return new VerAckMessage();
+        case "reject":
+          return new RejectMessage(networkMessage.Payload);
+        case "inv":
+          return new InvMessage(networkMessage.Payload);
+        case "headers":
+          return new HeadersMessage(networkMessage.Payload);
+        default:
+          throw new NotSupportedException(string.Format("Peer sent unknown NetworkMessage"));
+      }
+    }
+
+    public BufferBlock<NetworkMessage> GetNetworkMessageListener()
+    {
+      BufferBlock<NetworkMessage> networkMessageListener = new BufferBlock<NetworkMessage>(
+        new DataflowBlockOptions
+        {
+          BoundedCapacity = 100
+        });
+      NetworkMessageListeners.Add(networkMessageListener);
+      return networkMessageListener;
+    }
+    public void DisposeNetworkMessageListener(BufferBlock<NetworkMessage> networkMessageListener)
+    {
+      NetworkMessageListeners.Remove(networkMessageListener);
     }
 
     public BufferBlock<NetworkBlock> GetBlocks(IEnumerable<UInt256> headerHashes)
@@ -78,7 +128,7 @@ namespace BToken.Networking
       CancellationTokenSource cts = new CancellationTokenSource();
       List<Task<NetworkMessage>> readPeerMessageTasks = new List<Task<NetworkMessage>>();
 
-      Task<NetworkMessage> readPeerMessageTask = PeerEndPoint.readMessageAsync(cts.Token);
+      Task<NetworkMessage> readPeerMessageTask = null;//PeerEndPoint.ReadMessageAsync();
 
       if (readPeerMessageTask.Status == TaskStatus.RanToCompletion)
       {

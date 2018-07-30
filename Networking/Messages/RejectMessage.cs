@@ -59,7 +59,7 @@ namespace BToken.Networking
           int extraDataLength = Payload.Length - startIndex;
           if (extraDataLength != TXAndBlockExtraDataLength)
           {
-            throw new ChainException(string.Format("Provided extra data length '{0}' not consistent with protocol '{1}'", extraDataLength, TXAndBlockExtraDataLength));
+            throw new NetworkProtocolException(string.Format("Provided extra data length '{0}' not consistent with protocol '{1}'", extraDataLength, TXAndBlockExtraDataLength));
           }
 
           ExtraData = new byte[TXAndBlockExtraDataLength];

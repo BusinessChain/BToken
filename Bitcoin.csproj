@@ -90,6 +90,8 @@
     <Compile Include="Networking\Messages\GetHeadersMessage.cs" />
     <Compile Include="Networking\Messages\HeadersMessage.cs" />
     <Compile Include="Networking\Messages\NetworkMessage.cs" />
+    <Compile Include="Networking\Messages\PingMessage.cs" />
+    <Compile Include="Networking\Messages\PongMessage.cs" />
     <Compile Include="Networking\NetworkAdapter.cs" />
     <Compile Include="Networking\Messages\BlockMessage.cs" />
     <Compile Include="Networking\Messages\GetBlocksMessage.cs" />

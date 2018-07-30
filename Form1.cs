@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using System.Threading.Tasks;
 using System.Net;
 
 namespace BToken
@@ -18,10 +19,10 @@ namespace BToken
       InitializeComponent();
     }
 
-    private void startButton_Click(object sender, EventArgs e)
+    private async void startButton_Click(object sender, EventArgs e)
     {
       Bitcoin node = new Bitcoin();
-      node.startAsync();
+      await node.startAsync().ConfigureAwait(false);
     }
   }
 }

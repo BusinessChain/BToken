@@ -29,7 +29,7 @@ namespace BToken
       UTXO = new UnspentTXOutputs(Blockchain, NetworkAdapter);
     }
 
-    public async void startAsync()
+    public async Task startAsync()
     {
       await NetworkAdapter.startAsync(Blockchain.getHeight());
       await Blockchain.startAsync();
