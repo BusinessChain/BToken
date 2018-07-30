@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  partial class NetworkAdapter
+  partial class Network
   {
     class GetBlocksMessage : NetworkMessage
     {
@@ -17,7 +17,7 @@ namespace BToken.Networking
 
       public GetBlocksMessage(List<byte[]> blockLocator) : base("getblocks")
       {
-        ProtocolVersion = NetworkAdapter.ProtocolVersion;
+        ProtocolVersion = Network.ProtocolVersion;
         BlockLocator = blockLocator;
 
         serializePayload();

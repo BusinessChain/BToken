@@ -2,7 +2,7 @@
 
 namespace BToken.Networking
 {
-  partial class NetworkAdapter
+  partial class Network
   {
     [Flags]
     public enum RelayOptionFlags : byte

@@ -11,10 +11,10 @@ namespace BToken.Chaining
 {
   partial class Headerchain : Chain
   {
-    NetworkAdapter NetworkAdapter;
+    Network NetworkAdapter;
 
 
-    public Headerchain(ChainHeader genesisHeader, NetworkAdapter networkAdapter) 
+    public Headerchain(ChainHeader genesisHeader, Network networkAdapter) 
       : base(genesisHeader)
     {
       NetworkAdapter = networkAdapter;

@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  partial class NetworkAdapter
+  partial class Network
   {
-    class GetDataMessage : NetworkAdapter
+    class GetDataMessage : Network
     {
     }
   }

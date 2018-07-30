@@ -11,12 +11,12 @@ namespace BToken.Chaining
 {
   class Blockchain : Chain
   {
-    NetworkAdapter NetworkAdapter;
+    Network NetworkAdapter;
 
     Headerchain Headerchain;
 
 
-    public Blockchain(ChainBlock genesisBlock, NetworkAdapter networkAdapter) : base(genesisBlock)
+    public Blockchain(ChainBlock genesisBlock, Network networkAdapter) : base(genesisBlock)
     {
       NetworkAdapter = networkAdapter;
       Headerchain = new Headerchain(genesisBlock.Header, networkAdapter);

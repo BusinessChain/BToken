@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  partial class NetworkAdapter
+  partial class Network
   {
     class GetHeadersMessage : NetworkMessage
     {
@@ -16,7 +16,7 @@ namespace BToken.Networking
       
       public GetHeadersMessage(IEnumerable<UInt256> headerLocator) : base("getheaders")
       {
-        ProtocolVersion = NetworkAdapter.ProtocolVersion;
+        ProtocolVersion = Network.ProtocolVersion;
         HeaderLocator = headerLocator;
         StopHash = new UInt256("00000000000000000000000000000000");
 

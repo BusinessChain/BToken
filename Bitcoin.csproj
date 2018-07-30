@@ -92,7 +92,8 @@
     <Compile Include="Networking\Messages\NetworkMessage.cs" />
     <Compile Include="Networking\Messages\PingMessage.cs" />
     <Compile Include="Networking\Messages\PongMessage.cs" />
-    <Compile Include="Networking\NetworkAdapter.cs" />
+    <Compile Include="Networking\Messages\SendHeadersMessage.cs" />
+    <Compile Include="Networking\Network.cs" />
     <Compile Include="Networking\Messages\BlockMessage.cs" />
     <Compile Include="Networking\Messages\GetBlocksMessage.cs" />
     <Compile Include="Networking\Messages\GetDataMessage.cs" />

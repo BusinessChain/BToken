@@ -15,7 +15,7 @@ namespace BToken
 {
   partial class Bitcoin
   {
-    NetworkAdapter NetworkAdapter;
+    Network NetworkAdapter;
     
     Blockchain Blockchain;
     static readonly ChainBlock GenesisBlock = new BitcoinGenesisChainBlock();
@@ -24,7 +24,7 @@ namespace BToken
 
     public Bitcoin()
     {
-      NetworkAdapter = new NetworkAdapter(/* Bitcoin configuration */);
+      NetworkAdapter = new Network(/* Bitcoin configuration */);
       Blockchain = new Blockchain(GenesisBlock, NetworkAdapter);
       UTXO = new UnspentTXOutputs(Blockchain, NetworkAdapter);
     }

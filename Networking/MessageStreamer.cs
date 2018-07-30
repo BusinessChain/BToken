@@ -8,7 +8,7 @@ using System.IO;
 
 namespace BToken.Networking
 {
-  partial class NetworkAdapter
+  partial class Network
   {
 
     /// <summary>
@@ -143,7 +143,7 @@ namespace BToken.Networking
 
       public void Dispose()
       {
-        Stream.Dispose();
+        Stream.Close();
       }
     }
   }

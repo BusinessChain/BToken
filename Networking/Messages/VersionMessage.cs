@@ -5,7 +5,7 @@ using System.Net;
 
 namespace BToken.Networking
 {
-  partial class NetworkAdapter
+  partial class Network
   {
     class VersionMessage : NetworkMessage
     {
@@ -81,18 +81,18 @@ namespace BToken.Networking
 
       public VersionMessage(UInt32 blockchainHeight) : base("version")
       {
-        ProtocolVersion = NetworkAdapter.ProtocolVersion;
+        ProtocolVersion = Network.ProtocolVersion;
         NetworkServicesLocal = (UInt64)NetworkServicesLocalProvided;
         UnixTimeSeconds = getUnixTimeSeconds();
         NetworkServicesRemote = (UInt64)NetworkServicesRemoteRequired;
         IPAddressRemote = IPAddress.Loopback.MapToIPv6();
-        PortRemote = NetworkAdapter.Port;
+        PortRemote = Network.Port;
         IPAddressLocal = IPAddress.Loopback.MapToIPv6();
-        PortLocal = NetworkAdapter.Port;
-        Nonce = NetworkAdapter.Nonce;
-        UserAgent = NetworkAdapter.UserAgent;
+        PortLocal = Network.Port;
+        Nonce = Network.Nonce;
+        UserAgent = Network.UserAgent;
         BlockchainHeight = blockchainHeight;
-        RelayOption = NetworkAdapter.RelayOption;
+        RelayOption = Network.RelayOption;
         
         serializePayload();
       }

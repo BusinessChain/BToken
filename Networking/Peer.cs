@@ -9,11 +9,11 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BToken.Networking
 {
-  partial class NetworkAdapter
+  partial class Network
   {
     partial class Peer
     {
-      NetworkAdapter NetworkAdapter;
+      Network NetworkAdapter;
       IPEndPoint IPEndPoint;
       PeerConnectionManager ConnectionManager;
 
@@ -22,7 +22,7 @@ namespace BToken.Networking
 
 
       // API
-      public Peer(IPEndPoint ipEndPoint, NetworkAdapter networkAdapter)
+      public Peer(IPEndPoint ipEndPoint, Network networkAdapter)
       {
         NetworkAdapter = networkAdapter;
 
@@ -45,7 +45,6 @@ namespace BToken.Networking
         }
         catch (Exception ex)
         {
-          TcpClient.Client.Disconnect(true);
           MessageStreamer.Dispose();
           TcpClient.Close();
 
@@ -66,18 +65,20 @@ namespace BToken.Networking
       {
         while (true)
         {
-          NetworkMessage networkMessage = await MessageStreamer.ReadAsync();
+          NetworkMessage message = await MessageStreamer.ReadAsync();
+          byte[] payload = message.Payload;
 
-          switch (networkMessage.Command)
+          switch (message.Command)
           {
             case "ping":
-              PingMessage pingMessage = new PingMessage(networkMessage.Payload);
+              PingMessage pingMessage = new PingMessage(payload);
               await MessageStreamer.WriteAsync(new PongMessage(pingMessage.Nonce));
               break;
             case "sendheaders":
+              await MessageStreamer.WriteAsync(new SendHeadersMessage());
               break;
             default:
-              await NetworkAdapter.WriteMessageToListeners(networkMessage);
+              await NetworkAdapter.WriteMessageToListeners(message);
               break;
           }
         }

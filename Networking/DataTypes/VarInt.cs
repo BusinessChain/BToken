@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  partial class NetworkAdapter
+  partial class Network
   {
     static class VarInt
     {
