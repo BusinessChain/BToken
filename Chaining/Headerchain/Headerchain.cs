@@ -11,19 +11,19 @@ namespace BToken.Chaining
 {
   partial class Headerchain : Chain
   {
-    Network NetworkAdapter;
+    Network Network;
 
 
-    public Headerchain(ChainHeader genesisHeader, Network networkAdapter) 
+    public Headerchain(ChainHeader genesisHeader, Network network) 
       : base(genesisHeader)
     {
-      NetworkAdapter = networkAdapter;
+      Network = network;
     }
 
     public async Task buildAsync()
     {
       List<UInt256> headerLocator = getHeaderLocator();
-      BufferBlock<NetworkHeader> networkHeaderBuffer = NetworkAdapter.GetHeaders(headerLocator);
+      BufferBlock<NetworkHeader> networkHeaderBuffer = Network.GetHeaders(headerLocator);
       await insertNetworkHeadersAsync(networkHeaderBuffer);
     }
     public List<UInt256> getHeaderLocator(Func<uint, uint> getNextLocation)
@@ -73,12 +73,12 @@ namespace BToken.Chaining
       {
         if(ex.HResult == (int)ChainLinkCode.DUPLICATE)
         {
-          NetworkAdapter.duplicateHash(header.Hash);
+          Network.duplicateHash(header.Hash);
         }
 
         if (ex.HResult == (int)ChainLinkCode.ORPHAN)
         {
-          NetworkAdapter.orphanHeaderHash(header.Hash);
+          Network.orphanHeaderHash(header.Hash);
         }
       }
     }
@@ -87,7 +87,7 @@ namespace BToken.Chaining
     {
       while (true)
       {
-        NetworkMessage networkMessage = await NetworkAdapter.readMessageAsync();
+        NetworkMessage networkMessage = await Network.readMessageAsync();
 
         switch (networkMessage)
         {

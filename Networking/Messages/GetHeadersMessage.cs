@@ -18,7 +18,7 @@ namespace BToken.Networking
       {
         ProtocolVersion = Network.ProtocolVersion;
         HeaderLocator = headerLocator;
-        StopHash = new UInt256("00000000000000000000000000000000");
+        StopHash = new UInt256("0000000000000000000000000000000000000000000000000000000000000000");
 
         serializePayload();
       }

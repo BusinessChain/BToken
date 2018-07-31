@@ -13,5 +13,10 @@ namespace BToken.Networking
       Command = command;
       Payload = payload;
     }
+
+    public int GetPayloadSize()
+    {
+      return Payload.Length;
+    }
   }
 }

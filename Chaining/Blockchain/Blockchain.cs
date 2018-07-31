@@ -11,27 +11,31 @@ namespace BToken.Chaining
 {
   class Blockchain : Chain
   {
-    Network NetworkAdapter;
+    Network Network;
+    BufferBlock<NetworkMessage> NetworkMessageListener;
 
     Headerchain Headerchain;
 
 
-    public Blockchain(ChainBlock genesisBlock, Network networkAdapter) : base(genesisBlock)
+    public Blockchain(ChainBlock genesisBlock, Network network) : base(genesisBlock)
     {
-      NetworkAdapter = networkAdapter;
-      Headerchain = new Headerchain(genesisBlock.Header, networkAdapter);
+      Network = network;
+      NetworkMessageListener = network.GetNetworkMessageListener();
+      Headerchain = new Headerchain(genesisBlock.Header, network);
     }
 
 
     public async Task startAsync()
     {
-      await Headerchain.buildAsync();
-      await buildAsync();
+      //await Headerchain.buildAsync();
+      //await buildAsync();
+
+      Task processMessagesUnsolicitedTask = ProcessMessagesUnsolicitedAsync();
     }
     async Task buildAsync()
     {
       List<UInt256> blocksMissing = getBlocksMissing();
-      BufferBlock<NetworkBlock> networkBlockBuffer = NetworkAdapter.GetBlocks(blocksMissing);
+      BufferBlock<NetworkBlock> networkBlockBuffer = Network.GetBlocks(blocksMissing);
 
       try
       {
@@ -41,12 +45,12 @@ namespace BToken.Chaining
       {
         if (ex.HResult == (int)ChainLinkCode.DUPLICATE)
         {
-          NetworkAdapter.duplicateHash(ex.ChainLink.Hash);
+          Network.duplicateHash(ex.ChainLink.Hash);
         }
 
         if (ex.HResult == (int)ChainLinkCode.ORPHAN)
         {
-          NetworkAdapter.orphanBlockHash(ex.ChainLink.Hash);
+          Network.orphanBlockHash(ex.ChainLink.Hash);
         }
 
         await buildAsync();
@@ -90,6 +94,30 @@ namespace BToken.Chaining
     List<TX> getTXs(NetworkBlock networkBlock)
     {
       throw new NotImplementedException();
+    }
+
+
+    async Task ProcessMessagesUnsolicitedAsync()
+    {
+      BufferBlock<InvMessage> invMessageBuffer = new BufferBlock<InvMessage>();
+
+      while (true)
+      {
+        NetworkMessage message = await NetworkMessageListener.ReceiveAsync();
+
+        switch (message)
+        {
+          case InvMessage invMessage:
+            Console.WriteLine("'{0}' - invMessage, number of inventories = '{1}', type = '{2}', size = '{3}' Bytes", DateTimeOffset.UtcNow.ToString(), invMessage.GetInventoryCount(), invMessage.GetInventoryType(), invMessage.GetPayloadSize());
+            invMessageBuffer.Post(invMessage);
+            break;
+          case HeadersMessage headersMessage:
+            Console.WriteLine("headersMessage");
+            break;
+          default:
+            break;
+        }
+      }
     }
   }
 }

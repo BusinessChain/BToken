@@ -23,13 +23,12 @@ namespace BToken.Networking
     Peer PeerEndPoint;
     List<BufferBlock<NetworkMessage>> NetworkMessageListeners = new List<BufferBlock<NetworkMessage>>();
 
-
     public Network()
     {
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("185.6.124.16"), 8333), this);// Satoshi 0.16.0
-      //PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("180.117.10.97"), 8333), this); // Satoshi 0.15.1
+      // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("180.117.10.97"), 8333), this); // Satoshi 0.15.1
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("49.64.118.12"), 8333), this); // Satoshi 0.15.1
-      //PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this); // Satoshi 0.16.0
+      // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this); // Satoshi 0.16.0
       PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this); // Satoshi 0.16.1 
     }
 
@@ -45,30 +44,11 @@ namespace BToken.Networking
       }
     }
 
-    async Task WriteMessageToListeners(NetworkMessage networkMessage)
+    async Task BufferMessageFromPeers(NetworkMessage networkMessage)
     {
-      NetworkMessage networkMessageCasted = CastNetworkMessage(networkMessage);
       foreach(BufferBlock<NetworkMessage> networkMessageListener in NetworkMessageListeners)
       {
-        await networkMessageListener.SendAsync(networkMessageCasted);
-      }
-    }
-    NetworkMessage CastNetworkMessage(NetworkMessage networkMessage)
-    {
-      switch (networkMessage.Command)
-      {
-        case "version":
-          return new VersionMessage(networkMessage.Payload);
-        case "verack":
-          return new VerAckMessage();
-        case "reject":
-          return new RejectMessage(networkMessage.Payload);
-        case "inv":
-          return new InvMessage(networkMessage.Payload);
-        case "headers":
-          return new HeadersMessage(networkMessage.Payload);
-        default:
-          throw new NetworkProtocolException(string.Format("Peer sent unknown NetworkMessage"));
+        await networkMessageListener.SendAsync(networkMessage);
       }
     }
 

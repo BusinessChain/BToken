@@ -33,7 +33,7 @@ namespace BToken
     {
       await NetworkAdapter.startAsync(Blockchain.getHeight());
       await Blockchain.startAsync();
-      await UTXO.startAsync();
+      //await UTXO.startAsync();
     }
   }
 }

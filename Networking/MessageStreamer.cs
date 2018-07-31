@@ -14,7 +14,7 @@ namespace BToken.Networking
     /// <summary>
     /// Reads and writes raw Bitcoin Messages from the provided stream.
     /// </summary>
-    class MessageStreamer : IDisposable
+    class MessageStreamer
     {
       Stream Stream;
 
@@ -139,11 +139,6 @@ namespace BToken.Networking
           offset += chunkSize;
           bytesToRead -= chunkSize;
         }
-      }
-
-      public void Dispose()
-      {
-        Stream.Close();
       }
     }
   }

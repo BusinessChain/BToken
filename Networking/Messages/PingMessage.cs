@@ -13,9 +13,9 @@ namespace BToken.Networking
       public UInt64 Nonce { get; private set; }
 
 
-      public PingMessage(byte[] payload) : base("ping", payload)
+      public PingMessage(NetworkMessage networkMessage) : base("ping", networkMessage.Payload)
       {
-        Nonce = BitConverter.ToUInt64(payload, 0);
+        Nonce = BitConverter.ToUInt64(Payload, 0);
       }
       public PingMessage(UInt64 nonce) : base("ping")
       {

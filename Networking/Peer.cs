@@ -20,6 +20,8 @@ namespace BToken.Networking
       TcpClient TcpClient;
       MessageStreamer MessageStreamer;
 
+      bool SendHeadersFlag = false;
+
 
       // API
       public Peer(IPEndPoint ipEndPoint, Network networkAdapter)
@@ -41,11 +43,10 @@ namespace BToken.Networking
 
           await handshakeAsync(blockheightLocal);
 
-          Task readMessagesTask = ReadMessagesAsync();
+          Task processMessagesUnsolicitedTask = ProcessMessagesUnsolicitedAsync();
         }
         catch (Exception ex)
         {
-          MessageStreamer.Dispose();
           TcpClient.Close();
 
           throw new NetworkProtocolException(string.Format("Connection failed with peer '{0}'", IPEndPoint.Address.ToString()), ex);
@@ -61,24 +62,29 @@ namespace BToken.Networking
           await ConnectionManager.receiveResponseToVersionMessageAsync(messageRemote);
         }
       }
-      async Task ReadMessagesAsync()
+      async Task ProcessMessagesUnsolicitedAsync()
       {
         while (true)
         {
           NetworkMessage message = await MessageStreamer.ReadAsync();
-          byte[] payload = message.Payload;
 
           switch (message.Command)
           {
             case "ping":
-              PingMessage pingMessage = new PingMessage(payload);
+              PingMessage pingMessage = new PingMessage(message);
               await MessageStreamer.WriteAsync(new PongMessage(pingMessage.Nonce));
               break;
             case "sendheaders":
+              SendHeadersFlag = true;
               await MessageStreamer.WriteAsync(new SendHeadersMessage());
               break;
+            case "inv":
+              await NetworkAdapter.BufferMessageFromPeers(new InvMessage(message));
+              break;
+            case "headers":
+              await NetworkAdapter.BufferMessageFromPeers(new HeadersMessage(message));
+              break;
             default:
-              await NetworkAdapter.WriteMessageToListeners(message);
               break;
           }
         }
@@ -94,7 +100,7 @@ namespace BToken.Networking
         await MessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator));
 
         NetworkMessage remoteNetworkMessageHeaders = await WaitUntilMessageType("headers");
-        HeadersMessage headerMessageRemote = new HeadersMessage(remoteNetworkMessageHeaders.Payload);
+        HeadersMessage headerMessageRemote = new HeadersMessage(remoteNetworkMessageHeaders);
               
         foreach (NetworkHeader header in headerMessageRemote.NetworkHeaders)
         {

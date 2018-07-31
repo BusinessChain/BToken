@@ -17,6 +17,7 @@ namespace BToken
     public Form1()
     {
       InitializeComponent();
+
     }
 
     private async void startButton_Click(object sender, EventArgs e)

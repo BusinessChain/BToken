@@ -6,44 +6,60 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  partial class Network
+  class InvMessage : NetworkMessage
   {
-    class InvMessage : NetworkMessage
+    public List<Inventory> Inventories { get; private set; } = new List<Inventory>();
+
+
+    public InvMessage(NetworkMessage networkMessage) : base("inv", networkMessage.Payload)
     {
-      List<Inventory> Inventories = new List<Inventory>();
+      deserializePayload();
+    }
+    void deserializePayload()
+    {
+      int startIndex = 0;
+      int inventoryCount = (int)VarInt.getUInt64(Payload, ref startIndex);
 
-      
-      public InvMessage(byte[] payload) : base("inv")
+      deserializeInventories(Payload, ref startIndex, inventoryCount);
+    }
+    void deserializeInventories(byte[] buffer, ref int startIndex, int inventoryCount)
+    {
+      for (int i = 0; i < inventoryCount; i++)
       {
-        deserializePayload();
+        Inventory inventory = deserializeInventory(buffer, ref startIndex);
+        Inventories.Add(inventory);
       }
-      void deserializePayload()
-      {
-        int startIndex = 0;
+    }
+    Inventory deserializeInventory(byte[] buffer, ref int startIndex)
+    {
+      UInt32 type = BitConverter.ToUInt32(buffer, startIndex);
+      startIndex += 4;
 
-        int inventoryCount = (int)VarInt.getUInt64(Payload, ref startIndex);
+      byte[] hash = new byte[32];
+      Array.Copy(buffer, startIndex, hash, 0, 32);
+      startIndex += 32;
 
-        deserializeInventories(Payload, ref startIndex, inventoryCount);
-      }
-      void deserializeInventories(byte[] buffer, ref int startIndex, int inventoryCount)
+      return new Inventory(type, hash);
+    }
+
+    public int GetInventoryCount()
+    {
+      return Inventories.Count;
+    }
+
+    public string GetInventoryType()
+    {
+      string type = "";
+      foreach (Inventory inventory in Inventories)
       {
-        for (int i = 0; i < inventoryCount; i++)
+        string newType = inventory.Type.ToString();
+        if (type != newType && type != "")
         {
-          Inventory inventory = deserializeInventory(buffer, ref startIndex);
-          Inventories.Add(inventory);
+          return "mixed";
         }
+        type = newType;
       }
-      Inventory deserializeInventory(byte[] buffer, ref int startIndex)
-      {
-        UInt32 type = BitConverter.ToUInt32(buffer, startIndex);
-        startIndex += 4;
-
-        byte[] hash = new byte[32];
-        Array.Copy(buffer, startIndex, hash, 0, 32);
-        startIndex += 32;
-
-        return new Inventory(type, hash);
-      }
+      return type;
     }
   }
 }

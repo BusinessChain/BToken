@@ -6,43 +6,40 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  partial class Network
+  class HeadersMessage : NetworkMessage
   {
-    class HeadersMessage : NetworkMessage
+    public const int MAX_HEADER_COUNT = 2000;
+    public List<NetworkHeader> NetworkHeaders { get; private set; } = new List<NetworkHeader>();
+
+
+    public HeadersMessage(NetworkMessage message) : base("headers", message.Payload)
     {
-      public const int MAX_HEADER_COUNT = 2000;
-      public List<NetworkHeader> NetworkHeaders { get; private set; } = new List<NetworkHeader>();
+      deserializePayload();
+    }
+    void deserializePayload()
+    {
+      int startIndex = 0;
 
+      int headersCount = (int)VarInt.getUInt64(Payload, ref startIndex);
 
-      public HeadersMessage(byte[] payload) : base("headers")
+      for (int i = 0; i < headersCount; i++)
       {
-        deserializePayload();
-      }
-      void deserializePayload()
-      {
-        int startIndex = 0;
+        byte[] header = new byte[NetworkHeader.HEADER_LENGTH];
+        Array.Copy(Payload, startIndex, header, 0, NetworkHeader.HEADER_LENGTH);
+        startIndex = startIndex + NetworkHeader.HEADER_LENGTH;
 
-        int headersCount = (int)VarInt.getUInt64(Payload, ref startIndex);
+        NetworkHeaders.Add(NetworkHeader.deserialize(header));
+      }
+    }
 
-        for (int i = 0; i < headersCount; i++)
-        {
-          byte[] header = new byte[NetworkHeader.HEADER_LENGTH];
-          Array.Copy(Payload, startIndex, header, 0, NetworkHeader.HEADER_LENGTH);
-          startIndex = startIndex + NetworkHeader.HEADER_LENGTH;
+    public bool hasMaxHeaderCount()
+    {
+      return NetworkHeaders.Count == MAX_HEADER_COUNT;
+    }
 
-          NetworkHeaders.Add(NetworkHeader.deserialize(header));
-        }
-      }
-      
-      public bool hasMaxHeaderCount()
-      {
-        return NetworkHeaders.Count == MAX_HEADER_COUNT;
-      }
-      
-      public bool connectsToHeaderLocator(IEnumerable<UInt256> headerLocator)
-      {
-        return headerLocator.Any(h => h.isEqual(NetworkHeaders.First().HashPrevious));
-      }
+    public bool connectsToHeaderLocator(IEnumerable<UInt256> headerLocator)
+    {
+      return headerLocator.Any(h => h.isEqual(NetworkHeaders.First().HashPrevious));
     }
   }
 }
