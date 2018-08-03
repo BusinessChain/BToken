@@ -24,19 +24,19 @@ namespace BToken.Networking
       }
       void serializePayload()
       {
-        List<byte> versionPayload = new List<byte>();
+        List<byte> payload = new List<byte>();
 
-        versionPayload.AddRange(BitConverter.GetBytes(ProtocolVersion));
-        versionPayload.AddRange(VarInt.getBytes(HeaderLocator.Count()));
+        payload.AddRange(BitConverter.GetBytes(ProtocolVersion));
+        payload.AddRange(VarInt.getBytes(HeaderLocator.Count()));
 
         for (int i = 0; i < HeaderLocator.Count(); i++)
         {
-          versionPayload.AddRange(HeaderLocator.ElementAt(i).getBytes());
+          payload.AddRange(HeaderLocator.ElementAt(i).GetBytes());
         }
 
-        versionPayload.AddRange(StopHash.getBytes());
+        payload.AddRange(StopHash.GetBytes());
 
-        Payload = versionPayload.ToArray();
+        Payload = payload.ToArray();
       }
 
     }

@@ -43,9 +43,11 @@ namespace BToken
       Data = new BigInteger(dataBytes);
     }
 
-    public byte[] getBytes()
+    public byte[] GetBytes()
     {
-      return Data.ToByteArray();
+      byte[] byteArray = Data.ToByteArray();
+      Array.Resize(ref byteArray, BYTE_LENGTH);
+      return byteArray;
     }
 
 

@@ -6,6 +6,15 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
+  enum InventoryType : UInt32
+  {
+    UNDEFINED = 0,
+    MSG_TX = 1,
+    MSG_BLOCK = 2,
+    MSG_FILTERED_BLOCK = 3,
+    MSG_CMPCT_BLOCK = 4
+  }
+
   class InvMessage : NetworkMessage
   {
     public List<Inventory> Inventories { get; private set; } = new List<Inventory>();
@@ -32,11 +41,12 @@ namespace BToken.Networking
     }
     Inventory deserializeInventory(byte[] buffer, ref int startIndex)
     {
-      UInt32 type = BitConverter.ToUInt32(buffer, startIndex);
+      InventoryType type = (InventoryType)BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
 
-      byte[] hash = new byte[32];
-      Array.Copy(buffer, startIndex, hash, 0, 32);
+      byte[] hashBytes = new byte[32];
+      Array.Copy(buffer, startIndex, hashBytes, 0, 32);
+      UInt256 hash = new UInt256(hashBytes);
       startIndex += 32;
 
       return new Inventory(type, hash);
@@ -61,5 +71,6 @@ namespace BToken.Networking
       }
       return type;
     }
+
   }
 }

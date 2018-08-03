@@ -8,7 +8,7 @@ namespace BToken.Chaining
   abstract partial class Chain
   {
 
-    protected ChainSocket Socket;
+    ChainSocket Socket;
 
 
     public Chain(ChainLink chainLinkGenesis)
@@ -38,8 +38,7 @@ namespace BToken.Chaining
     }
     ChainLink getChainLinkPrevious(ChainLink chainLink)
     {
-      resetProbes();
-      ChainLink chainLinkPrevious = getChainLink(chainLink.HashPrevious);
+      ChainLink chainLinkPrevious = GetChainLink(chainLink.HashPrevious);
 
       if (chainLinkPrevious == null)
       {
@@ -53,10 +52,19 @@ namespace BToken.Chaining
     {
       return Socket.ChainLink.Height;
     }
+    public UInt256 getHash()
+    {
+      return Socket.ChainLink.Hash;
+    }
 
-    public ChainLink getChainLink(UInt256 hash)
+    protected bool ContainsChainLinkHash(UInt256 hash)
+    {
+      return GetChainLink(hash) != null;
+    }
+    protected ChainLink GetChainLink(UInt256 hash)
     {
       ChainSocket socket = Socket;
+      resetProbes();
 
       while (socket != null)
       {

@@ -20,8 +20,9 @@ namespace BToken.Networking
       TcpClient TcpClient;
       MessageStreamer MessageStreamer;
 
-      bool SendHeadersFlag = false;
+      List<NetworkMessage> MessagesReceivedFromRemotePeer = new List<NetworkMessage>();
 
+      bool SendHeadersFlag = false;
 
       // API
       public Peer(IPEndPoint ipEndPoint, Network networkAdapter)
@@ -67,7 +68,7 @@ namespace BToken.Networking
         while (true)
         {
           NetworkMessage message = await MessageStreamer.ReadAsync();
-
+          
           switch (message.Command)
           {
             case "ping":
@@ -79,10 +80,14 @@ namespace BToken.Networking
               await MessageStreamer.WriteAsync(new SendHeadersMessage());
               break;
             case "inv":
-              await NetworkAdapter.BufferMessageFromPeers(new InvMessage(message));
+              InvMessage invMessage = new InvMessage(message);
+              MessagesReceivedFromRemotePeer.Add(invMessage);
+              await NetworkAdapter.ProcessMessageUnsolicitedAsync(invMessage);
               break;
             case "headers":
-              await NetworkAdapter.BufferMessageFromPeers(new HeadersMessage(message));
+              HeadersMessage headersMessage = new HeadersMessage(message);
+              MessagesReceivedFromRemotePeer.Add(headersMessage);
+              await NetworkAdapter.ProcessMessageUnsolicitedAsync(headersMessage);
               break;
             default:
               break;
@@ -90,28 +95,33 @@ namespace BToken.Networking
         }
       }
 
+      public bool IsOriginOfNetworkMessage(NetworkMessage networkMessage)
+      {
+        return MessagesReceivedFromRemotePeer.Contains(networkMessage);
+      }
+
       public async Task SendMessageAsync(NetworkMessage networkMessage)
       {
         await MessageStreamer.WriteAsync(networkMessage);
       }
 
+      public BufferBlock<NetworkHeader> GetHeadersAdvertisedAsync(UInt256 headerHashChainTip)
+      {
+        BufferBlock<NetworkHeader> headerBuffer = new BufferBlock<NetworkHeader>();
+        Task getHeadersTask = GetHeadersAsync(new List<UInt256>() { headerHashChainTip }, headerBuffer);
+
+        return headerBuffer;
+      }
       public async Task GetHeadersAsync(IEnumerable<UInt256> headerLocator, BufferBlock<NetworkHeader> networkHeaderBuffer)
       {
         await MessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator));
 
         NetworkMessage remoteNetworkMessageHeaders = await WaitUntilMessageType("headers");
         HeadersMessage headerMessageRemote = new HeadersMessage(remoteNetworkMessageHeaders);
-              
+
         foreach (NetworkHeader header in headerMessageRemote.NetworkHeaders)
         {
           await networkHeaderBuffer.SendAsync(header);
-        }
-        byte[] hashHeaderLast = Hashing.sha256d(headerMessageRemote.NetworkHeaders.Last().getBytes());
-        headerLocator = new List<UInt256>() { new UInt256(hashHeaderLast) };
-
-        if (headerMessageRemote.hasMaxHeaderCount())
-        {
-          await GetHeadersAsync(headerLocator, networkHeaderBuffer);
         }
 
         networkHeaderBuffer.Post(null);

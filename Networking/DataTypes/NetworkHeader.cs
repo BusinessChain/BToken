@@ -70,8 +70,8 @@ namespace BToken
       List<byte> headerSerialized = new List<byte>();
 
       headerSerialized.AddRange(BitConverter.GetBytes(Version));
-      headerSerialized.AddRange(HashPrevious.getBytes());
-      headerSerialized.AddRange(MerkleRootHash.getBytes());
+      headerSerialized.AddRange(HashPrevious.GetBytes());
+      headerSerialized.AddRange(MerkleRootHash.GetBytes());
       headerSerialized.AddRange(BitConverter.GetBytes(UnixTimeSeconds));
       headerSerialized.AddRange(BitConverter.GetBytes(NBits));
       headerSerialized.AddRange(BitConverter.GetBytes(Nonce));

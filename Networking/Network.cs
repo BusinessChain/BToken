@@ -20,7 +20,7 @@ namespace BToken.Networking
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x01;
 
-    Peer PeerEndPoint;
+    List<Peer> PeerEndPoints = new List<Peer>();
     List<BufferBlock<NetworkMessage>> NetworkMessageListeners = new List<BufferBlock<NetworkMessage>>();
 
     public Network()
@@ -29,14 +29,14 @@ namespace BToken.Networking
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("180.117.10.97"), 8333), this); // Satoshi 0.15.1
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("49.64.118.12"), 8333), this); // Satoshi 0.15.1
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this); // Satoshi 0.16.0
-      PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this); // Satoshi 0.16.1 
+      PeerEndPoints.Add(new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this)); // Satoshi 0.16.1 
     }
 
     public async Task startAsync(uint blockheightLocal)
     {
       try
       {
-        await PeerEndPoint.startAsync(blockheightLocal);
+        await PeerEndPoints.First().startAsync(blockheightLocal);
       }
       catch (NetworkProtocolException ex)
       {
@@ -44,7 +44,7 @@ namespace BToken.Networking
       }
     }
 
-    async Task BufferMessageFromPeers(NetworkMessage networkMessage)
+    async Task ProcessMessageUnsolicitedAsync(NetworkMessage networkMessage)
     {
       foreach(BufferBlock<NetworkMessage> networkMessageListener in NetworkMessageListeners)
       {
@@ -54,11 +54,7 @@ namespace BToken.Networking
 
     public BufferBlock<NetworkMessage> GetNetworkMessageListener()
     {
-      BufferBlock<NetworkMessage> networkMessageListener = new BufferBlock<NetworkMessage>(
-        new DataflowBlockOptions
-        {
-          BoundedCapacity = 100
-        });
+      BufferBlock<NetworkMessage> networkMessageListener = new BufferBlock<NetworkMessage>();
       NetworkMessageListeners.Add(networkMessageListener);
       return networkMessageListener;
     }
@@ -71,24 +67,31 @@ namespace BToken.Networking
     {
       return new BufferBlock<NetworkBlock>();
     }
-    
-    public BufferBlock<NetworkHeader> GetHeaders(IEnumerable<UInt256> headerLocator)
+    public BufferBlock<NetworkHeader> GetHeaders(UInt256 headerHash)
     {
       BufferBlock<NetworkHeader> headerBuffer = new BufferBlock<NetworkHeader>();
-      Peer peer = getPeerHighestChain();
-      Task getHeadersTask = peer.GetHeadersAsync(headerLocator, headerBuffer);
+
+      Task getHeadersTask = PeerEndPoints.First().GetHeadersAsync(new List<UInt256>() { headerHash }, headerBuffer);
       return headerBuffer;
     }
-    Peer getPeerHighestChain()
+    public BufferBlock<NetworkHeader> GetHeadersAdvertised(InvMessage invMessage, UInt256 headerHashChainTip)
     {
-      //return PeersConnected.OrderBy(p => p.getChainHeight()).Last();
-      return PeerEndPoint;
+      Peer peer = GetPeerOriginOfNetworkMessage(invMessage);
+      if (peer == null)
+      {
+        return null;
+      }
+      return peer.GetHeadersAdvertisedAsync(headerHashChainTip);
+    }
+    Peer GetPeerOriginOfNetworkMessage(NetworkMessage networkMessage)
+    {
+      return PeerEndPoints.Find(p => p.IsOriginOfNetworkMessage(networkMessage));
     }
 
     public void orphanHeaderHash(UInt256 hash)
     {
       // Gib Headers zurück um Root block zu suchen. Kann Peer nicht liefern, Kopf ab.
-      throw new NotImplementedException();
+      Console.WriteLine("Received duplicate Block.");
     }
     public void orphanBlockHash(UInt256 hash)
     {
@@ -96,33 +99,13 @@ namespace BToken.Networking
     }
     public void duplicateHash(UInt256 hash)
     {
-      throw new NotImplementedException();
+      Console.WriteLine("Received duplicate Block.");
     }
     public void invalidHash(UInt256 hash)
     {
       throw new NotImplementedException();
     }
-
-    public async Task<NetworkMessage> readMessageAsync()
-    {
-      CancellationTokenSource cts = new CancellationTokenSource();
-      List<Task<NetworkMessage>> readPeerMessageTasks = new List<Task<NetworkMessage>>();
-
-      Task<NetworkMessage> readPeerMessageTask = null;//PeerEndPoint.ReadMessageAsync();
-
-      if (readPeerMessageTask.Status == TaskStatus.RanToCompletion)
-      {
-        cts.Cancel();
-        return readPeerMessageTask.Result;
-      }
-
-      Task<NetworkMessage> readFirstPeerMessageTask = await Task.WhenAny(readPeerMessageTasks).ConfigureAwait(false);
-      cts.Cancel();
-      return readFirstPeerMessageTask.Result;
-
-      // Todo: Exception handling when readFirstPeerMessageTask failed.
-    }
-
+    
     static UInt64 createNonce()
     {
       Random rnd = new Random();

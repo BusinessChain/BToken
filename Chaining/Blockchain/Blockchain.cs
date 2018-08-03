@@ -31,6 +31,7 @@ namespace BToken.Chaining
       //await buildAsync();
 
       Task processMessagesUnsolicitedTask = ProcessMessagesUnsolicitedAsync();
+
     }
     async Task buildAsync()
     {
@@ -99,8 +100,6 @@ namespace BToken.Chaining
 
     async Task ProcessMessagesUnsolicitedAsync()
     {
-      BufferBlock<InvMessage> invMessageBuffer = new BufferBlock<InvMessage>();
-
       while (true)
       {
         NetworkMessage message = await NetworkMessageListener.ReceiveAsync();
@@ -108,8 +107,7 @@ namespace BToken.Chaining
         switch (message)
         {
           case InvMessage invMessage:
-            Console.WriteLine("'{0}' - invMessage, number of inventories = '{1}', type = '{2}', size = '{3}' Bytes", DateTimeOffset.UtcNow.ToString(), invMessage.GetInventoryCount(), invMessage.GetInventoryType(), invMessage.GetPayloadSize());
-            invMessageBuffer.Post(invMessage);
+            ProcessInventoryMessageUnsolicitedAsync(invMessage);
             break;
           case HeadersMessage headersMessage:
             Console.WriteLine("headersMessage");
@@ -118,6 +116,35 @@ namespace BToken.Chaining
             break;
         }
       }
+    }
+    void ProcessInventoryMessageUnsolicitedAsync(InvMessage invMessage)
+    {
+      List<Inventory> blockHashInventories = invMessage.Inventories.FindAll(i => i.Type == InventoryType.MSG_BLOCK);
+      Headerchain.RemoveExistingBlockHashInventories(blockHashInventories);
+      if(!blockHashInventories.Any())
+      {
+        return;
+      }
+      Console.WriteLine("Block");
+
+      BufferBlock<NetworkHeader> networkHeaderBuffer = Network.GetHeadersAdvertised(invMessage, Headerchain.getHash());
+      
+      //try
+      //{
+      //  Task insertNetworkHeadersTask = Headerchain.insertNetworkHeadersAsync(networkHeaderBuffer);
+      //}
+      //catch (ChainLinkException ex)
+      //{
+      //  if (ex.HResult == (int)ChainLinkCode.DUPLICATE)
+      //  {
+      //    Network.duplicateHash(ex.ChainLink.Hash);
+      //  }
+
+      //  if (ex.HResult == (int)ChainLinkCode.ORPHAN)
+      //  {
+      //    Network.orphanHeaderHash(ex.ChainLink.Hash);
+      //  }
+      //}
     }
   }
 }

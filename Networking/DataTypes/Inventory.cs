@@ -6,24 +6,31 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  public class Inventory
+  class Inventory
   {
-    public enum InventoryType
-    {
-      UNDEFINED = 0,
-      MSG_TX = 1,
-      MSG_BLOCK = 2,
-      MSG_FILTERED_BLOCK = 3,
-      MSG_CMPCT_BLOCK = 4
-    }
 
     public InventoryType Type { get; private set; }
-    Byte[] Hash = new byte[32];
+    public UInt256 Hash { get; private set; }
 
-    public Inventory(uint type, Byte[] hash)
+    public Inventory(InventoryType type, UInt256 hash)
     {
-      Type = (InventoryType)type;
+      Type = type;
       Hash = hash;
     }
+
+    public List<byte> getBytes()
+    {
+      List<byte> bytes = new List<byte>();
+
+      bytes.AddRange(BitConverter.GetBytes((UInt32)Type));
+
+      byte[] hashBytes = Hash.GetBytes();
+      Array.Reverse(hashBytes);
+      bytes.AddRange(hashBytes);
+
+      return bytes;
+
+    }
+
   }
 }

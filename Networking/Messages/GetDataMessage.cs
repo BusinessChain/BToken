@@ -8,8 +8,30 @@ namespace BToken.Networking
 {
   partial class Network
   {
-    class GetDataMessage : Network
+    class GetDataMessage : NetworkMessage
     {
+      public IEnumerable<Inventory> Inventories { get; private set; }
+
+
+      public GetDataMessage(List<Inventory> inventories) : base("getdata")
+      {
+        Inventories = inventories;
+
+        serializePayload();
+      }
+      void serializePayload()
+      {
+        List<byte> payload = new List<byte>();
+
+        payload.AddRange(VarInt.getBytes(Inventories.Count()));
+
+        for (int i = 0; i < Inventories.Count(); i++)
+        {
+          payload.AddRange(Inventories.ElementAt(i).getBytes());
+        }
+        
+        Payload = payload.ToArray();
+      }
     }
   }
 }

@@ -22,9 +22,10 @@ namespace BToken.Chaining
 
     public async Task buildAsync()
     {
-      List<UInt256> headerLocator = getHeaderLocator();
-      BufferBlock<NetworkHeader> networkHeaderBuffer = Network.GetHeaders(headerLocator);
-      await insertNetworkHeadersAsync(networkHeaderBuffer);
+      //List<UInt256> headerLocator = getHeaderLocator();
+      //BufferBlock<NetworkHeader> networkHeaderBuffer = new BufferBlock<NetworkHeader>();
+      //Network.GetHeadersAsync(headerLocator);
+      //await insertNetworkHeadersAsync(networkHeaderBuffer);
     }
     public List<UInt256> getHeaderLocator(Func<uint, uint> getNextLocation)
     {
@@ -46,7 +47,20 @@ namespace BToken.Chaining
       }
     }
 
-    async Task insertNetworkHeadersAsync(BufferBlock<NetworkHeader> headerBuffer)
+    public void RemoveExistingBlockHashInventories(List<Inventory> blockHashInventories)
+    {
+      for (int i = blockHashInventories.Count - 1; i >= 0; i--)
+      {
+        Inventory inventory = blockHashInventories[i];
+
+        if(ContainsChainLinkHash(inventory.Hash))
+        {
+          blockHashInventories.RemoveAt(i);
+        }
+      }
+    }
+
+    public async Task insertNetworkHeadersAsync(BufferBlock<NetworkHeader> headerBuffer)
     {
       NetworkHeader networkHeader = await headerBuffer.ReceiveAsync();
 
@@ -65,43 +79,7 @@ namespace BToken.Chaining
 
     void insertHeader(ChainHeader header)
     {
-      try
-      {
-        insertChainLink(header);
-      }
-      catch (ChainLinkException ex)
-      {
-        if(ex.HResult == (int)ChainLinkCode.DUPLICATE)
-        {
-          Network.duplicateHash(header.Hash);
-        }
-
-        if (ex.HResult == (int)ChainLinkCode.ORPHAN)
-        {
-          Network.orphanHeaderHash(header.Hash);
-        }
-      }
-    }
-
-    public async Task readMessageAsync()
-    {
-      while (true)
-      {
-        NetworkMessage networkMessage = await Network.readMessageAsync();
-
-        switch (networkMessage)
-        {
-          //case GetBlocksMessage getBlocksMessage:
-          // Message handlen
-          // break;
-          // case BlockMessage blockMessage:
-          // Message handlen
-          // return new BlockPayloadMessage : BlockchainMessage
-          // break;
-          default:
-            throw new NotSupportedException("Blockchain received unknown NetworkMessage from NetworkAdapter.");
-        }
-      }
+      insertChainLink(header);
     }
 
   }
