@@ -67,21 +67,15 @@ namespace BToken.Networking
     {
       return new BufferBlock<NetworkBlock>();
     }
-    public BufferBlock<NetworkHeader> GetHeaders(UInt256 headerHash)
-    {
-      BufferBlock<NetworkHeader> headerBuffer = new BufferBlock<NetworkHeader>();
 
-      Task getHeadersTask = PeerEndPoints.First().GetHeadersAsync(new List<UInt256>() { headerHash }, headerBuffer);
-      return headerBuffer;
-    }
-    public BufferBlock<NetworkHeader> GetHeadersAdvertised(InvMessage invMessage, UInt256 headerHashChainTip)
+    public async Task GetHeadersAdvertisedAsync(InvMessage invMessage, UInt256 headerHashChainTip)
     {
       Peer peer = GetPeerOriginOfNetworkMessage(invMessage);
       if (peer == null)
       {
-        return null;
+        return;
       }
-      return peer.GetHeadersAdvertisedAsync(headerHashChainTip);
+      await peer.GetHeadersAdvertisedAsync(headerHashChainTip);
     }
     Peer GetPeerOriginOfNetworkMessage(NetworkMessage networkMessage)
     {

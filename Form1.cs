@@ -23,7 +23,7 @@ namespace BToken
     private async void startButton_Click(object sender, EventArgs e)
     {
       Bitcoin node = new Bitcoin();
-      await node.startAsync().ConfigureAwait(false);
+      await node.startAsync();
     }
   }
 }

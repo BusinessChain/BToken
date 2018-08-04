@@ -105,26 +105,23 @@ namespace BToken.Networking
         await MessageStreamer.WriteAsync(networkMessage);
       }
 
-      public BufferBlock<NetworkHeader> GetHeadersAdvertisedAsync(UInt256 headerHashChainTip)
+      public async Task GetHeadersAdvertisedAsync(UInt256 headerHashChainTip)
       {
-        BufferBlock<NetworkHeader> headerBuffer = new BufferBlock<NetworkHeader>();
-        Task getHeadersTask = GetHeadersAsync(new List<UInt256>() { headerHashChainTip }, headerBuffer);
-
-        return headerBuffer;
+        await GetHeadersAsync(new List<UInt256>() { headerHashChainTip });
       }
-      public async Task GetHeadersAsync(IEnumerable<UInt256> headerLocator, BufferBlock<NetworkHeader> networkHeaderBuffer)
+      public async Task GetHeadersAsync(IEnumerable<UInt256> headerLocator)
       {
         await MessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator));
 
-        NetworkMessage remoteNetworkMessageHeaders = await WaitUntilMessageType("headers");
-        HeadersMessage headerMessageRemote = new HeadersMessage(remoteNetworkMessageHeaders);
+        //NetworkMessage remoteNetworkMessageHeaders = await WaitUntilMessageType("headers");
+        //HeadersMessage headerMessageRemote = new HeadersMessage(remoteNetworkMessageHeaders);
 
-        foreach (NetworkHeader header in headerMessageRemote.NetworkHeaders)
-        {
-          await networkHeaderBuffer.SendAsync(header);
-        }
+        //foreach (NetworkHeader header in headerMessageRemote.NetworkHeaders)
+        //{
+        //  await networkHeaderBuffer.SendAsync(header);
+        //}
 
-        networkHeaderBuffer.Post(null);
+        //networkHeaderBuffer.Post(null);
       }
     
       async Task<NetworkMessage> WaitUntilMessageType(string messageCommand)

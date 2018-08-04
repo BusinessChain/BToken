@@ -107,7 +107,7 @@ namespace BToken.Chaining
         switch (message)
         {
           case InvMessage invMessage:
-            ProcessInventoryMessageUnsolicitedAsync(invMessage);
+            await ProcessInventoryMessageUnsolicitedAsync(invMessage);
             break;
           case HeadersMessage headersMessage:
             Console.WriteLine("headersMessage");
@@ -117,7 +117,7 @@ namespace BToken.Chaining
         }
       }
     }
-    void ProcessInventoryMessageUnsolicitedAsync(InvMessage invMessage)
+    async Task ProcessInventoryMessageUnsolicitedAsync(InvMessage invMessage)
     {
       List<Inventory> blockHashInventories = invMessage.Inventories.FindAll(i => i.Type == InventoryType.MSG_BLOCK);
       Headerchain.RemoveExistingBlockHashInventories(blockHashInventories);
@@ -125,9 +125,8 @@ namespace BToken.Chaining
       {
         return;
       }
-      Console.WriteLine("Block");
 
-      BufferBlock<NetworkHeader> networkHeaderBuffer = Network.GetHeadersAdvertised(invMessage, Headerchain.getHash());
+      await Network.GetHeadersAdvertisedAsync(invMessage, Headerchain.getHash());
       
       //try
       //{
