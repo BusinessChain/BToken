@@ -6,18 +6,9 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  enum InventoryType : UInt32
-  {
-    UNDEFINED = 0,
-    MSG_TX = 1,
-    MSG_BLOCK = 2,
-    MSG_FILTERED_BLOCK = 3,
-    MSG_CMPCT_BLOCK = 4
-  }
-
   class InvMessage : NetworkMessage
   {
-    public List<Inventory> Inventories { get; private set; } = new List<Inventory>();
+    List<Inventory> Inventories = new List<Inventory>();
 
 
     public InvMessage(NetworkMessage networkMessage) : base("inv", networkMessage.Payload)
@@ -51,26 +42,14 @@ namespace BToken.Networking
 
       return new Inventory(type, hash);
     }
-
-    public int GetInventoryCount()
+    
+    public List<Inventory> GetInventoriesBlock()
     {
-      return Inventories.Count;
+      return Inventories.FindAll(i => i.Type == InventoryType.MSG_BLOCK);
     }
-
-    public string GetInventoryType()
+    public List<Inventory> GetInventoriesTX()
     {
-      string type = "";
-      foreach (Inventory inventory in Inventories)
-      {
-        string newType = inventory.Type.ToString();
-        if (type != newType && type != "")
-        {
-          return "mixed";
-        }
-        type = newType;
-      }
-      return type;
+      return Inventories.FindAll(i => i.Type == InventoryType.MSG_TX);
     }
-
   }
 }

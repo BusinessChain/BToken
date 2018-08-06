@@ -26,7 +26,6 @@ namespace BToken.Networking
       byte[] Payload;
 
       const int ChecksumSize = 4;
-      uint Checksum;
 
       const int HeaderSize = CommandSize + LengthSize + ChecksumSize;
       byte[] Header = new byte[HeaderSize];
@@ -108,7 +107,7 @@ namespace BToken.Networking
 
         if (PayloadLength > 0x02000000)
         {
-          throw new NetworkProtocolException("Message payload too big (over 32MB)");
+          throw new NetworkException("Message payload too big (over 32MB)");
         }
       }
       async Task parseMessagePayload()
@@ -123,7 +122,7 @@ namespace BToken.Networking
 
         if (checksumMessage != checksumCalculated)
         {
-          throw new NetworkProtocolException("Invalid Message checksum.");
+          throw new NetworkException("Invalid Message checksum.");
         }
       }
       async Task readBytesAsync(byte[] buffer)

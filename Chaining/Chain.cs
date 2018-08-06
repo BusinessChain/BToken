@@ -8,12 +8,12 @@ namespace BToken.Chaining
   abstract partial class Chain
   {
 
-    ChainSocket Socket;
+    ChainSocket SocketMain;
 
 
     public Chain(ChainLink chainLinkGenesis)
     {
-      Socket = new ChainSocket(chainLinkGenesis);
+      SocketMain = new ChainSocket(chainLinkGenesis);
     }
 
     public void insertChainLink(ChainLink chainLink)
@@ -50,20 +50,16 @@ namespace BToken.Chaining
 
     public uint getHeight()
     {
-      return Socket.ChainLink.Height;
+      return SocketMain.ChainLink.Height;
     }
     public UInt256 getHash()
     {
-      return Socket.ChainLink.Hash;
+      return SocketMain.ChainLink.Hash;
     }
 
-    protected bool ContainsChainLinkHash(UInt256 hash)
-    {
-      return GetChainLink(hash) != null;
-    }
     protected ChainLink GetChainLink(UInt256 hash)
     {
-      ChainSocket socket = Socket;
+      ChainSocket socket = SocketMain;
       resetProbes();
 
       while (socket != null)
@@ -108,7 +104,7 @@ namespace BToken.Chaining
     }
     void resetProbes()
     {
-      ChainSocket socket = Socket;
+      ChainSocket socket = SocketMain;
 
       while (socket != null)
       {
@@ -135,7 +131,7 @@ namespace BToken.Chaining
     }
     ChainSocket getSocket(ChainLink chainLink)
     {
-      ChainSocket socket = Socket;
+      ChainSocket socket = SocketMain;
 
       while (socket != null)
       {
@@ -150,13 +146,13 @@ namespace BToken.Chaining
     }
     void insertSocket(ChainSocket newSocket)
     {
-      if (newSocket.isStrongerThan(Socket))
+      if (newSocket.isStrongerThan(SocketMain))
       {
-        swapChain(newSocket, Socket);
+        swapChain(newSocket, SocketMain);
         insertSocket(newSocket);
       }
 
-      ChainSocket socket = Socket;
+      ChainSocket socket = SocketMain;
       while (!newSocket.isStrongerThan(socket.WeakerSocket))
       {
         socket = socket.WeakerSocket;
@@ -176,27 +172,31 @@ namespace BToken.Chaining
       socket.StrongerSocket.insertAsWeakerSocket(socket.WeakerSocket);
       socket.disconnect();
     }
-
-
-    protected List<UInt256> getChainLinkLocator(Func<uint,uint> getNextLocation)
+    
+    protected List<UInt256> getChainLinkLocator(UInt256 checkpointHash, Func<uint,uint> getNextLocation)
     {
-      List<UInt256> chainLinklocator = new List<UInt256>();
-      Socket.Probe.reset();
+      List<UInt256> chainLinkLocator = new List<UInt256>();
+      SocketMain.Probe.reset();
       uint locator = 0;
 
-      while (!Socket.isProbeAtGenesis())
+      while (true)
       {
-        if (locator == Socket.Probe.Depth)
+        if (locator == SocketMain.Probe.Depth)
         {
-          chainLinklocator.Add(Socket.Probe.getHash());
-          locator = getNextLocation(Socket.Probe.Depth);
+          chainLinkLocator.Add(SocketMain.Probe.getHash());
+          locator = getNextLocation(SocketMain.Probe.Depth);
         }
-        Socket.Probe.push();
+
+        if (SocketMain.Probe.getHash().isEqual(checkpointHash) || SocketMain.isProbeAtGenesis())
+        {
+          return chainLinkLocator;
+        }
+        else
+        {
+          SocketMain.Probe.push();
+        }
       }
 
-      chainLinklocator.Add(Socket.Probe.getHash()); // This must be genesis
-
-      return chainLinklocator;
     }
   }
 }

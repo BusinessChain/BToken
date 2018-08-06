@@ -12,11 +12,13 @@ namespace BToken.Chaining
   partial class Headerchain : Chain
   {
     Network Network;
+    UInt256 CheckpointHash;
 
 
-    public Headerchain(ChainHeader genesisHeader, Network network) 
+    public Headerchain(ChainHeader genesisHeader, UInt256 checkpointHash, Network network) 
       : base(genesisHeader)
     {
+      CheckpointHash = checkpointHash;
       Network = network;
     }
 
@@ -27,39 +29,32 @@ namespace BToken.Chaining
       //Network.GetHeadersAsync(headerLocator);
       //await insertNetworkHeadersAsync(networkHeaderBuffer);
     }
-    public List<UInt256> getHeaderLocator(Func<uint, uint> getNextLocation)
-    {
-      return getChainLinkLocator(getNextLocation);
-    }
+
     public List<UInt256> getHeaderLocator()
     {
-      return getChainLinkLocator(getNextLocation);
-    }
-    uint getNextLocation(uint locator)
-    {
-      if (locator < 10)
-      {
-        return locator + 1;
-      }
-      else
-      {
-        return locator << 1;
-      }
-    }
-
-    public void RemoveExistingBlockHashInventories(List<Inventory> blockHashInventories)
-    {
-      for (int i = blockHashInventories.Count - 1; i >= 0; i--)
-      {
-        Inventory inventory = blockHashInventories[i];
-
-        if(ContainsChainLinkHash(inventory.Hash))
+      return getChainLinkLocator(
+        CheckpointHash,
+        locator =>
         {
-          blockHashInventories.RemoveAt(i);
-        }
-      }
+          if (locator < 10)
+            return locator + 1;
+          else
+            return locator * 2;
+        });
     }
 
+    public ChainHeader GetChainHeader(UInt256 hash)
+    {
+      return (ChainHeader)GetChainLink(hash);
+    }
+
+    public void insertNetworkHeaders(List<NetworkHeader> networkHeaders)
+    {
+      foreach(NetworkHeader networkHeader in networkHeaders)
+      {
+        insertNetworkHeader(networkHeader);
+      }
+    }
     public async Task insertNetworkHeadersAsync(BufferBlock<NetworkHeader> headerBuffer)
     {
       NetworkHeader networkHeader = await headerBuffer.ReceiveAsync();
@@ -71,15 +66,10 @@ namespace BToken.Chaining
         networkHeader = await headerBuffer.ReceiveAsync();
       }
     }
-    void insertNetworkHeader(NetworkHeader networkHeader)
+    public void insertNetworkHeader(NetworkHeader networkHeader)
     {
       ChainHeader chainHeader = new ChainHeader(networkHeader);
-      insertHeader(chainHeader);
-    }
-
-    void insertHeader(ChainHeader header)
-    {
-      insertChainLink(header);
+      insertChainLink(chainHeader);
     }
 
   }

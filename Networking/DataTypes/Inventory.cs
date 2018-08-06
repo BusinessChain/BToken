@@ -6,6 +6,15 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
+  enum InventoryType : UInt32
+  {
+    UNDEFINED = 0,
+    MSG_TX = 1,
+    MSG_BLOCK = 2,
+    MSG_FILTERED_BLOCK = 3,
+    MSG_CMPCT_BLOCK = 4
+  }
+
   class Inventory
   {
 

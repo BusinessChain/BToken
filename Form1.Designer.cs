@@ -28,34 +28,45 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.startButton = new System.Windows.Forms.Button();
-            this.SuspendLayout();
-            // 
-            // startButton
-            // 
-            this.startButton.Location = new System.Drawing.Point(104, 80);
-            this.startButton.Name = "startButton";
-            this.startButton.Size = new System.Drawing.Size(75, 23);
-            this.startButton.TabIndex = 0;
-            this.startButton.Text = "Start";
-            this.startButton.UseVisualStyleBackColor = true;
-            this.startButton.Click += new System.EventHandler(this.startButton_Click);
-            // 
-            // Form1
-            // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(284, 262);
-            this.Controls.Add(this.startButton);
-            this.Name = "Form1";
-            this.Text = "Form1";
-            this.ResumeLayout(false);
+      this.getHeadersButton = new System.Windows.Forms.Button();
+      this.textBox_LocatorHash = new System.Windows.Forms.TextBox();
+      this.SuspendLayout();
+      // 
+      // getHeadersButton
+      // 
+      this.getHeadersButton.Location = new System.Drawing.Point(13, 163);
+      this.getHeadersButton.Name = "getHeadersButton";
+      this.getHeadersButton.Size = new System.Drawing.Size(75, 23);
+      this.getHeadersButton.TabIndex = 1;
+      this.getHeadersButton.Text = "GetHeaders";
+      this.getHeadersButton.UseVisualStyleBackColor = true;
+      this.getHeadersButton.Click += new System.EventHandler(this.getHeadersButton_Click);
+      // 
+      // textBox_LocatorHash
+      // 
+      this.textBox_LocatorHash.Location = new System.Drawing.Point(13, 192);
+      this.textBox_LocatorHash.Name = "textBox_LocatorHash";
+      this.textBox_LocatorHash.Size = new System.Drawing.Size(391, 20);
+      this.textBox_LocatorHash.TabIndex = 2;
+      this.textBox_LocatorHash.Text = "0000000000000000001dc5c36260719a12153f8f06860b50b0bd29f267f55164";
+      // 
+      // Form1
+      // 
+      this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+      this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+      this.ClientSize = new System.Drawing.Size(467, 262);
+      this.Controls.Add(this.textBox_LocatorHash);
+      this.Controls.Add(this.getHeadersButton);
+      this.Name = "Form1";
+      this.Text = "Form1";
+      this.ResumeLayout(false);
+      this.PerformLayout();
 
         }
 
         #endregion
-
-        private System.Windows.Forms.Button startButton;
-    }
+    private System.Windows.Forms.Button getHeadersButton;
+    private System.Windows.Forms.TextBox textBox_LocatorHash;
+  }
 }
 

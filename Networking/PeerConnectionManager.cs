@@ -38,10 +38,10 @@ namespace BToken.Networking
 
             case "reject":
               RejectMessage rejectMessage = new RejectMessage(messageRemote.Payload);
-              throw new NetworkProtocolException(string.Format("Peer rejected handshake: '{0}'", rejectMessage.RejectionReason));
+              throw new NetworkException(string.Format("Peer rejected handshake: '{0}'", rejectMessage.RejectionReason));
 
             default:
-              throw new NetworkProtocolException(string.Format("Handshake aborted: Received improper message '{0}' during handshake session.", messageRemote.Command));
+              throw new NetworkException(string.Format("Handshake aborted: Received improper message '{0}' during handshake session.", messageRemote.Command));
           }
         }
         NetworkMessage responseToVersionMessageRemote()

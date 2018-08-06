@@ -1,4 +1,5 @@
-﻿
+﻿using System;
+
 namespace BToken.Networking
 {
   public class NetworkMessage

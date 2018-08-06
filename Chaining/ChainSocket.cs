@@ -16,9 +16,9 @@ namespace BToken.Chaining
       public ChainSocket WeakerSocketActive;
 
       public ChainLink ChainLink;
-      readonly ChainLink ChainLinkGenesis;
-
       public SocketProbe Probe;
+
+      readonly ChainLink ChainLinkGenesis;
 
       public ChainSocket(ChainLink chainLinkGenesis)
       {

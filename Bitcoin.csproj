@@ -61,6 +61,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Bitcoin\BitcoinGenesisChainBlock.cs" />
+    <Compile Include="Chaining\Blockchain\BlockchainController.cs" />
     <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
     <Compile Include="Chaining\Blockchain\TX.cs" />
@@ -101,7 +102,7 @@
     <Compile Include="Networking\Messages\RejectMessage.cs" />
     <Compile Include="Networking\Messages\VerAckMessage.cs" />
     <Compile Include="Networking\Messages\VersionMessage.cs" />
-    <Compile Include="Networking\NetworkProtocolException.cs" />
+    <Compile Include="Networking\NetworkException.cs" />
     <Compile Include="Networking\PeerConnectionManager.cs" />
     <Compile Include="Networking\Peer.cs" />
     <Compile Include="Networking\ProtocolVersion.cs" />

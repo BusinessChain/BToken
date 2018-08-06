@@ -9,6 +9,7 @@ namespace BToken.Chaining
   class ChainLinkException : Exception
   {
     public ChainLink ChainLink { get; private set; }
+    public ChainLinkCode ErrorCode { get; private set; }
 
 
     public ChainLinkException()
@@ -25,10 +26,10 @@ namespace BToken.Chaining
     {
     }
 
-    public ChainLinkException(ChainLink chainLink, ChainLinkCode result)
+    public ChainLinkException(ChainLink chainLink, ChainLinkCode errorCode)
     {
       ChainLink = chainLink;
-      HResult = (int)result;
+      ErrorCode = errorCode;
     }
   }
 }

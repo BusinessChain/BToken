@@ -9,19 +9,16 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  class Blockchain : Chain
+  partial class Blockchain : Chain
   {
-    Network Network;
-    BufferBlock<NetworkMessage> NetworkMessageListener;
-
     Headerchain Headerchain;
+    BlockchainController Controller;
 
 
-    public Blockchain(ChainBlock genesisBlock, Network network) : base(genesisBlock)
+    public Blockchain(ChainBlock genesisBlock, UInt256 checkpointHash, Network network) : base(genesisBlock)
     {
-      Network = network;
-      NetworkMessageListener = network.GetNetworkMessageListener();
-      Headerchain = new Headerchain(genesisBlock.Header, network);
+      Headerchain = new Headerchain(genesisBlock.Header, checkpointHash , network);
+      Controller = new BlockchainController(network, this);
     }
 
 
@@ -30,13 +27,12 @@ namespace BToken.Chaining
       //await Headerchain.buildAsync();
       //await buildAsync();
 
-      Task processMessagesUnsolicitedTask = ProcessMessagesUnsolicitedAsync();
-
+      await Controller.startAsync();
     }
     async Task buildAsync()
     {
       List<UInt256> blocksMissing = getBlocksMissing();
-      BufferBlock<NetworkBlock> networkBlockBuffer = Network.GetBlocks(blocksMissing);
+      BufferBlock<NetworkBlock> networkBlockBuffer = null;//Network.GetBlocks(blocksMissing);
 
       try
       {
@@ -44,14 +40,14 @@ namespace BToken.Chaining
       }
       catch (ChainLinkException ex)
       {
-        if (ex.HResult == (int)ChainLinkCode.DUPLICATE)
+        if (ex.ErrorCode == ChainLinkCode.DUPLICATE)
         {
-          Network.duplicateHash(ex.ChainLink.Hash);
+          //Network.duplicateHash(ex.ChainLink.Hash);
         }
 
-        if (ex.HResult == (int)ChainLinkCode.ORPHAN)
+        if (ex.ErrorCode == ChainLinkCode.ORPHAN)
         {
-          Network.orphanBlockHash(ex.ChainLink.Hash);
+          //Network.orphanBlockHash(ex.ChainLink.Hash);
         }
 
         await buildAsync();
@@ -59,7 +55,7 @@ namespace BToken.Chaining
     }
     List<UInt256> getBlocksMissing()
     {
-      return Headerchain.getHeaderLocator(getNextLocation);
+      return Headerchain.getHeaderLocator();
     }
     uint getNextLocation(uint locator)
     {
@@ -98,52 +94,5 @@ namespace BToken.Chaining
     }
 
 
-    async Task ProcessMessagesUnsolicitedAsync()
-    {
-      while (true)
-      {
-        NetworkMessage message = await NetworkMessageListener.ReceiveAsync();
-
-        switch (message)
-        {
-          case InvMessage invMessage:
-            await ProcessInventoryMessageUnsolicitedAsync(invMessage);
-            break;
-          case HeadersMessage headersMessage:
-            Console.WriteLine("headersMessage");
-            break;
-          default:
-            break;
-        }
-      }
-    }
-    async Task ProcessInventoryMessageUnsolicitedAsync(InvMessage invMessage)
-    {
-      List<Inventory> blockHashInventories = invMessage.Inventories.FindAll(i => i.Type == InventoryType.MSG_BLOCK);
-      Headerchain.RemoveExistingBlockHashInventories(blockHashInventories);
-      if(!blockHashInventories.Any())
-      {
-        return;
-      }
-
-      await Network.GetHeadersAdvertisedAsync(invMessage, Headerchain.getHash());
-      
-      //try
-      //{
-      //  Task insertNetworkHeadersTask = Headerchain.insertNetworkHeadersAsync(networkHeaderBuffer);
-      //}
-      //catch (ChainLinkException ex)
-      //{
-      //  if (ex.HResult == (int)ChainLinkCode.DUPLICATE)
-      //  {
-      //    Network.duplicateHash(ex.ChainLink.Hash);
-      //  }
-
-      //  if (ex.HResult == (int)ChainLinkCode.ORPHAN)
-      //  {
-      //    Network.orphanHeaderHash(ex.ChainLink.Hash);
-      //  }
-      //}
-    }
   }
 }

@@ -49,7 +49,11 @@ namespace BToken
       Array.Resize(ref byteArray, BYTE_LENGTH);
       return byteArray;
     }
-
+    public override string ToString()
+    {
+      SoapHexBinary soapHexBinary = new SoapHexBinary(GetBytes());
+      return soapHexBinary.ToString();
+    }
 
     public UInt256 multiplyBy(ulong factor)
     {

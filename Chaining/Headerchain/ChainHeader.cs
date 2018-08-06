@@ -49,7 +49,7 @@ namespace BToken.Chaining
     static UInt256 calculateHash(byte[] headerBytes)
     {
       byte[] hashBytes = Hashing.sha256d(headerBytes);
-      return new UInt256(headerBytes);
+      return new UInt256(hashBytes);
     }
 
     public override void connectToPrevious(ChainLink chainLinkPrevious)

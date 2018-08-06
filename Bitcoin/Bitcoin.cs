@@ -16,17 +16,18 @@ namespace BToken
 {
   partial class Bitcoin
   {
-    Network NetworkAdapter;
+    public Network NetworkAdapter;
     
     Blockchain Blockchain;
-    static readonly ChainBlock GenesisBlock = new BitcoinGenesisChainBlock();
+    readonly ChainBlock GenesisBlock = new BitcoinGenesisChainBlock();
+    readonly UInt256 CheckpointHash = new UInt256("000000000000000000209ecbacceb3e7b8ec520ed7f1cfafbe149dd2b9007d39");
 
     UnspentTXOutputs UTXO;
 
     public Bitcoin()
     {
       NetworkAdapter = new Network(/* Bitcoin configuration */);
-      Blockchain = new Blockchain(GenesisBlock, NetworkAdapter);
+      Blockchain = new Blockchain(GenesisBlock, CheckpointHash, NetworkAdapter);
       UTXO = new UnspentTXOutputs(Blockchain, NetworkAdapter);
     }
 
