@@ -43,11 +43,11 @@ namespace BToken.Networking
       return new Inventory(type, hash);
     }
     
-    public List<Inventory> GetInventoriesBlock()
+    public List<Inventory> GetBlockInventories()
     {
       return Inventories.FindAll(i => i.Type == InventoryType.MSG_BLOCK);
     }
-    public List<Inventory> GetInventoriesTX()
+    public List<Inventory> GetTXInventories()
     {
       return Inventories.FindAll(i => i.Type == InventoryType.MSG_TX);
     }

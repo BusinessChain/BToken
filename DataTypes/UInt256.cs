@@ -25,9 +25,8 @@ namespace BToken
       {
         throw new ArgumentException(string.Format("Length of data bytes must be '{0}', but has '{1}'", BYTE_LENGTH, dataBytes.Length));
       }
-      byte[] unsignedPrefix = new byte[] { 0x00 };
-      dataBytes = unsignedPrefix.Concat(dataBytes).ToArray();
-      Array.Reverse(dataBytes);
+      byte[] unsignedPostfix = new byte[] { 0x00 };
+      dataBytes = dataBytes.Concat(unsignedPostfix).ToArray();
       Data = new BigInteger(dataBytes);
     }
     public UInt256(string hexValue)
@@ -70,6 +69,11 @@ namespace BToken
     }
     public bool isEqual(UInt256 number)
     {
+      if(number == null)
+      {
+        return false;
+      }
+
       return Data.Equals(number.Data);
     }
 

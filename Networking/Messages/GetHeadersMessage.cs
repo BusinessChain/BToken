@@ -11,10 +11,10 @@ namespace BToken.Networking
     class GetHeadersMessage : NetworkMessage
     {
       UInt32 ProtocolVersion;
-      IEnumerable<UInt256> HeaderLocator;
+      List<UInt256> HeaderLocator;
       UInt256 StopHash;
       
-      public GetHeadersMessage(IEnumerable<UInt256> headerLocator) : base("getheaders")
+      public GetHeadersMessage(List<UInt256> headerLocator) : base("getheaders")
       {
         ProtocolVersion = Network.ProtocolVersion;
         HeaderLocator = headerLocator;

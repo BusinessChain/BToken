@@ -29,7 +29,7 @@ namespace BToken.Chaining
         }
         public bool isHash(UInt256 hash)
         {
-          return getHash() == hash;
+          return getHash().isEqual(hash);
         }
 
         public bool isStrongerThan(SocketProbe probe)

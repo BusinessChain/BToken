@@ -40,7 +40,7 @@ namespace BToken.Chaining
         return ChainLinkPrevious.getChainLinkPrevious(--depth);
       }
 
-      return this;
+      return ChainLinkPrevious;
     }
     public void connectToNext(ChainLink chainLinkNext)
     {
@@ -52,7 +52,7 @@ namespace BToken.Chaining
     }
     public virtual void connectToPrevious(ChainLink chainLinkPrevious)
     {
-      Height = Height + 1;
+      Height = chainLinkPrevious.Height + 1;
       ChainLinkPrevious = chainLinkPrevious;
     }
     public bool isGenesis()

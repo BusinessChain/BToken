@@ -32,15 +32,15 @@ namespace BToken.Chaining
 
     public List<UInt256> getHeaderLocator()
     {
-      return getChainLinkLocator(
-        CheckpointHash,
-        locator =>
-        {
-          if (locator < 10)
-            return locator + 1;
-          else
-            return locator * 2;
-        });
+      uint getNextLocation(uint locator)
+      {
+        if (locator < 10)
+          return locator + 1;
+        else
+          return locator * 2;
+      }
+
+      return getChainLinkLocator(CheckpointHash, getNextLocation);
     }
 
     public ChainHeader GetChainHeader(UInt256 hash)
@@ -48,13 +48,6 @@ namespace BToken.Chaining
       return (ChainHeader)GetChainLink(hash);
     }
 
-    public void insertNetworkHeaders(List<NetworkHeader> networkHeaders)
-    {
-      foreach(NetworkHeader networkHeader in networkHeaders)
-      {
-        insertNetworkHeader(networkHeader);
-      }
-    }
     public async Task insertNetworkHeadersAsync(BufferBlock<NetworkHeader> headerBuffer)
     {
       NetworkHeader networkHeader = await headerBuffer.ReceiveAsync();

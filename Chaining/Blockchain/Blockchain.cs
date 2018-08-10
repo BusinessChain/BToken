@@ -28,6 +28,7 @@ namespace BToken.Chaining
       //await buildAsync();
 
       await Controller.startAsync();
+      Console.Write("helle");
     }
     async Task buildAsync()
     {

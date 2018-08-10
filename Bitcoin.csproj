@@ -61,9 +61,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Bitcoin\BitcoinGenesisChainBlock.cs" />
-    <Compile Include="Chaining\Blockchain\BlockchainController.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
     <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\NetworkMessageSession.cs" />
     <Compile Include="Chaining\Blockchain\TX.cs" />
     <Compile Include="Chaining\ChainLink.cs" />
     <Compile Include="Chaining\ChainSocket.cs" />

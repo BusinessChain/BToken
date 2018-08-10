@@ -20,24 +20,23 @@ namespace BToken.Networking
     const Byte RelayOption = 0x01;
     static readonly UInt64 Nonce = createNonce();
 
-    List<Peer> PeerEndPoints = new List<Peer>();
-    BufferBlock<NetworkMessage> UTXONetworkMessages = new BufferBlock<NetworkMessage>();
-    BufferBlock<NetworkMessage> BlockchainNetworkMessages = new BufferBlock<NetworkMessage>();
+    List<Peer> PeersConnected = new List<Peer>();
 
+    
     public Network()
     {
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("185.6.124.16"), 8333), this);// Satoshi 0.16.0
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("180.117.10.97"), 8333), this); // Satoshi 0.15.1
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("49.64.118.12"), 8333), this); // Satoshi 0.15.1
-      PeerEndPoints.Add(new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this)); // Satoshi 0.16.0
-      //PeerEndPoints.Add(new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this)); // Satoshi 0.16.1 
+      //PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this)); // Satoshi 0.16.0
+      PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this)); // Satoshi 0.16.1 
     }
 
     public async Task startAsync(uint blockheightLocal)
     {
       try
       {
-        await PeerEndPoints.First().startAsync(blockheightLocal);
+        await PeersConnected.First().startAsync(blockheightLocal);
       }
       catch (NetworkException ex)
       {
@@ -45,39 +44,53 @@ namespace BToken.Networking
       }
     }
 
-    async Task RelayMessageIncomingAsync(NetworkMessage networkMessage)
+    async Task RelayMessageIncomingAsync(NetworkMessage networkMessage, Peer peer)
     {
       switch (networkMessage)
       {
         case InvMessage invMessage:
-          await RelayInventoryMessageAsync(invMessage);
+          await RelayInventoryMessageAsync(invMessage, peer);
           break;
+
         case HeadersMessage headersMessage:
-          await BlockchainNetworkMessages.SendAsync(headersMessage);
+          await peer.NetworkMessageBufferBlockchain.SendAsync(headersMessage);
           break;
+
         default:
           break;
       }
     }
-    async Task RelayInventoryMessageAsync(InvMessage invMessage)
+    async Task RelayInventoryMessageAsync(InvMessage invMessage, Peer peer)
     {
-      if (invMessage.GetInventoriesBlock().Any())
+      if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
       {
-        await BlockchainNetworkMessages.SendAsync(invMessage);
+        await peer.NetworkMessageBufferBlockchain.SendAsync(invMessage);
       }
-      if (invMessage.GetInventoriesTX().Any())
+      if (invMessage.GetTXInventories().Any())
       {
-        await UTXONetworkMessages.SendAsync(invMessage);
+        await peer.NetworkMessageBufferUTXO.SendAsync(invMessage);
       }
     }
 
-    public async Task<NetworkMessage> ReceiveBlockchainNetworkMessageAsync()
+    public async Task<List<BufferBlock<NetworkMessage>>> GetNetworkBuffersBlockchainAsync()
     {
-      return await BlockchainNetworkMessages.ReceiveAsync();
+      List<Peer> connectedPeers = await GetConnectedPeersAsync();
+      return connectedPeers.Select(p => p.NetworkMessageBufferBlockchain).ToList();
     }
-    public async Task<NetworkMessage> ReceiveUTXONetworkMessageAsync()
+
+    async Task<List<Peer>> GetConnectedPeersAsync()
     {
-      return await UTXONetworkMessages.ReceiveAsync();
+      if(PeersConnected.Count == 0)
+      {
+        Peer peerNew = await ConnectNewPeerAsync();
+        PeersConnected.Add(peerNew);
+      }
+
+      return PeersConnected;
+    }
+    async Task<Peer> ConnectNewPeerAsync()
+    {
+      throw new NotImplementedException();
     }
 
     public BufferBlock<NetworkBlock> GetBlocks(IEnumerable<UInt256> headerHashes)
@@ -87,34 +100,22 @@ namespace BToken.Networking
 
     public async Task GetHeadersAsync(UInt256 headerHashChainTip)
     {
-      await PeerEndPoints.First().GetHeadersAsync(new List<UInt256>() { headerHashChainTip });
+      await PeersConnected.First().GetHeadersAsync(new List<UInt256>() { headerHashChainTip });
     }
-    public async Task GetHeadersAdvertisedAsync(InvMessage invMessage, IEnumerable<UInt256> headerLocator)
+    public async Task GetHeadersAdvertisedAsync(NetworkMessage networkMessage, List<UInt256> headerLocator)
     {
-      Peer peer = GetPeerOriginOfNetworkMessage(invMessage);
+      Peer peer = GetPeerOriginOfNetworkMessage(networkMessage);
       if (peer == null)
       {
-        Console.WriteLine("Could not find peer that advertised invMessage containing '{0}' block inventories.", invMessage.GetInventoriesBlock().Count);
         return;
       }
       await peer.GetHeadersAsync(headerLocator);
     }
     Peer GetPeerOriginOfNetworkMessage(NetworkMessage networkMessage)
     {
-      return PeerEndPoints.Find(p => p.IsOriginOfNetworkMessage(networkMessage));
+      return PeersConnected.Find(p => p.IsOriginOfNetworkMessage(networkMessage));
     }
 
-    public async Task RequestOrphanParentHeadersAsync(HeadersMessage headersMessage, UInt256 hash, List<UInt256> headerLocator)
-    {
-      Peer peer = GetPeerOriginOfNetworkMessage(headersMessage);
-      if (peer == null)
-      {
-        Console.WriteLine("Could not find peer that sent headersMessage containing orphan hash '{0}'", hash.ToString());
-        return;
-      }
-
-      await peer.RequestOrphanParentHeadersAsync(headerLocator);
-    }
     public void orphanBlockHash(UInt256 hash)
     {
       throw new NotImplementedException();

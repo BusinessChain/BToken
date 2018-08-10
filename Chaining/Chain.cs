@@ -24,8 +24,7 @@ namespace BToken.Chaining
       validate(chainLink);
       chainLinkPrevious.connectToNext(chainLink);
 
-      ChainSocket socket = plugChainLinkIntoSocket(chainLink);
-      insertSocket(socket);
+      plugChainLinkIntoSocket(chainLink);
     }
     void validate(ChainLink chainLink)
     {
@@ -46,6 +45,28 @@ namespace BToken.Chaining
       }
 
       return chainLinkPrevious;
+    }
+    void insertSocket(ChainSocket newSocket)
+    {
+      if (newSocket.isStrongerThan(SocketMain))
+      {
+        swapChain(newSocket, SocketMain);
+        insertSocket(newSocket);
+      }
+
+      ChainSocket socket = SocketMain;
+      while (!newSocket.isStrongerThan(socket.WeakerSocket))
+      {
+        socket = socket.WeakerSocket;
+      }
+
+      socket.connectWeakerSocket(newSocket);
+    }
+    void swapChain(ChainSocket socket1, ChainSocket socket2)
+    {
+      ChainLink chainLinkTemp = socket2.ChainLink;
+      socket2.plugin(socket1.ChainLink);
+      socket1.plugin(chainLinkTemp);
     }
 
     public uint getHeight()
@@ -113,21 +134,23 @@ namespace BToken.Chaining
       }
     }
 
-    ChainSocket plugChainLinkIntoSocket(ChainLink chainLink)
+    void plugChainLinkIntoSocket(ChainLink chainLink)
     {
       ChainSocket socket = getSocket(chainLink.getChainLinkPrevious());
 
-      if (socket != null)
-      {
-        socket.plugin(chainLink);
-        removeSocket(socket);
-      }
-      else
+      if(socket == null)
       {
         socket = new ChainSocket(chainLink);
+        return;
       }
 
-      return socket;
+      socket.plugin(chainLink);
+
+      if (socket != SocketMain)
+      {
+        socket.remove();
+        insertSocket(socket);
+      }
     }
     ChainSocket getSocket(ChainLink chainLink)
     {
@@ -144,35 +167,11 @@ namespace BToken.Chaining
 
       return null;
     }
-    void insertSocket(ChainSocket newSocket)
-    {
-      if (newSocket.isStrongerThan(SocketMain))
-      {
-        swapChain(newSocket, SocketMain);
-        insertSocket(newSocket);
-      }
-
-      ChainSocket socket = SocketMain;
-      while (!newSocket.isStrongerThan(socket.WeakerSocket))
-      {
-        socket = socket.WeakerSocket;
-      }
-
-      socket.insertAsWeakerSocket(newSocket);
-    }
-    void swapChain(ChainSocket socket1, ChainSocket socket2)
-    {
-      ChainLink chainLinkTemp = socket2.ChainLink;
-      socket2.plugin(socket1.ChainLink);
-      socket1.plugin(chainLinkTemp);
-    }
     
-    void removeSocket(ChainSocket socket)
-    {
-      socket.StrongerSocket.insertAsWeakerSocket(socket.WeakerSocket);
-      socket.disconnect();
-    }
     
+    /// <summary>
+    /// Generates the chain locator object. If the checkpoint is not null, it will be treated as if the Genesis block hash.
+    /// </summary>
     protected List<UInt256> getChainLinkLocator(UInt256 checkpointHash, Func<uint,uint> getNextLocation)
     {
       List<UInt256> chainLinkLocator = new List<UInt256>();
@@ -181,20 +180,19 @@ namespace BToken.Chaining
 
       while (true)
       {
+        if(SocketMain.Probe.isHash(checkpointHash) || SocketMain.isProbeAtGenesis())
+        {
+          chainLinkLocator.Add(SocketMain.Probe.getHash());
+          return chainLinkLocator;
+        }
+
         if (locator == SocketMain.Probe.Depth)
         {
           chainLinkLocator.Add(SocketMain.Probe.getHash());
           locator = getNextLocation(SocketMain.Probe.Depth);
         }
 
-        if (SocketMain.Probe.getHash().isEqual(checkpointHash) || SocketMain.isProbeAtGenesis())
-        {
-          return chainLinkLocator;
-        }
-        else
-        {
-          SocketMain.Probe.push();
-        }
+        SocketMain.Probe.push();
       }
 
     }

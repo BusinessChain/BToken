@@ -55,14 +55,7 @@ namespace BToken.Chaining
         WeakerSocketActive = WeakerSocket;
       }
 
-      public void disconnect()
-      {
-        StrongerSocket = null;
-        StrongerSocketActive = null;
-        WeakerSocket = null;
-        WeakerSocketActive = null;
-      }
-      public void insertAsWeakerSocket(ChainSocket weakerSocket)
+      public void connectWeakerSocket(ChainSocket weakerSocket)
       {
         weakerSocket.WeakerSocket = WeakerSocket;
         weakerSocket.WeakerSocketActive = WeakerSocket;
@@ -78,6 +71,25 @@ namespace BToken.Chaining
 
         WeakerSocket = weakerSocket;
         WeakerSocketActive = weakerSocket;
+      }
+
+      public void remove()
+      {
+        if(StrongerSocket != null)
+        {
+          StrongerSocket.WeakerSocket = WeakerSocket;
+          StrongerSocket.WeakerSocketActive = WeakerSocket;
+        }
+        if (WeakerSocket != null)
+        {
+          WeakerSocket.StrongerSocket = StrongerSocket;
+          WeakerSocket.StrongerSocketActive = StrongerSocket;
+        }
+
+        StrongerSocket = null;
+        StrongerSocketActive = null;
+        WeakerSocket = null;
+        WeakerSocketActive = null;
       }
 
       public void plugin(ChainLink chainLink)
