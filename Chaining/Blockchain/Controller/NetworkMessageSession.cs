@@ -98,6 +98,13 @@ namespace BToken.Chaining
               // What happens if invalid ??
             }
           }
+
+          if (headersMessage.NetworkHeaders.Any())
+          {
+            List<UInt256> headerLocator = Controller.Blockchain.Headerchain.getHeaderLocator();
+            await Controller.Network.GetHeadersAdvertisedAsync(headersMessage, headerLocator);
+            return;
+          }
         }
 
         public bool ContainsBuffer(BufferBlock<NetworkMessage> sessionMessageBuffer)

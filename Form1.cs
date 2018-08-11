@@ -31,6 +31,5 @@ namespace BToken
       Console.WriteLine("Send 'getheaders', locator = " + hashString);
       await Node.NetworkAdapter.GetHeadersAsync(hash);
     }
-
   }
 }

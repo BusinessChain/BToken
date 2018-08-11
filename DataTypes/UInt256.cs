@@ -77,13 +77,13 @@ namespace BToken
       return Data.Equals(number.Data);
     }
 
-    public static UInt256 Max(UInt256 number1, UInt256 number2)
+    public static UInt256 Min(UInt256 number1, UInt256 number2)
     {
       if(number1.isGreaterThan(number2))
       {
-        return number1;
+        return number2;
       }
-      return number2;
+      return number1;
     }
 
     public static explicit operator double(UInt256 d)

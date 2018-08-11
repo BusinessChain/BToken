@@ -40,7 +40,7 @@ namespace BToken.Chaining
         return ChainLinkPrevious.getChainLinkPrevious(--depth);
       }
 
-      return ChainLinkPrevious;
+      return this;
     }
     public void connectToNext(ChainLink chainLinkNext)
     {

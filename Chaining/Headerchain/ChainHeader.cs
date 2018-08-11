@@ -69,7 +69,7 @@ namespace BToken.Chaining
     }
     public ChainHeader getHeaderPrevious()
     {
-      return getHeaderPrevious(0);
+      return getHeaderPrevious(1);
     }
     public ChainHeader getHeaderPrevious(uint depth)
     {

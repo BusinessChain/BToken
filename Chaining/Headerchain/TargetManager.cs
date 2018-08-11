@@ -14,19 +14,19 @@ namespace BToken.Chaining
       const double MAX_TARGET = 2.695994666715064E67;
 
 
-      public static UInt256 getNextTarget(ChainHeader header)
+      public static UInt256 getNextTarget(ChainHeader headerPrevious)
       {
-        uint nextHeight = header.Height + 1;
+        uint nextHeight = headerPrevious.Height + 1;
 
         if ((nextHeight % RETARGETING_BLOCK_INTERVAL) != 0)
         {
-          return header.Target;
+          return headerPrevious.Target;
         }
 
-        ChainHeader headerIntervalStart = header.getHeaderPrevious(RETARGETING_BLOCK_INTERVAL - 1);
+        ChainHeader headerIntervalStart = headerPrevious.getHeaderPrevious(RETARGETING_BLOCK_INTERVAL - 1);
 
-        ulong actualTimespan = limit(header.UnixTimeSeconds - headerIntervalStart.UnixTimeSeconds);
-        return calculateTarget(header.Target, actualTimespan);
+        ulong actualTimespan = limit(headerPrevious.UnixTimeSeconds - headerIntervalStart.UnixTimeSeconds);
+        return calculateTarget(headerPrevious.Target, actualTimespan);
       }
       static ulong limit(ulong actualTimespan)
       {
@@ -46,7 +46,7 @@ namespace BToken.Chaining
       {
         UInt256 newTarget = oldTarget.multiplyBy(actualTimespan).divideBy(RETARGETING_TIMESPAN_INTERVAL);
 
-        return UInt256.Max(MaxTarget, newTarget);
+        return UInt256.Min(MaxTarget, newTarget);
       }
 
       public static double getDifficulty(UInt256 target)

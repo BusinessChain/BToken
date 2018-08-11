@@ -44,9 +44,7 @@ namespace BToken.Networking
       {
         try
         {
-          await EstablishTcpConnection();
-
-          await handshakeAsync(blockheightLocal);
+          await EstablishPeerConnection(blockheightLocal);
 
           Task processMessagesIncomingTask = ProcessMessagesIncomingAsync();
         }
@@ -57,13 +55,21 @@ namespace BToken.Networking
           throw new NetworkException(string.Format("Connection failed with peer '{0}:{1}'", IPEndPoint.Address.ToString(), IPEndPoint.Port.ToString()), ex);
         }
       }
-      async Task EstablishTcpConnection()
+      async Task EstablishPeerConnection(uint blockheightLocal)
       {
-        TcpClient = new TcpClient(new IPEndPoint(IPAddress.Any, 8333));
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        CancellationToken token = cts.Token;
+
+        await ConnectTCPAsync();
+        await handshakeAsync(blockheightLocal, token);
+      }
+      async Task ConnectTCPAsync()
+      {
+        TcpClient = new TcpClient(new IPEndPoint(IPAddress.Any, Port));
         await TcpClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port);
         NetworkMessageStreamer = new MessageStreamer(TcpClient.GetStream());
       }
-      async Task handshakeAsync(uint blockchainHeightLocal)
+      async Task handshakeAsync(uint blockchainHeightLocal, CancellationToken cancellationToken)
       {
         await NetworkMessageStreamer.WriteAsync(new VersionMessage(blockchainHeightLocal));
 
@@ -153,6 +159,7 @@ namespace BToken.Networking
       {
         TcpClient.Close();
       }
+      
     }
   }
 }

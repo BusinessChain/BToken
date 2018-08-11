@@ -17,7 +17,7 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NETWORK;
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NONE; 
     const string UserAgent = "/BToken:0.0.0/";
-    const Byte RelayOption = 0x01;
+    const Byte RelayOption = 0x00;
     static readonly UInt64 Nonce = createNonce();
 
     List<Peer> PeersConnected = new List<Peer>();
@@ -28,8 +28,8 @@ namespace BToken.Networking
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("185.6.124.16"), 8333), this);// Satoshi 0.16.0
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("180.117.10.97"), 8333), this); // Satoshi 0.15.1
       // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("49.64.118.12"), 8333), this); // Satoshi 0.15.1
-      //PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this)); // Satoshi 0.16.0
-      PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this)); // Satoshi 0.16.1 
+      PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this)); // Satoshi 0.16.0
+      //PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this)); // Satoshi 0.16.1 
     }
 
     public async Task startAsync(uint blockheightLocal)
@@ -43,35 +43,7 @@ namespace BToken.Networking
         throw new NetworkException("Connection failed with network", ex);
       }
     }
-
-    async Task RelayMessageIncomingAsync(NetworkMessage networkMessage, Peer peer)
-    {
-      switch (networkMessage)
-      {
-        case InvMessage invMessage:
-          await RelayInventoryMessageAsync(invMessage, peer);
-          break;
-
-        case HeadersMessage headersMessage:
-          await peer.NetworkMessageBufferBlockchain.SendAsync(headersMessage);
-          break;
-
-        default:
-          break;
-      }
-    }
-    async Task RelayInventoryMessageAsync(InvMessage invMessage, Peer peer)
-    {
-      if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
-      {
-        await peer.NetworkMessageBufferBlockchain.SendAsync(invMessage);
-      }
-      if (invMessage.GetTXInventories().Any())
-      {
-        await peer.NetworkMessageBufferUTXO.SendAsync(invMessage);
-      }
-    }
-
+    
     public async Task<List<BufferBlock<NetworkMessage>>> GetNetworkBuffersBlockchainAsync()
     {
       List<Peer> connectedPeers = await GetConnectedPeersAsync();
