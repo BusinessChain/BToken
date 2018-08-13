@@ -49,16 +49,16 @@ namespace BToken.Networking
 
       public async Task WriteAsync(NetworkMessage networkMessage)
       {
-        await Stream.WriteAsync(MagicBytes, 0, MagicBytes.Length);
+        Stream.Write(MagicBytes, 0, MagicBytes.Length);
 
         byte[] command = Encoding.ASCII.GetBytes(networkMessage.Command.PadRight(CommandSize, '\0'));
-        await Stream.WriteAsync(command, 0, CommandSize);
+        Stream.Write(command, 0, CommandSize);
 
         byte[] payloadLength = BitConverter.GetBytes(networkMessage.Payload.Length);
-        await Stream.WriteAsync(payloadLength, 0, LengthSize);
+        Stream.Write(payloadLength, 0, LengthSize);
         
         byte[] checksum = createChecksum(networkMessage.Payload);
-        await Stream.WriteAsync(checksum, 0, ChecksumSize);
+        Stream.Write(checksum, 0, ChecksumSize);
 
         await Stream.WriteAsync(networkMessage.Payload, 0, networkMessage.Payload.Length);
       }

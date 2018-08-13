@@ -16,24 +16,27 @@ namespace BToken
 {
   partial class Bitcoin
   {
-    public Network NetworkAdapter;
+    public Network Network;
     
     Blockchain Blockchain;
-    readonly ChainBlock GenesisBlock = new BitcoinGenesisChainBlock();
+
     readonly UInt256 CheckpointHash = new UInt256("000000000000000000209ecbacceb3e7b8ec520ed7f1cfafbe149dd2b9007d39");
+    readonly Blockchain.ChainBlock GenesisBlock = new BitcoinGenesisChainBlock();
 
     UnspentTXOutputs UTXO;
 
     public Bitcoin()
     {
-      NetworkAdapter = new Network(/* Bitcoin configuration */);
-      Blockchain = new Blockchain(GenesisBlock, CheckpointHash, NetworkAdapter);
-      UTXO = new UnspentTXOutputs(Blockchain, NetworkAdapter);
+      Network = new Network(/* Bitcoin configuration */);
+
+      Blockchain = new Blockchain(GenesisBlock, CheckpointHash, Network);
+
+      UTXO = new UnspentTXOutputs(Blockchain, Network);
     }
 
     public async Task startAsync()
     {
-      await NetworkAdapter.startAsync(Blockchain.getHeight());
+      await Network.startAsync(Blockchain.getHeight());
       await Blockchain.startAsync();
       //await UTXO.startAsync();
       Console.Write("helle");

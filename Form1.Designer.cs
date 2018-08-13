@@ -30,6 +30,7 @@
         {
       this.getHeadersButton = new System.Windows.Forms.Button();
       this.textBox_LocatorHash = new System.Windows.Forms.TextBox();
+      this.button_ping = new System.Windows.Forms.Button();
       this.SuspendLayout();
       // 
       // getHeadersButton
@@ -50,11 +51,22 @@
       this.textBox_LocatorHash.TabIndex = 2;
       this.textBox_LocatorHash.Text = "00000000000000000024ee96acb254c7847c2f4c792570845e1e0203dc26872e";
       // 
+      // button_ping
+      // 
+      this.button_ping.Location = new System.Drawing.Point(197, 66);
+      this.button_ping.Name = "button_ping";
+      this.button_ping.Size = new System.Drawing.Size(75, 23);
+      this.button_ping.TabIndex = 3;
+      this.button_ping.Text = "Ping!";
+      this.button_ping.UseVisualStyleBackColor = true;
+      this.button_ping.Click += new System.EventHandler(this.button_ping_Click);
+      // 
       // Form1
       // 
       this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
       this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
       this.ClientSize = new System.Drawing.Size(467, 262);
+      this.Controls.Add(this.button_ping);
       this.Controls.Add(this.textBox_LocatorHash);
       this.Controls.Add(this.getHeadersButton);
       this.Name = "Form1";
@@ -67,6 +79,7 @@
         #endregion
     private System.Windows.Forms.Button getHeadersButton;
     private System.Windows.Forms.TextBox textBox_LocatorHash;
+    private System.Windows.Forms.Button button_ping;
   }
 }
 

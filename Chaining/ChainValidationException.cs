@@ -6,30 +6,33 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  class ChainLinkException : Exception
+  abstract partial class Chain
   {
-    public ChainLink ChainLink { get; private set; }
-    public ChainLinkCode ErrorCode { get; private set; }
-
-
-    public ChainLinkException()
+    protected class ChainLinkException : Exception
     {
-    }
+      public ChainLink ChainLink { get; private set; }
+      public ChainLinkCode ErrorCode { get; private set; }
 
-    public ChainLinkException(string message)
-        : base(message)
-    {
-    }
 
-    public ChainLinkException(string message, Exception inner)
-        : base(message, inner)
-    {
-    }
+      public ChainLinkException()
+      {
+      }
 
-    public ChainLinkException(ChainLink chainLink, ChainLinkCode errorCode)
-    {
-      ChainLink = chainLink;
-      ErrorCode = errorCode;
+      public ChainLinkException(string message)
+          : base(message)
+      {
+      }
+
+      public ChainLinkException(string message, Exception inner)
+          : base(message, inner)
+      {
+      }
+
+      public ChainLinkException(ChainLink chainLink, ChainLinkCode errorCode)
+      {
+        ChainLink = chainLink;
+        ErrorCode = errorCode;
+      }
     }
   }
 }

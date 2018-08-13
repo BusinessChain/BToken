@@ -3,7 +3,7 @@ using System;
 
 namespace BToken.Chaining
 {
-  public enum ChainLinkCode { ORPHAN, DUPLICATE, INVALID, EXPIRED };
+  public enum ChainLinkCode { ORPHAN, DUPLICATE, INVALID, EXPIRED, CHECKPOINT };
 
   abstract partial class Chain
   {
@@ -13,38 +13,37 @@ namespace BToken.Chaining
 
     public Chain(ChainLink chainLinkGenesis)
     {
-      SocketMain = new ChainSocket(chainLinkGenesis);
+      SocketMain = new ChainSocket(
+        this, 
+        chainLinkGenesis,
+        GetDifficulty(chainLinkGenesis),
+        0);
     }
 
     public void insertChainLink(ChainLink chainLink)
     {
-      ChainLink chainLinkPrevious = getChainLinkPrevious(chainLink);
+      ChainSocket.SocketProbe socketProbeChainLinkPrevious = GetSocketProbe(chainLink.HashPrevious);
 
-      chainLink.connectToPrevious(chainLinkPrevious);
-      validate(chainLink);
-      chainLinkPrevious.connectToNext(chainLink);
-
-      plugChainLinkIntoSocket(chainLink);
-    }
-    void validate(ChainLink chainLink)
-    {
-      if (chainLink.getChainLinkPrevious().isConnectedToNext(chainLink))
-      {
-        throw new ChainLinkException(chainLink, ChainLinkCode.DUPLICATE);
-      }
-
-      chainLink.validate();
-    }
-    ChainLink getChainLinkPrevious(ChainLink chainLink)
-    {
-      ChainLink chainLinkPrevious = GetChainLink(chainLink.HashPrevious);
-
-      if (chainLinkPrevious == null)
+      if (socketProbeChainLinkPrevious == null)
       {
         throw new ChainLinkException(chainLink, ChainLinkCode.ORPHAN);
       }
 
-      return chainLinkPrevious;
+      socketProbeChainLinkPrevious.InsertChainLink(chainLink);
+    }
+    protected virtual void ConnectChainLinks(ChainLink chainLinkPrevious, ChainLink chainLink)
+    {
+      chainLink.Height = chainLinkPrevious.Height + 1; //Weg, die Height soll in den Sockel
+      chainLink.ChainLinkPrevious = chainLinkPrevious;
+      chainLinkPrevious.NextChainLinks.Add(chainLink);
+    }
+    protected virtual void Validate(ChainLink chainLinkPrevious, ChainLink chainLink)
+    {
+
+      if (chainLinkPrevious.isConnectedToNext(chainLink))
+      {
+        throw new ChainLinkException(chainLink, ChainLinkCode.DUPLICATE);
+      }
     }
     void insertSocket(ChainSocket newSocket)
     {
@@ -65,10 +64,33 @@ namespace BToken.Chaining
     void swapChain(ChainSocket socket1, ChainSocket socket2)
     {
       ChainLink chainLinkTemp = socket2.ChainLink;
-      socket2.plugin(socket1.ChainLink);
-      socket1.plugin(chainLinkTemp);
+      socket2.appendChainLink(socket1.ChainLink);
+      socket1.appendChainLink(chainLinkTemp);
     }
 
+    public abstract double GetDifficulty(ChainLink chainLink);
+    protected bool IsChainLinkDeeperThanCheckpoint(ChainLink chainLink, UInt256 checkpointHash)
+    {
+      ChainSocket socket = SocketMain;
+      socket.Probe.reset();
+      
+      while(!socket.Probe.IsGenesis())
+      {
+        if (socket.Probe.IsChainLink(chainLink))
+        {
+          return false;
+        }
+
+        if (socket.Probe.IsHash(checkpointHash))
+        {
+          return true;
+        }
+
+        socket.Probe.push();
+      }
+
+      throw new InvalidOperationException("Neither chainLink nor checkpoint in chain encountered.");
+    }
     public uint getHeight()
     {
       return SocketMain.ChainLink.Height;
@@ -78,19 +100,19 @@ namespace BToken.Chaining
       return SocketMain.ChainLink.Hash;
     }
 
-    protected ChainLink GetChainLink(UInt256 hash)
+    protected ChainSocket.SocketProbe GetSocketProbe(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
       resetProbes();
 
       while (socket != null)
       {
-        if (socket.Probe.isHash(hash))
+        if (socket.Probe.IsHash(hash))
         {
-          return socket.Probe.ChainLink;
+          return socket.Probe;
         }
 
-        if (socket.isProbeAtGenesis())
+        if (socket.Probe.IsGenesis())
         {
           socket.bypass();
 
@@ -123,6 +145,10 @@ namespace BToken.Chaining
 
       return null;
     }
+    protected ChainLink GetChainLink(UInt256 hash)
+    {
+      return GetSocketProbe(hash).ChainLink;
+    }
     void resetProbes()
     {
       ChainSocket socket = SocketMain;
@@ -133,41 +159,7 @@ namespace BToken.Chaining
         socket = socket.WeakerSocket;
       }
     }
-
-    void plugChainLinkIntoSocket(ChainLink chainLink)
-    {
-      ChainSocket socket = getSocket(chainLink.getChainLinkPrevious());
-
-      if(socket == null)
-      {
-        socket = new ChainSocket(chainLink);
-        return;
-      }
-
-      socket.plugin(chainLink);
-
-      if (socket != SocketMain)
-      {
-        socket.remove();
-        insertSocket(socket);
-      }
-    }
-    ChainSocket getSocket(ChainLink chainLink)
-    {
-      ChainSocket socket = SocketMain;
-
-      while (socket != null)
-      {
-        if(socket.ChainLink == chainLink)
-        {
-          return socket;
-        }
-        socket = socket.WeakerSocket;
-      }
-
-      return null;
-    }
-    
+        
     
     /// <summary>
     /// Generates the chain locator object. If the checkpoint is not null, it will be treated as if the Genesis block hash.
@@ -180,7 +172,7 @@ namespace BToken.Chaining
 
       while (true)
       {
-        if(SocketMain.Probe.isHash(checkpointHash) || SocketMain.isProbeAtGenesis())
+        if(SocketMain.Probe.IsHash(checkpointHash) || SocketMain.Probe.IsGenesis())
         {
           chainLinkLocator.Add(SocketMain.Probe.getHash());
           return chainLinkLocator;
@@ -189,7 +181,7 @@ namespace BToken.Chaining
         if (locator == SocketMain.Probe.Depth)
         {
           chainLinkLocator.Add(SocketMain.Probe.getHash());
-          locator = getNextLocation(SocketMain.Probe.Depth);
+          locator = getNextLocation(locator);
         }
 
         SocketMain.Probe.push();

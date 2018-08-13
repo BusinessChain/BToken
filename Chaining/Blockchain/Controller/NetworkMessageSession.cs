@@ -18,8 +18,8 @@ namespace BToken.Chaining
         BlockchainController Controller;
 
         BufferBlock<NetworkMessage> Buffer;
-        NetworkMessage NetworkMessageOld;
-        NetworkMessage NetworkMessageNext;
+        NetworkMessage NetworkMessageReceivedOld;
+        NetworkMessage NetworkMessageReceivedNext;
 
         public NetworkMessageSession(BufferBlock<NetworkMessage> buffer, BlockchainController controller)
         {
@@ -29,9 +29,9 @@ namespace BToken.Chaining
         
         public async Task ProcessNextMessageAsync()
         {
-          NetworkMessageNext = await Buffer.ReceiveAsync();
+          NetworkMessageReceivedNext = await Buffer.ReceiveAsync();
 
-          switch (NetworkMessageNext)
+          switch (NetworkMessageReceivedNext)
           {
             case InvMessage invMessage:
               await ProcessInventoryMessageAsync(invMessage);
@@ -45,66 +45,65 @@ namespace BToken.Chaining
               break;
           }
 
-          NetworkMessageOld = NetworkMessageNext;
+          NetworkMessageReceivedOld = NetworkMessageReceivedNext;
         }
         async Task ProcessInventoryMessageAsync(InvMessage invMessage)
         {
           foreach (Inventory blockInventory in invMessage.GetBlockInventories())
           {
-            ChainHeader chainHeader = Controller.Blockchain.Headerchain.GetChainHeader(blockInventory.Hash);
+            Headerchain.ChainHeader chainHeader = Controller.Blockchain.Headers.GetChainHeader(blockInventory.Hash);
 
             if (chainHeader != null)
             {
-              uint chainHeaderDepth = Controller.Blockchain.Headerchain.getHeight() - chainHeader.Height;
-              uint blameScore = chainHeaderDepth * BLAME_FACTOR_DUPLICATE_BLOCKHASH;
-              Controller.Network.BlameMessage(invMessage, blameScore);
+              Controller.Network.BlameProtocolError(Buffer);
             }
             else
             {
-              await RequestNewHeaderAdvertised(invMessage);
+              List<UInt256> headerLocator = Controller.Blockchain.Headers.getHeaderLocator();
+              await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
               return;
             }
           }
         }
-        async Task RequestNewHeaderAdvertised(InvMessage invMessage)
-        {
-          List<UInt256> headerLocator = Controller.Blockchain.Headerchain.getHeaderLocator();
-          await Controller.Network.GetHeadersAdvertisedAsync(invMessage, headerLocator);
-      }
         async Task ProcessHeadersMessageAsync(HeadersMessage headersMessage)
         {
           foreach (NetworkHeader networkHeader in headersMessage.NetworkHeaders)
           {
             try
             {
-              Controller.Blockchain.Headerchain.insertNetworkHeader(networkHeader);
+              Controller.Blockchain.Headers.insertNetworkHeader(networkHeader);
             }
             catch (ChainLinkException ex)
             {
               if (ex.ErrorCode == ChainLinkCode.DUPLICATE)
               {
-                uint chainHeaderDepth = Controller.Blockchain.Headerchain.getHeight() - ex.ChainLink.Height;
-                uint blameScore = chainHeaderDepth * BLAME_FACTOR_DUPLICATE_BLOCKHASH;
-                Controller.Network.BlameMessage(headersMessage, blameScore);
+                Controller.Network.BlameProtocolError(Buffer);
               }
 
               if (ex.ErrorCode == ChainLinkCode.ORPHAN)
               {
-                List<UInt256> headerLocator = Controller.Blockchain.Headerchain.getHeaderLocator();
-                await Controller.Network.GetHeadersAdvertisedAsync(headersMessage, headerLocator);
+                Controller.Network.BlameProtocolError(Buffer);
+
+                List<UInt256> headerLocator = Controller.Blockchain.Headers.getHeaderLocator();
+                await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
                 return;
               }
 
-              // What happens if invalid ??
+              if (ex.ErrorCode == ChainLinkCode.INVALID)
+              {
+                Controller.Network.BlameConsensusError(Buffer);
+              }
             }
           }
 
           if (headersMessage.NetworkHeaders.Any())
           {
-            List<UInt256> headerLocator = Controller.Blockchain.Headerchain.getHeaderLocator();
-            await Controller.Network.GetHeadersAdvertisedAsync(headersMessage, headerLocator);
-            return;
+            List<UInt256> headerLocator = Controller.Blockchain.Headers.getHeaderLocator();
+            await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
           }
+
+          headersMessage = null;
+          // check here if we have headers prior checkpoint.
         }
 
         public bool ContainsBuffer(BufferBlock<NetworkMessage> sessionMessageBuffer)

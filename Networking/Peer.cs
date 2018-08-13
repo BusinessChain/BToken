@@ -22,10 +22,7 @@ namespace BToken.Networking
 
       public BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
       public BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
-
-      //Bound the capacity of that List
-      List<NetworkMessage> MessagesReceived = new List<NetworkMessage>();
-
+      
       uint PenaltyScore = 0;
 
       bool SendHeadersFlag = false;
@@ -117,7 +114,6 @@ namespace BToken.Networking
       async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
       {
         InvMessage invMessage = new InvMessage(networkMessage);
-        MessagesReceived.Add(invMessage);
 
         if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
         {
@@ -131,13 +127,11 @@ namespace BToken.Networking
       async Task ProcessHeadersMessageAsync(NetworkMessage networkMessage)
       {
         HeadersMessage headersMessage = new HeadersMessage(networkMessage);
-        MessagesReceived.Add(headersMessage);
         await NetworkMessageBufferBlockchain.SendAsync(headersMessage);
       }
-
-      public bool IsOriginOfNetworkMessage(NetworkMessage networkMessage)
+      public bool IsOwnerOfBuffer(BufferBlock<NetworkMessage> buffer)
       {
-        return MessagesReceived.Contains(networkMessage);
+        return buffer == NetworkMessageBufferBlockchain || buffer == NetworkMessageBufferUTXO;
       }
 
       public async Task SendMessageAsync(NetworkMessage networkMessage)
@@ -160,6 +154,10 @@ namespace BToken.Networking
         TcpClient.Close();
       }
       
+      public async Task PingAsync()
+      {
+        await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
+      }
     }
   }
 }

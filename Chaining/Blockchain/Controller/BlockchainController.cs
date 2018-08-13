@@ -13,9 +13,6 @@ namespace BToken.Chaining
   {
     partial class BlockchainController
     {
-      const int BLAME_FACTOR_DUPLICATE_BLOCKHASH = 20;
-    
-
       Network Network;
       Blockchain Blockchain;
 
@@ -31,8 +28,7 @@ namespace BToken.Chaining
 
       public async Task startAsync()
       {
-        ProcessNetworkSessionsAsync();
-        Console.Write("hello");
+        await ProcessNetworkSessionsAsync();
       }
       async Task ProcessNetworkSessionsAsync()
       {

@@ -10,20 +10,36 @@ namespace BToken.Chaining
   {
     protected partial class ChainSocket
     {
+      Chain Chain;
+
+      readonly ChainLink ChainLinkGenesis;
+      public ChainLink ChainLink;
+
+      double AccumulatedDifficulty;
+      public uint Height;
+
       public ChainSocket StrongerSocket;
       public ChainSocket StrongerSocketActive;
       public ChainSocket WeakerSocket;
       public ChainSocket WeakerSocketActive;
 
-      public ChainLink ChainLink;
       public SocketProbe Probe;
 
-      readonly ChainLink ChainLinkGenesis;
 
-      public ChainSocket(ChainLink chainLinkGenesis)
+      public ChainSocket(
+        Chain chain, 
+        ChainLink chainLinkGenesis,
+        double accumulatedDifficulty, 
+        uint height
+        )
       {
+        Chain = chain;
+
         ChainLinkGenesis = chainLinkGenesis;
         ChainLink = chainLinkGenesis;
+
+        AccumulatedDifficulty = accumulatedDifficulty;
+        Height = height;
 
         Probe = new SocketProbe(this);
       }
@@ -75,7 +91,7 @@ namespace BToken.Chaining
 
       public void remove()
       {
-        if(StrongerSocket != null)
+        if (StrongerSocket != null)
         {
           StrongerSocket.WeakerSocket = WeakerSocket;
           StrongerSocket.WeakerSocketActive = WeakerSocket;
@@ -92,10 +108,19 @@ namespace BToken.Chaining
         WeakerSocketActive = null;
       }
 
-      public void plugin(ChainLink chainLink)
+      public void appendChainLink(ChainLink chainLink)
       {
         ChainLink = chainLink;
-        Probe.reset();
+        AccumulatedDifficulty += Chain.GetDifficulty(chainLink);
+        Height++;
+      }
+
+      protected virtual void Validate(ChainLink chainLinkNew)
+      {
+        if (ChainLink.isConnectedToNext(chainLinkNew))
+        {
+          throw new ChainLinkException(chainLinkNew, ChainLinkCode.DUPLICATE);
+        }
       }
 
       public bool isStrongerThan(ChainSocket socket)
@@ -104,7 +129,7 @@ namespace BToken.Chaining
         {
           return true;
         }
-        return ChainLink.isStrongerThan(socket.ChainLink);
+        return AccumulatedDifficulty > socket.AccumulatedDifficulty;
       }
       public bool isProbeStrongerThan(ChainSocket socket)
       {
@@ -119,6 +144,7 @@ namespace BToken.Chaining
       {
         return ChainLinkGenesis == Probe.ChainLink;
       }
+
     }
   }
 }

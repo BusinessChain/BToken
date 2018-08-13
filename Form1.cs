@@ -29,7 +29,12 @@ namespace BToken
       string hashString = textBox_LocatorHash.Text;
       UInt256 hash = new UInt256(hashString);
       Console.WriteLine("Send 'getheaders', locator = " + hashString);
-      await Node.NetworkAdapter.GetHeadersAsync(hash);
+      await Node.Network.GetHeadersAsync(hash);
+    }
+
+    private async void button_ping_Click(object sender, EventArgs e)
+    {
+      await Node.Network.PingAsync();
     }
   }
 }

@@ -74,47 +74,34 @@ namespace BToken.Networking
     {
       await PeersConnected.First().GetHeadersAsync(new List<UInt256>() { headerHashChainTip });
     }
-    public async Task GetHeadersAdvertisedAsync(NetworkMessage networkMessage, List<UInt256> headerLocator)
+    public async Task GetHeadersAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> headerLocator)
     {
-      Peer peer = GetPeerOriginOfNetworkMessage(networkMessage);
-      if (peer == null)
+      Peer peer = GetPeerOwnerOfBuffer(buffer);
+      if (peer != null)
       {
-        return;
+        await peer.GetHeadersAsync(headerLocator);
       }
-      await peer.GetHeadersAsync(headerLocator);
     }
-    Peer GetPeerOriginOfNetworkMessage(NetworkMessage networkMessage)
+    Peer GetPeerOwnerOfBuffer(BufferBlock<NetworkMessage> buffer)
     {
-      return PeersConnected.Find(p => p.IsOriginOfNetworkMessage(networkMessage));
+      return PeersConnected.Find(p => p.IsOwnerOfBuffer(buffer));
     }
 
-    public void orphanBlockHash(UInt256 hash)
+    public void BlameProtocolError(BufferBlock<NetworkMessage> buffer)
     {
-      throw new NotImplementedException();
-    }
-    public void duplicateHash(HeadersMessage headersMessage, UInt256 hash)
-    {
-      Peer peer = GetPeerOriginOfNetworkMessage(headersMessage);
-      if (peer == null)
+      Peer peer = GetPeerOwnerOfBuffer(buffer);
+      if (peer != null)
       {
-        Console.WriteLine("Could not find peer that sent headersMessage containing duplicate hash '{0}'", hash.ToString());
-        return;
+        peer.Blame(20);
       }
     }
-    public void invalidHash(UInt256 hash)
+    public void BlameConsensusError(BufferBlock<NetworkMessage> buffer)
     {
-      throw new NotImplementedException();
-    }
-    public void BlameMessage(NetworkMessage networkMessage, uint penaltyScore)
-    {
-      Peer peer = GetPeerOriginOfNetworkMessage(networkMessage);
-      if (peer == null)
+      Peer peer = GetPeerOwnerOfBuffer(buffer);
+      if (peer != null)
       {
-        Console.WriteLine("Could not find peer that sent networkMessage which is to blame by '{0}' penalty score", penaltyScore);
-        return;
+        peer.Dispose();
       }
-
-      peer.Blame(penaltyScore);
     }
 
     static UInt64 createNonce()
@@ -130,5 +117,9 @@ namespace BToken.Networking
       return DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     }
 
+    public async Task PingAsync()
+    {
+      PeersConnected.First().PingAsync();
+    }
   }
 }

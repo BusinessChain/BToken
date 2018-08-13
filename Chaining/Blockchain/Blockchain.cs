@@ -11,13 +11,13 @@ namespace BToken.Chaining
 {
   partial class Blockchain : Chain
   {
-    Headerchain Headerchain;
+    Headerchain Headers;
     BlockchainController Controller;
 
 
     public Blockchain(ChainBlock genesisBlock, UInt256 checkpointHash, Network network) : base(genesisBlock)
     {
-      Headerchain = new Headerchain(genesisBlock.Header, checkpointHash , network);
+      Headers = new Headerchain(genesisBlock.Header, checkpointHash , network);
       Controller = new BlockchainController(network, this);
     }
 
@@ -28,7 +28,6 @@ namespace BToken.Chaining
       //await buildAsync();
 
       await Controller.startAsync();
-      Console.Write("helle");
     }
     async Task buildAsync()
     {
@@ -56,11 +55,11 @@ namespace BToken.Chaining
     }
     List<UInt256> getBlocksMissing()
     {
-      return Headerchain.getHeaderLocator();
+      return Headers.getHeaderLocator();
     }
     uint getNextLocation(uint locator)
     {
-      uint offsetChainDepths = Headerchain.getHeight() - getHeight();
+      uint offsetChainDepths = Headers.getHeight() - getHeight();
 
       if (locator == offsetChainDepths)
       {
@@ -93,7 +92,22 @@ namespace BToken.Chaining
     {
       throw new NotImplementedException();
     }
+    
+    protected override void ConnectChainLinks(ChainLink chainLinkPrevious, ChainLink chainLink)
+    {
+      base.ConnectChainLinks(chainLinkPrevious, chainLink);
 
+      ChainBlock blockPrevious = (ChainBlock)chainLinkPrevious;
+      ChainBlock block = (ChainBlock)chainLinkPrevious;
 
+      block.Header = blockPrevious.Header.GetNextHeader(block.Hash);
+    }
+
+    public override double GetDifficulty(ChainLink chainLink)
+    {
+      ChainBlock block = (ChainBlock)chainLink;
+
+      return Headers.GetDifficulty(block.Header);
+    }
   }
 }

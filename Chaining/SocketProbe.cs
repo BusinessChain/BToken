@@ -15,31 +15,84 @@ namespace BToken.Chaining
         ChainSocket Socket;
 
         public ChainLink ChainLink;
-        public uint Depth = 0;
+        public uint Depth;
+        double AccumulatedDifficulty;
 
         public SocketProbe(ChainSocket socket)
         {
           Socket = socket;
           ChainLink = socket.ChainLink;
+          AccumulatedDifficulty = socket.AccumulatedDifficulty;
         }
 
+
+        public void InsertChainLink(ChainLink chainLinkNew)
+        {
+          Socket.Validate(chainLinkNew);
+
+          ConnectChainLinks(ChainLink, chainLinkNew);
+
+          if(Depth == 0)
+          {
+            Socket.appendChainLink(chainLinkNew);
+            reset();
+          }
+          else
+          {
+            CreateFork(chainLinkNew);
+          }
+        }
+        void CreateFork(ChainLink chainLink)
+        {
+          double accumulatedDifficulty = AccumulatedDifficulty + Socket.Chain.GetDifficulty(chainLink);
+          uint height = GetHeight() + 1;
+
+          var socket = new ChainSocket(
+            Socket.Chain,
+            chainLink,
+            accumulatedDifficulty,
+            height);
+        }
+        protected virtual void ConnectChainLinks(ChainLink chainLinkPrevious, ChainLink chainLink)
+        {
+          chainLink.ChainLinkPrevious = chainLinkPrevious;
+          chainLinkPrevious.NextChainLinks.Add(chainLink);
+        }
+
+        uint GetHeight()
+        {
+          return Socket.Height - Depth;
+        }
         public UInt256 getHash()
         {
           return ChainLink.Hash;
         }
-        public bool isHash(UInt256 hash)
+        public bool IsHash(UInt256 hash)
         {
           return getHash().isEqual(hash);
         }
-
+        public bool IsGenesis()
+        {
+          return ChainLink == Socket.ChainLinkGenesis;
+        }
+        public bool IsChainLink(ChainLink chainLink)
+        {
+          return ChainLink == chainLink;
+        }
         public bool isStrongerThan(SocketProbe probe)
         {
-          return ChainLink.isStrongerThan(probe.ChainLink);
+          if(probe == null)
+          {
+            return false;
+          }
+
+          return AccumulatedDifficulty > probe.AccumulatedDifficulty;
         }
 
         public void push()
         {
           ChainLink = ChainLink.getChainLinkPrevious();
+          AccumulatedDifficulty -= Socket.Chain.GetDifficulty(ChainLink);
           Depth++;
         }
 

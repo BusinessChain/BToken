@@ -8,50 +8,30 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  class ChainBlock : ChainLink
+  partial class Blockchain : Chain
   {
-    public ChainHeader Header { get; private set; }
-    public List<TX> TXs { get; private set; }
+    public class ChainBlock : ChainLink
+    {
+      public Headerchain.ChainHeader Header;
+      List<TX> TXs = new List<TX>();
 
-    public ChainBlock(NetworkBlock networkBlock)
-    {
-      Header = new ChainHeader(networkBlock.Header);
-      TXs = networkBlock.NetworkTXs.Select(ntx => new TX(ntx)).ToList();
-    }
-    public ChainBlock(ChainHeader header, List<TX> tXs)
-    {
-      Header = header;
-      TXs = tXs;
-    }
-
-    public override void connectToPrevious(ChainLink chainLinkPrevious)
-    {
-      base.connectToPrevious(chainLinkPrevious);
-
-      ChainBlock blockPrevious = (ChainBlock)chainLinkPrevious;
-
-      Header = blockPrevious.Header.GetNextHeader(Hash);
-    }
-    
-    public UInt64 getUnixTimeSeconds()
-    {
-      return Header.UnixTimeSeconds;
-    }
-
-    public override double getAccumulatedDifficulty()
-    {
-      return Header.getAccumulatedDifficulty();
-    }
-    public override void validate()
-    {
-      if (!Header.MerkleRootHash.isEqual(ComputeMerkleRootHash()))
+      public ChainBlock(NetworkBlock networkBlock)
       {
-        throw new ChainLinkException(this, ChainLinkCode.INVALID);
+        // Der Header besteht im Memory ja bereits also kein neuen machen.
+        Header = null;//new Headerchain.ChainHeader(networkBlock.Header);
+        TXs = networkBlock.NetworkTXs.Select(ntx => new TX(ntx)).ToList();
       }
-    }
-    UInt256 ComputeMerkleRootHash()
-    {
-      throw new NotImplementedException();
+      public ChainBlock(
+        UInt256 hash, 
+        UInt256 hashPrevious,
+        UInt32 nBits,
+        UInt256 merkleRootHash,
+        UInt64 unixTimeSeconds,
+        List<TX> tXs)
+      {
+        Header = new Headerchain.ChainHeader(hash, hashPrevious, nBits, merkleRootHash, unixTimeSeconds);
+        TXs = tXs;
+      }
     }
   }
 }
