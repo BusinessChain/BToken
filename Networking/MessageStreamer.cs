@@ -70,9 +70,9 @@ namespace BToken.Networking
 
       public async Task<NetworkMessage> ReadAsync()
       {
-        await syncStreamToMagicAsync().ConfigureAwait(false);
+        await syncStreamToMagicAsync().ConfigureAwait(false); //synchron
 
-        await readBytesAsync(Header).ConfigureAwait(false);
+        await readBytesAsync(Header).ConfigureAwait(false);//synchron
         getCommand();
         getPayloadLength();
 

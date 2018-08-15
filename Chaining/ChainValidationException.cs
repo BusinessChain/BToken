@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  abstract partial class Chain
+  partial class Blockchain
   {
     protected class ChainLinkException : Exception
     {
-      public ChainLink ChainLink { get; private set; }
+      public ChainBlock ChainHeader { get; private set; }
       public ChainLinkCode ErrorCode { get; private set; }
 
 
@@ -28,9 +28,9 @@ namespace BToken.Chaining
       {
       }
 
-      public ChainLinkException(ChainLink chainLink, ChainLinkCode errorCode)
+      public ChainLinkException(ChainBlock chainHeader, ChainLinkCode errorCode)
       {
-        ChainLink = chainLink;
+        ChainHeader = chainHeader;
         ErrorCode = errorCode;
       }
     }

@@ -6,14 +6,14 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  abstract partial class Chain
+  partial class Blockchain
   {
-    protected partial class ChainSocket
+    partial class ChainSocket
     {
-      Chain Chain;
+      Blockchain Blockchain;
 
-      readonly ChainLink ChainLinkGenesis;
-      public ChainLink ChainLink;
+      static ChainBlock BlockGenesis;
+      public ChainBlock Block;
 
       double AccumulatedDifficulty;
       public uint Height;
@@ -27,19 +27,19 @@ namespace BToken.Chaining
 
 
       public ChainSocket(
-        Chain chain, 
-        ChainLink chainLinkGenesis,
-        double accumulatedDifficulty, 
+        Blockchain blockchain, 
+        ChainBlock blockGenesis,
+        double accumulatedDifficulty,
         uint height
         )
       {
-        Chain = chain;
+        Blockchain = blockchain;
 
-        ChainLinkGenesis = chainLinkGenesis;
-        ChainLink = chainLinkGenesis;
+        BlockGenesis = blockGenesis;
+        Block = blockGenesis;
 
-        AccumulatedDifficulty = accumulatedDifficulty;
-        Height = height;
+        AccumulatedDifficulty = accumulatedDifficulty + TargetManager.GetDifficulty(blockGenesis.NBits);
+        Height = height + 1;
 
         Probe = new SocketProbe(this);
       }
@@ -108,21 +108,12 @@ namespace BToken.Chaining
         WeakerSocketActive = null;
       }
 
-      public void appendChainLink(ChainLink chainLink)
+      public void AppendChainHeader(ChainBlock block)
       {
-        ChainLink = chainLink;
-        AccumulatedDifficulty += Chain.GetDifficulty(chainLink);
+        Block = block;
+        AccumulatedDifficulty += TargetManager.GetDifficulty(block.NBits);
         Height++;
       }
-
-      protected virtual void Validate(ChainLink chainLinkNew)
-      {
-        if (ChainLink.isConnectedToNext(chainLinkNew))
-        {
-          throw new ChainLinkException(chainLinkNew, ChainLinkCode.DUPLICATE);
-        }
-      }
-
       public bool isStrongerThan(ChainSocket socket)
       {
         if (socket == null)
@@ -142,7 +133,7 @@ namespace BToken.Chaining
 
       public bool isProbeAtGenesis()
       {
-        return ChainLinkGenesis == Probe.ChainLink;
+        return BlockGenesis == Probe.Block;
       }
 
     }

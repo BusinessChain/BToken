@@ -17,21 +17,24 @@ namespace BToken
 
     UInt256(BigInteger data)
     {
-      Data = data; 
+      Data = data;
     }
     public UInt256(byte[] dataBytes)
     {
-      if (dataBytes.Length != BYTE_LENGTH)
-      {
-        throw new ArgumentException(string.Format("Length of data bytes must be '{0}', but has '{1}'", BYTE_LENGTH, dataBytes.Length));
-      }
-      byte[] unsignedPostfix = new byte[] { 0x00 };
-      dataBytes = dataBytes.Concat(unsignedPostfix).ToArray();
+      Array.Resize(ref dataBytes, BYTE_LENGTH);
+      AddUnsignedPostfix(dataBytes);
       Data = new BigInteger(dataBytes);
     }
+    void AddUnsignedPostfix(byte[] dataBytes)
+    {
+      byte[] unsignedPostfix = new byte[] { 0x00 };
+      dataBytes = dataBytes.Concat(unsignedPostfix).ToArray();
+    }
+
+
     public UInt256(string hexValue)
     {
-      if(hexValue.Length != BYTE_LENGTH*2)
+      if (hexValue.Length != BYTE_LENGTH * 2)
       {
         throw new ArgumentException(string.Format("Hex-string must have '{0}' characters, but has '{1}'", BYTE_LENGTH * 2, hexValue.Length));
       }
@@ -69,7 +72,7 @@ namespace BToken
     }
     public bool isEqual(UInt256 number)
     {
-      if(number == null)
+      if (number == null)
       {
         return false;
       }
@@ -79,7 +82,7 @@ namespace BToken
 
     public static UInt256 Min(UInt256 number1, UInt256 number2)
     {
-      if(number1.isGreaterThan(number2))
+      if (number1.isGreaterThan(number2))
       {
         return number2;
       }

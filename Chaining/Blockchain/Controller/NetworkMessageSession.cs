@@ -9,7 +9,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain : Chain
+  partial class Blockchain
   {
     partial class BlockchainController
     {
@@ -26,7 +26,7 @@ namespace BToken.Chaining
           Buffer = buffer;
           Controller = controller;
         }
-        
+
         public async Task ProcessNextMessageAsync()
         {
           NetworkMessageReceivedNext = await Buffer.ReceiveAsync();
@@ -51,7 +51,7 @@ namespace BToken.Chaining
         {
           foreach (Inventory blockInventory in invMessage.GetBlockInventories())
           {
-            Headerchain.ChainHeader chainHeader = Controller.Blockchain.Headers.GetChainHeader(blockInventory.Hash);
+            Blockchain.ChainBlock chainHeader = Controller.Blockchain.GetChainBlock(blockInventory.Hash);
 
             if (chainHeader != null)
             {
@@ -59,7 +59,7 @@ namespace BToken.Chaining
             }
             else
             {
-              List<UInt256> headerLocator = Controller.Blockchain.Headers.getHeaderLocator();
+              List<UInt256> headerLocator = Controller.Blockchain.getBlockLocator();
               await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
               return;
             }
@@ -71,7 +71,7 @@ namespace BToken.Chaining
           {
             try
             {
-              Controller.Blockchain.Headers.insertNetworkHeader(networkHeader);
+              Controller.Blockchain.insertNetworkHeader(networkHeader);
             }
             catch (ChainLinkException ex)
             {
@@ -84,7 +84,7 @@ namespace BToken.Chaining
               {
                 Controller.Network.BlameProtocolError(Buffer);
 
-                List<UInt256> headerLocator = Controller.Blockchain.Headers.getHeaderLocator();
+                List<UInt256> headerLocator = Controller.Blockchain.getBlockLocator();
                 await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
                 return;
               }
@@ -98,7 +98,7 @@ namespace BToken.Chaining
 
           if (headersMessage.NetworkHeaders.Any())
           {
-            List<UInt256> headerLocator = Controller.Blockchain.Headers.getHeaderLocator();
+            List<UInt256> headerLocator = Controller.Blockchain.getBlockLocator();
             await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
           }
 

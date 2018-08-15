@@ -9,105 +9,271 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain : Chain
+  public enum ChainLinkCode { ORPHAN, DUPLICATE, INVALID, EXPIRED, CHECKPOINT };
+
+
+  partial class Blockchain
   {
-    Headerchain Headers;
+    Network Network;
     BlockchainController Controller;
 
+    static ChainBlock BlockGenesis;
+    static UInt256 CheckpointHash;
 
-    public Blockchain(ChainBlock genesisBlock, UInt256 checkpointHash, Network network) : base(genesisBlock)
+    ChainSocket SocketMain;
+
+    public Blockchain(ChainBlock blockGenesis, UInt256 checkpointHash, Network network)
     {
-      Headers = new Headerchain(genesisBlock.Header, checkpointHash , network);
+      Network = network;
       Controller = new BlockchainController(network, this);
-    }
 
+      CheckpointHash = checkpointHash;
+      BlockGenesis = blockGenesis;
+
+      SocketMain = new ChainSocket(
+        this,
+        blockGenesis,
+        0,
+        0);
+    }
 
     public async Task startAsync()
     {
-      //await Headerchain.buildAsync();
-      //await buildAsync();
-
-      await Controller.startAsync();
+      await Controller.StartAsync();
     }
-    async Task buildAsync()
-    {
-      List<UInt256> blocksMissing = getBlocksMissing();
-      BufferBlock<NetworkBlock> networkBlockBuffer = null;//Network.GetBlocks(blocksMissing);
 
-      try
+    public async Task buildAsync()
+    {
+      //List<UInt256> headerLocator = getHeaderLocator();
+      //BufferBlock<NetworkHeader> networkHeaderBuffer = new BufferBlock<NetworkHeader>();
+      //Network.GetHeadersAsync(headerLocator);
+      //await insertNetworkHeadersAsync(networkHeaderBuffer);
+    }
+
+    public List<UInt256> getBlockLocator()
+    {
+      uint getNextLocation(uint locator)
       {
-        await insertNetworkBlocksAsync(networkBlockBuffer);
+        if (locator < 10)
+          return locator + 1;
+        else
+          return locator * 2;
       }
-      catch (ChainLinkException ex)
+
+      return getBlockLocator(CheckpointHash, getNextLocation);
+    }
+    List<UInt256> getBlockLocator(UInt256 checkpointHash, Func<uint, uint> getNextLocation)
+    {
+      List<UInt256> chainLinkLocator = new List<UInt256>();
+      SocketMain.Probe.reset();
+      uint locator = 0;
+
+      while (true)
       {
-        if (ex.ErrorCode == ChainLinkCode.DUPLICATE)
+        if (SocketMain.Probe.IsHash(checkpointHash) || SocketMain.Probe.IsGenesis())
         {
-          //Network.duplicateHash(ex.ChainLink.Hash);
+          chainLinkLocator.Add(SocketMain.Probe.getHash());
+          return chainLinkLocator;
         }
 
-        if (ex.ErrorCode == ChainLinkCode.ORPHAN)
+        if (locator == SocketMain.Probe.Depth)
         {
-          //Network.orphanBlockHash(ex.ChainLink.Hash);
+          chainLinkLocator.Add(SocketMain.Probe.getHash());
+          locator = getNextLocation(locator);
         }
 
-        await buildAsync();
+        SocketMain.Probe.push();
       }
-    }
-    List<UInt256> getBlocksMissing()
-    {
-      return Headers.getHeaderLocator();
-    }
-    uint getNextLocation(uint locator)
-    {
-      uint offsetChainDepths = Headers.getHeight() - getHeight();
 
-      if (locator == offsetChainDepths)
+    }
+
+
+    public ChainBlock GetChainBlock(UInt256 hash)
+    {
+      return GetSocketProbe(hash).Block;
+    }
+    ChainSocket.SocketProbe GetSocketProbe(UInt256 hash)
+    {
+      ChainSocket socket = SocketMain;
+      resetProbes();
+
+      while (socket != null)
       {
-        return locator;
+        if (socket.Probe.IsHash(hash))
+        {
+          return socket.Probe;
+        }
+
+        if (socket.Probe.IsGenesis())
+        {
+          socket.bypass();
+
+          if (socket.isWeakerSocketProbeStrongerThan(socket.StrongerSocketActive))
+          {
+            socket = socket.WeakerSocketActive;
+          }
+          else
+          {
+            socket = socket.StrongerSocket;
+          }
+          continue;
+        }
+
+        if (socket.isProbeStrongerThan(socket.StrongerSocket))
+        {
+          if (socket.isWeakerSocketProbeStronger())
+          {
+            socket = socket.WeakerSocketActive;
+          }
+
+          socket.Probe.push();
+        }
+        else
+        {
+          socket = socket.StrongerSocket;
+        }
+
       }
 
-      return locator++;
+      return null;
     }
-    async Task insertNetworkBlocksAsync(BufferBlock<NetworkBlock> networkBlockBuffer)
+    void resetProbes()
     {
-      NetworkBlock networkBlock = await networkBlockBuffer.ReceiveAsync();
+      ChainSocket socket = SocketMain;
 
-      while (networkBlock != null)
+      while (socket != null)
       {
-        insertNetworkBlock(networkBlock);
-
-        networkBlock = await networkBlockBuffer.ReceiveAsync();
+        socket.reset();
+        socket = socket.WeakerSocket;
       }
     }
-    void insertNetworkBlock(NetworkBlock networkBlock)
+
+    public async Task insertNetworkHeadersAsync(BufferBlock<NetworkHeader> headerBuffer)
     {
-      ChainBlock chainBlock = new ChainBlock(networkBlock);
-      insertBlock(chainBlock);
+      NetworkHeader networkHeader = await headerBuffer.ReceiveAsync();
+
+      while (networkHeader != null)
+      {
+        insertNetworkHeader(networkHeader);
+
+        networkHeader = await headerBuffer.ReceiveAsync();
+      }
     }
-    void insertBlock(ChainBlock block)
+    public void insertNetworkHeader(NetworkHeader networkHeader)
     {
-      insertChainLink(block);
+      UInt256 hash = calculateHash(networkHeader.getBytes());
+
+      ChainBlock chainHeader = new ChainBlock(
+        hash,
+        networkHeader.HashPrevious,
+        networkHeader.NBits,
+        networkHeader.MerkleRootHash,
+        networkHeader.UnixTimeSeconds
+        );
+
+      insertChainBlock(chainHeader);
     }
-    List<TX> getTXs(NetworkBlock networkBlock)
+
+    static UInt256 calculateHash(byte[] headerBytes)
     {
-      throw new NotImplementedException();
+      byte[] hashBytes = Hashing.sha256d(headerBytes);
+      return new UInt256(hashBytes);
     }
     
-    protected override void ConnectChainLinks(ChainLink chainLinkPrevious, ChainLink chainLink)
+    public void insertChainBlock(ChainBlock block)
     {
-      base.ConnectChainLinks(chainLinkPrevious, chainLink);
+      if (IsTimestampExpired(block.UnixTimeSeconds))
+      {
+        throw new ChainLinkException(block, ChainLinkCode.EXPIRED);
+      }
 
-      ChainBlock blockPrevious = (ChainBlock)chainLinkPrevious;
-      ChainBlock block = (ChainBlock)chainLinkPrevious;
+      ChainSocket.SocketProbe socketProbeHeaderPrevious = GetSocketProbe(block.HashPrevious);
+      if (socketProbeHeaderPrevious == null)
+      {
+        throw new ChainLinkException(block, ChainLinkCode.ORPHAN);
+      }
 
-      block.Header = blockPrevious.Header.GetNextHeader(block.Hash);
+      ChainSocket socketNew = socketProbeHeaderPrevious.InsertBlock(block);
+      InsertSocket(socketNew);
+    }
+    bool IsTimestampExpired(ulong unixTimeSeconds)
+    {
+      const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+      return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
     }
 
-    public override double GetDifficulty(ChainLink chainLink)
+    public uint getHeight()
     {
-      ChainBlock block = (ChainBlock)chainLink;
+      return SocketMain.Height;
+    }
+    public UInt256 getHash()
+    {
+      return SocketMain.Block.Hash;
+    }
+        
+    static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
+    {
+      if (depth > 0)
+      {
+        if (block == BlockGenesis)
+        {
+          throw new ArgumentOutOfRangeException("Genesis Block encountered prior specified depth has been reached.");
+        }
 
-      return Headers.GetDifficulty(block.Header);
+        return GetBlockPrevious(block, --depth);
+      }
+
+      return block;
+    }
+    
+    bool IsDeeperThanCheckpoint(ChainBlock block, UInt256 checkpointHash)
+    {
+      ChainSocket socket = SocketMain;
+      socket.Probe.reset();
+
+      while (!socket.Probe.IsGenesis())
+      {
+        if (socket.Probe.IsBlock(block))
+        {
+          return false;
+        }
+
+        if (socket.Probe.IsHash(checkpointHash))
+        {
+          return true;
+        }
+
+        socket.Probe.push();
+      }
+
+      throw new InvalidOperationException("Neither chainLink nor checkpoint in chain encountered.");
+    }
+    void ConnectChainLinks(ChainBlock blockPrevious, ChainBlock block)
+    {
+      block.BlockPrevious = blockPrevious;
+      blockPrevious.BlocksNext.Add(block);
+    }
+    void InsertSocket(ChainSocket newSocket)
+    {
+      if (newSocket.isStrongerThan(SocketMain))
+      {
+        swapChain(newSocket, SocketMain);
+        InsertSocket(newSocket);
+      }
+
+      ChainSocket socket = SocketMain;
+      while (!newSocket.isStrongerThan(socket.WeakerSocket))
+      {
+        socket = socket.WeakerSocket;
+      }
+
+      socket.connectWeakerSocket(newSocket);
+    }
+    void swapChain(ChainSocket socket1, ChainSocket socket2)
+    {
+      ChainBlock chainLinkTemp = socket2.Block;
+      socket2.AppendChainHeader(socket1.Block);
+      socket1.AppendChainHeader(chainLinkTemp);
     }
   }
 }

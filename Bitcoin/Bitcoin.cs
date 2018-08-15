@@ -39,7 +39,6 @@ namespace BToken
       await Network.startAsync(Blockchain.getHeight());
       await Blockchain.startAsync();
       //await UTXO.startAsync();
-      Console.Write("helle");
     }
   }
 }

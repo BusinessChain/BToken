@@ -6,66 +6,118 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  abstract partial class Chain
+  partial class Blockchain
   {
-    protected partial class ChainSocket
+    partial class ChainSocket
     {
       public class SocketProbe
       {
         ChainSocket Socket;
 
-        public ChainLink ChainLink;
+        public ChainBlock Block;
         public uint Depth;
         double AccumulatedDifficulty;
+
+        bool DeeperThanCheckpoint;
 
         public SocketProbe(ChainSocket socket)
         {
           Socket = socket;
-          ChainLink = socket.ChainLink;
+          Block = socket.Block;
           AccumulatedDifficulty = socket.AccumulatedDifficulty;
         }
-
-
-        public void InsertChainLink(ChainLink chainLinkNew)
+        
+        public ChainSocket InsertBlock(ChainBlock blockNew)
         {
-          Socket.Validate(chainLinkNew);
+          Validate(blockNew);
 
-          ConnectChainLinks(ChainLink, chainLinkNew);
+          ConnectBlocks(Block, blockNew);
 
           if(Depth == 0)
           {
-            Socket.appendChainLink(chainLinkNew);
-            reset();
+            Socket.AppendChainHeader(blockNew);
+            return Socket;
           }
           else
           {
-            CreateFork(chainLinkNew);
+            return CreateFork(blockNew);
           }
         }
-        void CreateFork(ChainLink chainLink)
+        void Validate(ChainBlock blockNew)
         {
-          double accumulatedDifficulty = AccumulatedDifficulty + Socket.Chain.GetDifficulty(chainLink);
-          uint height = GetHeight() + 1;
+          if (IsHeaderConnectedToHeaderNew(blockNew))
+          {
+            throw new ChainLinkException(blockNew, ChainLinkCode.DUPLICATE);
+          }
+          
+          if (blockNew.NBits != TargetManager.GetNextTargetBits(this))
+          {
+            throw new ChainLinkException(blockNew, ChainLinkCode.INVALID);
+          }
 
-          var socket = new ChainSocket(
-            Socket.Chain,
-            chainLink,
-            accumulatedDifficulty,
-            height);
+          if (blockNew.Hash.isGreaterThan(TargetManager.GetTarget(blockNew.NBits)))
+          {
+            throw new ChainLinkException(blockNew, ChainLinkCode.INVALID);
+          }
+
+          if (DeeperThanCheckpoint)
+          {
+            throw new ChainLinkException(blockNew, ChainLinkCode.CHECKPOINT);
+          }
+
+          if (blockNew.UnixTimeSeconds <= getMedianTimePast())
+          {
+            throw new ChainLinkException(blockNew, ChainLinkCode.INVALID);
+          }
         }
-        protected virtual void ConnectChainLinks(ChainLink chainLinkPrevious, ChainLink chainLink)
+        ulong getMedianTimePast()
         {
-          chainLink.ChainLinkPrevious = chainLinkPrevious;
-          chainLinkPrevious.NextChainLinks.Add(chainLink);
+          const int MEDIAN_TIME_PAST = 11;
+
+          List<ulong> timestampsPast = new List<ulong>();
+          ChainBlock block = Block;
+
+          int depth = 0;
+          while (depth < MEDIAN_TIME_PAST)
+          {
+            timestampsPast.Add(block.UnixTimeSeconds);
+
+            if (block == BlockGenesis)
+            { break; }
+
+            block = block.BlockPrevious;
+            depth++;
+          }
+
+          timestampsPast.Sort();
+
+          return timestampsPast[timestampsPast.Count / 2];
+        }
+        bool IsHeaderConnectedToHeaderNew(ChainBlock blockNew)
+        {
+          return Block.BlocksNext.Any(c => c.Hash.isEqual(blockNew.Hash));
+        }
+        ChainSocket CreateFork(ChainBlock blockNew)
+        {
+          return new ChainSocket(
+            Socket.Blockchain,
+            blockNew,
+            AccumulatedDifficulty,
+            GetHeight());
+        }
+        void ConnectBlocks(ChainBlock blockPrevious, ChainBlock block)
+        {
+          block.BlockPrevious = blockPrevious;
+          blockPrevious.BlocksNext.Add(block);
         }
 
-        uint GetHeight()
+        public uint GetHeight()
         {
           return Socket.Height - Depth;
         }
         public UInt256 getHash()
         {
-          return ChainLink.Hash;
+          return Block.Hash;
         }
         public bool IsHash(UInt256 hash)
         {
@@ -73,11 +125,11 @@ namespace BToken.Chaining
         }
         public bool IsGenesis()
         {
-          return ChainLink == Socket.ChainLinkGenesis;
+          return Block == BlockGenesis;
         }
-        public bool IsChainLink(ChainLink chainLink)
+        public bool IsBlock(ChainBlock blockHeader)
         {
-          return ChainLink == chainLink;
+          return Block == blockHeader;
         }
         public bool isStrongerThan(SocketProbe probe)
         {
@@ -88,18 +140,24 @@ namespace BToken.Chaining
 
           return AccumulatedDifficulty > probe.AccumulatedDifficulty;
         }
-
+        
         public void push()
         {
-          ChainLink = ChainLink.getChainLinkPrevious();
-          AccumulatedDifficulty -= Socket.Chain.GetDifficulty(ChainLink);
+          if(Block.Hash.isEqual(CheckpointHash))
+          {
+            DeeperThanCheckpoint = true;
+          }
+
+          Block = Block.BlockPrevious;
+          AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.NBits);
           Depth++;
         }
 
         public void reset()
         {
-          ChainLink = Socket.ChainLink;
+          Block = Socket.Block;
           Depth = 0;
+          DeeperThanCheckpoint = false;
         }
       }
     }

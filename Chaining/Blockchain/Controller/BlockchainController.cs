@@ -9,7 +9,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain : Chain
+  partial class Blockchain
   {
     partial class BlockchainController
     {
@@ -26,13 +26,13 @@ namespace BToken.Chaining
         Blockchain = blockchain;
       }
 
-      public async Task startAsync()
+      public async Task StartAsync()
       {
         await ProcessNetworkSessionsAsync();
       }
       async Task ProcessNetworkSessionsAsync()
       {
-        while(true)
+        while (true)
         {
           List<NetworkMessageSession> sessions = await GetNetworkMessageSessionsAsync();
 
