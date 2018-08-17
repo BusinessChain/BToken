@@ -31,10 +31,10 @@ namespace BToken.Chaining
       BlockGenesis = blockGenesis;
 
       SocketMain = new ChainSocket(
-        this,
-        blockGenesis,
-        0,
-        0);
+        blockchain: this,
+        blockGenesis: blockGenesis,
+        accumulatedDifficultyPrevious: 0,
+        height: 0);
     }
 
     public async Task startAsync()
@@ -90,9 +90,9 @@ namespace BToken.Chaining
 
     public ChainBlock GetChainBlock(UInt256 hash)
     {
-      return GetSocketProbe(hash).Block;
+      return GetSocket(hash).Probe.Block;
     }
-    ChainSocket.SocketProbe GetSocketProbe(UInt256 hash)
+    ChainSocket GetSocket(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
       resetProbes();
@@ -101,7 +101,7 @@ namespace BToken.Chaining
       {
         if (socket.Probe.IsHash(hash))
         {
-          return socket.Probe;
+          return socket;
         }
 
         if (socket.Probe.IsGenesis())
@@ -171,6 +171,8 @@ namespace BToken.Chaining
         networkHeader.UnixTimeSeconds
         );
 
+      networkHeader = null;
+
       insertChainBlock(chainHeader);
     }
 
@@ -187,14 +189,23 @@ namespace BToken.Chaining
         throw new ChainLinkException(block, ChainLinkCode.EXPIRED);
       }
 
-      ChainSocket.SocketProbe socketProbeHeaderPrevious = GetSocketProbe(block.HashPrevious);
-      if (socketProbeHeaderPrevious == null)
+      ChainSocket socketHeaderPrevious = GetSocket(block.HashPrevious);
+      if (socketHeaderPrevious == null)
       {
         throw new ChainLinkException(block, ChainLinkCode.ORPHAN);
       }
 
-      ChainSocket socketNew = socketProbeHeaderPrevious.InsertBlock(block);
-      InsertSocket(socketNew);
+      ChainSocket socketNew = socketHeaderPrevious.InsertBlock(block);
+
+      if (socketNew == SocketMain)
+      {
+        return;
+      }
+      else
+      {
+        disconnectSocket(socketNew);
+        InsertSocket(socketNew);
+      }
     }
     bool IsTimestampExpired(ulong unixTimeSeconds)
     {
@@ -220,7 +231,7 @@ namespace BToken.Chaining
           throw new ArgumentOutOfRangeException("Genesis Block encountered prior specified depth has been reached.");
         }
 
-        return GetBlockPrevious(block, --depth);
+        return GetBlockPrevious(block.BlockPrevious, --depth);
       }
 
       return block;
@@ -268,6 +279,24 @@ namespace BToken.Chaining
       }
 
       socket.connectWeakerSocket(newSocket);
+    }
+    void disconnectSocket(ChainSocket socket)
+    {
+      if (socket.StrongerSocket != null)
+      {
+        socket.StrongerSocket.WeakerSocket = socket.WeakerSocket;
+        socket.StrongerSocket.WeakerSocketActive = socket.WeakerSocket;
+      }
+      if (socket.WeakerSocket != null)
+      {
+        socket.WeakerSocket.StrongerSocket = socket.StrongerSocket;
+        socket.WeakerSocket.StrongerSocketActive = socket.StrongerSocket;
+      }
+
+      socket.StrongerSocket = null;
+      socket.StrongerSocketActive = null;
+      socket.WeakerSocket = null;
+      socket.WeakerSocketActive = null;
     }
     void swapChain(ChainSocket socket1, ChainSocket socket2)
     {

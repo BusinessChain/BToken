@@ -69,7 +69,7 @@
     <Compile Include="Chaining\SocketProbe.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\Hashing.cs" />
-    <Compile Include="Chaining\Blockchain\ChainHeader.cs" />
+    <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
     <Compile Include="Chaining\Blockchain\TargetManager.cs" />
     <Compile Include="Networking\DataTypes\Inventory.cs" />
     <Compile Include="Networking\DataTypes\NetworkHeader.cs" />

@@ -51,7 +51,7 @@ namespace BToken.Chaining
         {
           foreach (Inventory blockInventory in invMessage.GetBlockInventories())
           {
-            Blockchain.ChainBlock chainHeader = Controller.Blockchain.GetChainBlock(blockInventory.Hash);
+            ChainBlock chainHeader = Controller.Blockchain.GetChainBlock(blockInventory.Hash);
 
             if (chainHeader != null)
             {
@@ -102,7 +102,6 @@ namespace BToken.Chaining
             await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
           }
 
-          headersMessage = null;
           // check here if we have headers prior checkpoint.
         }
 

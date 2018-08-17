@@ -29,7 +29,7 @@ namespace BToken.Chaining
       public ChainSocket(
         Blockchain blockchain, 
         ChainBlock blockGenesis,
-        double accumulatedDifficulty,
+        double accumulatedDifficultyPrevious,
         uint height
         )
       {
@@ -38,8 +38,8 @@ namespace BToken.Chaining
         BlockGenesis = blockGenesis;
         Block = blockGenesis;
 
-        AccumulatedDifficulty = accumulatedDifficulty + TargetManager.GetDifficulty(blockGenesis.NBits);
-        Height = height + 1;
+        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockGenesis.NBits);
+        Height = height;
 
         Probe = new SocketProbe(this);
       }
@@ -88,24 +88,9 @@ namespace BToken.Chaining
         WeakerSocket = weakerSocket;
         WeakerSocketActive = weakerSocket;
       }
-
-      public void remove()
+      public ChainSocket InsertBlock(ChainBlock block)
       {
-        if (StrongerSocket != null)
-        {
-          StrongerSocket.WeakerSocket = WeakerSocket;
-          StrongerSocket.WeakerSocketActive = WeakerSocket;
-        }
-        if (WeakerSocket != null)
-        {
-          WeakerSocket.StrongerSocket = StrongerSocket;
-          WeakerSocket.StrongerSocketActive = StrongerSocket;
-        }
-
-        StrongerSocket = null;
-        StrongerSocketActive = null;
-        WeakerSocket = null;
-        WeakerSocketActive = null;
+        return Probe.InsertBlock(block);
       }
 
       public void AppendChainHeader(ChainBlock block)

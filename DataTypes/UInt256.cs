@@ -21,29 +21,28 @@ namespace BToken
     }
     public UInt256(byte[] dataBytes)
     {
+      WriteToInternalData(dataBytes);
+    }
+    public UInt256(string hexValue)
+    {
+      byte[] dataBytes = SoapHexBinary.Parse(hexValue).Value;
+      Array.Reverse(dataBytes);
+
+      WriteToInternalData(dataBytes);
+    }
+
+    void WriteToInternalData(byte[] dataBytes)
+    {
       Array.Resize(ref dataBytes, BYTE_LENGTH);
-      AddUnsignedPostfix(dataBytes);
+      AddUnsignedPostfix(ref dataBytes);
       Data = new BigInteger(dataBytes);
     }
-    void AddUnsignedPostfix(byte[] dataBytes)
+    static void AddUnsignedPostfix(ref byte[] dataBytes)
     {
       byte[] unsignedPostfix = new byte[] { 0x00 };
       dataBytes = dataBytes.Concat(unsignedPostfix).ToArray();
     }
 
-
-    public UInt256(string hexValue)
-    {
-      if (hexValue.Length != BYTE_LENGTH * 2)
-      {
-        throw new ArgumentException(string.Format("Hex-string must have '{0}' characters, but has '{1}'", BYTE_LENGTH * 2, hexValue.Length));
-      }
-
-      string unsignedPrefix = "00";
-      byte[] dataBytes = SoapHexBinary.Parse(unsignedPrefix + hexValue).Value;
-      Array.Reverse(dataBytes);
-      Data = new BigInteger(dataBytes);
-    }
 
     public byte[] GetBytes()
     {
@@ -51,6 +50,82 @@ namespace BToken
       Array.Resize(ref byteArray, BYTE_LENGTH);
       return byteArray;
     }
+    public UInt32 GetCompact()
+    {
+      uint numberOfBytesUsed;
+
+      UInt32 compact = 0;
+
+      compact |= GetMantissa(GetBytes(), out numberOfBytesUsed);
+      compact |= numberOfBytesUsed << 24;
+
+      return compact;
+    }
+    static uint GetMantissa(byte[] bytes, out uint numberOfBytesUsed)
+    {
+      uint numberOfBytesUnused = 0;
+      uint mantissa = 0;
+
+      for (int i = bytes.Length - 1; i >= 0; i--)
+      {
+        if (bytes[i] == 0x00)
+        {
+          numberOfBytesUnused++;
+        }
+        else
+        {
+          mantissa = parseMantissa(bytes, i);
+          break;
+        }
+      }
+
+      numberOfBytesUsed = (uint)bytes.Length - numberOfBytesUnused;
+
+      if ((mantissa & 0x00800000) != 0)
+      {
+        mantissa >>= 8;
+        numberOfBytesUsed++;
+      }
+
+      return mantissa;
+    }
+    static uint parseMantissa(byte[] bytes, int startindex)
+    {
+      uint mantissa = 0;
+
+      int MANTISSA_SIZE = 3;
+      for (int m = 0; m < MANTISSA_SIZE; m++)
+      {
+        mantissa <<= 8;
+        mantissa |= bytes[startindex - m];
+      }
+
+      return mantissa;
+    }
+
+    public static UInt256 ParseFromCompact(uint nBits)
+    {
+      int expBits = ((int)nBits & 0x7F000000) >> 24;
+      UInt32 factorBits = nBits & 0x00FFFFFF;
+
+      if (expBits < 3)
+      {
+        factorBits >>= (3 - expBits) * 8;
+      }
+
+      var bytes = new List<byte>();
+
+      for (int i = expBits - 3; i > 0; i--)
+      {
+        bytes.Add(0x00);
+      }
+      bytes.Add((byte)(factorBits & 0xFF));
+      bytes.Add((byte)((factorBits & 0xFF00) >> 8));
+      bytes.Add((byte)((factorBits & 0xFF0000) >> 16));
+
+      return new UInt256(bytes.ToArray());
+    }
+
     public override string ToString()
     {
       SoapHexBinary soapHexBinary = new SoapHexBinary(GetBytes());
@@ -93,5 +168,6 @@ namespace BToken
     {
       return (double)d.Data;
     }
+
   }
 }

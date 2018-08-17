@@ -49,13 +49,13 @@ namespace BToken.Chaining
           {
             throw new ChainLinkException(blockNew, ChainLinkCode.DUPLICATE);
           }
-          
+
           if (blockNew.NBits != TargetManager.GetNextTargetBits(this))
           {
             throw new ChainLinkException(blockNew, ChainLinkCode.INVALID);
           }
 
-          if (blockNew.Hash.isGreaterThan(TargetManager.GetTarget(blockNew.NBits)))
+          if (blockNew.Hash.isGreaterThan(UInt256.ParseFromCompact(blockNew.NBits)))
           {
             throw new ChainLinkException(blockNew, ChainLinkCode.INVALID);
           }
@@ -103,7 +103,7 @@ namespace BToken.Chaining
             Socket.Blockchain,
             blockNew,
             AccumulatedDifficulty,
-            GetHeight());
+            GetHeight() + 1);
         }
         void ConnectBlocks(ChainBlock blockPrevious, ChainBlock block)
         {

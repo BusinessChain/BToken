@@ -12,7 +12,7 @@ namespace BToken.Chaining
         const int RETARGETING_BLOCK_INTERVAL = 2016;
         const ulong RETARGETING_TIMESPAN_INTERVAL = 14 * 24 * 60 * 60; // two weeks in seconds
 
-        static readonly UInt256 DIFFICULTY_1_TARGET = new UInt256("00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+        static readonly UInt256 DIFFICULTY_1_TARGET = new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000");
         const double MAX_TARGET = 2.695994666715064E67;
 
         public static UInt32 GetNextTargetBits(SocketProbe probe)
@@ -20,7 +20,9 @@ namespace BToken.Chaining
           uint nextHeight = probe.GetHeight() + 1;
           if ((nextHeight % RETARGETING_BLOCK_INTERVAL) == 0)
           {
-            return GetTargetBits(GetNextTarget(probe));
+            UInt256 nextTarget = GetNextTarget(probe);
+            UInt32 nextTargetBits = nextTarget.GetCompact();
+            return nextTargetBits;
           }
 
           return probe.Block.NBits;
@@ -29,9 +31,18 @@ namespace BToken.Chaining
         {
           ChainBlock headerIntervalStart = GetBlockPrevious(probe.Block, RETARGETING_BLOCK_INTERVAL - 1);
           ulong actualTimespan = Limit(probe.Block.UnixTimeSeconds - headerIntervalStart.UnixTimeSeconds);
-          UInt256 oldTarget = GetTarget(probe.Block.NBits);
+          UInt256 targetOld = UInt256.ParseFromCompact(probe.Block.NBits);
 
-          return oldTarget.multiplyBy(actualTimespan).divideBy(RETARGETING_TIMESPAN_INTERVAL);
+          UInt256 targetNew = targetOld.multiplyBy(actualTimespan).divideBy(RETARGETING_TIMESPAN_INTERVAL);
+
+          if(targetNew.isGreaterThan(DIFFICULTY_1_TARGET))
+          {
+            return DIFFICULTY_1_TARGET;
+          }
+          else
+          {
+            return targetNew;
+          }
         }
         static ulong Limit(ulong actualTimespan)
         {
@@ -47,38 +58,10 @@ namespace BToken.Chaining
 
           return actualTimespan;
         }
-        static UInt32 GetTargetBits(UInt256 target)
-        {
-          return 0;
-        }
-
-        public static UInt256 GetTarget(UInt32 nBits)
-        {
-          int expBits = ((int)nBits & 0x7F000000) >> 24;
-          UInt32 factorBits = nBits & 0x00FFFFFF;
-
-          if (expBits < 3)
-          {
-            factorBits >>= (3 - expBits) * 8;
-          }
-
-          var targetBytes = new List<byte>();
-
-          for (int i = expBits - 3; i > 0; i--)
-          {
-            targetBytes.Add(0x00);
-          }
-          targetBytes.Add((byte)(factorBits & 0xFF));
-          targetBytes.Add((byte)((factorBits & 0xFF00) >> 8));
-          targetBytes.Add((byte)((factorBits & 0xFF0000) >> 16));
-
-          return new UInt256(targetBytes.ToArray());
-        }
-
         
         public static double GetDifficulty(UInt32 nBits)
         {
-          return MAX_TARGET / (double)GetTarget(nBits);
+          return MAX_TARGET / (double)UInt256.ParseFromCompact(nBits);
         }
       }
     }

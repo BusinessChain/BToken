@@ -64,7 +64,6 @@ namespace BToken
 
       return new NetworkHeader(version, previousHeaderHash, merkleRootHash, unixTimeSeconds, nBits, nonce, txnCount);
     }
-
     public byte[] getBytes()
     {
       List<byte> headerSerialized = new List<byte>();
