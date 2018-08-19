@@ -16,7 +16,7 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      int NumberOfSessionsMax = 5;
+      int NumberOfSessionsMax = 1;
       List<BlockchainSession> BlockchainSessions = new List<BlockchainSession>();
       
 

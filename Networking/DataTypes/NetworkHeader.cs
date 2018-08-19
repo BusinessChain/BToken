@@ -13,7 +13,6 @@ namespace BToken
     public UInt32 UnixTimeSeconds { get; private set; }
     public UInt32 NBits { get; private set; }
     public UInt32 Nonce { get; private set; }
-    public Byte TXnCount { get; private set; }
 
 
     public NetworkHeader(
@@ -22,8 +21,7 @@ namespace BToken
       UInt256 merkleRootHash,
       UInt32 unixTimeSeconds,
       UInt32 nBits,
-      UInt32 nonce,
-      Byte txnCount)
+      UInt32 nonce)
     {
       Version = version;
       HashPrevious = hashPrevious;
@@ -31,7 +29,6 @@ namespace BToken
       UnixTimeSeconds = unixTimeSeconds;
       NBits = nBits;
       Nonce = nonce;
-      TXnCount = txnCount;
     }
 
     public byte[] getBytes()

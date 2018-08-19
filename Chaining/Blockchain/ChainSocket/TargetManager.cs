@@ -25,13 +25,13 @@ namespace BToken.Chaining
             return nextTargetBits;
           }
 
-          return probe.Block.NBits;
+          return probe.Block.Header.NBits;
         }
         static UInt256 GetNextTarget(SocketProbe probe)
         {
           ChainBlock headerIntervalStart = GetBlockPrevious(probe.Block, RETARGETING_BLOCK_INTERVAL - 1);
-          ulong actualTimespan = Limit(probe.Block.UnixTimeSeconds - headerIntervalStart.UnixTimeSeconds);
-          UInt256 targetOld = UInt256.ParseFromCompact(probe.Block.NBits);
+          ulong actualTimespan = Limit(probe.Block.Header.UnixTimeSeconds - headerIntervalStart.Header.UnixTimeSeconds);
+          UInt256 targetOld = UInt256.ParseFromCompact(probe.Block.Header.NBits);
 
           UInt256 targetNew = targetOld.multiplyBy(actualTimespan).divideBy(RETARGETING_TIMESPAN_INTERVAL);
 

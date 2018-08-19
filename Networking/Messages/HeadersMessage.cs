@@ -59,7 +59,7 @@ namespace BToken.Networking
       Byte txnCount = header[startIndex];
       startIndex += 1;
 
-      return new NetworkHeader(version, previousHeaderHash, merkleRootHash, unixTimeSeconds, nBits, nonce, txnCount);
+      return new NetworkHeader(version, previousHeaderHash, merkleRootHash, unixTimeSeconds, nBits, nonce);
     }
 
     public bool hasMaxHeaderCount()

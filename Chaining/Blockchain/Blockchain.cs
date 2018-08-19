@@ -34,8 +34,14 @@ namespace BToken.Chaining
       SocketMain = new ChainSocket(
         blockchain: this,
         blockGenesis: blockGenesis,
+        hash: CalculateHash(blockGenesis.Header.getBytes()),
         accumulatedDifficultyPrevious: 0,
         height: 0);
+    }
+    static UInt256 CalculateHash(byte[] headerBytes)
+    {
+      byte[] hashBytes = Hashing.sha256d(headerBytes);
+      return new UInt256(hashBytes);
     }
 
     public async Task startAsync()
@@ -73,13 +79,13 @@ namespace BToken.Chaining
       {
         if (SocketMain.Probe.IsHash(checkpointHash) || SocketMain.Probe.IsGenesis())
         {
-          chainLinkLocator.Add(SocketMain.Probe.getHash());
+          chainLinkLocator.Add(SocketMain.Probe.Hash);
           return chainLinkLocator;
         }
 
         if (locator == SocketMain.Probe.Depth)
         {
-          chainLinkLocator.Add(SocketMain.Probe.getHash());
+          chainLinkLocator.Add(SocketMain.Probe.Hash);
           locator = getNextLocation(locator);
         }
 
@@ -91,7 +97,7 @@ namespace BToken.Chaining
 
     public ChainBlock GetChainBlock(UInt256 hash)
     {
-      ChainSocket socket = GetSocket(hash);
+      ChainSocket socket = GetSocketWithProbeSetTo(hash);
 
       if(socket == null)
       {
@@ -100,7 +106,7 @@ namespace BToken.Chaining
 
       return socket.Probe.Block;
     }
-    ChainSocket GetSocket(UInt256 hash)
+    ChainSocket GetSocketWithProbeSetTo(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
       resetProbes();
@@ -156,62 +162,67 @@ namespace BToken.Chaining
       }
     }
 
-    public async Task insertNetworkHeadersAsync(BufferBlock<NetworkHeader> headerBuffer)
+    public void insertNetworkHeader(NetworkHeader header)
     {
-      NetworkHeader networkHeader = await headerBuffer.ReceiveAsync();
-
-      while (networkHeader != null)
+      if (IsTimestampExpired(header.UnixTimeSeconds))
       {
-        insertNetworkHeader(networkHeader);
-
-        networkHeader = await headerBuffer.ReceiveAsync();
-      }
-    }
-    public void insertNetworkHeader(NetworkHeader networkHeader)
-    {
-      UInt256 hash = calculateHash(networkHeader.getBytes());
-
-      ChainBlock chainHeader = new ChainBlock(
-        hash,
-        networkHeader.HashPrevious,
-        networkHeader.NBits,
-        networkHeader.MerkleRootHash,
-        networkHeader.UnixTimeSeconds
-        );
-
-      insertChainBlock(chainHeader);
-    }
-    UInt256 calculateHash(byte[] headerBytes)
-    {
-      byte[] hashBytes = Hashing.sha256d(headerBytes);
-      return new UInt256(hashBytes);
-    }
-
-    public void insertChainBlock(ChainBlock block)
-    {
-      if (IsTimestampExpired(block.UnixTimeSeconds))
-      {
-        throw new BlockchainException(block, ChainLinkCode.EXPIRED);
+        throw new BlockchainException(ChainLinkCode.EXPIRED);
       }
 
-      ChainSocket socketHeaderPrevious = GetSocket(block.HashPrevious);
-      if (socketHeaderPrevious == null)
+      ChainSocket socket = GetSocketWithProbeSetTo(header.HashPrevious);
+
+      if (socket == null)
       {
-        throw new BlockchainException(block, ChainLinkCode.ORPHAN);
+        throw new BlockchainException(ChainLinkCode.ORPHAN);
       }
 
-      ChainSocket socketNew = socketHeaderPrevious.InsertBlock(block);
+      UInt256 headerHash = CalculateHash(header.getBytes());
+      ChainBlock block = socket.InsertHeader(header, headerHash);
 
-      if (socketNew == SocketMain)
+      if(socket.Probe.Depth == 0)
       {
-        return;
+        socket.ConnectNextBlock(block, headerHash);
+
+        if(socket == SocketMain)
+        {
+          return;
+        }
+        else
+        {
+          disconnectSocket(socket);
+        }
       }
       else
       {
-        disconnectSocket(socketNew);
-        InsertSocket(socketNew);
+        socket = new ChainSocket(
+          this,
+          block,
+          headerHash,
+          socket.Probe.AccumulatedDifficulty,
+          socket.Probe.GetHeight() + 1);
       }
+      
+      InsertSocket(socket);
     }
+    void disconnectSocket(ChainSocket socket)
+    {
+      if (socket.StrongerSocket != null)
+      {
+        socket.StrongerSocket.WeakerSocket = socket.WeakerSocket;
+        socket.StrongerSocket.WeakerSocketActive = socket.WeakerSocket;
+      }
+      if (socket.WeakerSocket != null)
+      {
+        socket.WeakerSocket.StrongerSocket = socket.StrongerSocket;
+        socket.WeakerSocket.StrongerSocketActive = socket.StrongerSocket;
+      }
+
+      socket.StrongerSocket = null;
+      socket.StrongerSocketActive = null;
+      socket.WeakerSocket = null;
+      socket.WeakerSocketActive = null;
+    }
+
     bool IsTimestampExpired(ulong unixTimeSeconds)
     {
       const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
@@ -221,10 +232,6 @@ namespace BToken.Chaining
     public uint GetHeight()
     {
       return SocketMain.Height;
-    }
-    public UInt256 getHash()
-    {
-      return SocketMain.Block.Hash;
     }
         
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
@@ -273,8 +280,8 @@ namespace BToken.Chaining
     {
       if (newSocket.isStrongerThan(SocketMain))
       {
-        swapChain(newSocket, SocketMain);
-        InsertSocket(newSocket);
+        newSocket.connectWeakerSocket(SocketMain);
+        SocketMain = newSocket;
       }
 
       ChainSocket socket = SocketMain;
@@ -284,30 +291,6 @@ namespace BToken.Chaining
       }
 
       socket.connectWeakerSocket(newSocket);
-    }
-    void disconnectSocket(ChainSocket socket)
-    {
-      if (socket.StrongerSocket != null)
-      {
-        socket.StrongerSocket.WeakerSocket = socket.WeakerSocket;
-        socket.StrongerSocket.WeakerSocketActive = socket.WeakerSocket;
-      }
-      if (socket.WeakerSocket != null)
-      {
-        socket.WeakerSocket.StrongerSocket = socket.StrongerSocket;
-        socket.WeakerSocket.StrongerSocketActive = socket.StrongerSocket;
-      }
-
-      socket.StrongerSocket = null;
-      socket.StrongerSocketActive = null;
-      socket.WeakerSocket = null;
-      socket.WeakerSocketActive = null;
-    }
-    void swapChain(ChainSocket socket1, ChainSocket socket2)
-    {
-      ChainBlock chainLinkTemp = socket2.Block;
-      socket2.AppendChainHeader(socket1.Block);
-      socket1.AppendChainHeader(chainLinkTemp);
     }
   }
 }

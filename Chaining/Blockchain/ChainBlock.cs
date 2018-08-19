@@ -14,28 +14,15 @@ namespace BToken.Chaining
 
     public class ChainBlock
     {
-      public UInt256 Hash;
-      public UInt256 HashPrevious;
-      public UInt64 UnixTimeSeconds;
-      public UInt256 MerkleRootHash;
-      public UInt32 NBits;
+      public NetworkHeader Header;
 
       public ChainBlock BlockPrevious;
       public List<ChainBlock> BlocksNext = new List<ChainBlock>();
       //public IBlockPayload BlockPayload;
 
-      public ChainBlock(
-        UInt256 hash,
-        UInt256 hashPrevious,
-        UInt32 nBits,
-        UInt256 merkleRootHash,
-        UInt64 unixTimeSeconds)
+      public ChainBlock(NetworkHeader header)
       {
-        Hash = hash;
-        HashPrevious = hashPrevious;
-        UnixTimeSeconds = unixTimeSeconds;
-        MerkleRootHash = merkleRootHash;
-        NBits = nBits;
+        Header = header;
       }
 
     }

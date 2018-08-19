@@ -13,76 +13,77 @@ namespace BToken.Chaining
       public class SocketProbe
       {
         ChainSocket Socket;
-
+        
         public ChainBlock Block;
+        public UInt256 Hash;
         public uint Depth;
-        double AccumulatedDifficulty;
+        public double AccumulatedDifficulty;
 
         bool DeeperThanCheckpoint;
 
         public SocketProbe(ChainSocket socket)
         {
           Socket = socket;
+
           Block = socket.Block;
+          Hash = socket.Hash;
           AccumulatedDifficulty = socket.AccumulatedDifficulty;
         }
         
-        public ChainSocket InsertBlock(ChainBlock blockNew)
+        public ChainBlock InsertHeader(NetworkHeader header, UInt256 headerHash)
         {
-          Validate(blockNew);
+          Validate(header, headerHash);
 
-          ConnectBlocks(Block, blockNew);
+          var block = new ChainBlock(header);
+          
+          ConnectBlocks(Block, block);
 
-          if(Depth == 0)
-          {
-            Socket.AppendChainHeader(blockNew);
-            return Socket;
-          }
-          else
-          {
-            return CreateFork(blockNew);
-          }
+          return block;
         }
-        void Validate(ChainBlock blockNew)
+        void Validate(NetworkHeader header, UInt256 headerHash)
         {
-          if (IsHeaderConnectedToHeaderNew(blockNew))
+          if (IsBlockConnectedToHash(headerHash))
           {
-            throw new BlockchainException(blockNew, ChainLinkCode.DUPLICATE);
+            throw new BlockchainException(ChainLinkCode.DUPLICATE);
           }
 
-          if (blockNew.NBits != TargetManager.GetNextTargetBits(this))
+          if (header.NBits != TargetManager.GetNextTargetBits(this))
           {
-            throw new BlockchainException(blockNew, ChainLinkCode.INVALID);
+            throw new BlockchainException(ChainLinkCode.INVALID);
           }
 
-          if (blockNew.Hash.isGreaterThan(UInt256.ParseFromCompact(blockNew.NBits)))
+          if (headerHash.isGreaterThan(UInt256.ParseFromCompact(header.NBits)))
           {
-            throw new BlockchainException(blockNew, ChainLinkCode.INVALID);
+            throw new BlockchainException(ChainLinkCode.INVALID);
           }
 
           if (DeeperThanCheckpoint)
           {
-            throw new BlockchainException(blockNew, ChainLinkCode.CHECKPOINT);
+            throw new BlockchainException(ChainLinkCode.CHECKPOINT);
           }
 
-          if (blockNew.UnixTimeSeconds <= getMedianTimePast())
+          if (header.UnixTimeSeconds <= getMedianTimePast())
           {
-            throw new BlockchainException(blockNew, ChainLinkCode.INVALID);
+            throw new BlockchainException(ChainLinkCode.INVALID);
           }
         }
-        ulong getMedianTimePast()
+        bool IsBlockConnectedToHash(UInt256 hash)
+        {
+          return Block.BlocksNext.Any(b => CalculateHash(b.Header.getBytes()).isEqual(hash));
+        }
+        uint getMedianTimePast()
         {
           const int MEDIAN_TIME_PAST = 11;
 
-          List<ulong> timestampsPast = new List<ulong>();
+          List<uint> timestampsPast = new List<uint>();
           ChainBlock block = Block;
 
           int depth = 0;
           while (depth < MEDIAN_TIME_PAST)
           {
-            timestampsPast.Add(block.UnixTimeSeconds);
+            timestampsPast.Add(block.Header.UnixTimeSeconds);
 
-            if (block == BlockGenesis)
+            if (block == Socket.BlockGenesis)
             { break; }
 
             block = block.BlockPrevious;
@@ -92,18 +93,6 @@ namespace BToken.Chaining
           timestampsPast.Sort();
 
           return timestampsPast[timestampsPast.Count / 2];
-        }
-        bool IsHeaderConnectedToHeaderNew(ChainBlock blockNew)
-        {
-          return Block.BlocksNext.Any(b => b.Hash.isEqual(blockNew.Hash));
-        }
-        ChainSocket CreateFork(ChainBlock blockNew)
-        {
-          return new ChainSocket(
-            Socket.Blockchain,
-            blockNew,
-            AccumulatedDifficulty,
-            GetHeight() + 1);
         }
         void ConnectBlocks(ChainBlock blockPrevious, ChainBlock block)
         {
@@ -115,17 +104,13 @@ namespace BToken.Chaining
         {
           return Socket.Height - Depth;
         }
-        public UInt256 getHash()
-        {
-          return Block.Hash;
-        }
         public bool IsHash(UInt256 hash)
         {
-          return getHash().isEqual(hash);
+          return Hash.isEqual(hash);
         }
         public bool IsGenesis()
         {
-          return Block == BlockGenesis;
+          return Block == Socket.BlockGenesis;
         }
         public bool IsBlock(ChainBlock blockHeader)
         {
@@ -143,19 +128,21 @@ namespace BToken.Chaining
         
         public void push()
         {
-          if(Block.Hash.isEqual(CheckpointHash))
+          if(Hash.isEqual(CheckpointHash))
           {
             DeeperThanCheckpoint = true;
           }
 
+          Hash = Block.Header.HashPrevious;
           Block = Block.BlockPrevious;
-          AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.NBits);
+          AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.Header.NBits);
           Depth++;
         }
 
         public void reset()
         {
           Block = Socket.Block;
+          Hash = Socket.Hash;
           Depth = 0;
           DeeperThanCheckpoint = false;
         }

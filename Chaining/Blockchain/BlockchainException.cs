@@ -10,7 +10,6 @@ namespace BToken.Chaining
   {
     protected class BlockchainException : Exception
     {
-      public ChainBlock ChainHeader { get; private set; }
       public ChainLinkCode ErrorCode { get; private set; }
 
 
@@ -28,9 +27,8 @@ namespace BToken.Chaining
       {
       }
 
-      public BlockchainException(ChainBlock chainHeader, ChainLinkCode errorCode)
+      public BlockchainException(ChainLinkCode errorCode)
       {
-        ChainHeader = chainHeader;
         ErrorCode = errorCode;
       }
     }
