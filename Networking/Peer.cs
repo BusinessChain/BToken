@@ -43,7 +43,7 @@ namespace BToken.Networking
         {
           await EstablishPeerConnection(blockheightLocal);
 
-          Task processMessagesIncomingTask = ProcessMessagesIncomingAsync();
+          Task processMessagesTask = ProcessMessages();
         }
         catch (Exception ex)
         {
@@ -62,7 +62,7 @@ namespace BToken.Networking
       }
       async Task ConnectTCPAsync()
       {
-        TcpClient = new TcpClient(new IPEndPoint(IPAddress.Any, Port));
+        TcpClient = new TcpClient();
         await TcpClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port);
         NetworkMessageStreamer = new MessageStreamer(TcpClient.GetStream());
       }
@@ -76,7 +76,7 @@ namespace BToken.Networking
           await ConnectionManager.receiveResponseToVersionMessageAsync(messageRemote);
         }
       }
-      async Task ProcessMessagesIncomingAsync()
+      async Task ProcessMessages()
       {
         while (true)
         {

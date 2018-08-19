@@ -22,7 +22,7 @@ namespace BToken.Chaining
 
       public ChainBlock BlockPrevious;
       public List<ChainBlock> BlocksNext = new List<ChainBlock>();
-      public IBlockPayload BlockPayload;
+      //public IBlockPayload BlockPayload;
 
       public ChainBlock(
         UInt256 hash,

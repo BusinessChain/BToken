@@ -20,6 +20,9 @@ namespace BToken.Networking
       const int LengthSize = 4;
       const int ChecksumSize = 4;
 
+      const uint MagicValue = 0xF9BEB4D9;
+      const uint MagicValueByteSize = 4;
+
       Stream Stream;
 
       string Command;
@@ -70,9 +73,9 @@ namespace BToken.Networking
 
       public async Task<NetworkMessage> ReadAsync()
       {
-        await syncStreamToMagicAsync().ConfigureAwait(false); //synchron
+        await syncStreamToMagicAsync().ConfigureAwait(false);
 
-        await readBytesAsync(Header).ConfigureAwait(false);//synchron
+        await readBytesAsync(Header).ConfigureAwait(false);
         getCommand();
         getPayloadLength();
 
@@ -136,7 +139,7 @@ namespace BToken.Networking
 
           if(chunkSize == 0)
           {
-            throw new InvalidOperationException("Stream returns 0 bytes signifying end of stream. Code will be caught in a forever-loop.");
+            throw new InvalidOperationException("Stream returns 0 bytes signifying end of stream.");
           }
 
           offset += chunkSize;

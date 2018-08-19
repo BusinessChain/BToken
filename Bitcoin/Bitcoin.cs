@@ -36,7 +36,6 @@ namespace BToken
 
     public async Task startAsync()
     {
-      await Network.startAsync(Blockchain.getHeight());
       await Blockchain.startAsync();
       //await UTXO.startAsync();
     }

@@ -13,59 +13,63 @@ namespace BToken.Chaining
   {
     partial class BlockchainController
     {
-      class NetworkMessageSession
+      class BlockchainSession
       {
         BlockchainController Controller;
 
         BufferBlock<NetworkMessage> Buffer;
-        NetworkMessage NetworkMessageReceivedOld;
-        NetworkMessage NetworkMessageReceivedNext;
 
-        public NetworkMessageSession(BufferBlock<NetworkMessage> buffer, BlockchainController controller)
+        public BlockchainSession(BufferBlock<NetworkMessage> buffer, BlockchainController controller)
         {
           Buffer = buffer;
           Controller = controller;
         }
+        
+        public async Task StartAsync()
+        {
+          while (true)
+          {
+            await ProcessNextMessageAsync();
+          }
+        }
 
         public async Task ProcessNextMessageAsync()
         {
-          NetworkMessageReceivedNext = await Buffer.ReceiveAsync();
+          NetworkMessage networkMessage = await Buffer.ReceiveAsync();
 
-          switch (NetworkMessageReceivedNext)
+          switch (networkMessage)
           {
             case InvMessage invMessage:
-              await ProcessInventoryMessageAsync(invMessage);
+              ProcessInventoryMessage(invMessage);
               break;
 
             case HeadersMessage headersMessage:
-              await ProcessHeadersMessageAsync(headersMessage);
+              ProcessHeadersMessage(headersMessage);
               break;
 
             default:
               break;
           }
-
-          NetworkMessageReceivedOld = NetworkMessageReceivedNext;
         }
-        async Task ProcessInventoryMessageAsync(InvMessage invMessage)
+        void ProcessInventoryMessage(InvMessage invMessage)
         {
           foreach (Inventory blockInventory in invMessage.GetBlockInventories())
           {
-            ChainBlock chainHeader = Controller.Blockchain.GetChainBlock(blockInventory.Hash);
+            ChainBlock chainBlock = Controller.Blockchain.GetChainBlock(blockInventory.Hash);
 
-            if (chainHeader != null)
+            if (chainBlock == null)
             {
-              Controller.Network.BlameProtocolError(Buffer);
+              List<UInt256> headerLocator = Controller.Blockchain.getBlockLocator();
+              Task getHeadersTask = Controller.Network.GetHeadersAsync(Buffer, headerLocator);
+              return;
             }
             else
             {
-              List<UInt256> headerLocator = Controller.Blockchain.getBlockLocator();
-              await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
-              return;
+              Controller.Network.BlameProtocolError(Buffer);
             }
           }
         }
-        async Task ProcessHeadersMessageAsync(HeadersMessage headersMessage)
+        void ProcessHeadersMessage(HeadersMessage headersMessage)
         {
           foreach (NetworkHeader networkHeader in headersMessage.NetworkHeaders)
           {
@@ -73,7 +77,7 @@ namespace BToken.Chaining
             {
               Controller.Blockchain.insertNetworkHeader(networkHeader);
             }
-            catch (ChainLinkException ex)
+            catch (BlockchainException ex)
             {
               if (ex.ErrorCode == ChainLinkCode.DUPLICATE)
               {
@@ -85,21 +89,22 @@ namespace BToken.Chaining
                 Controller.Network.BlameProtocolError(Buffer);
 
                 List<UInt256> headerLocator = Controller.Blockchain.getBlockLocator();
-                await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
-                return;
+                Task getHeadersTask = Controller.Network.GetHeadersAsync(Buffer, headerLocator);
               }
 
               if (ex.ErrorCode == ChainLinkCode.INVALID)
               {
                 Controller.Network.BlameConsensusError(Buffer);
               }
+
+              return;
             }
           }
 
           if (headersMessage.NetworkHeaders.Any())
           {
             List<UInt256> headerLocator = Controller.Blockchain.getBlockLocator();
-            await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
+            Task getHeadersTask = Controller.Network.GetHeadersAsync(Buffer, headerLocator);
           }
 
           // check here if we have headers prior checkpoint.

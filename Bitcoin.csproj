@@ -62,15 +62,16 @@
   <ItemGroup>
     <Compile Include="Bitcoin\BitcoinGenesisChainBlock.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
-    <Compile Include="Chaining\Blockchain\Controller\NetworkMessageSession.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\BlockchainSession.cs" />
     <Compile Include="Chaining\Blockchain\TX.cs" />
-    <Compile Include="Chaining\ChainSocket.cs" />
-    <Compile Include="Chaining\ChainValidationException.cs" />
-    <Compile Include="Chaining\SocketProbe.cs" />
+    <Compile Include="Chaining\Blockchain\ChainSocket\ChainSocket.cs" />
+    <Compile Include="Chaining\Blockchain\BlockchainException.cs" />
+    <Compile Include="Chaining\Blockchain\ChainSocket\SocketProbe.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\Hashing.cs" />
     <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
-    <Compile Include="Chaining\Blockchain\TargetManager.cs" />
+    <Compile Include="Chaining\Blockchain\ChainSocket\TargetManager.cs" />
+    <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\DataTypes\Inventory.cs" />
     <Compile Include="Networking\DataTypes\NetworkHeader.cs" />
     <Compile Include="Networking\DataTypes\NetworkTX.cs" />

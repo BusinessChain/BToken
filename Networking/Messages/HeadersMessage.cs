@@ -28,8 +28,38 @@ namespace BToken.Networking
         Array.Copy(Payload, startIndex, header, 0, NetworkHeader.HEADER_LENGTH);
         startIndex = startIndex + NetworkHeader.HEADER_LENGTH;
 
-        NetworkHeaders.Add(NetworkHeader.deserialize(header));
+        NetworkHeaders.Add(ParseHeader(header));
       }
+    }
+    public static NetworkHeader ParseHeader(byte[] header)
+    {
+      int startIndex = 0;
+      byte[] tempByteArray = new byte[UInt256.BYTE_LENGTH];
+
+      UInt32 version = BitConverter.ToUInt32(header, startIndex);
+      startIndex += 4;
+
+      Array.Copy(header, startIndex, tempByteArray, 0, UInt256.BYTE_LENGTH);
+      UInt256 previousHeaderHash = new UInt256(tempByteArray);
+      startIndex += UInt256.BYTE_LENGTH;
+
+      Array.Copy(header, startIndex, tempByteArray, 0, UInt256.BYTE_LENGTH);
+      UInt256 merkleRootHash = new UInt256(tempByteArray);
+      startIndex += UInt256.BYTE_LENGTH;
+
+      UInt32 unixTimeSeconds = BitConverter.ToUInt32(header, startIndex);
+      startIndex += 4;
+
+      UInt32 nBits = BitConverter.ToUInt32(header, startIndex);
+      startIndex += 4;
+
+      UInt32 nonce = BitConverter.ToUInt32(header, startIndex);
+      startIndex += 4;
+
+      Byte txnCount = header[startIndex];
+      startIndex += 1;
+
+      return new NetworkHeader(version, previousHeaderHash, merkleRootHash, unixTimeSeconds, nBits, nonce, txnCount);
     }
 
     public bool hasMaxHeaderCount()

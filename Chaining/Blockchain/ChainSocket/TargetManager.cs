@@ -35,14 +35,7 @@ namespace BToken.Chaining
 
           UInt256 targetNew = targetOld.multiplyBy(actualTimespan).divideBy(RETARGETING_TIMESPAN_INTERVAL);
 
-          if(targetNew.isGreaterThan(DIFFICULTY_1_TARGET))
-          {
-            return DIFFICULTY_1_TARGET;
-          }
-          else
-          {
-            return targetNew;
-          }
+          return UInt256.Min(DIFFICULTY_1_TARGET, targetNew);
         }
         static ulong Limit(ulong actualTimespan)
         {

@@ -16,56 +16,34 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      List<NetworkMessageSession> NetworkMessageSessions = new List<NetworkMessageSession>();
-
-
+      int NumberOfSessionsMax = 5;
+      List<BlockchainSession> BlockchainSessions = new List<BlockchainSession>();
+      
 
       public BlockchainController(Network network, Blockchain blockchain)
       {
         Network = network;
         Blockchain = blockchain;
+
       }
 
       public async Task StartAsync()
       {
-        await ProcessNetworkSessionsAsync();
+        await CreateBlockchainSessionsAsync();
       }
-      async Task ProcessNetworkSessionsAsync()
+      async Task CreateBlockchainSessionsAsync()
       {
-        while (true)
+        for (int i = 0; i < NumberOfSessionsMax; i++)
         {
-          List<NetworkMessageSession> sessions = await GetNetworkMessageSessionsAsync();
-
-          var sessionsProcessingNextMessageTasks = new List<Task>();
-          foreach (NetworkMessageSession session in sessions)
-          {
-            Task sessionProcessingNextMessageTask = session.ProcessNextMessageAsync();
-            sessionsProcessingNextMessageTasks.Add(sessionProcessingNextMessageTask);
-          }
-
-          Task firstSessionProcessingNextMessageTask = await Task.WhenAny(sessionsProcessingNextMessageTasks);
+          BlockchainSession blockchainSession = await CreateBlockchainSessionAsync();
+          BlockchainSessions.Add(blockchainSession);
+          Task blockchainSessionStartTask = blockchainSession.StartAsync();
         }
       }
-      async Task<List<NetworkMessageSession>> GetNetworkMessageSessionsAsync()
+      async Task<BlockchainSession> CreateBlockchainSessionAsync()
       {
-        List<BufferBlock<NetworkMessage>> buffers = await Network.GetNetworkBuffersBlockchainAsync();
-
-        var sessions = new List<NetworkMessageSession>();
-        foreach (BufferBlock<NetworkMessage> buffer in buffers)
-        {
-          NetworkMessageSession session = NetworkMessageSessions.Find(s => s.ContainsBuffer(buffer));
-
-          if (session == null)
-          {
-            session = new NetworkMessageSession(buffer, this);
-          }
-
-          sessions.Add(session);
-        }
-
-        NetworkMessageSessions = sessions;
-
-        return NetworkMessageSessions;
+        BufferBlock<NetworkMessage> buffer = await Network.CreateNetworkSessionBlockchainAsync(Blockchain.GetHeight());
+        return new BlockchainSession(buffer, this);
       }
 
     }

@@ -10,8 +10,6 @@ namespace BToken.Networking
 {
   partial class Network
   {
-    const uint MagicValue = 0xF9BEB4D9; // Bitcoin Main
-    const uint MagicValueByteSize = 4;
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
     const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NETWORK;
@@ -20,49 +18,28 @@ namespace BToken.Networking
     const Byte RelayOption = 0x00;
     static readonly UInt64 Nonce = createNonce();
 
-    List<Peer> PeersConnected = new List<Peer>();
+    NetworkAddressPool AddressPool = new NetworkAddressPool();
 
-    
+    List<Peer> Peers = new List<Peer>();
+
     public Network()
     {
-      // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("185.6.124.16"), 8333), this);// Satoshi 0.16.0
-      // PeerEndPoint = new Peer(new IPEndPoint(IPAddress.Parse("180.117.10.97"), 8333), this); // Satoshi 0.15.1
       //PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("49.64.118.12"), 8333), this)); // Satoshi 0.16.0
       //PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this)); // Satoshi 0.16.0
-      PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this)); // Satoshi 0.16.1 
+      //PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this)); // Satoshi 0.16.1 
     }
 
-    public async Task startAsync(uint blockheightLocal)
+    public async Task<BufferBlock<NetworkMessage>> CreateNetworkSessionBlockchainAsync(uint blockheightLocal)
     {
-      try
-      {
-        await PeersConnected.First().startAsync(blockheightLocal);
-      }
-      catch (NetworkException ex)
-      {
-        throw new NetworkException("Connection failed with network", ex);
-      }
+      Peer peer = CreatePeer();
+      Peers.Add(peer);
+      await peer.startAsync(blockheightLocal);
+      return peer.NetworkMessageBufferBlockchain;
     }
-    
-    public async Task<List<BufferBlock<NetworkMessage>>> GetNetworkBuffersBlockchainAsync()
+    Peer CreatePeer()
     {
-      List<Peer> connectedPeers = await GetConnectedPeersAsync();
-      return connectedPeers.Select(p => p.NetworkMessageBufferBlockchain).ToList();
-    }
-
-    async Task<List<Peer>> GetConnectedPeersAsync()
-    {
-      if(PeersConnected.Count == 0)
-      {
-        Peer peerNew = await ConnectNewPeerAsync();
-        PeersConnected.Add(peerNew);
-      }
-
-      return PeersConnected;
-    }
-    async Task<Peer> ConnectNewPeerAsync()
-    {
-      throw new NotImplementedException();
+      IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
+      return new Peer(new IPEndPoint(iPAddress, Port), this);
     }
 
     public BufferBlock<NetworkBlock> GetBlocks(IEnumerable<UInt256> headerHashes)
@@ -72,7 +49,7 @@ namespace BToken.Networking
 
     public async Task GetHeadersAsync(UInt256 headerHashChainTip)
     {
-      await PeersConnected.First().GetHeadersAsync(new List<UInt256>() { headerHashChainTip });
+      Peers.ForEach(p => p.GetHeadersAsync(new List<UInt256>() { headerHashChainTip }));
     }
     public async Task GetHeadersAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> headerLocator)
     {
@@ -84,7 +61,7 @@ namespace BToken.Networking
     }
     Peer GetPeerOwnerOfBuffer(BufferBlock<NetworkMessage> buffer)
     {
-      return PeersConnected.Find(p => p.IsOwnerOfBuffer(buffer));
+      return Peers.Find(p => p.IsOwnerOfBuffer(buffer));
     }
 
     public void BlameProtocolError(BufferBlock<NetworkMessage> buffer)
@@ -119,7 +96,7 @@ namespace BToken.Networking
 
     public async Task PingAsync()
     {
-      PeersConnected.First().PingAsync();
+      Peers.ForEach(p => p.PingAsync());
     }
   }
 }

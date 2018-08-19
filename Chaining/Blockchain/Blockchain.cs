@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+using System.Security.Cryptography;
 
 using BToken.Networking;
 
@@ -90,7 +91,14 @@ namespace BToken.Chaining
 
     public ChainBlock GetChainBlock(UInt256 hash)
     {
-      return GetSocket(hash).Probe.Block;
+      ChainSocket socket = GetSocket(hash);
+
+      if(socket == null)
+      {
+        return null;
+      }
+
+      return socket.Probe.Block;
     }
     ChainSocket GetSocket(UInt256 hash)
     {
@@ -171,28 +179,25 @@ namespace BToken.Chaining
         networkHeader.UnixTimeSeconds
         );
 
-      networkHeader = null;
-
       insertChainBlock(chainHeader);
     }
-
-    static UInt256 calculateHash(byte[] headerBytes)
+    UInt256 calculateHash(byte[] headerBytes)
     {
       byte[] hashBytes = Hashing.sha256d(headerBytes);
       return new UInt256(hashBytes);
     }
-    
+
     public void insertChainBlock(ChainBlock block)
     {
       if (IsTimestampExpired(block.UnixTimeSeconds))
       {
-        throw new ChainLinkException(block, ChainLinkCode.EXPIRED);
+        throw new BlockchainException(block, ChainLinkCode.EXPIRED);
       }
 
       ChainSocket socketHeaderPrevious = GetSocket(block.HashPrevious);
       if (socketHeaderPrevious == null)
       {
-        throw new ChainLinkException(block, ChainLinkCode.ORPHAN);
+        throw new BlockchainException(block, ChainLinkCode.ORPHAN);
       }
 
       ChainSocket socketNew = socketHeaderPrevious.InsertBlock(block);
@@ -213,7 +218,7 @@ namespace BToken.Chaining
       return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
     }
 
-    public uint getHeight()
+    public uint GetHeight()
     {
       return SocketMain.Height;
     }
