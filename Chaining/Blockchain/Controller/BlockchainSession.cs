@@ -17,7 +17,7 @@ namespace BToken.Chaining
       {
         BlockchainController Controller;
 
-        BufferBlock<NetworkMessage> Buffer;
+        public BufferBlock<NetworkMessage> Buffer;
 
         public BlockchainSession(BufferBlock<NetworkMessage> buffer, BlockchainController controller)
         {
@@ -27,15 +27,28 @@ namespace BToken.Chaining
         
         public async Task StartAsync()
         {
-          while (true)
+          try
           {
-            await ProcessNextMessageAsync();
+            while (true)
+            {
+              await ProcessNextMessageAsync();
+            }
+          }
+          catch
+          {
+            Controller.DisposeSession(this);
+            await Controller.CreateSessionAsync();
           }
         }
 
         public async Task ProcessNextMessageAsync()
         {
           NetworkMessage networkMessage = await Buffer.ReceiveAsync();
+
+          if(networkMessage == null)
+          {
+            throw new NetworkException("Network indicated end of session.");
+          }
 
           switch (networkMessage)
           {
@@ -109,12 +122,7 @@ namespace BToken.Chaining
 
           // check here if we have headers prior checkpoint.
         }
-
-        public bool ContainsBuffer(BufferBlock<NetworkMessage> sessionMessageBuffer)
-        {
-          return sessionMessageBuffer == Buffer;
-        }
-
+        
       }
     }
   }

@@ -24,22 +24,41 @@ namespace BToken.Networking
 
     public Network()
     {
-      //PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("49.64.118.12"), 8333), this)); // Satoshi 0.16.0
-      //PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("47.106.188.113"), 8333), this)); // Satoshi 0.16.0
-      //PeersConnected.Add(new Peer(new IPEndPoint(IPAddress.Parse("172.116.169.85"), 8333), this)); // Satoshi 0.16.1 
     }
 
-    public async Task<BufferBlock<NetworkMessage>> CreateNetworkSessionBlockchainAsync(uint blockheightLocal)
+    public async Task<BufferBlock<NetworkMessage>> CreateBlockchainSessionAsync(uint blockheightLocal)
     {
       Peer peer = CreatePeer();
       Peers.Add(peer);
-      await peer.startAsync(blockheightLocal);
+
+      try
+      {
+        await peer.startAsync(blockheightLocal);
+      }
+      catch
+      {
+        return await CreateBlockchainSessionAsync(blockheightLocal);
+      }
+
       return peer.NetworkMessageBufferBlockchain;
     }
     Peer CreatePeer()
     {
       IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
       return new Peer(new IPEndPoint(iPAddress, Port), this);
+    }
+
+    public void DisposeSession(BufferBlock<NetworkMessage> buffer)
+    {
+      try
+      {
+        Peer peer = GetPeerOwnerOfBuffer(buffer);
+        peer.Dispose();
+      }
+      catch
+      {
+        return;
+      }
     }
 
     public BufferBlock<NetworkBlock> GetBlocks(IEnumerable<UInt256> headerHashes)
@@ -54,31 +73,38 @@ namespace BToken.Networking
     public async Task GetHeadersAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> headerLocator)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
-      if (peer != null)
+
+      try
       {
         await peer.GetHeadersAsync(headerLocator);
+      }
+      catch
+      {
+        peer.Dispose();
+        throw new NetworkException("Peer discarded due to connection error.");
       }
     }
     Peer GetPeerOwnerOfBuffer(BufferBlock<NetworkMessage> buffer)
     {
-      return Peers.Find(p => p.IsOwnerOfBuffer(buffer));
+      Peer peer = Peers.Find(p => p.IsOwnerOfBuffer(buffer));
+
+      if (peer == null)
+      {
+        throw new NetworkException("No peer owning this buffer.");
+      }
+
+      return peer;
     }
 
     public void BlameProtocolError(BufferBlock<NetworkMessage> buffer)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
-      if (peer != null)
-      {
-        peer.Blame(20);
-      }
+      peer.Blame(20);
     }
     public void BlameConsensusError(BufferBlock<NetworkMessage> buffer)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
-      if (peer != null)
-      {
-        peer.Dispose();
-      }
+      peer.Dispose();
     }
 
     static UInt64 createNonce()
@@ -96,7 +122,22 @@ namespace BToken.Networking
 
     public async Task PingAsync()
     {
-      Peers.ForEach(p => p.PingAsync());
+      var faultedPeers = new List<Peer>();
+
+      foreach(Peer peer in Peers)
+      {
+        try
+        {
+          await peer.PingAsync();
+        }
+        catch
+        {
+          faultedPeers.Add(peer);
+        }
+      }
+
+      faultedPeers.ForEach(p => p.Dispose());
     }
+
   }
 }

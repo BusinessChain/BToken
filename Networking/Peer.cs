@@ -13,7 +13,7 @@ namespace BToken.Networking
   {
     partial class Peer : IDisposable
     {
-      Network NetworkAdapter;
+      Network Network;
       IPEndPoint IPEndPoint;
       PeerConnectionManager ConnectionManager;
 
@@ -28,9 +28,9 @@ namespace BToken.Networking
       bool SendHeadersFlag = false;
 
       // API
-      public Peer(IPEndPoint ipEndPoint, Network networkAdapter)
+      public Peer(IPEndPoint ipEndPoint, Network network)
       {
-        NetworkAdapter = networkAdapter;
+        Network = network;
 
         ConnectionManager = new PeerConnectionManager(this);
         IPEndPoint = ipEndPoint;
@@ -39,11 +39,19 @@ namespace BToken.Networking
 
       public async Task startAsync(uint blockheightLocal)
       {
+        await EstablishPeerConnectionAsync(blockheightLocal);
+
+        Task processMessagesTask = ProcessMessagesAsync();
+      }
+      async Task EstablishPeerConnectionAsync(uint blockheightLocal)
+      {
         try
         {
-          await EstablishPeerConnection(blockheightLocal);
+          var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+          CancellationToken token = cts.Token;
 
-          Task processMessagesTask = ProcessMessages();
+          await ConnectTCPAsync();
+          await handshakeAsync(blockheightLocal, token);
         }
         catch (Exception ex)
         {
@@ -51,14 +59,6 @@ namespace BToken.Networking
 
           throw new NetworkException(string.Format("Connection failed with peer '{0}:{1}'", IPEndPoint.Address.ToString(), IPEndPoint.Port.ToString()), ex);
         }
-      }
-      async Task EstablishPeerConnection(uint blockheightLocal)
-      {
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-        CancellationToken token = cts.Token;
-
-        await ConnectTCPAsync();
-        await handshakeAsync(blockheightLocal, token);
       }
       async Task ConnectTCPAsync()
       {
@@ -76,29 +76,36 @@ namespace BToken.Networking
           await ConnectionManager.receiveResponseToVersionMessageAsync(messageRemote);
         }
       }
-      async Task ProcessMessages()
+      async Task ProcessMessagesAsync()
       {
-        while (true)
+        try
         {
-          NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync();
-          
-          switch (networkMessage.Command)
+          while (true)
           {
-            case "ping":
-              await ProcessPingMessageAsync(networkMessage);
-              break;
-            case "sendheaders":
-              await ProcessSendHeadersMessageAsync(networkMessage);
-              break;
-            case "inv":
-              await ProcessInventoryMessageAsync(networkMessage);
-              break;
-            case "headers":
-              await ProcessHeadersMessageAsync(networkMessage);
-              break;
-            default:
-              break;
+            NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync();
+
+            switch (networkMessage.Command)
+            {
+              case "ping":
+                await ProcessPingMessageAsync(networkMessage);
+                break;
+              case "sendheaders":
+                await ProcessSendHeadersMessageAsync(networkMessage);
+                break;
+              case "inv":
+                await ProcessInventoryMessageAsync(networkMessage);
+                break;
+              case "headers":
+                await ProcessHeadersMessageAsync(networkMessage);
+                break;
+              default:
+                break;
+            }
           }
+        }
+        catch
+        {
+          Dispose();
         }
       }
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
@@ -152,6 +159,11 @@ namespace BToken.Networking
       public void Dispose()
       {
         TcpClient.Close();
+
+        NetworkMessageBufferBlockchain.Post(null);
+        NetworkMessageBufferUTXO.Post(null);
+
+        Network.Peers.Remove(this);
       }
       
       public async Task PingAsync()

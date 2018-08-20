@@ -34,23 +34,28 @@ namespace BToken.Networking
       {
         foreach (string dnsSeed in DnsSeeds)
         {
-          try
-          {
-            IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
-            SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList);
-          }
-          catch (Exception ex)
-          {
-            Console.WriteLine(ex.Message);
-          }
+          IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
+          SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList);
+        }
+
+        if(SeedNodeIPAddresses.Count == 0)
+        {
+          throw new InvalidOperationException("No seed addresses downloaded.");
         }
       }
 
       public IPAddress GetRandomNodeAddress()
       {
+        if (SeedNodeIPAddresses.Count == 0)
+        {
+          DownloadIPAddressesFromSeeds();
+        }
+
         int randomIndex = RandomGenerator.Next(SeedNodeIPAddresses.Count);
+
         IPAddress iPAddress = SeedNodeIPAddresses[randomIndex];
         SeedNodeIPAddresses.Remove(iPAddress);
+
         return iPAddress;
       }
     }

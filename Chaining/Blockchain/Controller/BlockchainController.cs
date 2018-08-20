@@ -16,7 +16,7 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      int NumberOfSessionsMax = 1;
+      int NumberOfSessionsMax = 8;
       List<BlockchainSession> BlockchainSessions = new List<BlockchainSession>();
       
 
@@ -29,21 +29,29 @@ namespace BToken.Chaining
 
       public async Task StartAsync()
       {
-        await CreateBlockchainSessionsAsync();
+        await CreateSessionsAsync();
       }
-      async Task CreateBlockchainSessionsAsync()
+      async Task CreateSessionsAsync()
       {
         for (int i = 0; i < NumberOfSessionsMax; i++)
         {
-          BlockchainSession blockchainSession = await CreateBlockchainSessionAsync();
-          BlockchainSessions.Add(blockchainSession);
-          Task blockchainSessionStartTask = blockchainSession.StartAsync();
+          await CreateSessionAsync();
         }
       }
-      async Task<BlockchainSession> CreateBlockchainSessionAsync()
+      async Task CreateSessionAsync()
       {
-        BufferBlock<NetworkMessage> buffer = await Network.CreateNetworkSessionBlockchainAsync(Blockchain.GetHeight());
-        return new BlockchainSession(buffer, this);
+        BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainSessionAsync(Blockchain.GetHeight());
+        
+        var blockchainSession = new BlockchainSession(buffer, this);
+        BlockchainSessions.Add(blockchainSession);
+
+        Task blockchainSessionStartTask = blockchainSession.StartAsync();
+      }
+
+      void DisposeSession(BlockchainSession session)
+      {
+        Network.DisposeSession(session.Buffer);
+        BlockchainSessions.Remove(session);
       }
 
     }
