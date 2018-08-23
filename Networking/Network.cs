@@ -16,31 +16,33 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NONE; 
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-    static readonly UInt64 Nonce = createNonce();
+    static UInt64 Nonce;
 
-    NetworkAddressPool AddressPool = new NetworkAddressPool();
+    NetworkAddressPool AddressPool;
 
     List<Peer> Peers = new List<Peer>();
 
     public Network()
     {
+      Nonce = createNonce();
+      AddressPool = new NetworkAddressPool();
     }
 
     public async Task<BufferBlock<NetworkMessage>> CreateBlockchainSessionAsync(uint blockheightLocal)
     {
-      Peer peer = CreatePeer();
-      Peers.Add(peer);
-
       try
       {
+        Peer peer = CreatePeer();
+        Peers.Add(peer);
         await peer.startAsync(blockheightLocal);
+        return peer.NetworkMessageBufferBlockchain;
       }
-      catch
+      catch (Exception ex)
       {
+        Console.WriteLine(ex.Message);
         return await CreateBlockchainSessionAsync(blockheightLocal);
       }
 
-      return peer.NetworkMessageBufferBlockchain;
     }
     Peer CreatePeer()
     {
@@ -60,12 +62,7 @@ namespace BToken.Networking
         return;
       }
     }
-
-    public BufferBlock<NetworkBlock> GetBlocks(IEnumerable<UInt256> headerHashes)
-    {
-      return new BufferBlock<NetworkBlock>();
-    }
-
+    
     public async Task GetHeadersAsync(UInt256 headerHashChainTip)
     {
       Peers.ForEach(p => p.GetHeadersAsync(new List<UInt256>() { headerHashChainTip }));
@@ -115,7 +112,7 @@ namespace BToken.Networking
       number = number << 32;
       return number |= (UInt32)rnd.Next();
     }
-    public static long getUnixTimeSeconds()
+    static long getUnixTimeSeconds()
     {
       return DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     }

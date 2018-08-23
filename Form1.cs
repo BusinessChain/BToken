@@ -20,8 +20,15 @@ namespace BToken
     public Form1()
     {
       InitializeComponent();
-      Node = new Bitcoin();
-      Task runNodeTask = Node.startAsync();
+      try
+      {
+        Node = new Bitcoin();
+        Task runNodeTask = Node.startAsync();
+      }
+      catch (Exception ex)
+      {
+        MessageBox.Show(string.Format("Ups, something went wrong: '{0}'", ex.Message));
+      }
     }
     
     private async void getHeadersButton_Click(object sender, EventArgs e)

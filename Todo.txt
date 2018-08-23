@@ -8,3 +8,5 @@
 
 
 - Leute zahlen bei Hypo Lenzi auf ein Konto ein, und erhalten dabei ein Token der Hypo Lenzi auf einen schweizerFranken redeem.
+- Headers 82 bytes statt 81.
+- bSecure

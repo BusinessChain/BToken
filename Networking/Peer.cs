@@ -15,7 +15,7 @@ namespace BToken.Networking
     {
       Network Network;
       IPEndPoint IPEndPoint;
-      PeerConnectionManager ConnectionManager;
+      PeerHandshakeManager ConnectionManager;
 
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
@@ -32,7 +32,7 @@ namespace BToken.Networking
       {
         Network = network;
 
-        ConnectionManager = new PeerConnectionManager(this);
+        ConnectionManager = new PeerHandshakeManager(this);
         IPEndPoint = ipEndPoint;
       }
 
@@ -73,7 +73,7 @@ namespace BToken.Networking
         while (!ConnectionManager.isHandshakeCompleted())
         {
           NetworkMessage messageRemote = await NetworkMessageStreamer.ReadAsync();
-          await ConnectionManager.receiveResponseToVersionMessageAsync(messageRemote);
+          await ConnectionManager.ProcessResponseToVersionMessageAsync(messageRemote);
         }
       }
       async Task ProcessMessagesAsync()

@@ -8,8 +8,7 @@ namespace BToken.Networking
 {
   class HeadersMessage : NetworkMessage
   {
-    public const int MAX_HEADER_COUNT = 2000;
-    public List<NetworkHeader> NetworkHeaders { get; private set; } = new List<NetworkHeader>();
+    public List<NetworkHeader> Headers { get; private set; } = new List<NetworkHeader>();
 
 
     public HeadersMessage(NetworkMessage message) : base("headers", message.Payload)
@@ -28,7 +27,7 @@ namespace BToken.Networking
         Array.Copy(Payload, startIndex, header, 0, NetworkHeader.HEADER_LENGTH);
         startIndex = startIndex + NetworkHeader.HEADER_LENGTH;
 
-        NetworkHeaders.Add(ParseHeader(header));
+        Headers.Add(ParseHeader(header));
       }
     }
     public static NetworkHeader ParseHeader(byte[] header)
@@ -62,14 +61,9 @@ namespace BToken.Networking
       return new NetworkHeader(version, previousHeaderHash, merkleRootHash, unixTimeSeconds, nBits, nonce);
     }
 
-    public bool hasMaxHeaderCount()
-    {
-      return NetworkHeaders.Count == MAX_HEADER_COUNT;
-    }
-
     public bool connectsToHeaderLocator(IEnumerable<UInt256> headerLocator)
     {
-      return headerLocator.Any(h => h.isEqual(NetworkHeaders.First().HashPrevious));
+      return headerLocator.Any(h => h.isEqual(Headers.First().HashPrevious));
     }
   }
 }

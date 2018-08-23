@@ -1,16 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
-using System.Security.Cryptography;
 
 using BToken.Networking;
 
+
 namespace BToken.Chaining
 {
-  public enum ChainLinkCode { ORPHAN, DUPLICATE, INVALID, EXPIRED, CHECKPOINT };
+  public enum BlockCode { ORPHAN, DUPLICATE, INVALID, EXPIRED, CHECKPOINT };
 
 
   partial class Blockchain
@@ -19,16 +17,16 @@ namespace BToken.Chaining
     BlockchainController Controller;
 
     static ChainBlock BlockGenesis;
-    static UInt256 CheckpointHash;
+    static BlockLocation Checkpoint;
 
     ChainSocket SocketMain;
 
-    public Blockchain(ChainBlock blockGenesis, UInt256 checkpointHash, Network network)
+    public Blockchain(ChainBlock blockGenesis, BlockLocation checkpoint, Network network)
     {
       Network = network;
       Controller = new BlockchainController(network, this);
 
-      CheckpointHash = checkpointHash;
+      Checkpoint = checkpoint;
       BlockGenesis = blockGenesis;
 
       SocketMain = new ChainSocket(
@@ -49,55 +47,15 @@ namespace BToken.Chaining
       await Controller.StartAsync();
     }
 
-    public async Task buildAsync()
+
+    List<UInt256> GetBlockLocator()
     {
-      //List<UInt256> headerLocator = getHeaderLocator();
-      //BufferBlock<NetworkHeader> networkHeaderBuffer = new BufferBlock<NetworkHeader>();
-      //Network.GetHeadersAsync(headerLocator);
-      //await insertNetworkHeadersAsync(networkHeaderBuffer);
+      return SocketMain.GetBlockLocator().Select(b => b.Hash).ToList();
     }
 
-    public List<UInt256> getBlockLocator()
+    ChainBlock GetBlock(UInt256 hash)
     {
-      uint getNextLocation(uint locator)
-      {
-        if (locator < 10)
-          return locator + 1;
-        else
-          return locator * 2;
-      }
-
-      return getBlockLocator(CheckpointHash, getNextLocation);
-    }
-    List<UInt256> getBlockLocator(UInt256 checkpointHash, Func<uint, uint> getNextLocation)
-    {
-      List<UInt256> chainLinkLocator = new List<UInt256>();
-      SocketMain.Probe.reset();
-      uint locator = 0;
-
-      while (true)
-      {
-        if (SocketMain.Probe.IsHash(checkpointHash) || SocketMain.Probe.IsGenesis())
-        {
-          chainLinkLocator.Add(SocketMain.Probe.Hash);
-          return chainLinkLocator;
-        }
-
-        if (locator == SocketMain.Probe.Depth)
-        {
-          chainLinkLocator.Add(SocketMain.Probe.Hash);
-          locator = getNextLocation(locator);
-        }
-
-        SocketMain.Probe.push();
-      }
-
-    }
-
-
-    public ChainBlock GetChainBlock(UInt256 hash)
-    {
-      ChainSocket socket = GetSocketWithProbeSetTo(hash);
+      ChainSocket socket = GetSocketWithProbeAtBlock(hash);
 
       if(socket == null)
       {
@@ -106,7 +64,8 @@ namespace BToken.Chaining
 
       return socket.Probe.Block;
     }
-    ChainSocket GetSocketWithProbeSetTo(UInt256 hash)
+
+    ChainSocket GetSocketWithProbeAtBlock(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
       resetProbes();
@@ -162,18 +121,18 @@ namespace BToken.Chaining
       }
     }
 
-    public void insertNetworkHeader(NetworkHeader header)
+    void insertHeader(NetworkHeader header)
     {
       if (IsTimestampExpired(header.UnixTimeSeconds))
       {
-        throw new BlockchainException(ChainLinkCode.EXPIRED);
+        throw new BlockchainException(BlockCode.EXPIRED);
       }
 
-      ChainSocket socket = GetSocketWithProbeSetTo(header.HashPrevious);
+      ChainSocket socket = GetSocketWithProbeAtBlock(header.HashPrevious);
 
       if (socket == null)
       {
-        throw new BlockchainException(ChainLinkCode.ORPHAN);
+        throw new BlockchainException(BlockCode.ORPHAN);
       }
 
       UInt256 headerHash = CalculateHash(header.getBytes());
@@ -229,7 +188,7 @@ namespace BToken.Chaining
       return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
     }
 
-    public uint GetHeight()
+    uint GetHeight()
     {
       return SocketMain.Height;
     }
@@ -270,11 +229,6 @@ namespace BToken.Chaining
       }
 
       throw new InvalidOperationException("Neither chainLink nor checkpoint in chain encountered.");
-    }
-    void ConnectChainLinks(ChainBlock blockPrevious, ChainBlock block)
-    {
-      block.BlockPrevious = blockPrevious;
-      blockPrevious.BlocksNext.Add(block);
     }
     void InsertSocket(ChainSocket newSocket)
     {

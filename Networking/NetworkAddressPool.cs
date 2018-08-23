@@ -34,13 +34,20 @@ namespace BToken.Networking
       {
         foreach (string dnsSeed in DnsSeeds)
         {
-          IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
-          SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList);
+          try
+          {
+            IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
+            SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList);
+          }
+          catch
+          {
+            Console.WriteLine("DNS seed error :'{0}'", dnsSeed);
+          }
         }
 
         if(SeedNodeIPAddresses.Count == 0)
         {
-          throw new InvalidOperationException("No seed addresses downloaded.");
+         throw new InvalidOperationException("No seed addresses downloaded.");
         }
       }
 

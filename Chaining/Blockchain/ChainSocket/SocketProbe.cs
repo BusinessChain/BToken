@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
@@ -44,27 +42,33 @@ namespace BToken.Chaining
         {
           if (IsBlockConnectedToHash(headerHash))
           {
-            throw new BlockchainException(ChainLinkCode.DUPLICATE);
+            throw new BlockchainException(BlockCode.DUPLICATE);
           }
 
           if (header.NBits != TargetManager.GetNextTargetBits(this))
           {
-            throw new BlockchainException(ChainLinkCode.INVALID);
+            throw new BlockchainException(BlockCode.INVALID);
           }
 
           if (headerHash.isGreaterThan(UInt256.ParseFromCompact(header.NBits)))
           {
-            throw new BlockchainException(ChainLinkCode.INVALID);
-          }
-
-          if (DeeperThanCheckpoint)
-          {
-            throw new BlockchainException(ChainLinkCode.CHECKPOINT);
+            throw new BlockchainException(BlockCode.INVALID);
           }
 
           if (header.UnixTimeSeconds <= getMedianTimePast())
           {
-            throw new BlockchainException(ChainLinkCode.INVALID);
+            throw new BlockchainException(BlockCode.INVALID);
+          }
+
+          // This applies only if checkpoint is already in the chain and a new block wants to connect prior to it.
+          if (DeeperThanCheckpoint)  
+          {
+            throw new BlockchainException(BlockCode.CHECKPOINT);
+          }
+
+          if (GetHeight() + 1 == Checkpoint.Height && !headerHash.isEqual(Checkpoint.Hash))
+          {
+            throw new BlockchainException(BlockCode.CHECKPOINT);
           }
         }
         bool IsBlockConnectedToHash(UInt256 hash)
@@ -128,7 +132,7 @@ namespace BToken.Chaining
         
         public void push()
         {
-          if(Hash.isEqual(CheckpointHash))
+          if(Hash.isEqual(Checkpoint.Hash))
           {
             DeeperThanCheckpoint = true;
           }

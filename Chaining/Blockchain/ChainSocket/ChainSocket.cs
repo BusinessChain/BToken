@@ -13,8 +13,9 @@ namespace BToken.Chaining
       Blockchain Blockchain;
 
       ChainBlock BlockGenesis;
-      public ChainBlock Block;
-      UInt256 Hash;
+      ChainBlock Block;
+      public UInt256 Hash;
+      BlockLocator Locator;
 
       double AccumulatedDifficulty;
       public uint Height;
@@ -38,9 +39,10 @@ namespace BToken.Chaining
       {
         Blockchain = blockchain;
 
+        Hash = hash;
         BlockGenesis = blockGenesis;
         Block = blockGenesis;
-        Hash = hash;
+        Locator = new BlockLocator(blockGenesis);
 
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockGenesis.Header.NBits);
         Height = height;
@@ -104,7 +106,15 @@ namespace BToken.Chaining
         Hash = headerHash;
         AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
         Height++;
+
+        Locator.Update(Height, Hash);
       }
+
+      public List<BlockLocation> GetBlockLocator()
+      {
+        return Locator.BlockList;
+      }
+
       public bool isStrongerThan(ChainSocket socket)
       {
         if (socket == null)
