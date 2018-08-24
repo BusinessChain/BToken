@@ -79,15 +79,18 @@ namespace BToken.Chaining
                 {
                   case BlockCode.DUPLICATE:
                     State = SessionState.END;
+                    BlockchainSession.BlameProtocolError();
                     return;
 
                   case BlockCode.ORPHAN:
                     State = SessionState.ORPHAN;
+                    BlockchainSession.BlameProtocolError();
                     HeaderOrphan = header;
                     await BlockchainSession.GetHeadersAsync();
                     return;
 
                   case BlockCode.INVALID:
+                    BlockchainSession.BlameConsensusError();
                     return;
 
                   default:

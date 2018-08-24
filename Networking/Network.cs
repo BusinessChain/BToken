@@ -101,7 +101,7 @@ namespace BToken.Networking
     public void BlameConsensusError(BufferBlock<NetworkMessage> buffer)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
-      peer.Dispose();
+      peer.Blame(100);
     }
 
     static UInt64 createNonce()

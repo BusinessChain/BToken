@@ -126,7 +126,7 @@ namespace BToken.Chaining
           {
             timestampsPast.Add(block.Header.UnixTimeSeconds);
 
-            if (block == Socket.BlockGenesis)
+            if (block == Socket.Blockchain.BlockGenesis)
             { break; }
 
             block = block.BlockPrevious;
@@ -153,7 +153,7 @@ namespace BToken.Chaining
         }
         public bool IsGenesis()
         {
-          return Block == Socket.BlockGenesis;
+          return Block == Socket.Blockchain.BlockGenesis;
         }
         public bool IsBlock(ChainBlock blockHeader)
         {

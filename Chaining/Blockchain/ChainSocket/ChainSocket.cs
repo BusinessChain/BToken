@@ -2,9 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-
-using BToken.Networking;
 
 namespace BToken.Chaining
 {
@@ -13,8 +10,6 @@ namespace BToken.Chaining
     partial class ChainSocket
     {
       Blockchain Blockchain;
-
-      ChainBlock BlockGenesis;
 
       ChainBlock Block;
       public UInt256 Hash;
@@ -34,7 +29,7 @@ namespace BToken.Chaining
       public ChainSocket
         (
         Blockchain blockchain,
-        ChainBlock blockGenesis,
+        ChainBlock block,
         UInt256 hash,
         double accumulatedDifficultyPrevious,
         uint height
@@ -44,16 +39,15 @@ namespace BToken.Chaining
         Probe = new SocketProbe(this);
 
         Hash = hash;
-        BlockGenesis = blockGenesis;
-        Block = blockGenesis;
-        Locator = new BlockLocator(blockGenesis, this);
+        Block = block;
+        Locator = new BlockLocator(this);
 
-        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockGenesis.Header.NBits);
+        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(block.Header.NBits);
         Height = height;
 
       }
 
-      public bool isWeakerSocketProbeStrongerThan(ChainSocket socket)
+      public bool IsWeakerSocketProbeStrongerThan(ChainSocket socket)
       {
         return WeakerSocketActive != null && WeakerSocketActive.isProbeStrongerThan(socket);
       }
@@ -148,12 +142,7 @@ namespace BToken.Chaining
         }
         return Probe.isStrongerThan(socket.Probe);
       }
-
-      public bool isProbeAtGenesis()
-      {
-        return BlockGenesis == Probe.Block;
-      }
-
+      
     }
   }
 }

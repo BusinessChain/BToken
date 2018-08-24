@@ -17,7 +17,7 @@ namespace BToken.Chaining
         public List<BlockLocation> BlockList { get; private set; }
 
 
-        public BlockLocator(ChainBlock blockGenesis, ChainSocket socket)
+        public BlockLocator(ChainSocket socket)
         {
           Socket = socket;
 
@@ -29,14 +29,8 @@ namespace BToken.Chaining
           Socket.Probe.reset();
           uint locator = 0;
 
-          while (true)
+          while (!Socket.Probe.IsGenesis())
           {
-            if (Socket.Probe.IsGenesis())
-            {
-              chainLinkLocator.Add(Socket.Probe.GetBlockLocation());
-              return chainLinkLocator;
-            }
-
             if (locator == Socket.Probe.Depth)
             {
               chainLinkLocator.Add(Socket.Probe.GetBlockLocation());
@@ -45,6 +39,10 @@ namespace BToken.Chaining
 
             Socket.Probe.push();
           }
+
+          chainLinkLocator.Add(Socket.Probe.GetBlockLocation());
+
+          return chainLinkLocator;
         }
         uint GetNextLocator(uint locator)
         {
@@ -78,7 +76,6 @@ namespace BToken.Chaining
 
         }
         
-
         
       }
     }

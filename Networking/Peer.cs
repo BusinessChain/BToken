@@ -154,6 +154,13 @@ namespace BToken.Networking
       public void Blame(uint penaltyScore)
       {
         PenaltyScore += penaltyScore;
+
+        if(PenaltyScore >= 100)
+        {
+          Network.AddressPool.Blame(IPEndPoint.Address);
+          Dispose();
+        }
+
       }
           
       public void Dispose()

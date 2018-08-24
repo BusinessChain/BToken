@@ -23,6 +23,10 @@ namespace BToken.Networking
 
       List<IPAddress> SeedNodeIPAddresses = new List<IPAddress>();
 
+      List<IPAddress> BlackListedIPAddresses = new List<IPAddress>();
+      DateTimeOffset TimeOfLastUpdate = DateTimeOffset.UtcNow;
+
+
       Random RandomGenerator = new Random();
 
 
@@ -53,6 +57,8 @@ namespace BToken.Networking
 
       public IPAddress GetRandomNodeAddress()
       {
+        UpdateBlackList();
+
         if (SeedNodeIPAddresses.Count == 0)
         {
           DownloadIPAddressesFromSeeds();
@@ -63,7 +69,29 @@ namespace BToken.Networking
         IPAddress iPAddress = SeedNodeIPAddresses[randomIndex];
         SeedNodeIPAddresses.Remove(iPAddress);
 
-        return iPAddress;
+        if(BlackListedIPAddresses.Contains(iPAddress))
+        {
+          return GetRandomNodeAddress();
+        }
+        else
+        {
+          return iPAddress;
+
+        }
+      }
+      void UpdateBlackList()
+      {
+        TimeSpan timeSinceLastUpdate = DateTimeOffset.UtcNow - TimeOfLastUpdate;
+        if (timeSinceLastUpdate > TimeSpan.FromDays(1))
+        {
+          BlackListedIPAddresses = new List<IPAddress>();
+          DateTimeOffset TimeOfLastUpdate = DateTimeOffset.UtcNow;
+        }
+      }
+
+      public void Blame(IPAddress iPAddress)
+      {
+        BlackListedIPAddresses.Add(iPAddress);
       }
     }
   }

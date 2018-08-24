@@ -15,7 +15,8 @@ namespace BToken.Chaining
   {
     Network Network;
     BlockchainController Controller;
-
+    
+    ChainBlock BlockGenesis;
     CheckpointManager Checkpoints;
 
     ChainSocket SocketMain;
@@ -26,11 +27,12 @@ namespace BToken.Chaining
       Network = network;
       Controller = new BlockchainController(network, this);
 
+      BlockGenesis = genesisBlock;
       Checkpoints = new CheckpointManager(checkpoints);
 
       SocketMain = new ChainSocket(
         blockchain: this,
-        blockGenesis: genesisBlock,
+        block: genesisBlock,
         hash: CalculateHash(genesisBlock.Header.getBytes()),
         accumulatedDifficultyPrevious: 0,
         height: 0);
@@ -79,7 +81,7 @@ namespace BToken.Chaining
         {
           socket.bypass();
 
-          if (socket.isWeakerSocketProbeStrongerThan(socket.StrongerSocketActive))
+          if (socket.IsWeakerSocketProbeStrongerThan(socket.StrongerSocketActive))
           {
             socket = socket.WeakerSocketActive;
           }
