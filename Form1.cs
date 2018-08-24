@@ -36,7 +36,7 @@ namespace BToken
       string hashString = textBox_LocatorHash.Text;
       UInt256 hash = new UInt256(hashString);
       Console.WriteLine("Send 'getheaders', locator = " + hashString);
-      await Node.Network.GetHeadersAsync(hash);
+      await Node.Network.GetHeadersAsync(Node.Blockchain.GetBlockLocator());
     }
 
     private async void button_ping_Click(object sender, EventArgs e)

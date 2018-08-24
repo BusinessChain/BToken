@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 
 using BToken.Networking;
 
@@ -23,7 +22,6 @@ namespace BToken.Chaining
           SessionState State = SessionState.START;
 
           NetworkHeader HeaderOrphan;
-          List<UInt256> BlockLocator;
 
                     
           public HeadersSession(BlockchainSession blockchainSession)
@@ -86,8 +84,7 @@ namespace BToken.Chaining
                   case BlockCode.ORPHAN:
                     State = SessionState.ORPHAN;
                     HeaderOrphan = header;
-                    BlockLocator = BlockchainSession.GetBlockLocator();
-                    await BlockchainSession.GetHeadersAsync(BlockLocator);
+                    await BlockchainSession.GetHeadersAsync();
                     return;
 
                   case BlockCode.INVALID:
@@ -101,7 +98,7 @@ namespace BToken.Chaining
 
             if (headers.Any())
             {
-              await BlockchainSession.GetHeadersAsync(BlockchainSession.GetLastBlockHash());
+              await BlockchainSession.GetHeadersAsync();
             }
             else
             {

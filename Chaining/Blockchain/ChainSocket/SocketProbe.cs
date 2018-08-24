@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 
+using BToken.Networking;
+
+
 namespace BToken.Chaining
 {
   partial class Blockchain
@@ -10,35 +13,76 @@ namespace BToken.Chaining
     {
       public class SocketProbe
       {
-        ChainSocket Socket;
+        public ChainSocket Socket { get; private set; }
         
         public ChainBlock Block;
         public UInt256 Hash;
-        public uint Depth;
         public double AccumulatedDifficulty;
 
-        bool DeeperThanCheckpoint;
+        public uint Depth;
+
+        bool IsBelowCheckpoint;
+
 
         public SocketProbe(ChainSocket socket)
         {
           Socket = socket;
 
-          Block = socket.Block;
-          Hash = socket.Hash;
-          AccumulatedDifficulty = socket.AccumulatedDifficulty;
+          reset();
+        }
+
+        public void reset()
+        {
+          Block = Socket.Block;
+          Hash = Socket.Hash;
+          AccumulatedDifficulty = Socket.AccumulatedDifficulty;
+
+          Depth = 0;
+
+          IsBelowCheckpoint = false;
+        }
+
+        public void push()
+        {
+          Hash = Block.Header.HashPrevious;
+          Block = Block.BlockPrevious;
+          AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.Header.NBits);
+          
+          Depth++;
+
+          IsBelowCheckpoint = false;
         }
         
-        public ChainBlock InsertHeader(NetworkHeader header, UInt256 headerHash)
+        public ChainSocket InsertHeader(NetworkHeader header, UInt256 headerHash)
         {
-          Validate(header, headerHash);
+          ValidateHeader(header, headerHash);
 
           var block = new ChainBlock(header);
           
           ConnectBlocks(Block, block);
 
-          return block;
+          if (Depth == 0)
+          {
+            Socket.ConnectNextBlock(block, headerHash);
+
+            if(Socket.StrongerSocket != null)
+            {
+              Socket.Disconnect();
+            }
+
+            return Socket;
+          }
+          else
+          {
+            return new ChainSocket(
+              Socket.Blockchain,
+              block,
+              headerHash,
+              AccumulatedDifficulty,
+              GetHeight() + 1);
+          }
         }
-        void Validate(NetworkHeader header, UInt256 headerHash)
+        void ValidateHeader(NetworkHeader header, UInt256 headerHash)
         {
           if (IsBlockConnectedToHash(headerHash))
           {
@@ -50,32 +94,27 @@ namespace BToken.Chaining
             throw new BlockchainException(BlockCode.INVALID);
           }
 
-          if (headerHash.isGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+          if (header.UnixTimeSeconds <= GetMedianTimePast())
           {
             throw new BlockchainException(BlockCode.INVALID);
           }
 
-          if (header.UnixTimeSeconds <= getMedianTimePast())
+          if (!Socket.Blockchain.Checkpoints.ValidateBlockLocation(GetHeight() + 1, headerHash))
           {
             throw new BlockchainException(BlockCode.INVALID);
           }
 
-          // This applies only if checkpoint is already in the chain and a new block wants to connect prior to it.
-          if (DeeperThanCheckpoint)  
+          if (IsBelowCheckpoint)
           {
-            throw new BlockchainException(BlockCode.CHECKPOINT);
-          }
+            throw new BlockchainException(BlockCode.INVALID);
+          }          
 
-          if (GetHeight() + 1 == Checkpoint.Height && !headerHash.isEqual(Checkpoint.Hash))
-          {
-            throw new BlockchainException(BlockCode.CHECKPOINT);
-          }
         }
         bool IsBlockConnectedToHash(UInt256 hash)
         {
           return Block.BlocksNext.Any(b => CalculateHash(b.Header.getBytes()).isEqual(hash));
         }
-        uint getMedianTimePast()
+        uint GetMedianTimePast()
         {
           const int MEDIAN_TIME_PAST = 11;
 
@@ -129,26 +168,10 @@ namespace BToken.Chaining
 
           return AccumulatedDifficulty > probe.AccumulatedDifficulty;
         }
-        
-        public void push()
+                
+        public BlockLocation GetBlockLocation()
         {
-          if(Hash.isEqual(Checkpoint.Hash))
-          {
-            DeeperThanCheckpoint = true;
-          }
-
-          Hash = Block.Header.HashPrevious;
-          Block = Block.BlockPrevious;
-          AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.Header.NBits);
-          Depth++;
-        }
-
-        public void reset()
-        {
-          Block = Socket.Block;
-          Hash = Socket.Hash;
-          Depth = 0;
-          DeeperThanCheckpoint = false;
+          return new BlockLocation(GetHeight(), Hash);
         }
       }
     }

@@ -12,28 +12,50 @@ namespace BToken.Chaining
     {
       class BlockLocator
       {
-        public List<BlockLocation> BlockList { get; private set; } = new List<BlockLocation>();
+        ChainSocket Socket;
 
-        public BlockLocator(ChainBlock blockGenesis)
+        public List<BlockLocation> BlockList { get; private set; }
+
+
+        public BlockLocator(ChainBlock blockGenesis, ChainSocket socket)
         {
-          BlockList.Add(new BlockLocation()
+          Socket = socket;
+
+          BlockList = CreateBlockList();
+        }
+        List<BlockLocation> CreateBlockList()
+        {
+          List<BlockLocation> chainLinkLocator = new List<BlockLocation>();
+          Socket.Probe.reset();
+          uint locator = 0;
+
+          while (true)
           {
-            Height = 0,
-            Hash = CalculateHash(blockGenesis.Header.getBytes())
-          });
+            if (Socket.Probe.IsGenesis())
+            {
+              chainLinkLocator.Add(Socket.Probe.GetBlockLocation());
+              return chainLinkLocator;
+            }
+
+            if (locator == Socket.Probe.Depth)
+            {
+              chainLinkLocator.Add(Socket.Probe.GetBlockLocation());
+              locator = GetNextLocator(locator);
+            }
+
+            Socket.Probe.push();
+          }
+        }
+        uint GetNextLocator(uint locator)
+        {
+          return locator * 2 + 1;
         }
 
         public void Update(uint height, UInt256 hash)
         {
-          BlockList.Insert(0, new BlockLocation()
-          {
-            Height = height,
-            Hash = hash
-          });
-
+          BlockList.Insert(0, new BlockLocation(height, hash));
           SortLocator();
         }
-
         void SortLocator()
         {
           SortLocator(1);
@@ -55,6 +77,8 @@ namespace BToken.Chaining
           }
 
         }
+        
+
         
       }
     }

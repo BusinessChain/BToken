@@ -12,6 +12,12 @@ namespace BToken.Chaining
     {
       public uint Height;
       public UInt256 Hash;
+
+      public BlockLocation(uint height, UInt256 hash)
+      {
+        Height = height;
+        Hash = hash;
+      }
     }
   }
 }

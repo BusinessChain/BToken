@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
+using BToken.Networking;
 
 namespace BToken.Chaining
 {
@@ -21,6 +23,17 @@ namespace BToken.Chaining
       public ChainBlock(NetworkHeader header)
       {
         Header = header;
+      }
+
+      public ChainBlock(
+      UInt32 version,
+      UInt256 hashPrevious,
+      UInt256 merkleRootHash,
+      UInt32 unixTimeSeconds,
+      UInt32 nBits,
+      UInt32 nonce)
+      {
+        Header = new NetworkHeader(version, hashPrevious, merkleRootHash, unixTimeSeconds, nBits, nonce);
       }
 
     }

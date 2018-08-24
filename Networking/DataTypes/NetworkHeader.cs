@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace BToken
+namespace BToken.Networking
 {
   class NetworkHeader
   {

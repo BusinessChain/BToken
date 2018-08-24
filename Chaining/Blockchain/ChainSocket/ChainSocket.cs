@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using BToken.Networking;
+
 namespace BToken.Chaining
 {
   partial class Blockchain
@@ -13,6 +15,7 @@ namespace BToken.Chaining
       Blockchain Blockchain;
 
       ChainBlock BlockGenesis;
+
       ChainBlock Block;
       public UInt256 Hash;
       BlockLocator Locator;
@@ -38,16 +41,16 @@ namespace BToken.Chaining
         )
       {
         Blockchain = blockchain;
+        Probe = new SocketProbe(this);
 
         Hash = hash;
         BlockGenesis = blockGenesis;
         Block = blockGenesis;
-        Locator = new BlockLocator(blockGenesis);
+        Locator = new BlockLocator(blockGenesis, this);
 
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockGenesis.Header.NBits);
         Height = height;
 
-        Probe = new SocketProbe(this);
       }
 
       public bool isWeakerSocketProbeStrongerThan(ChainSocket socket)
@@ -94,13 +97,8 @@ namespace BToken.Chaining
         WeakerSocket = weakerSocket;
         WeakerSocketActive = weakerSocket;
       }
-
-      public ChainBlock InsertHeader(NetworkHeader header, UInt256 headerHash)
-      {
-         return Probe.InsertHeader(header, headerHash);
-      }
-
-      public void ConnectNextBlock(ChainBlock block, UInt256 headerHash)
+      
+      void ConnectNextBlock(ChainBlock block, UInt256 headerHash)
       {
         Block = block;
         Hash = headerHash;
@@ -108,6 +106,25 @@ namespace BToken.Chaining
         Height++;
 
         Locator.Update(Height, Hash);
+      }
+
+      void Disconnect()
+      {
+        if (StrongerSocket != null)
+        {
+          StrongerSocket.WeakerSocket = WeakerSocket;
+          StrongerSocket.WeakerSocketActive = WeakerSocket;
+        }
+        if (WeakerSocket != null)
+        {
+          WeakerSocket.StrongerSocket = StrongerSocket;
+          WeakerSocket.StrongerSocketActive = StrongerSocket;
+        }
+
+        StrongerSocket = null;
+        StrongerSocketActive = null;
+        WeakerSocket = null;
+        WeakerSocketActive = null;
       }
 
       public List<BlockLocation> GetBlockLocator()

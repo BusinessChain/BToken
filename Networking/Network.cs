@@ -63,9 +63,9 @@ namespace BToken.Networking
       }
     }
     
-    public async Task GetHeadersAsync(UInt256 headerHashChainTip)
+    public async Task GetHeadersAsync(List<UInt256> headerLocator)
     {
-      Peers.ForEach(p => p.GetHeadersAsync(new List<UInt256>() { headerHashChainTip }));
+      Peers.ForEach(p => p.GetHeadersAsync(headerLocator));
     }
     public async Task GetHeadersAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> headerLocator)
     {

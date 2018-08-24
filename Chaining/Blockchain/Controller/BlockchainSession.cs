@@ -29,7 +29,7 @@ namespace BToken.Chaining
         {
           try
           {
-            await InitiateHeaderDownloadAsync();
+            await GetHeadersAsync();
 
             while (true)
             {
@@ -77,7 +77,7 @@ namespace BToken.Chaining
 
             if (chainBlock == null)
             {
-              await GetHeadersAsync(GetBlockLocator());
+              await GetHeadersAsync();
               return;
             }
             else
@@ -87,22 +87,10 @@ namespace BToken.Chaining
           }
         }
         
-        public async Task InitiateHeaderDownloadAsync()
+        async Task GetHeadersAsync()
         {
-          await GetHeadersAsync(GetBlockLocator());
-        }
-
-        UInt256 GetLastBlockHash()
-        {
-          return Controller.Blockchain.SocketMain.Hash;
-        }
-        async Task GetHeadersAsync(UInt256 rootBlockHash)
-        {
-          await GetHeadersAsync(new List<UInt256> { rootBlockHash });
-        }
-        async Task GetHeadersAsync(List<UInt256> headerLocator)
-        {
-          await Controller.Network.GetHeadersAsync(Buffer, headerLocator);
+          List<UInt256> blockLocator = Controller.Blockchain.GetBlockLocator();
+          await Controller.Network.GetHeadersAsync(Buffer, blockLocator);
         }
         void BlameConsensusError()
         {
@@ -111,10 +99,6 @@ namespace BToken.Chaining
         void BlameProtocolError()
         {
           Controller.Network.BlameProtocolError(Buffer);
-        }
-        List<UInt256> GetBlockLocator()
-        {
-          return Controller.Blockchain.GetBlockLocator();
         }
       }
     }

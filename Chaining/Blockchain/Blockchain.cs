@@ -8,7 +8,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public enum BlockCode { ORPHAN, DUPLICATE, INVALID, EXPIRED, CHECKPOINT };
+  public enum BlockCode { ORPHAN, DUPLICATE, INVALID, EXPIRED };
 
 
   partial class Blockchain
@@ -16,23 +16,22 @@ namespace BToken.Chaining
     Network Network;
     BlockchainController Controller;
 
-    static ChainBlock BlockGenesis;
-    static BlockLocation Checkpoint;
+    CheckpointManager Checkpoints;
 
     ChainSocket SocketMain;
+    
 
-    public Blockchain(ChainBlock blockGenesis, BlockLocation checkpoint, Network network)
+    public Blockchain(Network network, ChainBlock genesisBlock, List<BlockLocation> checkpoints)
     {
       Network = network;
       Controller = new BlockchainController(network, this);
 
-      Checkpoint = checkpoint;
-      BlockGenesis = blockGenesis;
+      Checkpoints = new CheckpointManager(checkpoints);
 
       SocketMain = new ChainSocket(
         blockchain: this,
-        blockGenesis: blockGenesis,
-        hash: CalculateHash(blockGenesis.Header.getBytes()),
+        blockGenesis: genesisBlock,
+        hash: CalculateHash(genesisBlock.Header.getBytes()),
         accumulatedDifficultyPrevious: 0,
         height: 0);
     }
@@ -46,26 +45,25 @@ namespace BToken.Chaining
     {
       await Controller.StartAsync();
     }
-
-
-    List<UInt256> GetBlockLocator()
+    
+    public List<UInt256> GetBlockLocator()
     {
       return SocketMain.GetBlockLocator().Select(b => b.Hash).ToList();
     }
 
     ChainBlock GetBlock(UInt256 hash)
     {
-      ChainSocket socket = GetSocketWithProbeAtBlock(hash);
+      ChainSocket.SocketProbe socketProbe = GetProbeAtBlock(hash);
 
-      if(socket == null)
+      if(socketProbe == null)
       {
         return null;
       }
 
-      return socket.Probe.Block;
+      return socketProbe.Block;
     }
 
-    ChainSocket GetSocketWithProbeAtBlock(UInt256 hash)
+    ChainSocket.SocketProbe GetProbeAtBlock(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
       resetProbes();
@@ -74,7 +72,7 @@ namespace BToken.Chaining
       {
         if (socket.Probe.IsHash(hash))
         {
-          return socket;
+          return socket.Probe;
         }
 
         if (socket.Probe.IsGenesis())
@@ -123,65 +121,40 @@ namespace BToken.Chaining
 
     void insertHeader(NetworkHeader header)
     {
+      UInt256 headerHash = CalculateHash(header.getBytes());
+      ChainSocket.SocketProbe socketProbe;
+
+      ValidateHeader(header, headerHash, out socketProbe);
+
+      ChainSocket socket = socketProbe.InsertHeader(header, headerHash);
+
+      if (socket == SocketMain)
+      {
+        return;
+      }
+
+      InsertSocket(socket);
+    }
+    void ValidateHeader(NetworkHeader header, UInt256 headerHash, out ChainSocket.SocketProbe socketProbe)
+    {
+      if (headerHash.isGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+
       if (IsTimestampExpired(header.UnixTimeSeconds))
       {
         throw new BlockchainException(BlockCode.EXPIRED);
       }
 
-      ChainSocket socket = GetSocketWithProbeAtBlock(header.HashPrevious);
+      socketProbe = GetProbeAtBlock(header.HashPrevious);
 
-      if (socket == null)
+      if (socketProbe == null)
       {
         throw new BlockchainException(BlockCode.ORPHAN);
       }
-
-      UInt256 headerHash = CalculateHash(header.getBytes());
-      ChainBlock block = socket.InsertHeader(header, headerHash);
-
-      if(socket.Probe.Depth == 0)
-      {
-        socket.ConnectNextBlock(block, headerHash);
-
-        if(socket == SocketMain)
-        {
-          return;
-        }
-        else
-        {
-          disconnectSocket(socket);
-        }
-      }
-      else
-      {
-        socket = new ChainSocket(
-          this,
-          block,
-          headerHash,
-          socket.Probe.AccumulatedDifficulty,
-          socket.Probe.GetHeight() + 1);
-      }
-      
-      InsertSocket(socket);
     }
-    void disconnectSocket(ChainSocket socket)
-    {
-      if (socket.StrongerSocket != null)
-      {
-        socket.StrongerSocket.WeakerSocket = socket.WeakerSocket;
-        socket.StrongerSocket.WeakerSocketActive = socket.WeakerSocket;
-      }
-      if (socket.WeakerSocket != null)
-      {
-        socket.WeakerSocket.StrongerSocket = socket.StrongerSocket;
-        socket.WeakerSocket.StrongerSocketActive = socket.StrongerSocket;
-      }
-
-      socket.StrongerSocket = null;
-      socket.StrongerSocketActive = null;
-      socket.WeakerSocket = null;
-      socket.WeakerSocketActive = null;
-    }
-
+    
     bool IsTimestampExpired(ulong unixTimeSeconds)
     {
       const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
@@ -192,44 +165,17 @@ namespace BToken.Chaining
     {
       return SocketMain.Height;
     }
-        
+
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {
-      if (depth > 0)
+      if (depth == 0 || block.BlockPrevious == null)
       {
-        if (block == BlockGenesis)
-        {
-          throw new ArgumentOutOfRangeException("Genesis Block encountered prior specified depth has been reached.");
-        }
-
-        return GetBlockPrevious(block.BlockPrevious, --depth);
+        return block;
       }
 
-      return block;
+      return GetBlockPrevious(block.BlockPrevious, --depth);
     }
     
-    bool IsDeeperThanCheckpoint(ChainBlock block, UInt256 checkpointHash)
-    {
-      ChainSocket socket = SocketMain;
-      socket.Probe.reset();
-
-      while (!socket.Probe.IsGenesis())
-      {
-        if (socket.Probe.IsBlock(block))
-        {
-          return false;
-        }
-
-        if (socket.Probe.IsHash(checkpointHash))
-        {
-          return true;
-        }
-
-        socket.Probe.push();
-      }
-
-      throw new InvalidOperationException("Neither chainLink nor checkpoint in chain encountered.");
-    }
     void InsertSocket(ChainSocket newSocket)
     {
       if (newSocket.isStrongerThan(SocketMain))
