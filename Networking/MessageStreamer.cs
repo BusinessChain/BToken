@@ -71,27 +71,27 @@ namespace BToken.Networking
         return Hashing.sha256d(payload).Take(ChecksumSize).ToArray();
       }
 
-      public async Task<NetworkMessage> ReadAsync()
+      public async Task<NetworkMessage> ReadAsync(CancellationToken cancellationToken)
       {
-        await syncStreamToMagicAsync().ConfigureAwait(false);
+        await syncStreamToMagicAsync(cancellationToken).ConfigureAwait(false);
 
-        await readBytesAsync(Header).ConfigureAwait(false);
+        await readBytesAsync(Header, cancellationToken).ConfigureAwait(false);
         getCommand();
         getPayloadLength();
 
-        await parseMessagePayload().ConfigureAwait(false);
+        await parseMessagePayload(cancellationToken).ConfigureAwait(false);
         verifyChecksum();
 
         return new NetworkMessage(Command, Payload);
       }
-      async Task syncStreamToMagicAsync()
+      async Task syncStreamToMagicAsync(CancellationToken cancellationToken)
       {
         byte[] singleByte = new byte[1];
         for (int i = 0; i < MagicBytes.Length; i++)
         {
           byte expectedByte = MagicBytes[i];
 
-          await readBytesAsync(singleByte).ConfigureAwait(false);
+          await readBytesAsync(singleByte, cancellationToken).ConfigureAwait(false);
           byte receivedByte = singleByte[0];
           if (expectedByte != receivedByte)
           {
@@ -113,10 +113,10 @@ namespace BToken.Networking
           throw new NetworkException("Message payload too big (over 32MB)");
         }
       }
-      async Task parseMessagePayload()
+      async Task parseMessagePayload(CancellationToken cancellationToken)
       {
         Payload = new byte[(int)PayloadLength];
-        await readBytesAsync(Payload).ConfigureAwait(false);
+        await readBytesAsync(Payload, cancellationToken).ConfigureAwait(false);
       }
       void verifyChecksum()
       {
@@ -128,14 +128,14 @@ namespace BToken.Networking
           throw new NetworkException("Invalid Message checksum.");
         }
       }
-      async Task readBytesAsync(byte[] buffer)
+      async Task readBytesAsync(byte[] buffer, CancellationToken cancellationToken)
       {
         int bytesToRead = buffer.Length;
         int offset = 0;
 
         while (bytesToRead > 0)
         {
-          int chunkSize = await Stream.ReadAsync(buffer, offset, bytesToRead).ConfigureAwait(false);
+          int chunkSize = await Stream.ReadAsync(buffer, offset, bytesToRead, cancellationToken).ConfigureAwait(false);
 
           if(chunkSize == 0)
           {

@@ -47,11 +47,8 @@ namespace BToken.Networking
       {
         try
         {
-          var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-          CancellationToken token = cts.Token;
-
           await ConnectTCPAsync();
-          await handshakeAsync(blockheightLocal, token);
+          await handshakeAsync(blockheightLocal);
         }
         catch (Exception ex)
         {
@@ -66,23 +63,26 @@ namespace BToken.Networking
         await TcpClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port);
         NetworkMessageStreamer = new MessageStreamer(TcpClient.GetStream());
       }
-      async Task handshakeAsync(uint blockchainHeightLocal, CancellationToken cancellationToken)
+      async Task handshakeAsync(uint blockchainHeightLocal)
       {
         await NetworkMessageStreamer.WriteAsync(new VersionMessage(blockchainHeightLocal));
+        
+        var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        CancellationToken cancellationToken = cancellationTokenSource.Token;
 
         while (!ConnectionManager.isHandshakeCompleted())
         {
-          NetworkMessage messageRemote = await NetworkMessageStreamer.ReadAsync();
+          NetworkMessage messageRemote = await NetworkMessageStreamer.ReadAsync(cancellationToken);
           await ConnectionManager.ProcessResponseToVersionMessageAsync(messageRemote);
         }
       }
-      async Task ProcessMessagesAsync()
+      async Task ProcessMessagesAsync(CancellationToken cancellationToken = default(CancellationToken))
       {
         try
         {
           while (true)
           {
-            NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync();
+            NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(cancellationToken);
 
             switch (networkMessage.Command)
             {
