@@ -48,9 +48,9 @@ namespace BToken.Chaining
       await Controller.StartAsync();
     }
     
-    public List<UInt256> GetBlockLocator()
+    public List<BlockLocation> GetBlockLocator()
     {
-      return SocketMain.GetBlockLocator().Select(b => b.Hash).ToList();
+      return SocketMain.GetBlockLocator();
     }
 
     ChainBlock GetBlock(UInt256 hash)

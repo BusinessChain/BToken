@@ -17,6 +17,7 @@ namespace BToken.Chaining
       {
         BlockchainController Controller;
         public BufferBlock<NetworkMessage> Buffer;
+        
 
         public BlockchainSession() { }
         public BlockchainSession(BufferBlock<NetworkMessage> buffer, BlockchainController controller)
@@ -29,12 +30,11 @@ namespace BToken.Chaining
         {
           try
           {
-            await GetHeadersAsync();
+            await TriggerHeadersSessionAsync();
 
             while (true)
             {
-              NetworkMessage networkMessage = await GetNextNetworkMessageAsync();
-              await ProcessMessageAsync(networkMessage);
+              await ProcessNextSessionAsync();
             }
           }
           catch
@@ -42,19 +42,13 @@ namespace BToken.Chaining
             Controller.DisposeSession(this);
           }
         }
-        async Task<NetworkMessage> GetNextNetworkMessageAsync()
-        {
-          NetworkMessage networkMessage = await Buffer.ReceiveAsync();
-          if (networkMessage == null)
-          {
-            throw new NetworkException("Network aborted session.");
-          }
+        async Task TriggerHeadersSessionAsync() => await GetHeadersAsync();
 
-          return networkMessage;
-        }
                
-        virtual protected async Task ProcessMessageAsync(NetworkMessage networkMessage)
+        async Task ProcessNextSessionAsync()
         {
+          NetworkMessage networkMessage = await GetNextNetworkMessageAsync();
+
           switch (networkMessage)
           {
             case InvMessage invMessage:
@@ -68,6 +62,16 @@ namespace BToken.Chaining
             default:
               break;
           }
+        }
+        async Task<NetworkMessage> GetNextNetworkMessageAsync()
+        {
+          NetworkMessage networkMessage = await Buffer.ReceiveAsync();
+          if (networkMessage == null)
+          {
+            throw new NetworkException("Network disposed session.");
+          }
+
+          return networkMessage;
         }
         async Task ProcessInventoryMessageAsync(InvMessage invMessage)
         {
@@ -89,9 +93,10 @@ namespace BToken.Chaining
         
         async Task GetHeadersAsync()
         {
-          List<UInt256> blockLocator = Controller.Blockchain.GetBlockLocator();
+          List<UInt256> blockLocator = Controller.Blockchain.GetBlockLocator().Select(b => b.Hash).ToList();
           await Controller.Network.GetHeadersAsync(Buffer, blockLocator);
         }
+
         void BlameConsensusError()
         {
           Controller.Network.BlameConsensusError(Buffer);

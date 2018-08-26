@@ -23,11 +23,10 @@ namespace BToken.Networking
       public BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
       public BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
       
-      uint PenaltyScore = 0;
+      public uint PenaltyScore { get; private set; }
+      
 
-      bool SendHeadersFlag = false;
 
-      // API
       public Peer(IPEndPoint ipEndPoint, Network network)
       {
         Network = network;
@@ -103,7 +102,7 @@ namespace BToken.Networking
             }
           }
         }
-        catch
+        catch (Exception ex)
         {
           Dispose();
         }
@@ -115,7 +114,6 @@ namespace BToken.Networking
       }
       async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage)
       {
-        SendHeadersFlag = true;
         await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage());
       }
       async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
@@ -155,12 +153,11 @@ namespace BToken.Networking
       {
         PenaltyScore += penaltyScore;
 
-        if(PenaltyScore >= 100)
+        if (PenaltyScore >= 100)
         {
           Network.AddressPool.Blame(IPEndPoint.Address);
           Dispose();
         }
-
       }
           
       public void Dispose()

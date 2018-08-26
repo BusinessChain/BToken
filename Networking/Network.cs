@@ -52,14 +52,11 @@ namespace BToken.Networking
 
     public void DisposeSession(BufferBlock<NetworkMessage> buffer)
     {
-      try
+      Peer peer = GetPeerOwnerOfBuffer(buffer);
+
+      if(peer != null)
       {
-        Peer peer = GetPeerOwnerOfBuffer(buffer);
         peer.Dispose();
-      }
-      catch
-      {
-        return;
       }
     }
     
@@ -83,14 +80,7 @@ namespace BToken.Networking
     }
     Peer GetPeerOwnerOfBuffer(BufferBlock<NetworkMessage> buffer)
     {
-      Peer peer = Peers.Find(p => p.IsOwnerOfBuffer(buffer));
-
-      if (peer == null)
-      {
-        throw new NetworkException("No peer owning this buffer.");
-      }
-
-      return peer;
+      return Peers.Find(p => p.IsOwnerOfBuffer(buffer));;
     }
 
     public void BlameProtocolError(BufferBlock<NetworkMessage> buffer)

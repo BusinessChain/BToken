@@ -25,7 +25,7 @@ namespace BToken.Chaining
         }
         List<BlockLocation> CreateBlockList()
         {
-          List<BlockLocation> chainLinkLocator = new List<BlockLocation>();
+          List<BlockLocation> blockLocator = new List<BlockLocation>();
           Socket.Probe.reset();
           uint locator = 0;
 
@@ -33,16 +33,16 @@ namespace BToken.Chaining
           {
             if (locator == Socket.Probe.Depth)
             {
-              chainLinkLocator.Add(Socket.Probe.GetBlockLocation());
+              blockLocator.Add(Socket.Probe.GetBlockLocation());
               locator = GetNextLocator(locator);
             }
 
             Socket.Probe.push();
           }
 
-          chainLinkLocator.Add(Socket.Probe.GetBlockLocation());
+          blockLocator.Add(Socket.Probe.GetBlockLocation());
 
-          return chainLinkLocator;
+          return blockLocator;
         }
         uint GetNextLocator(uint locator)
         {

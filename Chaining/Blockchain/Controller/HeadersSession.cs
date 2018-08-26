@@ -45,26 +45,14 @@ namespace BToken.Chaining
             switch (networkMessage)
             {
               case HeadersMessage headersMessage:
-                await ProcessHeadersMessageAsync(headersMessage);
+                await InsertHeadersAsync(headersMessage.Headers);
                 break;
 
               default:
                 throw new NetworkException("Received improper session message.");
             }
           }
-          async Task ProcessHeadersMessageAsync(HeadersMessage headersMessage)
-          {
-            switch (State)
-            {
-              case SessionState.START:
-                await InsertHeadersAsync(headersMessage.Headers);
-                break;
 
-              case SessionState.ORPHAN:
-                await InsertHeadersAsync(headersMessage.Headers);
-                break;
-            }
-          }
           async Task InsertHeadersAsync(List<NetworkHeader> headers)
           {
             foreach (NetworkHeader header in headers)
@@ -77,11 +65,6 @@ namespace BToken.Chaining
               {
                 switch (ex.ErrorCode)
                 {
-                  case BlockCode.DUPLICATE:
-                    State = SessionState.END;
-                    BlockchainSession.BlameProtocolError();
-                    return;
-
                   case BlockCode.ORPHAN:
                     State = SessionState.ORPHAN;
                     BlockchainSession.BlameProtocolError();
@@ -89,16 +72,20 @@ namespace BToken.Chaining
                     await BlockchainSession.GetHeadersAsync();
                     return;
 
+                  case BlockCode.DUPLICATE:
+                    State = SessionState.END;
+                    return;
+
                   case BlockCode.INVALID:
                     BlockchainSession.BlameConsensusError();
-                    return;
+                    throw ex;
 
                   default:
                     throw ex;
                 }
               }
             }
-
+            
             if (headers.Any())
             {
               await BlockchainSession.GetHeadersAsync();
