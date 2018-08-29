@@ -19,10 +19,7 @@ namespace BToken.Chaining
         {
           BlockchainSession BlockchainSession;
 
-          enum SessionState { START, ORPHAN, END };
-          SessionState State = SessionState.START;
-
-          List<BlockLocation> BlockLocator;
+          List<BlockLocation> HeaderLocator;
 
 
 
@@ -118,20 +115,20 @@ namespace BToken.Chaining
               return 0;
             }
 
-            int rootBlockLocatorIndex = BlockLocator.FindIndex(b => b.Hash.isEqual(headers.First().HashPrevious));
+            int rootHeaderLocatorIndex = HeaderLocator.FindIndex(b => b.Hash.isEqual(headers.First().HashPrevious));
 
-            if (rootBlockLocatorIndex < 0)
+            if (rootHeaderLocatorIndex < 0)
             {
               throw new NetworkException("Headers do not link in locator");
             }
-            if (rootBlockLocatorIndex == 0)
+            if (rootHeaderLocatorIndex == 0)
             {
               return 0;
             }
             else
             {
-              BlockLocation rootLocator = BlockLocator[rootBlockLocatorIndex];
-              BlockLocation nextHigherLocator = BlockLocator[rootBlockLocatorIndex - 1];
+              BlockLocation rootLocator = HeaderLocator[rootHeaderLocatorIndex];
+              BlockLocation nextHigherLocator = HeaderLocator[rootHeaderLocatorIndex - 1];
 
               if (headers.Any(h => h.HashPrevious.isEqual(nextHigherLocator.Hash)))
               {
@@ -144,8 +141,8 @@ namespace BToken.Chaining
 
           async Task<List<NetworkHeader>> GetHeadersAsync()
           {
-            BlockLocator = BlockchainSession.Controller.Blockchain.GetBlockLocator();
-            await BlockchainSession.RequestHeadersAsync(BlockLocator);
+            HeaderLocator = BlockchainSession.Controller.Blockchain.GetHeaderLocator();
+            await BlockchainSession.RequestHeadersAsync(HeaderLocator);
 
             CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
             HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken);

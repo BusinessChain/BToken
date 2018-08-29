@@ -43,7 +43,7 @@ namespace BToken.Chaining
             Controller.DisposeSession(this);
           }
         }
-        async Task TriggerBlockDownloadAsync() => await RequestHeadersAsync(GetBlockLocator());
+        async Task TriggerBlockDownloadAsync() => await RequestHeadersAsync(GetHeaderLocator());
 
 
 
@@ -80,7 +80,7 @@ namespace BToken.Chaining
 
             if (chainBlock == null)
             {
-              await RequestHeadersAsync(GetBlockLocator());
+              await RequestHeadersAsync(GetHeaderLocator());
               return;
             }
             else
@@ -90,8 +90,8 @@ namespace BToken.Chaining
           }
         }
 
-        async Task RequestHeadersAsync(List<BlockLocation> blockLocator) => await Controller.Network.GetHeadersAsync(Buffer, blockLocator.Select(b => b.Hash).ToList());
-        List<BlockLocation> GetBlockLocator() => Controller.Blockchain.GetBlockLocator();
+        async Task RequestHeadersAsync(List<BlockLocation> headerLocator) => await Controller.Network.GetHeadersAsync(Buffer, headerLocator.Select(b => b.Hash).ToList());
+        List<BlockLocation> GetHeaderLocator() => Controller.Blockchain.GetHeaderLocator();
 
         void BlameConsensusError()
         {

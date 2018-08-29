@@ -13,7 +13,7 @@ namespace BToken.Chaining
 
       ChainBlock Block;
       public UInt256 Hash;
-      BlockLocator Locator;
+      HeaderLocator Locator;
 
       double AccumulatedDifficulty;
       public uint Height;
@@ -40,7 +40,7 @@ namespace BToken.Chaining
 
         Hash = hash;
         Block = block;
-        Locator = new BlockLocator(this);
+        Locator = new HeaderLocator(this);
 
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(block.Header.NBits);
         Height = height;
@@ -121,9 +121,9 @@ namespace BToken.Chaining
         WeakerSocketActive = null;
       }
 
-      public List<BlockLocation> GetBlockLocator()
+      public List<BlockLocation> GetHeaderLocator()
       {
-        return Locator.BlockList;
+        return Locator.HeaderList;
       }
 
       public bool isStrongerThan(ChainSocket socket)

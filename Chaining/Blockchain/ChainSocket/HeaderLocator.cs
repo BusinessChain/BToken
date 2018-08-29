@@ -10,22 +10,22 @@ namespace BToken.Chaining
   {
     partial class ChainSocket
     {
-      class BlockLocator
+      class HeaderLocator
       {
         ChainSocket Socket;
 
-        public List<BlockLocation> BlockList { get; private set; }
+        public List<BlockLocation> HeaderList { get; private set; }
 
 
-        public BlockLocator(ChainSocket socket)
+        public HeaderLocator(ChainSocket socket)
         {
           Socket = socket;
 
-          BlockList = CreateBlockList();
+          HeaderList = CreateHeaderList();
         }
-        List<BlockLocation> CreateBlockList()
+        List<BlockLocation> CreateHeaderList()
         {
-          List<BlockLocation> blockLocator = new List<BlockLocation>();
+          List<BlockLocation> headerLocator = new List<BlockLocation>();
           Socket.Probe.reset();
           uint locator = 0;
 
@@ -33,16 +33,16 @@ namespace BToken.Chaining
           {
             if (locator == Socket.Probe.Depth)
             {
-              blockLocator.Add(Socket.Probe.GetBlockLocation());
+              headerLocator.Add(Socket.Probe.GetBlockLocation());
               locator = GetNextLocator(locator);
             }
 
             Socket.Probe.push();
           }
 
-          blockLocator.Add(Socket.Probe.GetBlockLocation());
+          headerLocator.Add(Socket.Probe.GetBlockLocation());
 
-          return blockLocator;
+          return headerLocator;
         }
         uint GetNextLocator(uint locator)
         {
@@ -55,11 +55,11 @@ namespace BToken.Chaining
 
           if(Socket.Blockchain.Checkpoints.IsCheckpoint(height))
           {
-            BlockList = new List<BlockLocation>() { newBlockLocation };
+            HeaderList = new List<BlockLocation>() { newBlockLocation };
           }
           else
           {
-            BlockList.Insert(0, newBlockLocation);
+            HeaderList.Insert(0, newBlockLocation);
             SortLocator();
           }
         }
@@ -69,17 +69,17 @@ namespace BToken.Chaining
         }
         void SortLocator(int n)
         {
-          if (n >= BlockList.Count - 2)
+          if (n >= HeaderList.Count - 2)
           {
             return;
           }
 
-          uint depthFromPrior = BlockList[n - 1].Height - BlockList[n].Height;
-          uint heightFromNextNext = BlockList[n].Height - BlockList[n + 2].Height;
+          uint depthFromPrior = HeaderList[n - 1].Height - HeaderList[n].Height;
+          uint heightFromNextNext = HeaderList[n].Height - HeaderList[n + 2].Height;
 
           if (heightFromNextNext <= 2 * depthFromPrior)
           {
-            BlockList.RemoveAt(n + 1);
+            HeaderList.RemoveAt(n + 1);
             SortLocator(n + 1);
           }
 
