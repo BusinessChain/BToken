@@ -29,7 +29,7 @@ namespace BToken.Chaining
           Socket.Probe.reset();
           uint locator = 0;
 
-          while (!Socket.Probe.IsGenesis())
+          while (!Socket.Probe.IsGenesis() && !Socket.Blockchain.Checkpoints.IsCheckpoint(Socket.Probe.GetHeight()))
           {
             if (locator == Socket.Probe.Depth)
             {
@@ -51,8 +51,17 @@ namespace BToken.Chaining
 
         public void Update(uint height, UInt256 hash)
         {
-          BlockList.Insert(0, new BlockLocation(height, hash));
-          SortLocator();
+          var newBlockLocation = new BlockLocation(height, hash);
+
+          if(Socket.Blockchain.Checkpoints.IsCheckpoint(height))
+          {
+            BlockList = new List<BlockLocation>() { newBlockLocation };
+          }
+          else
+          {
+            BlockList.Insert(0, newBlockLocation);
+            SortLocator();
+          }
         }
         void SortLocator()
         {

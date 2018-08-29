@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
@@ -30,7 +31,7 @@ namespace BToken.Chaining
         {
           try
           {
-            await TriggerHeadersSessionAsync();
+            await TriggerBlockDownloadAsync();
 
             while (true)
             {
@@ -42,36 +43,34 @@ namespace BToken.Chaining
             Controller.DisposeSession(this);
           }
         }
-        async Task TriggerHeadersSessionAsync() => await GetHeadersAsync();
+        async Task TriggerBlockDownloadAsync() => await RequestHeadersAsync(GetBlockLocator());
 
-               
+
+
         async Task ProcessNextSessionAsync()
         {
-          NetworkMessage networkMessage = await GetNextNetworkMessageAsync();
+          NetworkMessage networkMessage = await GetNetworkMessageAsync(default(CancellationToken));
 
           switch (networkMessage)
           {
             case InvMessage invMessage:
-              await ProcessInventoryMessageAsync(invMessage);
+              //await ProcessInventoryMessageAsync(invMessage);
               break;
 
             case HeadersMessage headersMessage:
               await new HeadersSession(this).StartAsync(headersMessage);
+              await new BlockDownloadSession(this).StartAsync();
               break;
 
             default:
               break;
           }
         }
-        async Task<NetworkMessage> GetNextNetworkMessageAsync()
+        async Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken cancellationToken)
         {
-          NetworkMessage networkMessage = await Buffer.ReceiveAsync();
-          if (networkMessage == null)
-          {
-            throw new NetworkException("Network disposed session.");
-          }
+          NetworkMessage networkMessage = await Buffer.ReceiveAsync(cancellationToken);
 
-          return networkMessage;
+          return networkMessage ?? throw new NetworkException("Network disposed session."); ;
         }
         async Task ProcessInventoryMessageAsync(InvMessage invMessage)
         {
@@ -81,7 +80,7 @@ namespace BToken.Chaining
 
             if (chainBlock == null)
             {
-              await GetHeadersAsync();
+              await RequestHeadersAsync(GetBlockLocator());
               return;
             }
             else
@@ -90,12 +89,9 @@ namespace BToken.Chaining
             }
           }
         }
-        
-        async Task GetHeadersAsync()
-        {
-          List<UInt256> blockLocator = Controller.Blockchain.GetBlockLocator().Select(b => b.Hash).ToList();
-          await Controller.Network.GetHeadersAsync(Buffer, blockLocator);
-        }
+
+        async Task RequestHeadersAsync(List<BlockLocation> blockLocator) => await Controller.Network.GetHeadersAsync(Buffer, blockLocator.Select(b => b.Hash).ToList());
+        List<BlockLocation> GetBlockLocator() => Controller.Blockchain.GetBlockLocator();
 
         void BlameConsensusError()
         {

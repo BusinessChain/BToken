@@ -28,6 +28,11 @@ namespace BToken.Chaining
 
         return true;
       }
+
+      public bool IsCheckpoint(uint height)
+      {
+        return Checkpoints.Any(c => c.Height == height);
+      }
     }
   }
 }

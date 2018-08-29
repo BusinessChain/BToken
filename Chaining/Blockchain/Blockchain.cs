@@ -121,9 +121,8 @@ namespace BToken.Chaining
       }
     }
 
-    void insertHeader(NetworkHeader header)
+    void insertHeader(NetworkHeader header, UInt256 headerHash)
     {
-      UInt256 headerHash = CalculateHash(header.getBytes());
       ChainSocket.SocketProbe socketProbe;
 
       ValidateHeader(header, headerHash, out socketProbe);

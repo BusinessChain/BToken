@@ -21,7 +21,7 @@ namespace BToken.Chaining
 
         public uint Depth;
 
-        bool IsBelowCheckpoint;
+        bool IsDeeperThanCheckpoint;
 
 
         public SocketProbe(ChainSocket socket)
@@ -39,7 +39,7 @@ namespace BToken.Chaining
 
           Depth = 0;
 
-          IsBelowCheckpoint = false;
+          IsDeeperThanCheckpoint = false;
         }
 
         public void push()
@@ -47,10 +47,10 @@ namespace BToken.Chaining
           Hash = Block.Header.HashPrevious;
           Block = Block.BlockPrevious;
           AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.Header.NBits);
-          
-          Depth++;
 
-          IsBelowCheckpoint = false;
+          IsDeeperThanCheckpoint |= Socket.Blockchain.Checkpoints.IsCheckpoint(GetHeight());
+
+          Depth++;
         }
         
         public ChainSocket InsertHeader(NetworkHeader header, UInt256 headerHash)
@@ -104,7 +104,7 @@ namespace BToken.Chaining
             throw new BlockchainException(BlockCode.INVALID);
           }
 
-          if (IsBelowCheckpoint)
+          if (IsDeeperThanCheckpoint)
           {
             throw new BlockchainException(BlockCode.INVALID);
           }          

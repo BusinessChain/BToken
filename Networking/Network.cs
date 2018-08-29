@@ -59,11 +59,8 @@ namespace BToken.Networking
         peer.Dispose();
       }
     }
-    
-    public async Task GetHeadersAsync(List<UInt256> headerLocator)
-    {
-      Peers.ForEach(p => p.GetHeadersAsync(headerLocator));
-    }
+
+    public async Task GetHeadersAsync(List<UInt256> headerLocator) => Peers.ForEach(p => p.GetHeadersAsync(headerLocator));
     public async Task GetHeadersAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> headerLocator)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
@@ -78,10 +75,7 @@ namespace BToken.Networking
         throw new NetworkException("Peer discarded due to connection error.");
       }
     }
-    Peer GetPeerOwnerOfBuffer(BufferBlock<NetworkMessage> buffer)
-    {
-      return Peers.Find(p => p.IsOwnerOfBuffer(buffer));;
-    }
+    Peer GetPeerOwnerOfBuffer(BufferBlock<NetworkMessage> buffer) => Peers.Find(p => p.IsOwnerOfBuffer(buffer));
 
     public void BlameProtocolError(BufferBlock<NetworkMessage> buffer)
     {
@@ -94,18 +88,16 @@ namespace BToken.Networking
       peer.Blame(100);
     }
 
-    static UInt64 createNonce()
+    static ulong createNonce()
     {
       Random rnd = new Random();
 
-      UInt64 number = (UInt64)rnd.Next();
+      ulong number = (ulong)rnd.Next();
       number = number << 32;
-      return number |= (UInt32)rnd.Next();
+      return number |= (uint)rnd.Next();
     }
-    static long getUnixTimeSeconds()
-    {
-      return DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-    }
+
+    static long getUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     public async Task PingAsync()
     {

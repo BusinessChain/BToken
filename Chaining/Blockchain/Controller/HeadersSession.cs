@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using BToken.Networking;
@@ -21,9 +22,10 @@ namespace BToken.Chaining
           enum SessionState { START, ORPHAN, END };
           SessionState State = SessionState.START;
 
-          NetworkHeader HeaderOrphan;
+          List<BlockLocation> BlockLocator;
 
-                    
+
+
           public HeadersSession(BlockchainSession blockchainSession)
           {
             BlockchainSession = blockchainSession;
@@ -31,69 +33,131 @@ namespace BToken.Chaining
 
           public async Task StartAsync(HeadersMessage headersMessage)
           {
-            await ProcessMessageAsync(headersMessage);
+            List<NetworkHeader> headers = headersMessage.Headers;
 
-            while (State != SessionState.END)
-            {
-              NetworkMessage networkMessage = await BlockchainSession.GetNextNetworkMessageAsync();
-              await ProcessMessageAsync(networkMessage);
-            }
-          }
-
-          async Task ProcessMessageAsync(NetworkMessage networkMessage)
-          {
-            switch (networkMessage)
-            {
-              case HeadersMessage headersMessage:
-                await InsertHeadersAsync(headersMessage.Headers);
-                break;
-
-              default:
-                throw new NetworkException("Received improper session message.");
-            }
+            await InsertHeadersAsync(headers);
           }
 
           async Task InsertHeadersAsync(List<NetworkHeader> headers)
           {
-            foreach (NetworkHeader header in headers)
+            do
             {
-              try
+              foreach (NetworkHeader header in headers)
               {
-                BlockchainSession.Controller.Blockchain.insertHeader(header);
-              }
-              catch (BlockchainException ex)
-              {
-                switch (ex.ErrorCode)
+                UInt256 headerHash = CalculateHash(header.getBytes());
+
+                try
                 {
-                  case BlockCode.ORPHAN:
-                    State = SessionState.ORPHAN;
-                    BlockchainSession.BlameProtocolError();
-                    HeaderOrphan = header;
-                    await BlockchainSession.GetHeadersAsync();
-                    return;
+                  BlockchainSession.Controller.Blockchain.insertHeader(header, headerHash);
+                }
+                catch (BlockchainException ex)
+                {
+                  switch (ex.ErrorCode)
+                  {
+                    case BlockCode.ORPHAN:
+                      await ProcessOrphanSessionAsync(headerHash);
+                      return;
 
-                  case BlockCode.DUPLICATE:
-                    State = SessionState.END;
-                    return;
+                    case BlockCode.DUPLICATE:
+                      return;
 
-                  case BlockCode.INVALID:
-                    BlockchainSession.BlameConsensusError();
-                    throw ex;
-
-                  default:
-                    throw ex;
+                    default:
+                      throw ex;
+                  }
                 }
               }
-            }
+
+              headers = await GetHeadersAsync();
+
+            } while (headers.Any());
+          }
+
+          async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
+          {
+            List<NetworkHeader> headers = await GetHeadersAsync();
             
-            if (headers.Any())
+            uint countDuplicatesAccepted = GetCountDuplicatesAccepted(headers);
+            
+            do
             {
-              await BlockchainSession.GetHeadersAsync();
+              foreach (NetworkHeader header in headers)
+              {
+                UInt256 headerHash = CalculateHash(header.getBytes());
+
+                try
+                {
+                  BlockchainSession.Controller.Blockchain.insertHeader(header, headerHash);
+                }
+                catch (BlockchainException ex)
+                {
+                  switch (ex.ErrorCode)
+                  {
+                    case BlockCode.DUPLICATE:
+                      if (countDuplicatesAccepted-- > 0)
+                      {
+                        break;
+                      }
+                      return;
+
+                    default:
+                      throw ex;
+                  }
+                }
+              }
+
+              await GetHeadersAsync();
+
+            } while (headers.Any());
+
+            // was advertised oprhan provided?
+          }
+          uint GetCountDuplicatesAccepted(List<NetworkHeader> headers)
+          {
+            if(!headers.Any())
+            {
+              return 0;
+            }
+
+            int rootBlockLocatorIndex = BlockLocator.FindIndex(b => b.Hash.isEqual(headers.First().HashPrevious));
+
+            if (rootBlockLocatorIndex < 0)
+            {
+              throw new NetworkException("Headers do not link in locator");
+            }
+            if (rootBlockLocatorIndex == 0)
+            {
+              return 0;
             }
             else
             {
-              State = SessionState.END;
+              BlockLocation rootLocator = BlockLocator[rootBlockLocatorIndex];
+              BlockLocation nextHigherLocator = BlockLocator[rootBlockLocatorIndex - 1];
+
+              if (headers.Any(h => h.HashPrevious.isEqual(nextHigherLocator.Hash)))
+              {
+                throw new NetworkException("Superfluous locator headers");
+              }
+
+              return nextHigherLocator.Height - rootLocator.Height - 1;
             }
+          }
+
+          async Task<List<NetworkHeader>> GetHeadersAsync()
+          {
+            BlockLocator = BlockchainSession.Controller.Blockchain.GetBlockLocator();
+            await BlockchainSession.RequestHeadersAsync(BlockLocator);
+
+            CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
+            HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken);
+            
+            return headersMessage.Headers;
+          }
+
+          async Task<HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
+          {
+            HeadersMessage headersMessage = await BlockchainSession.GetNetworkMessageAsync(cancellationToken) as HeadersMessage;
+
+            return headersMessage ?? await GetHeadersMessageAsync(cancellationToken);
           }
 
         }
