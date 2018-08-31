@@ -18,15 +18,19 @@ namespace BToken.Networking
       NetworkTXs = networkTXs;
     }
 
-    public UInt256 getHash()
+    public static NetworkBlock ParseBlock(byte[] blockBytes)
     {
-      byte[] hashBytes = Hashing.sha256d(getBytes());
-      return new UInt256(hashBytes);
-    }
+      int startIndex = 0;
 
-    byte[] getBytes()
-    {
-      throw new NotImplementedException();
+      NetworkHeader header = NetworkHeader.ParseHeader(blockBytes, ref startIndex);
+
+      var networkTXs = new List<NetworkTX>();
+      for (int i = 0; i < header.TxCount; i++)
+      {
+        networkTXs.Add(NetworkTX.Parse(blockBytes, ref startIndex));
+      }
+
+      return new NetworkBlock(header, networkTXs);
     }
   }
 }

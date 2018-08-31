@@ -97,6 +97,9 @@ namespace BToken.Networking
               case "headers":
                 await ProcessHeadersMessageAsync(networkMessage);
                 break;
+              case "block":
+                await ProcessBlockMessageAsync(networkMessage);
+                break;
               default:
                 break;
             }
@@ -133,6 +136,11 @@ namespace BToken.Networking
       {
         HeadersMessage headersMessage = new HeadersMessage(networkMessage);
         await NetworkMessageBufferBlockchain.SendAsync(headersMessage);
+      }
+      async Task ProcessBlockMessageAsync(NetworkMessage networkMessage)
+      {
+        BlockMessage blockMessage = new BlockMessage(networkMessage);
+        await NetworkMessageBufferBlockchain.SendAsync(blockMessage);
       }
       public bool IsOwnerOfBuffer(BufferBlock<NetworkMessage> buffer)
       {
@@ -173,6 +181,12 @@ namespace BToken.Networking
       public async Task PingAsync()
       {
         await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
+      }
+
+      public async Task GetBlockAsync(List<UInt256> hashes)
+      {
+        List<Inventory> inventories = hashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h)).ToList();
+        await NetworkMessageStreamer.WriteAsync(new GetDataMessage(inventories));
       }
     }
   }

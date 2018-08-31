@@ -103,7 +103,7 @@ namespace BToken.Networking
     {
       var faultedPeers = new List<Peer>();
 
-      foreach(Peer peer in Peers)
+      foreach (Peer peer in Peers)
       {
         try
         {
@@ -116,6 +116,11 @@ namespace BToken.Networking
       }
 
       faultedPeers.ForEach(p => p.Dispose());
+    }
+
+    public async Task GetBlockAsync(List<UInt256> hashes)
+    {
+      await Peers.First().GetBlockAsync(hashes);
     }
 
   }

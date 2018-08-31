@@ -30,11 +30,12 @@
         {
       this.getHeadersButton = new System.Windows.Forms.Button();
       this.button_ping = new System.Windows.Forms.Button();
+      this.button_GetBlock = new System.Windows.Forms.Button();
       this.SuspendLayout();
       // 
       // getHeadersButton
       // 
-      this.getHeadersButton.Location = new System.Drawing.Point(197, 144);
+      this.getHeadersButton.Location = new System.Drawing.Point(197, 122);
       this.getHeadersButton.Name = "getHeadersButton";
       this.getHeadersButton.Size = new System.Drawing.Size(75, 23);
       this.getHeadersButton.TabIndex = 1;
@@ -52,11 +53,22 @@
       this.button_ping.UseVisualStyleBackColor = true;
       this.button_ping.Click += new System.EventHandler(this.button_ping_Click);
       // 
+      // button_GetBlock
+      // 
+      this.button_GetBlock.Location = new System.Drawing.Point(197, 184);
+      this.button_GetBlock.Name = "button_GetBlock";
+      this.button_GetBlock.Size = new System.Drawing.Size(75, 23);
+      this.button_GetBlock.TabIndex = 4;
+      this.button_GetBlock.Text = "GetBlock";
+      this.button_GetBlock.UseVisualStyleBackColor = true;
+      this.button_GetBlock.Click += new System.EventHandler(this.button_GetBlock_Click);
+      // 
       // Form1
       // 
       this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
       this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
       this.ClientSize = new System.Drawing.Size(467, 262);
+      this.Controls.Add(this.button_GetBlock);
       this.Controls.Add(this.button_ping);
       this.Controls.Add(this.getHeadersButton);
       this.Name = "Form1";
@@ -68,6 +80,7 @@
         #endregion
     private System.Windows.Forms.Button getHeadersButton;
     private System.Windows.Forms.Button button_ping;
+    private System.Windows.Forms.Button button_GetBlock;
   }
 }
 

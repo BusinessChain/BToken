@@ -16,10 +16,18 @@ namespace BToken.Chaining
         {
           BlockchainSession BlockchainSession;
 
+          List<List<BlockLocation>> GetDataBatches;
+
 
           public BlockDownloadSession(BlockchainSession blockchainSession)
           {
             BlockchainSession = blockchainSession;
+            CreateGetDataBatches();
+          }
+          void CreateGetDataBatches()
+          {
+            // Go through the entire chain to search all headers with BlockPayload=null
+            // The socket can provide information whether every Block is downloaded.
           }
 
           public async Task StartAsync()

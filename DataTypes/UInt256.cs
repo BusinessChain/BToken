@@ -19,6 +19,15 @@ namespace BToken
     {
       Data = data;
     }
+      
+    public UInt256(byte[] byteStream, ref int startIndex)
+    {
+      byte[] tempByteArray = new byte[UInt256.BYTE_LENGTH];
+      Array.Copy(byteStream, startIndex, tempByteArray, 0, UInt256.BYTE_LENGTH);
+      startIndex += UInt256.BYTE_LENGTH;
+
+      WriteToInternalData(tempByteArray);
+    }
     public UInt256(byte[] dataBytes)
     {
       WriteToInternalData(dataBytes);

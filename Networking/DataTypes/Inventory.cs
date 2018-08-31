@@ -32,10 +32,7 @@ namespace BToken.Networking
       List<byte> bytes = new List<byte>();
 
       bytes.AddRange(BitConverter.GetBytes((UInt32)Type));
-
-      byte[] hashBytes = Hash.GetBytes();
-      Array.Reverse(hashBytes);
-      bytes.AddRange(hashBytes);
+      bytes.AddRange(Hash.GetBytes());
 
       return bytes;
 

@@ -8,8 +8,15 @@ namespace BToken.Networking
 {
   partial class Network
   {
-    class BlockMessage : NetworkMessage
+    public class BlockMessage : NetworkMessage
     {
+      public NetworkBlock NetworkBlock { get; private set; }
+
+
+      public BlockMessage(NetworkMessage message) : base("block", message.Payload)
+      {
+        NetworkBlock = NetworkBlock.ParseBlock(Payload);
+      }
     }
   }
 }

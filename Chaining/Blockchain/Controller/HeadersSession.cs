@@ -28,7 +28,7 @@ namespace BToken.Chaining
             BlockchainSession = blockchainSession;
           }
 
-          public async Task StartAsync(HeadersMessage headersMessage)
+          public async Task StartAsync(Network.HeadersMessage headersMessage)
           {
             List<NetworkHeader> headers = headersMessage.Headers;
 
@@ -67,6 +67,8 @@ namespace BToken.Chaining
               headers = await GetHeadersAsync();
 
             } while (headers.Any());
+            
+            await new BlockDownloadSession(BlockchainSession).StartAsync();
           }
 
           async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
@@ -145,14 +147,14 @@ namespace BToken.Chaining
             await BlockchainSession.RequestHeadersAsync(HeaderLocator);
 
             CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-            HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken);
+            Network.HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken);
             
             return headersMessage.Headers;
           }
 
-          async Task<HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
+          async Task<Network.HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
           {
-            HeadersMessage headersMessage = await BlockchainSession.GetNetworkMessageAsync(cancellationToken) as HeadersMessage;
+            Network.HeadersMessage headersMessage = await BlockchainSession.GetNetworkMessageAsync(cancellationToken) as Network.HeadersMessage;
 
             return headersMessage ?? await GetHeadersMessageAsync(cancellationToken);
           }

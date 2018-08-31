@@ -31,7 +31,7 @@ namespace BToken.Chaining
         {
           try
           {
-            await TriggerBlockDownloadAsync();
+            //await TriggerBlockDownloadAsync();
 
             while (true)
             {
@@ -57,9 +57,11 @@ namespace BToken.Chaining
               //await ProcessInventoryMessageAsync(invMessage);
               break;
 
-            case HeadersMessage headersMessage:
+            case Network.HeadersMessage headersMessage:
               await new HeadersSession(this).StartAsync(headersMessage);
-              await new BlockDownloadSession(this).StartAsync();
+              break;
+
+            case Network.BlockMessage blockMessage:
               break;
 
             default:

@@ -16,7 +16,7 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      const int SESSIONS_COUNT_MAX = 8;
+      const int SESSIONS_COUNT = 8;
       List<BlockchainSession> Sessions = new List<BlockchainSession>();
       
 
@@ -29,7 +29,7 @@ namespace BToken.Chaining
 
       public async Task StartAsync()
       {
-        for(int i = 0; i < SESSIONS_COUNT_MAX; i++)
+        for(int i = 0; i < SESSIONS_COUNT; i++)
         {
           Task createSessionTask = CreateSessionAsync();
         }
@@ -50,7 +50,7 @@ namespace BToken.Chaining
         Network.DisposeSession(session.Buffer);
         Sessions.Remove(session);
 
-        if(Sessions.Count < SESSIONS_COUNT_MAX)
+        if(Sessions.Count < SESSIONS_COUNT)
         {
           Task createSessionTask = CreateSessionAsync();
         }

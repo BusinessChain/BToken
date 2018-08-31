@@ -18,7 +18,7 @@ namespace BToken.Chaining
 
       public ChainBlock BlockPrevious;
       public List<ChainBlock> BlocksNext = new List<ChainBlock>();
-      //public IBlockPayload BlockPayload;
+      public IBlockPayload BlockPayload;
 
       public ChainBlock(NetworkHeader header)
       {
@@ -33,7 +33,14 @@ namespace BToken.Chaining
       UInt32 nBits,
       UInt32 nonce)
       {
-        Header = new NetworkHeader(version, hashPrevious, merkleRootHash, unixTimeSeconds, nBits, nonce);
+        Header = new NetworkHeader(
+          version, 
+          hashPrevious,
+          merkleRootHash, 
+          unixTimeSeconds, 
+          nBits, 
+          nonce,
+          0);
       }
 
     }
