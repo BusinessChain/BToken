@@ -20,7 +20,8 @@ namespace BToken.Chaining
     CheckpointManager Checkpoints;
 
     ChainSocket SocketMain;
-    
+    HeaderLocator Locator;
+
 
     public Blockchain(Network network, ChainBlock genesisBlock, List<BlockLocation> checkpoints)
     {
@@ -36,6 +37,8 @@ namespace BToken.Chaining
         hash: CalculateHash(genesisBlock.Header.getBytes()),
         accumulatedDifficultyPrevious: 0,
         height: 0);
+
+      Locator = new HeaderLocator(this, SocketMain.Probe);
     }
     static UInt256 CalculateHash(byte[] headerBytes)
     {
@@ -47,11 +50,8 @@ namespace BToken.Chaining
     {
       await Controller.StartAsync();
     }
-    
-    public List<BlockLocation> GetHeaderLocator()
-    {
-      return SocketMain.GetHeaderLocator();
-    }
+
+    public List<BlockLocation> GetHeaderLocator() => Locator.BlockLocations;
 
     ChainBlock GetBlock(UInt256 hash)
     {
@@ -79,7 +79,7 @@ namespace BToken.Chaining
 
         if (socket.Probe.IsGenesis())
         {
-          socket.bypass();
+          socket.Bypass();
 
           if (socket.IsWeakerSocketProbeStrongerThan(socket.StrongerSocketActive))
           {
@@ -92,14 +92,14 @@ namespace BToken.Chaining
           continue;
         }
 
-        if (socket.isProbeStrongerThan(socket.StrongerSocket))
+        if (socket.IsProbeStrongerThan(socket.StrongerSocket))
         {
-          if (socket.isWeakerSocketProbeStronger())
+          if (socket.IsWeakerSocketProbeStronger())
           {
             socket = socket.WeakerSocketActive;
           }
 
-          socket.Probe.push();
+          socket.Probe.Push();
         }
         else
         {
@@ -116,21 +116,20 @@ namespace BToken.Chaining
 
       while (socket != null)
       {
-        socket.reset();
+        socket.Reset();
         socket = socket.WeakerSocket;
       }
     }
 
     void insertHeader(NetworkHeader header, UInt256 headerHash)
     {
-      ChainSocket.SocketProbe socketProbe;
-
-      ValidateHeader(header, headerHash, out socketProbe);
+      ValidateHeader(header, headerHash, out ChainSocket.SocketProbe socketProbe);
 
       ChainSocket socket = socketProbe.InsertHeader(header, headerHash);
 
       if (socket == SocketMain)
       {
+        Locator.Update(socket.Height, socket.Hash);
         return;
       }
 
@@ -162,10 +161,7 @@ namespace BToken.Chaining
       return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
     }
 
-    uint GetHeight()
-    {
-      return SocketMain.Height;
-    }
+    uint GetHeight() => SocketMain.Height;
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {
@@ -179,19 +175,22 @@ namespace BToken.Chaining
     
     void InsertSocket(ChainSocket newSocket)
     {
-      if (newSocket.isStrongerThan(SocketMain))
+      if (newSocket.IsStrongerThan(SocketMain))
       {
-        newSocket.connectWeakerSocket(SocketMain);
+        newSocket.ConnectWeakerSocket(SocketMain);
         SocketMain = newSocket;
+
+        Locator.Create(SocketMain.Probe);
+        return;
       }
 
       ChainSocket socket = SocketMain;
-      while (!newSocket.isStrongerThan(socket.WeakerSocket))
+      while (!newSocket.IsStrongerThan(socket.WeakerSocket))
       {
         socket = socket.WeakerSocket;
       }
 
-      socket.connectWeakerSocket(newSocket);
+      socket.ConnectWeakerSocket(newSocket);
     }
   }
 }

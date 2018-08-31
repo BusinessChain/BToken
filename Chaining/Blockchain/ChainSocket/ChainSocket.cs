@@ -11,19 +11,19 @@ namespace BToken.Chaining
     {
       Blockchain Blockchain;
 
+      ChainBlock BlockGenesis;
       ChainBlock Block;
-      public UInt256 Hash;
-      HeaderLocator Locator;
+      public UInt256 Hash { get; private set; }
 
       double AccumulatedDifficulty;
-      public uint Height;
+      public uint Height { get; private set; }
 
-      public ChainSocket StrongerSocket;
-      public ChainSocket StrongerSocketActive;
-      public ChainSocket WeakerSocket;
-      public ChainSocket WeakerSocketActive;
+      public ChainSocket StrongerSocket { get; private set; }
+      public ChainSocket StrongerSocketActive { get; private set; }
+      public ChainSocket WeakerSocket { get; private set; }
+      public ChainSocket WeakerSocketActive { get; private set; }
 
-      public SocketProbe Probe;
+      public SocketProbe Probe { get; private set; }
 
 
       public ChainSocket
@@ -36,26 +36,26 @@ namespace BToken.Chaining
         )
       {
         Blockchain = blockchain;
-        Probe = new SocketProbe(this);
 
-        Hash = hash;
+        BlockGenesis = block;
         Block = block;
-        Locator = new HeaderLocator(this);
+        Hash = hash;
 
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(block.Header.NBits);
         Height = height;
 
+        Probe = new SocketProbe(this);
       }
 
       public bool IsWeakerSocketProbeStrongerThan(ChainSocket socket)
       {
-        return WeakerSocketActive != null && WeakerSocketActive.isProbeStrongerThan(socket);
+        return WeakerSocketActive != null && WeakerSocketActive.IsProbeStrongerThan(socket);
       }
-      public bool isWeakerSocketProbeStronger()
+      public bool IsWeakerSocketProbeStronger()
       {
-        return WeakerSocketActive != null && WeakerSocketActive.isProbeStrongerThan(this);
+        return WeakerSocketActive != null && WeakerSocketActive.IsProbeStrongerThan(this);
       }
-      public void bypass()
+      public void Bypass()
       {
         if (StrongerSocketActive != null)
         {
@@ -66,15 +66,15 @@ namespace BToken.Chaining
           WeakerSocketActive.StrongerSocketActive = StrongerSocketActive;
         }
       }
-      public void reset()
+      public void Reset()
       {
-        Probe.reset();
+        Probe.Reset();
 
         StrongerSocketActive = StrongerSocket;
         WeakerSocketActive = WeakerSocket;
       }
 
-      public void connectWeakerSocket(ChainSocket weakerSocket)
+      public void ConnectWeakerSocket(ChainSocket weakerSocket)
       {
         weakerSocket.WeakerSocket = WeakerSocket;
         weakerSocket.WeakerSocketActive = WeakerSocket;
@@ -98,8 +98,6 @@ namespace BToken.Chaining
         Hash = headerHash;
         AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
         Height++;
-
-        Locator.Update(Height, Hash);
       }
 
       void Disconnect()
@@ -120,13 +118,8 @@ namespace BToken.Chaining
         WeakerSocket = null;
         WeakerSocketActive = null;
       }
-
-      public List<BlockLocation> GetHeaderLocator()
-      {
-        return Locator.HeaderList;
-      }
-
-      public bool isStrongerThan(ChainSocket socket)
+      
+      public bool IsStrongerThan(ChainSocket socket)
       {
         if (socket == null)
         {
@@ -134,13 +127,13 @@ namespace BToken.Chaining
         }
         return AccumulatedDifficulty > socket.AccumulatedDifficulty;
       }
-      public bool isProbeStrongerThan(ChainSocket socket)
+      public bool IsProbeStrongerThan(ChainSocket socket)
       {
         if (socket == null)
         {
           return true;
         }
-        return Probe.isStrongerThan(socket.Probe);
+        return Probe.IsStrongerThan(socket.Probe);
       }
       
     }

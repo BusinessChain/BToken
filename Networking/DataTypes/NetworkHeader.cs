@@ -5,8 +5,6 @@ namespace BToken.Networking
 {
   class NetworkHeader
   {
-    public const int HEADER_LENGTH = 80;
-
     public UInt32 Version { get; private set; }
     public UInt256 HashPrevious { get; private set; }
     public UInt256 MerkleRootHash { get; private set; }

@@ -31,7 +31,7 @@ namespace BToken.Chaining
         {
           try
           {
-            //await TriggerBlockDownloadAsync();
+            await TriggerBlockDownloadAsync();
 
             while (true)
             {

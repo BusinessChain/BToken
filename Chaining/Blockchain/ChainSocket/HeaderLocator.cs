@@ -8,85 +8,78 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    partial class ChainSocket
+    class HeaderLocator
     {
-      class HeaderLocator
+      Blockchain Blockchain;
+
+      public List<BlockLocation> BlockLocations { get; private set; }
+
+
+      public HeaderLocator(Blockchain blockchain, ChainSocket.SocketProbe socketProbe)
       {
-        ChainSocket Socket;
+        Blockchain = blockchain;
 
-        public List<BlockLocation> HeaderList { get; private set; }
-
-
-        public HeaderLocator(ChainSocket socket)
-        {
-          Socket = socket;
-
-          HeaderList = CreateHeaderList();
-        }
-        List<BlockLocation> CreateHeaderList()
-        {
-          List<BlockLocation> headerLocator = new List<BlockLocation>();
-          Socket.Probe.reset();
-          uint locator = 0;
-
-          while (!Socket.Probe.IsGenesis() && !Socket.Blockchain.Checkpoints.IsCheckpoint(Socket.Probe.GetHeight()))
-          {
-            if (locator == Socket.Probe.Depth)
-            {
-              headerLocator.Add(Socket.Probe.GetBlockLocation());
-              locator = GetNextLocator(locator);
-            }
-
-            Socket.Probe.push();
-          }
-
-          headerLocator.Add(Socket.Probe.GetBlockLocation());
-
-          return headerLocator;
-        }
-        uint GetNextLocator(uint locator)
-        {
-          return locator * 2 + 1;
-        }
-
-        public void Update(uint height, UInt256 hash)
-        {
-          var newBlockLocation = new BlockLocation(height, hash);
-
-          if(Socket.Blockchain.Checkpoints.IsCheckpoint(height))
-          {
-            HeaderList = new List<BlockLocation>() { newBlockLocation };
-          }
-          else
-          {
-            HeaderList.Insert(0, newBlockLocation);
-            SortLocator();
-          }
-        }
-        void SortLocator()
-        {
-          SortLocator(1);
-        }
-        void SortLocator(int n)
-        {
-          if (n >= HeaderList.Count - 2)
-          {
-            return;
-          }
-
-          uint depthFromPrior = HeaderList[n - 1].Height - HeaderList[n].Height;
-          uint heightFromNextNext = HeaderList[n].Height - HeaderList[n + 2].Height;
-
-          if (heightFromNextNext <= 2 * depthFromPrior)
-          {
-            HeaderList.RemoveAt(n + 1);
-            SortLocator(n + 1);
-          }
-
-        }
-        
-        
+        BlockLocations = Create(socketProbe);
       }
+
+      public List<BlockLocation> Create(ChainSocket.SocketProbe socketProbe)
+      {
+        List<BlockLocation> headerLocator = new List<BlockLocation>();
+        socketProbe.Reset();
+        uint locator = 0;
+
+        while (!IsProbeAtGenesis(socketProbe) && !Blockchain.Checkpoints.IsCheckpoint(socketProbe.GetHeight()))
+        {
+          if (locator == socketProbe.Depth)
+          {
+            headerLocator.Add(socketProbe.GetBlockLocation());
+            locator = GetNextLocator(locator);
+          }
+
+          socketProbe.Push();
+        }
+
+        headerLocator.Add(socketProbe.GetBlockLocation());
+
+        return headerLocator;
+      }
+      bool IsProbeAtGenesis(ChainSocket.SocketProbe socketProbe) => socketProbe.Block == Blockchain.BlockGenesis;
+      uint GetNextLocator(uint locator) => locator * 2 + 1;
+
+      public void Update(uint height, UInt256 hash)
+      {
+        var newBlockLocation = new BlockLocation(height, hash);
+
+        if (Blockchain.Checkpoints.IsCheckpoint(height))
+        {
+          BlockLocations = new List<BlockLocation>() { newBlockLocation };
+        }
+        else
+        {
+          BlockLocations.Insert(0, newBlockLocation);
+          SortLocator();
+        }
+      }
+      void SortLocator() => SortLocator(1);
+      void SortLocator(int n)
+      {
+        if (n >= BlockLocations.Count - 2)
+        {
+          return;
+        }
+
+        uint depthFromPrior = BlockLocations[n - 1].Height - BlockLocations[n].Height;
+        uint heightFromNextNext = BlockLocations[n].Height - BlockLocations[n + 2].Height;
+
+        if (heightFromNextNext <= 2 * depthFromPrior)
+        {
+          BlockLocations.RemoveAt(n + 1);
+          SortLocator(n + 1);
+        }
+
+      }
+
+
     }
   }
 }

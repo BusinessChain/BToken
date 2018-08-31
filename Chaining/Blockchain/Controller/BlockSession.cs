@@ -12,22 +12,22 @@ namespace BToken.Chaining
     {
       partial class BlockchainSession
       {
-        class BlockDownloadSession
+        class BlockSession
         {
           BlockchainSession BlockchainSession;
 
-          List<List<BlockLocation>> GetDataBatches;
+          List<List<BlockLocation>> GetBlockBatches;
 
 
-          public BlockDownloadSession(BlockchainSession blockchainSession)
+          public BlockSession(BlockchainSession blockchainSession)
           {
             BlockchainSession = blockchainSession;
-            CreateGetDataBatches();
+            CreateGetBlockBatches();
           }
-          void CreateGetDataBatches()
+          void CreateGetBlockBatches()
           {
-            // Go through the entire chain to search all headers with BlockPayload=null
-            // The socket can provide information whether every Block is downloaded.
+            ChainSocket socket = BlockchainSession.Controller.Blockchain.SocketMain;
+
           }
 
           public async Task StartAsync()

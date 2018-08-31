@@ -20,18 +20,17 @@ namespace BToken.Chaining
         public double AccumulatedDifficulty;
 
         public uint Depth;
-
         bool IsDeeperThanCheckpoint;
+
 
 
         public SocketProbe(ChainSocket socket)
         {
           Socket = socket;
-
-          reset();
+          Reset();
         }
 
-        public void reset()
+        public void Reset()
         {
           Block = Socket.Block;
           Hash = Socket.Hash;
@@ -42,7 +41,7 @@ namespace BToken.Chaining
           IsDeeperThanCheckpoint = false;
         }
 
-        public void push()
+        public void Push()
         {
           Hash = Block.Header.HashPrevious;
           Block = Block.BlockPrevious;
@@ -110,10 +109,7 @@ namespace BToken.Chaining
           }          
 
         }
-        bool IsBlockConnectedToHash(UInt256 hash)
-        {
-          return Block.BlocksNext.Any(b => CalculateHash(b.Header.getBytes()).isEqual(hash));
-        }
+        bool IsBlockConnectedToHash(UInt256 hash) => Block.BlocksNext.Any(b => CalculateHash(b.Header.getBytes()).isEqual(hash));
         uint GetMedianTimePast()
         {
           const int MEDIAN_TIME_PAST = 11;
@@ -143,23 +139,11 @@ namespace BToken.Chaining
           blockPrevious.BlocksNext.Add(block);
         }
 
-        public uint GetHeight()
-        {
-          return Socket.Height - Depth;
-        }
-        public bool IsHash(UInt256 hash)
-        {
-          return Hash.isEqual(hash);
-        }
-        public bool IsGenesis()
-        {
-          return Block == Socket.Blockchain.BlockGenesis;
-        }
-        public bool IsBlock(ChainBlock blockHeader)
-        {
-          return Block == blockHeader;
-        }
-        public bool isStrongerThan(SocketProbe probe)
+        public uint GetHeight() => Socket.Height - Depth;
+        public bool IsHash(UInt256 hash) => Hash.isEqual(hash);
+        public bool IsGenesis() => Block == Socket.BlockGenesis;
+        public bool IsBlock(ChainBlock blockHeader) => Block == blockHeader;
+        public bool IsStrongerThan(SocketProbe probe)
         {
           if(probe == null)
           {
@@ -168,11 +152,8 @@ namespace BToken.Chaining
 
           return AccumulatedDifficulty > probe.AccumulatedDifficulty;
         }
-                
-        public BlockLocation GetBlockLocation()
-        {
-          return new BlockLocation(GetHeight(), Hash);
-        }
+
+        public BlockLocation GetBlockLocation() => new BlockLocation(GetHeight(), Hash);
       }
     }
   }

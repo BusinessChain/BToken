@@ -68,7 +68,7 @@ namespace BToken.Chaining
 
             } while (headers.Any());
             
-            await new BlockDownloadSession(BlockchainSession).StartAsync();
+            await new BlockSession(BlockchainSession).StartAsync();
           }
 
           async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
