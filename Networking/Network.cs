@@ -118,9 +118,23 @@ namespace BToken.Networking
       faultedPeers.ForEach(p => p.Dispose());
     }
 
-    public async Task GetBlockAsync(List<UInt256> hashes)
+    public async Task GetBlockAsync(List<UInt256> blockHashes)
     {
-      await Peers.First().GetBlockAsync(hashes);
+      await Peers.First().GetBlockAsync(blockHashes);
+    }
+    public async Task GetBlockAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> blockHashes)
+    {
+      Peer peer = GetPeerOwnerOfBuffer(buffer);
+
+      try
+      {
+        await peer.GetBlockAsync(blockHashes);
+      }
+      catch
+      {
+        peer.Dispose();
+        throw new NetworkException("Peer discarded due to connection error.");
+      }
     }
 
   }

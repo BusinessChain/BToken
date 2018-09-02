@@ -22,13 +22,14 @@ namespace BToken.Chaining
         BlockLocations = Create(socketProbe);
       }
 
+
       public List<BlockLocation> Create(ChainSocket.SocketProbe socketProbe)
       {
         List<BlockLocation> headerLocator = new List<BlockLocation>();
         socketProbe.Reset();
         uint locator = 0;
 
-        while (!IsProbeAtGenesis(socketProbe) && !Blockchain.Checkpoints.IsCheckpoint(socketProbe.GetHeight()))
+        while (socketProbe.GetHeight() > 0 && !Blockchain.Checkpoints.IsCheckpoint(socketProbe.GetHeight()))
         {
           if (locator == socketProbe.Depth)
           {
@@ -43,7 +44,6 @@ namespace BToken.Chaining
 
         return headerLocator;
       }
-      bool IsProbeAtGenesis(ChainSocket.SocketProbe socketProbe) => socketProbe.Block == Blockchain.BlockGenesis;
       uint GetNextLocator(uint locator) => locator * 2 + 1;
 
       public void Update(uint height, UInt256 hash)

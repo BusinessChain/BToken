@@ -2,7 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+
+using BToken.Networking;
 
 namespace BToken.Chaining
 {
@@ -16,23 +19,38 @@ namespace BToken.Chaining
         {
           BlockchainSession BlockchainSession;
 
-          List<List<BlockLocation>> GetBlockBatches;
-
 
           public BlockSession(BlockchainSession blockchainSession)
           {
             BlockchainSession = blockchainSession;
-            CreateGetBlockBatches();
-          }
-          void CreateGetBlockBatches()
-          {
-            ChainSocket socket = BlockchainSession.Controller.Blockchain.SocketMain;
-
           }
 
-          public async Task StartAsync()
+          public async Task StartAsync(List<BlockLocation> blockLocationBatch)
           {
+            var blocks = new List<NetworkBlock>();
 
+            foreach(BlockLocation blockLocation in blockLocationBatch)
+            {
+              NetworkBlock block = await GetBlocksAsync(blockLocation.Hash);
+              blocks.Add(block);
+            }
+          }
+
+          async Task<NetworkBlock> GetBlocksAsync(UInt256 blockHash)
+          {
+            await BlockchainSession.RequestBlockAsync(blockHash);
+
+            //CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
+            Network.BlockMessage blockMessage = await GetBlockMessageAsync();
+
+            return blockMessage.NetworkBlock;
+          }
+
+          async Task<Network.BlockMessage> GetBlockMessageAsync()
+          {
+            Network.BlockMessage blockMessage = await BlockchainSession.GetNetworkMessageAsync(default(CancellationToken)) as Network.BlockMessage;
+
+            return blockMessage ?? await GetBlockMessageAsync();
           }
         }
       }

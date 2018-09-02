@@ -31,7 +31,7 @@ namespace BToken.Chaining
         {
           try
           {
-            await TriggerBlockDownloadAsync();
+            await TriggerHeaderDownloadAsync();
 
             while (true)
             {
@@ -43,10 +43,8 @@ namespace BToken.Chaining
             Controller.DisposeSession(this);
           }
         }
-        async Task TriggerBlockDownloadAsync() => await RequestHeadersAsync(GetHeaderLocator());
-
-
-
+        async Task TriggerHeaderDownloadAsync() => await RequestHeadersAsync(GetHeaderLocator());
+        
         async Task ProcessNextSessionAsync()
         {
           NetworkMessage networkMessage = await GetNetworkMessageAsync(default(CancellationToken));
@@ -74,6 +72,7 @@ namespace BToken.Chaining
 
           return networkMessage ?? throw new NetworkException("Network disposed session."); ;
         }
+        
         async Task ProcessInventoryMessageAsync(InvMessage invMessage)
         {
           foreach (Inventory blockInventory in invMessage.GetBlockInventories())
@@ -94,6 +93,12 @@ namespace BToken.Chaining
 
         async Task RequestHeadersAsync(List<BlockLocation> headerLocator) => await Controller.Network.GetHeadersAsync(Buffer, headerLocator.Select(b => b.Hash).ToList());
         List<BlockLocation> GetHeaderLocator() => Controller.Blockchain.GetHeaderLocator();
+                
+        public async Task RequestBlockDownloadAsync(List<BlockLocation> blockLocations)
+        {
+          await new BlockSession(this).StartAsync(blockLocations);
+        }
+        async Task RequestBlockAsync(UInt256 blockHash) => await Controller.Network.GetBlockAsync(Buffer, new List<UInt256> { blockHash });
 
         void BlameConsensusError()
         {

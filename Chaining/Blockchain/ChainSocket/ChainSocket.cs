@@ -26,6 +26,7 @@ namespace BToken.Chaining
       public SocketProbe Probe { get; private set; }
 
 
+
       public ChainSocket
         (
         Blockchain blockchain,
@@ -135,7 +136,7 @@ namespace BToken.Chaining
         }
         return Probe.IsStrongerThan(socket.Probe);
       }
-      
+            
     }
   }
 }

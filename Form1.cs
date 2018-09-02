@@ -46,9 +46,7 @@ namespace BToken
     private async void button_GetBlock_Click(object sender, EventArgs e)
     {
       List<UInt256> headers = new List<UInt256>() {
-        new UInt256("0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d"),
-        new UInt256("000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214"),
-        new UInt256("000000000000000000209ecbacceb3e7b8ec520ed7f1cfafbe149dd2b9007d39")
+        new UInt256("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
       };
       await Node.Network.GetBlockAsync(headers);
 

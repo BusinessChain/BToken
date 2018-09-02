@@ -68,7 +68,7 @@ namespace BToken.Chaining
     ChainSocket.SocketProbe GetProbeAtBlock(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
-      resetProbes();
+      ResetProbes();
 
       while (socket != null)
       {
@@ -110,7 +110,7 @@ namespace BToken.Chaining
 
       return null;
     }
-    void resetProbes()
+    void ResetProbes()
     {
       ChainSocket socket = SocketMain;
 
@@ -121,7 +121,7 @@ namespace BToken.Chaining
       }
     }
 
-    void insertHeader(NetworkHeader header, UInt256 headerHash)
+    void InsertHeader(NetworkHeader header, UInt256 headerHash)
     {
       ValidateHeader(header, headerHash, out ChainSocket.SocketProbe socketProbe);
 

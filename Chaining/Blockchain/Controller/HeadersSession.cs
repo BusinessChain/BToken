@@ -45,7 +45,7 @@ namespace BToken.Chaining
 
                 try
                 {
-                  BlockchainSession.Controller.Blockchain.insertHeader(header, headerHash);
+                  BlockchainSession.Controller.Blockchain.InsertHeader(header, headerHash);
                 }
                 catch (BlockchainException ex)
                 {
@@ -67,8 +67,8 @@ namespace BToken.Chaining
               headers = await GetHeadersAsync();
 
             } while (headers.Any());
-            
-            await new BlockSession(BlockchainSession).StartAsync();
+
+            Task requestBlockDownloadTask = BlockchainSession.Controller.RequestBlockDownloadAsync();
           }
 
           async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
@@ -85,7 +85,7 @@ namespace BToken.Chaining
 
                 try
                 {
-                  BlockchainSession.Controller.Blockchain.insertHeader(header, headerHash);
+                  BlockchainSession.Controller.Blockchain.InsertHeader(header, headerHash);
                 }
                 catch (BlockchainException ex)
                 {
