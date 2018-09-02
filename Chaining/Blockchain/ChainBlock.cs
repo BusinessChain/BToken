@@ -39,8 +39,7 @@ namespace BToken.Chaining
           merkleRootHash, 
           unixTimeSeconds, 
           nBits, 
-          nonce,
-          0);
+          nonce);
       }
 
     }

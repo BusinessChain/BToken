@@ -12,8 +12,6 @@ namespace BToken.Networking
     public UInt32 NBits { get; private set; }
     public UInt32 Nonce { get; private set; }
 
-    public int TxCount { get; private set; }
-
 
     public NetworkHeader(
       UInt32 version, 
@@ -21,8 +19,7 @@ namespace BToken.Networking
       UInt256 merkleRootHash,
       UInt32 unixTimeSeconds,
       UInt32 nBits,
-      UInt32 nonce,
-      int txCount)
+      UInt32 nonce)
     {
       Version = version;
       HashPrevious = hashPrevious;
@@ -30,7 +27,6 @@ namespace BToken.Networking
       UnixTimeSeconds = unixTimeSeconds;
       NBits = nBits;
       Nonce = nonce;
-      TxCount = txCount;
     }
 
     public byte[] getBytes()
@@ -47,7 +43,7 @@ namespace BToken.Networking
       return headerSerialized.ToArray();
     }
 
-    public static NetworkHeader ParseHeader(byte[] byteStream, ref int startIndex)
+    public static NetworkHeader ParseHeader(byte[] byteStream, out int txCount, ref int startIndex)
     {
       UInt32 version = BitConverter.ToUInt32(byteStream, startIndex);
       startIndex += 4;
@@ -65,7 +61,7 @@ namespace BToken.Networking
       UInt32 nonce = BitConverter.ToUInt32(byteStream, startIndex);
       startIndex += 4;
 
-      int txCount = (int)VarInt.getUInt64(byteStream, ref startIndex);
+      txCount = (int)VarInt.getUInt64(byteStream, ref startIndex);
 
       return new NetworkHeader(
         version, 
@@ -73,8 +69,7 @@ namespace BToken.Networking
         merkleRootHash, 
         unixTimeSeconds, 
         nBits, 
-        nonce,
-        txCount);
+        nonce);
     }
 
   }

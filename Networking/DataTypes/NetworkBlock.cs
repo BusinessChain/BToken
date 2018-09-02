@@ -22,10 +22,10 @@ namespace BToken.Networking
     {
       int startIndex = 0;
 
-      NetworkHeader header = NetworkHeader.ParseHeader(blockBytes, ref startIndex);
+      NetworkHeader header = NetworkHeader.ParseHeader(blockBytes, out int txCount, ref startIndex);
 
       var networkTXs = new List<NetworkTX>();
-      for (int i = 0; i < header.TxCount; i++)
+      for (int i = 0; i < txCount; i++)
       {
         networkTXs.Add(NetworkTX.Parse(blockBytes, ref startIndex));
       }

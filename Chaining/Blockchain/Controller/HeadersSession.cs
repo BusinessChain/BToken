@@ -68,7 +68,7 @@ namespace BToken.Chaining
 
             } while (headers.Any());
 
-            Task requestBlockDownloadTask = BlockchainSession.Controller.RequestBlockDownloadAsync();
+            //Task requestBlockDownloadTask = BlockchainSession.Controller.RequestBlockDownloadAsync();
           }
 
           async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
