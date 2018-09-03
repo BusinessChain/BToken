@@ -25,18 +25,18 @@ namespace BToken.Chaining
             BlockchainSession = blockchainSession;
           }
 
-          public async Task StartAsync(List<BlockLocation> blockLocationBatch)
+          public async Task StartAsync(List<BlockLocation> blockLocations)
           {
             var blocks = new List<NetworkBlock>();
 
-            foreach(BlockLocation blockLocation in blockLocationBatch)
+            foreach(BlockLocation blockLocation in blockLocations)
             {
-              NetworkBlock block = await GetBlocksAsync(blockLocation.Hash);
+              NetworkBlock block = await GetBlockAsync(blockLocation.Hash);
               blocks.Add(block);
             }
           }
 
-          async Task<NetworkBlock> GetBlocksAsync(UInt256 blockHash)
+          async Task<NetworkBlock> GetBlockAsync(UInt256 blockHash)
           {
             await BlockchainSession.RequestBlockAsync(blockHash);
 

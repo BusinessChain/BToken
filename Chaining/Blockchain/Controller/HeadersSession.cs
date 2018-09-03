@@ -30,9 +30,7 @@ namespace BToken.Chaining
 
           public async Task StartAsync(Network.HeadersMessage headersMessage)
           {
-            List<NetworkHeader> headers = headersMessage.Headers;
-
-            await InsertHeadersAsync(headers);
+            await InsertHeadersAsync(headersMessage.Headers);
           }
 
           async Task InsertHeadersAsync(List<NetworkHeader> headers)
@@ -68,7 +66,7 @@ namespace BToken.Chaining
 
             } while (headers.Any());
 
-            //Task requestBlockDownloadTask = BlockchainSession.Controller.RequestBlockDownloadAsync();
+            await BlockchainSession.Controller.RequestBlockDownloadAsync();
           }
 
           async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)

@@ -16,7 +16,7 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      const int SESSIONS_COUNT = 1;
+      const int SESSIONS_COUNT = 2;
       List<BlockchainSession> Sessions = new List<BlockchainSession>();
       
 
@@ -47,9 +47,15 @@ namespace BToken.Chaining
 
       async Task RequestBlockDownloadAsync()
       {
+        // Use concurrent collection instead of list
         List<List<BlockLocation>> blockLocationBatches = CreateBlockLocationBatches();
-        //await new BlockSession(Sessions.First()).StartAsync(blockLocationBatches.First());
-        await Sessions.First().RequestBlockDownloadAsync(blockLocationBatches.First());
+
+        var downloadBlocksTasks = new List<Task>();
+        foreach(BlockchainSession session in Sessions)
+        {
+          downloadBlocksTasks.Add(session.DownloadBlocksAsync(blockLocationBatches));
+        }
+        await Task.WhenAll(downloadBlocksTasks);
       }
       List<List<BlockLocation>> CreateBlockLocationBatches()
       {
@@ -69,38 +75,40 @@ namespace BToken.Chaining
       }
       void CreateBlockLocationBatchesPerSocket(ChainSocket.SocketProbe socketProbe, List<List<BlockLocation>> blockLocationBatches)
       {
-        List<BlockLocation> blockLocationBatch = CreateBlockLocationBatch(socketProbe);
+        bool finalBatch = false;
 
-        if (blockLocationBatch.Any())
+        while (!finalBatch)
         {
+          List<BlockLocation> blockLocationBatch = CreateBlockLocationBatch(socketProbe, out finalBatch);
           blockLocationBatches.Add(blockLocationBatch);
-          CreateBlockLocationBatchesPerSocket(socketProbe, blockLocationBatches);
         }
       }
-      List<BlockLocation> CreateBlockLocationBatch(ChainSocket.SocketProbe socketProbe)
+      List<BlockLocation> CreateBlockLocationBatch(ChainSocket.SocketProbe socketProbe, out bool finalList)
       {
-        const uint BATCH_SIZE = 3;
+        const uint BATCH_SIZE = 10;
         uint batchDepth = 0;
         List<BlockLocation> blockLocationBatch = new List<BlockLocation>();
 
-        do
+        while (batchDepth++ < BATCH_SIZE)
         {
-          if (socketProbe.IsGenesis())
-          {
-            return blockLocationBatch;
-          }
-
-          socketProbe.Push();
-
           if (socketProbe.IsPayloadAssigned())
           {
+            finalList = true;
             return blockLocationBatch;
           }
 
           blockLocationBatch.Add(socketProbe.GetBlockLocation());
 
-        } while (++batchDepth < BATCH_SIZE);
+          if (socketProbe.IsGenesis())
+          {
+            finalList = true;
+            return blockLocationBatch;
+          }
 
+          socketProbe.Push();
+        }
+
+        finalList = false;
         return blockLocationBatch;
       }
 

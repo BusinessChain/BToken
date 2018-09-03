@@ -34,8 +34,8 @@ namespace BToken
     private async void getHeadersButton_Click(object sender, EventArgs e)
     {
       List<UInt256> headers = new List<UInt256>() { new UInt256("0000000000000000001b25d108e90678516c91cf26332e44cd616655e56d1467") };
-      await Node.Network.GetHeadersAsync(headers);
-      //await Node.Network.GetHeadersAsync(Node.Blockchain.GetHeaderLocator().Select(b => b.Hash).ToList());
+      //await Node.Network.GetHeadersAsync(headers);
+      await Node.Network.GetHeadersAsync(Node.Blockchain.GetHeaderLocator().Select(b => b.Hash).ToList());
     }
 
     private async void button_ping_Click(object sender, EventArgs e)
