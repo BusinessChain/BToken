@@ -35,7 +35,7 @@ namespace BToken.Chaining
 
           async Task InsertHeadersAsync(List<NetworkHeader> headers)
           {
-            do
+            while (headers.Any())
             {
               foreach (NetworkHeader header in headers)
               {
@@ -60,13 +60,14 @@ namespace BToken.Chaining
                       throw ex;
                   }
                 }
+
+                // Maybe we should download blocks one by one right after succesfull insertion of its header
               }
 
               headers = await GetHeadersAsync();
+            }
 
-            } while (headers.Any());
-
-            await BlockchainSession.Controller.RequestBlockDownloadAsync();
+            // await BlockchainSession.Controller.RequestBlockDownloadAsync();
           }
 
           async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)

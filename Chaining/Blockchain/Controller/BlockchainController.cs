@@ -16,7 +16,7 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      const int SESSIONS_COUNT = 2;
+      const int SESSIONS_COUNT = 8;
       List<BlockchainSession> Sessions = new List<BlockchainSession>();
       
 
