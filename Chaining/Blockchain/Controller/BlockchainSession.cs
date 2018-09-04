@@ -31,8 +31,6 @@ namespace BToken.Chaining
         {
           try
           {
-            await TriggerHeaderDownloadAsync();
-
             while (true)
             {
               await ProcessNextSessionAsync();
@@ -40,10 +38,10 @@ namespace BToken.Chaining
           }
           catch
           {
-            Controller.DisposeSession(this);
+            await Controller.RenewSessionAsync(this);
           }
         }
-        async Task TriggerHeaderDownloadAsync() => await RequestHeadersAsync(GetHeaderLocator());
+        public async Task TriggerHeaderDownloadAsync() => await RequestHeadersAsync(GetHeaderLocator());
         
         async Task ProcessNextSessionAsync()
         {
