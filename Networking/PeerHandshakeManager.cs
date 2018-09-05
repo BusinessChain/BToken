@@ -12,8 +12,7 @@ namespace BToken.Networking
         Peer Peer;
 
         bool VerAckReceived;
-        bool MeetsCheckpointRequirement;
-        VersionMessage VersionMessageRemote;
+        bool VersionReceived;
         
         public PeerHandshakeManager(Peer peer)
         {
@@ -29,9 +28,9 @@ namespace BToken.Networking
               break;
 
             case "version":
-              VersionMessageRemote = new VersionMessage(messageRemote.Payload);
-              NetworkMessage responseToVersionMessageRemote = GetResponseToVersionMessageRemote();
-              await Peer.SendMessageAsync(responseToVersionMessageRemote);
+              VersionMessage versionMessageRemote = new VersionMessage(messageRemote.Payload);
+              VersionReceived = true;
+              await ProcessVersionMessageRemoteAsync(versionMessageRemote);
               break;
 
             case "reject":
@@ -42,48 +41,50 @@ namespace BToken.Networking
               throw new NetworkException(string.Format("Handshake aborted: Received improper message '{0}' during handshake session.", messageRemote.Command));
           }
         }
-        NetworkMessage GetResponseToVersionMessageRemote()
+        async Task ProcessVersionMessageRemoteAsync(VersionMessage versionMessageRemote)
         {
-          string rejectionReason = "";
-
-          if (VersionMessageRemote.ProtocolVersion < ProtocolVersion)
+          ValidateVersionRemoteAsync(versionMessageRemote, out string rejectionReason);
+          if (rejectionReason != "")
           {
-            rejectionReason = string.Format("Outdated version '{0}', minimum expected version is '{1}'.", VersionMessageRemote.ProtocolVersion, ProtocolVersion);
+            await Peer.SendMessageAsync(new RejectMessage("version", RejectMessage.RejectCode.OBSOLETE, rejectionReason));
+            throw new NetworkException("We rejected rempote peer: " + rejectionReason);
+          }
+          await Peer.SendMessageAsync(new VerAckMessage());
+        }
+        void ValidateVersionRemoteAsync(VersionMessage versionMessageRemote, out string rejectionReason)
+        {
+          rejectionReason = "";
+
+          if (versionMessageRemote.ProtocolVersion < ProtocolVersion)
+          {
+            rejectionReason = string.Format("Outdated version '{0}', minimum expected version is '{1}'.", versionMessageRemote.ProtocolVersion, ProtocolVersion);
           }
 
-          if (!((ServiceFlags)VersionMessageRemote.NetworkServicesLocal).HasFlag(NetworkServicesRemoteRequired))
+          if (!((ServiceFlags)versionMessageRemote.NetworkServicesLocal).HasFlag(NetworkServicesRemoteRequired))
           {
-            rejectionReason = string.Format("Network services '{0}' do not meet requirement '{1}'.", VersionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
+            rejectionReason = string.Format("Network services '{0}' do not meet requirement '{1}'.", versionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
           }
 
-          if (VersionMessageRemote.UnixTimeSeconds - getUnixTimeSeconds() > 2 * 60 * 60)
+          if (versionMessageRemote.UnixTimeSeconds - getUnixTimeSeconds() > 2 * 60 * 60)
           {
-            rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.", VersionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
+            rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.", versionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
           }
 
-          if (VersionMessageRemote.Nonce == Nonce)
+          if (versionMessageRemote.Nonce == Nonce)
           {
             rejectionReason = string.Format("Duplicate Nonce '{0}'.", Nonce);
           }
 
-          if ((RelayOptionFlags)VersionMessageRemote.RelayOption != RelayOptionFlags.SendTxStandard)
+          if ((RelayOptionFlags)versionMessageRemote.RelayOption != RelayOptionFlags.SendTxStandard)
           {
             rejectionReason = string.Format("We only support RelayOption = '{0}'.", RelayOptionFlags.SendTxStandard);
           }
 
-          if (rejectionReason != "")
-          {
-            return new RejectMessage(VersionMessageRemote.Command, RejectMessage.RejectCode.OBSOLETE, rejectionReason);
-          }
-          else
-          {
-            return new VerAckMessage();
-          }
         }
 
         public bool isHandshakeCompleted()
         {
-          return VerAckReceived && (VersionMessageRemote != null);
+          return VerAckReceived && VersionReceived;
         }
       }
     }
