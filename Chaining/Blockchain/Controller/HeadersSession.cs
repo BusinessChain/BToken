@@ -60,14 +60,12 @@ namespace BToken.Chaining
                       throw ex;
                   }
                 }
-
-                // Maybe we should download blocks one by one right after succesfull insertion of its header
               }
 
               headers = await GetHeadersAsync();
             }
 
-            // await BlockchainSession.Controller.RequestBlockDownloadAsync();
+            await BlockchainSession.Controller.RequestBlockDownloadAsync();
           }
 
           async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)

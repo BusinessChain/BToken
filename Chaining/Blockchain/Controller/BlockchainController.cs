@@ -34,21 +34,16 @@ namespace BToken.Chaining
         {
           createSessionTasks.Add(CreateSessionAsync());
         }
-
-        List<Task> startingSessionsTasks = createSessionTasks.Select(async t =>
-        {
-          BlockchainSession session = await t;
-          Task sessionStartTask = session.StartAsync();
-          Sessions.Add(session);
-        }).ToList();
-
-        await Task.WhenAny(startingSessionsTasks);
+        
+        await Task.WhenAny(createSessionTasks);
         await Sessions.First().TriggerHeaderDownloadAsync();
       }
       async Task<BlockchainSession> CreateSessionAsync()
       {
         BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainSessionAsync(Blockchain.GetHeight());
-        return new BlockchainSession(buffer, this);
+        BlockchainSession session = new BlockchainSession(buffer, this);
+        Sessions.Add(session);
+        return session;
       }
 
       async Task RequestBlockDownloadAsync()
