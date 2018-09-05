@@ -16,8 +16,8 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      const int SESSIONS_COUNT = 8;
-      List<BlockchainSession> Sessions = new List<BlockchainSession>();
+      const int CHANNELS_COUNT = 16;
+      List<BlockchainChannel> Channels = new List<BlockchainChannel>();
       
 
       public BlockchainController(Network network, Blockchain blockchain)
@@ -28,22 +28,22 @@ namespace BToken.Chaining
 
       public async Task StartAsync()
       {
-        var createSessionTasks = new List<Task<BlockchainSession>>();
+        var createChannelTasks = new List<Task<BlockchainChannel>>();
 
-        for (int i = 0; i < SESSIONS_COUNT; i++)
+        for (int i = 0; i < CHANNELS_COUNT; i++)
         {
-          createSessionTasks.Add(CreateSessionAsync());
+          createChannelTasks.Add(CreateChannelAsync());
         }
         
-        await Task.WhenAny(createSessionTasks);
-        await Sessions.First().TriggerHeaderDownloadAsync();
+        await Task.WhenAny(createChannelTasks);
+        await Channels.First().ExecuteSessionAsync(new SessionHeaderDownload(Blockchain));
       }
-      async Task<BlockchainSession> CreateSessionAsync()
+      async Task<BlockchainChannel> CreateChannelAsync()
       {
-        BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainSessionAsync(Blockchain.GetHeight());
-        BlockchainSession session = new BlockchainSession(buffer, this);
-        Sessions.Add(session);
-        return session;
+        BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainChannelAsync(Blockchain.GetHeight());
+        BlockchainChannel channel = new BlockchainChannel(buffer, this);
+        Channels.Add(channel);
+        return channel;
       }
 
       async Task RequestBlockDownloadAsync()
@@ -52,9 +52,9 @@ namespace BToken.Chaining
         List<List<BlockLocation>> blockLocationBatches = CreateBlockLocationBatches();
 
         var downloadBlocksTasks = new List<Task>();
-        foreach(BlockchainSession session in Sessions)
+        foreach(BlockchainChannel channel in Channels)
         {
-          downloadBlocksTasks.Add(session.DownloadBlocksAsync(blockLocationBatches));
+          downloadBlocksTasks.Add(channel.DownloadBlocksAsync(blockLocationBatches));
         }
         await Task.WhenAll(downloadBlocksTasks);
       }
@@ -114,15 +114,15 @@ namespace BToken.Chaining
       }
 
 
-      async Task RenewSessionAsync(BlockchainSession session)
+      async Task RenewChannelAsync(BlockchainChannel channel)
       {
-        Network.DisposeSession(session.Buffer);
-        Sessions.Remove(session);
+        Network.CloseChannel(channel.Buffer);
+        Channels.Remove(channel);
 
-        if(Sessions.Count < SESSIONS_COUNT)
+        if(Channels.Count < CHANNELS_COUNT)
         {
-          BlockchainSession newSession = await CreateSessionAsync();
-          Task sessionStartTask = newSession.StartAsync();
+          BlockchainChannel newChannel = await CreateChannelAsync();
+          Task channelStartTask = newChannel.StartAsync();
         }
       }
 

@@ -28,7 +28,7 @@ namespace BToken.Networking
       AddressPool = new NetworkAddressPool();
     }
 
-    public async Task<BufferBlock<NetworkMessage>> CreateBlockchainSessionAsync(uint blockheightLocal)
+    public async Task<BufferBlock<NetworkMessage>> CreateBlockchainChannelAsync(uint blockheightLocal)
     {
       try
       {
@@ -40,7 +40,7 @@ namespace BToken.Networking
       catch (Exception ex)
       {
         Console.WriteLine(ex.Message);
-        return await CreateBlockchainSessionAsync(blockheightLocal);
+        return await CreateBlockchainChannelAsync(blockheightLocal);
       }
 
     }
@@ -50,7 +50,7 @@ namespace BToken.Networking
       return new Peer(new IPEndPoint(iPAddress, Port), this);
     }
 
-    public void DisposeSession(BufferBlock<NetworkMessage> buffer)
+    public void CloseChannel(BufferBlock<NetworkMessage> buffer)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
 

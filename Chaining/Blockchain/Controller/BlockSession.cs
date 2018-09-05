@@ -13,16 +13,16 @@ namespace BToken.Chaining
   {
     partial class BlockchainController
     {
-      partial class BlockchainSession
+      partial class BlockchainChannel
       {
         class BlockSession
         {
-          BlockchainSession BlockchainSession;
+          BlockchainChannel Channel;
 
 
-          public BlockSession(BlockchainSession blockchainSession)
+          public BlockSession(BlockchainChannel channel)
           {
-            BlockchainSession = blockchainSession;
+            Channel = channel;
           }
 
           public async Task StartAsync(List<BlockLocation> blockLocations)
@@ -38,7 +38,7 @@ namespace BToken.Chaining
 
           async Task<NetworkBlock> GetBlockAsync(UInt256 blockHash)
           {
-            await BlockchainSession.RequestBlockAsync(blockHash);
+            await Channel.RequestBlockAsync(blockHash);
 
             //CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
             Network.BlockMessage blockMessage = await GetBlockMessageAsync();
@@ -48,7 +48,7 @@ namespace BToken.Chaining
 
           async Task<Network.BlockMessage> GetBlockMessageAsync()
           {
-            Network.BlockMessage blockMessage = await BlockchainSession.GetNetworkMessageAsync(default(CancellationToken)) as Network.BlockMessage;
+            Network.BlockMessage blockMessage = await Channel.GetNetworkMessageAsync(default(CancellationToken)) as Network.BlockMessage;
 
             return blockMessage ?? await GetBlockMessageAsync();
           }
