@@ -13,19 +13,19 @@ namespace BToken.Chaining
   {
     partial class BlockchainController
     {
-      partial class BlockchainSession
+      partial class BlockchainChannel
       {
         class HeadersSession
         {
-          BlockchainSession BlockchainSession;
+          BlockchainChannel Channel;
 
           List<BlockLocation> HeaderLocator;
 
 
 
-          public HeadersSession(BlockchainSession blockchainSession)
+          public HeadersSession(BlockchainChannel channel)
           {
-            BlockchainSession = blockchainSession;
+            Channel = channel;
           }
 
           public async Task StartAsync(Network.HeadersMessage headersMessage)
@@ -43,7 +43,7 @@ namespace BToken.Chaining
 
                 try
                 {
-                  BlockchainSession.Controller.Blockchain.InsertHeader(header, headerHash);
+                  Channel.Controller.Blockchain.InsertHeader(header, headerHash);
                 }
                 catch (BlockchainException ex)
                 {
@@ -60,14 +60,12 @@ namespace BToken.Chaining
                       throw ex;
                   }
                 }
-
-                // Maybe we should download blocks one by one right after succesfull insertion of its header
               }
 
               headers = await GetHeadersAsync();
             }
 
-            // await BlockchainSession.Controller.RequestBlockDownloadAsync();
+            await Channel.Controller.RequestBlockDownloadAsync();
           }
 
           async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
@@ -84,7 +82,7 @@ namespace BToken.Chaining
 
                 try
                 {
-                  BlockchainSession.Controller.Blockchain.InsertHeader(header, headerHash);
+                  Channel.Controller.Blockchain.InsertHeader(header, headerHash);
                 }
                 catch (BlockchainException ex)
                 {
@@ -103,7 +101,7 @@ namespace BToken.Chaining
                 }
               }
 
-              await GetHeadersAsync();
+              headers = await GetHeadersAsync();
 
             } while (headers.Any());
 
@@ -142,8 +140,8 @@ namespace BToken.Chaining
 
           async Task<List<NetworkHeader>> GetHeadersAsync()
           {
-            HeaderLocator = BlockchainSession.Controller.Blockchain.GetHeaderLocator();
-            await BlockchainSession.RequestHeadersAsync(HeaderLocator);
+            HeaderLocator = Channel.Controller.Blockchain.GetHeaderLocator();
+            await Channel.RequestHeadersAsync(HeaderLocator);
 
             CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
             Network.HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken);
@@ -153,7 +151,7 @@ namespace BToken.Chaining
 
           async Task<Network.HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
           {
-            Network.HeadersMessage headersMessage = await BlockchainSession.GetNetworkMessageAsync(cancellationToken) as Network.HeadersMessage;
+            Network.HeadersMessage headersMessage = await Channel.GetNetworkMessageAsync(cancellationToken) as Network.HeadersMessage;
 
             return headersMessage ?? await GetHeadersMessageAsync(cancellationToken);
           }
