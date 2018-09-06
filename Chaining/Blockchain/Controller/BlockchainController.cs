@@ -16,7 +16,7 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      const int CHANNELS_COUNT = 16;
+      const int CHANNELS_COUNT = 8;
       List<BlockchainChannel> Channels = new List<BlockchainChannel>();
       
 
@@ -28,15 +28,27 @@ namespace BToken.Chaining
 
       public async Task StartAsync()
       {
+        BlockchainChannel firstChannel = await CreateChannelAsync();
+        await firstChannel.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain));
+
+        Task startMessageListenerTask = firstChannel.StartMessageListenerAsync();
+
+        CreateAndStartChannels(CHANNELS_COUNT - 1);
+      }
+      void CreateAndStartChannels(int count)
+      {
         var createChannelTasks = new List<Task<BlockchainChannel>>();
 
-        for (int i = 0; i < CHANNELS_COUNT; i++)
+        for (int i = 0; i < count - 1; i++)
         {
           createChannelTasks.Add(CreateChannelAsync());
         }
-        
-        await Task.WhenAny(createChannelTasks);
-        await Channels.First().ExecuteSessionAsync(new SessionHeaderDownload(Blockchain));
+
+        createChannelTasks.Select(async c =>
+        {
+          BlockchainChannel channel = await c;
+          Task startMessageListenerTask = channel.StartMessageListenerAsync();
+        }).ToArray();
       }
       async Task<BlockchainChannel> CreateChannelAsync()
       {
@@ -114,16 +126,14 @@ namespace BToken.Chaining
       }
 
 
-      async Task RenewChannelAsync(BlockchainChannel channel)
+      async Task<BlockchainChannel> RenewChannelAsync(BlockchainChannel channel)
       {
         Network.CloseChannel(channel.Buffer);
         Channels.Remove(channel);
 
-        if(Channels.Count < CHANNELS_COUNT)
-        {
-          BlockchainChannel newChannel = await CreateChannelAsync();
-          Task channelStartTask = newChannel.StartAsync();
-        }
+        BlockchainChannel newChannel = await CreateChannelAsync();
+        Channels.Add(newChannel);
+        return newChannel;
       }
 
     }
