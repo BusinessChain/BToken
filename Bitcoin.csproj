@@ -67,7 +67,7 @@
     <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainChannel.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainSession.cs" />
-    <Compile Include="Chaining\Blockchain\Controller\BlockSession.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Blockchain\Controller\HeadersSession.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\Blockchain\TX.cs" />

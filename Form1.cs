@@ -20,6 +20,7 @@ namespace BToken
     public Form1()
     {
       InitializeComponent();
+
       try
       {
         Node = new Bitcoin();

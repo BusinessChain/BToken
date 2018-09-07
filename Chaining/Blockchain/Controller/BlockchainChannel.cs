@@ -112,10 +112,10 @@ namespace BToken.Chaining
             List<BlockLocation> blockLocations = blockLocationBatches[0];
             blockLocationBatches.RemoveAt(0);
 
-            await new BlockSession(this).StartAsync(blockLocations);
+            //await new SessionBlockDownload(this).StartAsync(blockLocations);
           }
         }
-        async Task RequestBlockAsync(UInt256 blockHash) => await Controller.Network.GetBlockAsync(Buffer, new List<UInt256> { blockHash });
+        public async Task RequestBlockAsync(UInt256 blockHash) => await Controller.Network.GetBlockAsync(Buffer, new List<UInt256> { blockHash });
 
         void BlameConsensusError()
         {
