@@ -60,6 +60,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Bitcoin\BitcoinBlockPayload.cs" />
+    <Compile Include="Bitcoin\BitcoinBlockPayloadParser.cs" />
     <Compile Include="Bitcoin\BitcoinGenesisBlock.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\HeaderLocator.cs" />
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
@@ -70,6 +72,7 @@
     <Compile Include="Chaining\Blockchain\Controller\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Blockchain\Controller\HeadersSession.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionHeaderDownload.cs" />
+    <Compile Include="Chaining\Blockchain\IBlockPayloadParser.cs" />
     <Compile Include="Chaining\Blockchain\TX.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\ChainSocket.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainException.cs" />

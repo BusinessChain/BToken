@@ -34,10 +34,30 @@ namespace BToken.Chaining
         {
           Channel = channel;
 
-          foreach (BlockLocation blockLocation in BlockLocations)
+          for (int i = BlockLocations.Count - 1; i >= 0; i--)
           {
-            NetworkBlock block = await GetBlockAsync(blockLocation.Hash);
-            BlocksDownloaded.Add(block);
+            BlockLocation blockLocation = BlockLocations[i];
+            BlocksDownloaded.Add(await GetBlockAsync(blockLocation.Hash));
+            BlockLocations.RemoveAt(i);
+          }
+
+          InsertDownloadedBlocksInChain();
+        }
+
+        void InsertDownloadedBlocksInChain()
+        {
+          foreach(NetworkBlock block in BlocksDownloaded)
+          {
+            UInt256 headerHash = CalculateHash(block.Header.getBytes());
+
+            try
+            {
+              Blockchain.InsertBlockPayload(block, headerHash);
+            }
+            catch (BlockchainException ex)
+            {
+              // Maybe we should not catch anything
+            }
           }
         }
 

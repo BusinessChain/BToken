@@ -19,7 +19,7 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      const int CHANNELS_COUNT = 4;
+      const int CHANNELS_COUNT = 8;
       List<BlockchainChannel> Channels = new List<BlockchainChannel>();
       
 
@@ -62,7 +62,7 @@ namespace BToken.Chaining
             List<BlockLocation> blockLocations = blockLocationBatches[0];
             blockLocationBatches.RemoveAt(0);
             Debug.WriteLine("Channel " + channel.GetHashCode() + " adds block " + Thread.CurrentThread.ManagedThreadId);
-            await channel.ExecuteSessionAsync(new SessionBlockDownload(blockLocations));
+            await channel.ExecuteSessionAsync(new SessionBlockDownload(Blockchain, blockLocations));
           }
         }).ToArray();
 

@@ -25,8 +25,8 @@ namespace BToken
     public Bitcoin()
     {
       Network = new Network();
-
-      Blockchain = new Blockchain(Network, GenesisBlock, Checkpoints);
+      
+      Blockchain = new Blockchain(Network, GenesisBlock, Checkpoints, new BitcoinBlockPayloadParser());
 
       UTXO = new UnspentTXOutputs(Blockchain, Network);
     }
