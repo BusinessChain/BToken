@@ -63,6 +63,7 @@
     <Compile Include="Bitcoin\BitcoinBlockPayload.cs" />
     <Compile Include="Bitcoin\BitcoinBlockPayloadParser.cs" />
     <Compile Include="Bitcoin\BitcoinGenesisBlock.cs" />
+    <Compile Include="Bitcoin\BitcoinTX.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\HeaderLocator.cs" />
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
     <Compile Include="Chaining\Blockchain\CheckpointManager.cs" />
@@ -73,7 +74,6 @@
     <Compile Include="Chaining\Blockchain\Controller\HeadersSession.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\Blockchain\IBlockPayloadParser.cs" />
-    <Compile Include="Chaining\Blockchain\TX.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\ChainSocket.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainException.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\SocketProbe.cs" />
@@ -84,9 +84,8 @@
     <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\DataTypes\Inventory.cs" />
     <Compile Include="Networking\DataTypes\NetworkHeader.cs" />
-    <Compile Include="Networking\DataTypes\NetworkTX.cs" />
-    <Compile Include="Networking\DataTypes\VarString.cs" />
-    <Compile Include="Networking\DataTypes\VarInt.cs" />
+    <Compile Include="DataTypes\VarString.cs" />
+    <Compile Include="DataTypes\VarInt.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>

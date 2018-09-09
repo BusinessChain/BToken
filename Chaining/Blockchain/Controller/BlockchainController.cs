@@ -19,7 +19,7 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      const int CHANNELS_COUNT = 8;
+      const int CHANNELS_COUNT = 1;
       List<BlockchainChannel> Channels = new List<BlockchainChannel>();
       
 

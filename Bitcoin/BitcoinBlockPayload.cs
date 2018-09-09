@@ -12,6 +12,7 @@ namespace BToken
   {
     class BitcoinBlockPayload : Blockchain.IBlockPayload
     {
+      List<BitcoinTX> BitcoinTXs;
       UInt256 MerkleRootHash;
 
 
@@ -20,7 +21,16 @@ namespace BToken
       {
         MerkleRootHash = merkleRootHash;
       }
+      public BitcoinBlockPayload(List<BitcoinTX> bitcoinTXs)
+      {
+        BitcoinTXs = bitcoinTXs;
+        MerkleRootHash = ComputeHash(bitcoinTXs);
+      }
 
+      public UInt256 ComputeHash(List<BitcoinTX> bitcoinTXs)
+      {
+        return MerkleRootHash;
+      }
       public UInt256 ComputeHash()
       {
         return MerkleRootHash;

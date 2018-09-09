@@ -12,15 +12,17 @@ namespace BToken
   {
     class BitcoinBlockPayloadParser : Blockchain.IBlockPayloadParser
     {
-      public Blockchain.IBlockPayload Parse(byte[] stream)
+      public Blockchain.IBlockPayload Parse(byte[] payloadStream)
       {
-        //var networkTXs = new List<NetworkTX>();
-        //for (int i = 0; i < txCount; i++)
-        //{
-        //  networkTXs.Add(NetworkTX.Parse(blockBytes, ref startIndex));
-        //}
+        var bitcoinTXs = new List<BitcoinTX>();
 
-        return new BitcoinGenesisBlock() as Blockchain.IBlockPayload;
+        int startIndex = 0;
+        while (startIndex < payloadStream.Length)
+        {
+          bitcoinTXs.Add(BitcoinTX.Parse(payloadStream, ref startIndex));
+        }
+
+        return new BitcoinBlockPayload(bitcoinTXs);
       }
     }
   }
