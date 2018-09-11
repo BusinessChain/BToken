@@ -13,10 +13,10 @@ namespace BToken.Bitcoin
 
     class TXInput
     {
-      public UInt256 TXIDPreviousOutput { get; private set; }
-      public UInt32 IndexPreviousOutput { get; private set; }
-      public byte[] UnlockingScript { get; private set; }
-      public UInt32 Sequence { get; private set; }
+      UInt256 TXIDPreviousOutput;
+      UInt32 IndexPreviousOutput;
+      byte[] UnlockingScript;
+      UInt32 Sequence;
 
 
       public TXInput(

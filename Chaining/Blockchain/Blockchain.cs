@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -22,6 +24,8 @@ namespace BToken.Chaining
 
     ChainSocket SocketMain;
     HeaderLocator Locator;
+
+    Stopwatch StopWatch = new Stopwatch();
 
 
     public Blockchain(Network network, ChainBlock genesisBlock, List<BlockLocation> checkpoints, IBlockPayloadParser blockPayloadParser)
@@ -57,14 +61,23 @@ namespace BToken.Chaining
 
     ChainBlock GetBlock(UInt256 hash)
     {
+      StopWatch.Start();
+
       ChainSocket.SocketProbe socketProbe = GetProbeAtBlock(hash);
 
-      if(socketProbe == null)
-      {
-        return null;
-      }
+      StopWatch.Stop();
+      TimeSpan ts = StopWatch.Elapsed;
+      string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+        ts.Hours, 
+        ts.Minutes, 
+        ts.Seconds, 
+        ts.Milliseconds / 10);
+      Debug.WriteLine("Runtime " + elapsedTime);
+      StopWatch.Reset();
 
-      return socketProbe.Block;
+
+
+      return socketProbe == null ? null : socketProbe.Block;
     }
 
     ChainSocket.SocketProbe GetProbeAtBlock(UInt256 hash)

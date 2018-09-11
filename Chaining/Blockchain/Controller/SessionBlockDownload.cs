@@ -21,7 +21,7 @@ namespace BToken.Chaining
 
         List<BlockLocation> BlockLocations;
         List<NetworkBlock> BlocksDownloaded = new List<NetworkBlock>();
-
+        
 
 
         public SessionBlockDownload(Blockchain blockchain, List<BlockLocation> blockLocations)
@@ -41,10 +41,12 @@ namespace BToken.Chaining
             BlockLocations.RemoveAt(i);
             
             //Check if we received the block we requested.
-            Debug.WriteLine("Channel " + Channel.GetHashCode() + " adds block " + Thread.CurrentThread.ManagedThreadId);
+            Debug.WriteLine("Channel " + Channel.GetHashCode() + " downloaded block at height " + blockLocation.Height);
           }
 
+
           InsertDownloadedBlocksInChain();
+
         }
 
         void InsertDownloadedBlocksInChain()
@@ -59,7 +61,7 @@ namespace BToken.Chaining
             }
             catch (BlockchainException ex)
             {
-              // Maybe we should not catch anything
+              Debug.WriteLine("Block insertion failed, Channel " + Channel.GetHashCode() + ", block hash: " + headerHash + "\nException: " + ex.Message);
             }
           }
         }
