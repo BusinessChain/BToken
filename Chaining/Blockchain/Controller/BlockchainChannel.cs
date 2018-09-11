@@ -10,7 +10,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain
+  public partial class Blockchain
   {
     partial class BlockchainController
     {
@@ -81,7 +81,7 @@ namespace BToken.Chaining
         {
           NetworkMessage networkMessage = await Buffer.ReceiveAsync(cancellationToken);
 
-          return networkMessage ?? throw new NetworkException("Network closed channel."); ;
+          return networkMessage ?? throw new NetworkException("Network closed channel.");
         }
         
         async Task ProcessInventoryMessageAsync(InvMessage invMessage)
@@ -112,10 +112,10 @@ namespace BToken.Chaining
             List<BlockLocation> blockLocations = blockLocationBatches[0];
             blockLocationBatches.RemoveAt(0);
 
-            await new BlockSession(this).StartAsync(blockLocations);
+            //await new SessionBlockDownload(this).StartAsync(blockLocations);
           }
         }
-        async Task RequestBlockAsync(UInt256 blockHash) => await Controller.Network.GetBlockAsync(Buffer, new List<UInt256> { blockHash });
+        public async Task RequestBlockAsync(UInt256 blockHash) => await Controller.Network.GetBlockAsync(Buffer, new List<UInt256> { blockHash });
 
         void BlameConsensusError()
         {

@@ -6,16 +6,16 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  class NetworkBlock
+  public class NetworkBlock
   {
     public NetworkHeader Header { get; private set; }
-    public List<NetworkTX> NetworkTXs { get; private set; }
+    public byte[] Payload { get; private set; }
 
 
-    public NetworkBlock(NetworkHeader networkHeader, List<NetworkTX> networkTXs)
+    public NetworkBlock(NetworkHeader networkHeader, byte[] payload)
     {
       Header = networkHeader;
-      NetworkTXs = networkTXs;
+      Payload = payload;
     }
 
     public static NetworkBlock ParseBlock(byte[] blockBytes)
@@ -23,14 +23,9 @@ namespace BToken.Networking
       int startIndex = 0;
 
       NetworkHeader header = NetworkHeader.ParseHeader(blockBytes, out int txCount, ref startIndex);
+      byte[] payload = blockBytes.Skip(startIndex).ToArray();
 
-      var networkTXs = new List<NetworkTX>();
-      for (int i = 0; i < txCount; i++)
-      {
-        networkTXs.Add(NetworkTX.Parse(blockBytes, ref startIndex));
-      }
-
-      return new NetworkBlock(header, networkTXs);
+      return new NetworkBlock(header, payload);
     }
   }
 }

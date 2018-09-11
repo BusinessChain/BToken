@@ -8,7 +8,7 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BToken.Networking
 {
-  partial class Network
+  public partial class Network
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
@@ -26,6 +26,14 @@ namespace BToken.Networking
     {
       Nonce = createNonce();
       AddressPool = new NetworkAddressPool();
+    }
+    static ulong createNonce()
+    {
+      Random rnd = new Random();
+
+      ulong number = (ulong)rnd.Next();
+      number = number << 32;
+      return number |= (uint)rnd.Next();
     }
 
     public async Task<BufferBlock<NetworkMessage>> CreateBlockchainChannelAsync(uint blockheightLocal)
@@ -87,16 +95,7 @@ namespace BToken.Networking
       Peer peer = GetPeerOwnerOfBuffer(buffer);
       peer.Blame(100);
     }
-
-    static ulong createNonce()
-    {
-      Random rnd = new Random();
-
-      ulong number = (ulong)rnd.Next();
-      number = number << 32;
-      return number |= (uint)rnd.Next();
-    }
-
+    
     static long getUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     public async Task PingAsync()

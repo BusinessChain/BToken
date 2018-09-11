@@ -142,8 +142,7 @@ namespace BToken.Chaining
         public uint GetHeight() => Socket.Height - Depth;
         public bool IsHash(UInt256 hash) => Hash.isEqual(hash);
         public bool IsGenesis() => Block == Socket.BlockGenesis;
-        public bool IsPayloadAssigned() => Block.BlockPayload != null;
-        public bool IsBlock(ChainBlock blockHeader) => Block == blockHeader;
+        public bool IsPayloadAssigned() => Block.IsPayloadAssigned();
         public bool IsStrongerThan(SocketProbe probe)
         {
           if(probe == null)

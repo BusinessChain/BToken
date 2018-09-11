@@ -65,7 +65,7 @@ namespace BToken.Chaining
               headers = await GetHeadersAsync();
             }
 
-            await Channel.Controller.RequestBlockDownloadAsync();
+            //await Channel.Controller.RequestBlockDownloadAsync();
           }
 
           async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)

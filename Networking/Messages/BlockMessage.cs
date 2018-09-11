@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  partial class Network
+  public partial class Network
   {
     public class BlockMessage : NetworkMessage
     {

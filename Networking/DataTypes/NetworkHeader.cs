@@ -3,11 +3,11 @@ using System.Collections.Generic;
 
 namespace BToken.Networking
 {
-  class NetworkHeader
+  public class NetworkHeader
   {
     public UInt32 Version { get; private set; }
     public UInt256 HashPrevious { get; private set; }
-    public UInt256 MerkleRootHash { get; private set; }
+    public UInt256 PayloadHash { get; private set; }
     public UInt32 UnixTimeSeconds { get; private set; }
     public UInt32 NBits { get; private set; }
     public UInt32 Nonce { get; private set; }
@@ -23,7 +23,7 @@ namespace BToken.Networking
     {
       Version = version;
       HashPrevious = hashPrevious;
-      MerkleRootHash = merkleRootHash;
+      PayloadHash = merkleRootHash;
       UnixTimeSeconds = unixTimeSeconds;
       NBits = nBits;
       Nonce = nonce;
@@ -35,7 +35,7 @@ namespace BToken.Networking
 
       headerSerialized.AddRange(BitConverter.GetBytes(Version));
       headerSerialized.AddRange(HashPrevious.GetBytes());
-      headerSerialized.AddRange(MerkleRootHash.GetBytes());
+      headerSerialized.AddRange(PayloadHash.GetBytes());
       headerSerialized.AddRange(BitConverter.GetBytes(UnixTimeSeconds));
       headerSerialized.AddRange(BitConverter.GetBytes(NBits));
       headerSerialized.AddRange(BitConverter.GetBytes(Nonce));

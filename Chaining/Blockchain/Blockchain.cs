@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -11,25 +13,29 @@ namespace BToken.Chaining
   public enum BlockCode { ORPHAN, DUPLICATE, INVALID, EXPIRED };
 
 
-  partial class Blockchain
+  public partial class Blockchain
   {
     Network Network;
     BlockchainController Controller;
     
     ChainBlock BlockGenesis;
     CheckpointManager Checkpoints;
+    IBlockPayloadParser BlockPayloadParser;
 
     ChainSocket SocketMain;
     HeaderLocator Locator;
 
+    Stopwatch StopWatch = new Stopwatch();
 
-    public Blockchain(Network network, ChainBlock genesisBlock, List<BlockLocation> checkpoints)
+
+    public Blockchain(Network network, ChainBlock genesisBlock, List<BlockLocation> checkpoints, IBlockPayloadParser blockPayloadParser)
     {
       Network = network;
       Controller = new BlockchainController(network, this);
 
       BlockGenesis = genesisBlock;
       Checkpoints = new CheckpointManager(checkpoints);
+      BlockPayloadParser = blockPayloadParser;
 
       SocketMain = new ChainSocket(
         blockchain: this,
@@ -40,9 +46,9 @@ namespace BToken.Chaining
 
       Locator = new HeaderLocator(this, SocketMain.Probe);
     }
-    static UInt256 CalculateHash(byte[] headerBytes)
+    static UInt256 CalculateHash(byte[] byteStream)
     {
-      byte[] hashBytes = Hashing.sha256d(headerBytes);
+      byte[] hashBytes = Hashing.sha256d(byteStream);
       return new UInt256(hashBytes);
     }
 
@@ -55,14 +61,23 @@ namespace BToken.Chaining
 
     ChainBlock GetBlock(UInt256 hash)
     {
+      StopWatch.Start();
+
       ChainSocket.SocketProbe socketProbe = GetProbeAtBlock(hash);
 
-      if(socketProbe == null)
-      {
-        return null;
-      }
+      StopWatch.Stop();
+      TimeSpan ts = StopWatch.Elapsed;
+      string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+        ts.Hours, 
+        ts.Minutes, 
+        ts.Seconds, 
+        ts.Milliseconds / 10);
+      Debug.WriteLine("Runtime " + elapsedTime);
+      StopWatch.Reset();
 
-      return socketProbe.Block;
+
+
+      return socketProbe == null ? null : socketProbe.Block;
     }
 
     ChainSocket.SocketProbe GetProbeAtBlock(UInt256 hash)
@@ -155,6 +170,14 @@ namespace BToken.Chaining
       }
     }
     
+    void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash)
+    {
+      ChainBlock chainBlock = GetBlock(headerHash);
+
+      IBlockPayload payload = BlockPayloadParser.Parse(networkBlock.Payload);
+      chainBlock.InsertPayload(payload);
+    }
+
     bool IsTimestampExpired(ulong unixTimeSeconds)
     {
       const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;

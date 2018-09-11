@@ -10,19 +10,22 @@ using System.Windows.Forms;
 using System.Threading.Tasks;
 using System.Net;
 
+using BToken.Bitcoin;
+
 namespace BToken
 {
   public partial class Form1 : Form
   {
-    Bitcoin Node;
+    BitcoinNode Node;
 
 
     public Form1()
     {
       InitializeComponent();
+
       try
       {
-        Node = new Bitcoin();
+        Node = new BitcoinNode();
         Task runNodeTask = Node.startAsync();
       }
       catch (Exception ex)
@@ -45,10 +48,10 @@ namespace BToken
 
     private async void button_GetBlock_Click(object sender, EventArgs e)
     {
-      List<UInt256> headers = new List<UInt256>() {
+      List<UInt256> hashes = new List<UInt256>() {
         new UInt256("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
       };
-      await Node.Network.GetBlockAsync(headers);
+      await Node.Network.GetBlockAsync(hashes);
 
       // await Blocks
     }
