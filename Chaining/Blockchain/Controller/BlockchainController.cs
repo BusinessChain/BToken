@@ -112,7 +112,7 @@ namespace BToken.Chaining
 
         while (socket != null)
         {
-          socket.Reset();
+          socket.Probe.Reset();
 
           CreateBlockLocationBatchesPerSocket(socket.Probe, blockLocationBatches);
 

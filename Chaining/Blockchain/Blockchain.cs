@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -24,8 +22,6 @@ namespace BToken.Chaining
 
     ChainSocket SocketMain;
     HeaderLocator Locator;
-
-    Stopwatch StopWatch = new Stopwatch();
 
 
     public Blockchain(Network network, ChainBlock genesisBlock, List<BlockLocation> checkpoints, IBlockPayloadParser blockPayloadParser)
@@ -61,90 +57,51 @@ namespace BToken.Chaining
 
     ChainBlock GetBlock(UInt256 hash)
     {
-      StopWatch.Start();
-
       ChainSocket.SocketProbe socketProbe = GetProbeAtBlock(hash);
-
-      StopWatch.Stop();
-      TimeSpan ts = StopWatch.Elapsed;
-      string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
-        ts.Hours, 
-        ts.Minutes, 
-        ts.Seconds, 
-        ts.Milliseconds / 10);
-      Debug.WriteLine("Runtime " + elapsedTime);
-      StopWatch.Reset();
-
-
-
+           
       return socketProbe == null ? null : socketProbe.Block;
     }
 
-    ChainSocket.SocketProbe GetProbeAtBlock(UInt256 hash)
+    enum SearchMode { NORMAL, PAYLOAD_INSERTION };
+    ChainSocket.SocketProbe GetProbeAtBlock(UInt256 hash, SearchMode searchMode)
     {
       ChainSocket socket = SocketMain;
-      ResetProbes();
+      ChainSocket.SocketProbe probe = null;
 
-      while (socket != null)
+      while (true)
       {
-        if (socket.Probe.IsHash(hash))
+        if(socket == null)
         {
-          return socket.Probe;
+          return null;
         }
 
-        if (socket.Probe.IsGenesis())
+        if (searchMode == SearchMode.NORMAL)
         {
-          socket.Bypass();
-
-          if (socket.IsWeakerSocketProbeStrongerThan(socket.StrongerSocketActive))
-          {
-            socket = socket.WeakerSocketActive;
-          }
-          else
-          {
-            socket = socket.StrongerSocket;
-          }
-          continue;
+          probe = socket.GetProbeAtBlock_NormalSearch(hash);
+        }
+        else if (searchMode == SearchMode.PAYLOAD_INSERTION)
+        {
+          probe = socket.GetProbeAtBlock_UnassignedPayloadSearch(hash);
         }
 
-        if (socket.IsProbeStrongerThan(socket.StrongerSocket))
+        if(probe != null)
         {
-          if (socket.IsWeakerSocketProbeStronger())
-          {
-            socket = socket.WeakerSocketActive;
-          }
-
-          socket.Probe.Push();
-        }
-        else
-        {
-          socket = socket.StrongerSocket;
+          return probe;
         }
 
-      }
-
-      return null;
-    }
-    void ResetProbes()
-    {
-      ChainSocket socket = SocketMain;
-
-      while (socket != null)
-      {
-        socket.Reset();
         socket = socket.WeakerSocket;
       }
     }
 
     void InsertHeader(NetworkHeader header, UInt256 headerHash)
     {
-      ValidateHeader(header, headerHash, out ChainSocket.SocketProbe socketProbe);
+      ValidateHeader(header, headerHash, out ChainSocket.SocketProbe socketProbeAtHeaderPrevious);
 
-      ChainSocket socket = socketProbe.InsertHeader(header, headerHash);
+      ChainSocket socket = socketProbeAtHeaderPrevious.InsertHeader(header, headerHash);
 
       if (socket == SocketMain)
       {
-        Locator.Update(socket.Height, socket.Hash);
+        Locator.Update(socket.HeightBlockTip, socket.HashBlockTip);
         return;
       }
 
@@ -184,7 +141,7 @@ namespace BToken.Chaining
       return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
     }
 
-    uint GetHeight() => SocketMain.Height;
+    uint GetHeight() => SocketMain.HeightBlockTip;
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {

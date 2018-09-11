@@ -32,8 +32,8 @@ namespace BToken.Chaining
 
         public void Reset()
         {
-          Block = Socket.Block;
-          Hash = Socket.Hash;
+          Block = Socket.BlockTip;
+          Hash = Socket.HashBlockTip;
           AccumulatedDifficulty = Socket.AccumulatedDifficulty;
 
           Depth = 0;
@@ -139,7 +139,7 @@ namespace BToken.Chaining
           blockPrevious.BlocksNext.Add(block);
         }
 
-        public uint GetHeight() => Socket.Height - Depth;
+        public uint GetHeight() => Socket.HeightBlockTip - Depth;
         public bool IsHash(UInt256 hash) => Hash.isEqual(hash);
         public bool IsGenesis() => Block == Socket.BlockGenesis;
         public bool IsPayloadAssigned() => Block.IsPayloadAssigned();
