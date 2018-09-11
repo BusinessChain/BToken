@@ -6,24 +6,21 @@ using System.Threading.Tasks;
 
 using BToken.Chaining;
 
-namespace BToken
+namespace BToken.Bitcoin
 {
-  partial class Bitcoin
+  public class BitcoinBlockPayloadParser : Blockchain.IBlockPayloadParser
   {
-    class BitcoinBlockPayloadParser : Blockchain.IBlockPayloadParser
+    public Blockchain.IBlockPayload Parse(byte[] payloadStream)
     {
-      public Blockchain.IBlockPayload Parse(byte[] payloadStream)
+      var bitcoinTXs = new List<BitcoinTX>();
+
+      int startIndex = 0;
+      while (startIndex < payloadStream.Length)
       {
-        var bitcoinTXs = new List<BitcoinTX>();
-
-        int startIndex = 0;
-        while (startIndex < payloadStream.Length)
-        {
-          bitcoinTXs.Add(BitcoinTX.Parse(payloadStream, ref startIndex));
-        }
-
-        return new BitcoinBlockPayload(bitcoinTXs);
+        bitcoinTXs.Add(BitcoinTX.Parse(payloadStream, ref startIndex));
       }
+
+      return new BitcoinBlockPayload(bitcoinTXs);
     }
   }
 }

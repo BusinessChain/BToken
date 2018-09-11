@@ -5,7 +5,7 @@ using System.Text;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain
+  public partial class Blockchain
   {
     partial class ChainSocket
     {

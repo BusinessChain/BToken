@@ -56,12 +56,11 @@ namespace BToken.Chaining
         Task[] downloadBlocksTask = createChannelTasks.Select(async c =>
         {
           BlockchainChannel channel = await c;
-
+          
           while (blockLocationBatches.Any())
           {
-            List<BlockLocation> blockLocations = blockLocationBatches[0];
-            blockLocationBatches.RemoveAt(0);
-            Debug.WriteLine("Channel " + channel.GetHashCode() + " adds block " + Thread.CurrentThread.ManagedThreadId);
+            List<BlockLocation> blockLocations = blockLocationBatches.Last();
+            blockLocationBatches.RemoveAt(blockLocationBatches.Count - 1);
             await channel.ExecuteSessionAsync(new SessionBlockDownload(Blockchain, blockLocations));
           }
         }).ToArray();

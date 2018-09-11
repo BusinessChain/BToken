@@ -11,7 +11,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain
+  public partial class Blockchain
   {
     partial class BlockchainController
     {
@@ -39,6 +39,9 @@ namespace BToken.Chaining
             BlockLocation blockLocation = BlockLocations[i];
             BlocksDownloaded.Add(await GetBlockAsync(blockLocation.Hash));
             BlockLocations.RemoveAt(i);
+            
+            //Check if we received the block we requested.
+            Debug.WriteLine("Channel " + Channel.GetHashCode() + " adds block " + Thread.CurrentThread.ManagedThreadId);
           }
 
           InsertDownloadedBlocksInChain();
@@ -52,7 +55,7 @@ namespace BToken.Chaining
 
             try
             {
-              Blockchain.InsertBlockPayload(block, headerHash);
+              Blockchain.InsertBlock(block, headerHash);
             }
             catch (BlockchainException ex)
             {

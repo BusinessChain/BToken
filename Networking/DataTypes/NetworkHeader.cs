@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace BToken.Networking
 {
-  class NetworkHeader
+  public class NetworkHeader
   {
     public UInt32 Version { get; private set; }
     public UInt256 HashPrevious { get; private set; }

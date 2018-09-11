@@ -8,7 +8,7 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BToken.Networking
 {
-  partial class Network
+  public partial class Network
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;

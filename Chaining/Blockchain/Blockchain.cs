@@ -11,7 +11,7 @@ namespace BToken.Chaining
   public enum BlockCode { ORPHAN, DUPLICATE, INVALID, EXPIRED };
 
 
-  partial class Blockchain
+  public partial class Blockchain
   {
     Network Network;
     BlockchainController Controller;
@@ -42,9 +42,9 @@ namespace BToken.Chaining
 
       Locator = new HeaderLocator(this, SocketMain.Probe);
     }
-    static UInt256 CalculateHash(byte[] headerBytes)
+    static UInt256 CalculateHash(byte[] byteStream)
     {
-      byte[] hashBytes = Hashing.sha256d(headerBytes);
+      byte[] hashBytes = Hashing.sha256d(byteStream);
       return new UInt256(hashBytes);
     }
 
@@ -157,7 +157,7 @@ namespace BToken.Chaining
       }
     }
     
-    void InsertBlockPayload(NetworkBlock networkBlock, UInt256 headerHash)
+    void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash)
     {
       ChainBlock chainBlock = GetBlock(headerHash);
 

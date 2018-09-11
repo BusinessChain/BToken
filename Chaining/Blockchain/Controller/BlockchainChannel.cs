@@ -10,7 +10,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain
+  public partial class Blockchain
   {
     partial class BlockchainController
     {
@@ -81,7 +81,7 @@ namespace BToken.Chaining
         {
           NetworkMessage networkMessage = await Buffer.ReceiveAsync(cancellationToken);
 
-          return networkMessage ?? throw new NetworkException("Network closed channel."); ;
+          return networkMessage ?? throw new NetworkException("Network closed channel.");
         }
         
         async Task ProcessInventoryMessageAsync(InvMessage invMessage)

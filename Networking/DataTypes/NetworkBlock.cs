@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  class NetworkBlock
+  public class NetworkBlock
   {
     public NetworkHeader Header { get; private set; }
     public byte[] Payload { get; private set; }

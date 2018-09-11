@@ -5,12 +5,12 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain
+  public partial class Blockchain
   {
     public interface IBlockPayload
     {
       void ParsePayload(byte[] stream);
-      UInt256 ComputeHash();
+      UInt256 GetPayloadHash();
     }
 
     public class ChainBlock
@@ -32,7 +32,7 @@ namespace BToken.Chaining
         Header = new NetworkHeader(
           version,
           hashPrevious,
-          payload.ComputeHash(),
+          payload.GetPayloadHash(),
           unixTimeSeconds,
           nBits,
           nonce);
@@ -47,12 +47,14 @@ namespace BToken.Chaining
 
       public void InsertPayload(IBlockPayload payload)
       {
-        BlockPayload = payload;
+        UInt256 payloadHash = payload.GetPayloadHash();
 
-        if (!BlockPayload.ComputeHash().isEqual(Header.PayloadHash))
+        if (!payloadHash.isEqual(Header.PayloadHash))
         {
           throw new BlockchainException(BlockCode.INVALID);
         }
+
+        BlockPayload = payload;
       }
 
       public bool IsPayloadAssigned()
