@@ -69,41 +69,12 @@ namespace BToken.Chaining
         Debug.WriteLine("All channels completed session");
       }
 
-
-      void CreateChannels(int count)
-      {
-        var createChannelTasks = new List<Task<BlockchainChannel>>();
-
-        for (int i = 0; i < count - 1; i++)
-        {
-          createChannelTasks.Add(CreateChannelAsync());
-        }
-
-        //createChannelTasks.Select(async c =>
-        //{
-        //  BlockchainChannel channel = await c;
-        //  Task startMessageListenerTask = channel.StartMessageListenerAsync();
-        //}).ToArray();
-      }
       async Task<BlockchainChannel> CreateChannelAsync()
       {
         BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainChannelAsync(Blockchain.GetHeight());
         BlockchainChannel channel = new BlockchainChannel(buffer, this);
         Channels.Add(channel);
         return channel;
-      }
-
-      async Task RequestBlockDownloadAsync()
-      {
-        // Use concurrent collection instead of list
-        List<List<BlockLocation>> blockLocationBatches = CreateBlockLocationBatches();
-
-        var downloadBlocksTasks = new List<Task>();
-        foreach(BlockchainChannel channel in Channels)
-        {
-          downloadBlocksTasks.Add(channel.DownloadBlocksAsync(blockLocationBatches));
-        }
-        await Task.WhenAll(downloadBlocksTasks);
       }
       List<List<BlockLocation>> CreateBlockLocationBatches()
       {
@@ -112,16 +83,16 @@ namespace BToken.Chaining
 
         while (socket != null)
         {
-          socket.Reset();
+          socket.HeaderProbe.Reset();
 
-          CreateBlockLocationBatchesPerSocket(socket.Probe, blockLocationBatches);
+          CreateBlockLocationBatchesPerSocket(socket.HeaderProbe, blockLocationBatches);
 
           socket = socket.WeakerSocket;
         }
 
         return blockLocationBatches;
       }
-      void CreateBlockLocationBatchesPerSocket(ChainSocket.SocketProbe socketProbe, List<List<BlockLocation>> blockLocationBatches)
+      void CreateBlockLocationBatchesPerSocket(ChainSocket.SocketProbeHeader socketProbe, List<List<BlockLocation>> blockLocationBatches)
       {
         bool finalBatch = false;
 
@@ -131,7 +102,7 @@ namespace BToken.Chaining
           blockLocationBatches.Add(blockLocationBatch);
         }
       }
-      List<BlockLocation> CreateBlockLocationBatch(ChainSocket.SocketProbe socketProbe, out bool finalList)
+      List<BlockLocation> CreateBlockLocationBatch(ChainSocket.SocketProbeHeader socketProbe, out bool finalList)
       {
         const uint BATCH_SIZE = 5;
         uint batchDepth = 0;
@@ -159,8 +130,7 @@ namespace BToken.Chaining
         finalList = false;
         return blockLocationBatch;
       }
-
-
+      
       async Task<BlockchainChannel> RenewChannelAsync(BlockchainChannel channel)
       {
         CloseChannel(channel);

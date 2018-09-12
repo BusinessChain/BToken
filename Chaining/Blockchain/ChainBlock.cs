@@ -47,9 +47,7 @@ namespace BToken.Chaining
 
       public void InsertPayload(IBlockPayload payload)
       {
-        UInt256 payloadHash = payload.GetPayloadHash();
-
-        if (!payloadHash.isEqual(Header.PayloadHash))
+        if (!payload.GetPayloadHash().isEqual(Header.PayloadHash))
         {
           throw new BlockchainException(BlockCode.INVALID);
         }
@@ -57,10 +55,7 @@ namespace BToken.Chaining
         BlockPayload = payload;
       }
 
-      public bool IsPayloadAssigned()
-      {
-        return BlockPayload != null;
-      }
+      public bool IsPayloadAssigned() => BlockPayload != null;
     }
   }
 }

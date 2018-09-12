@@ -11,19 +11,19 @@ namespace BToken.Chaining
     {
       Blockchain Blockchain;
 
+      ChainBlock BlockTip;
+      ChainBlock BlockNoPayloadDeepest;
       ChainBlock BlockGenesis;
-      ChainBlock Block;
-      public UInt256 Hash { get; private set; }
+      public UInt256 HashBlockTip { get; private set; }
 
       double AccumulatedDifficulty;
-      public uint Height { get; private set; }
+      public uint HeightBlockTip { get; private set; }
 
       public ChainSocket StrongerSocket { get; private set; }
-      public ChainSocket StrongerSocketActive { get; private set; }
       public ChainSocket WeakerSocket { get; private set; }
-      public ChainSocket WeakerSocketActive { get; private set; }
 
-      public SocketProbe Probe { get; private set; }
+      public SocketProbeHeader HeaderProbe { get; private set; }
+      SocketProbePayload PayloadProbe;
 
 
 
@@ -39,66 +39,109 @@ namespace BToken.Chaining
         Blockchain = blockchain;
 
         BlockGenesis = block;
-        Block = block;
-        Hash = hash;
+        BlockTip = block;
+        HashBlockTip = hash;
 
+        if(!block.IsPayloadAssigned())
+        {
+          BlockNoPayloadDeepest = block;
+        }
+        
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(block.Header.NBits);
-        Height = height;
+        HeightBlockTip = height;
 
-        Probe = new SocketProbe(this);
+        HeaderProbe = new SocketProbeHeader(this);
+        PayloadProbe = new SocketProbePayload(this);
       }
 
-      public bool IsWeakerSocketProbeStrongerThan(ChainSocket socket)
+      public bool InsertBlockPayload(IBlockPayload payload, UInt256 headerHash)
       {
-        return WeakerSocketActive != null && WeakerSocketActive.IsProbeStrongerThan(socket);
-      }
-      public bool IsWeakerSocketProbeStronger()
-      {
-        return WeakerSocketActive != null && WeakerSocketActive.IsProbeStrongerThan(this);
-      }
-      public void Bypass()
-      {
-        if (StrongerSocketActive != null)
+        PayloadProbe.GoToBlock(BlockNoPayloadDeepest);
+
+        while (true)
         {
-          StrongerSocketActive.WeakerSocketActive = WeakerSocketActive;
-        }
-        if (WeakerSocketActive != null)
-        {
-          WeakerSocketActive.StrongerSocketActive = StrongerSocketActive;
+          if (PayloadProbe.IsHash(headerHash))
+          {
+            PayloadProbe.InsertPayload(payload);
+
+            if(PayloadProbe.IsBlockNoPayloadDeepest())
+            {
+              BlockNoPayloadDeepest = GetNextUpperBlockNoPayload();
+            }
+
+            return true;
+          }
+
+          if (PayloadProbe.IsTip())
+          {
+            return false;
+          }
+
+          PayloadProbe.Pull();
         }
       }
-      public void Reset()
+      ChainBlock GetNextUpperBlockNoPayload()
       {
-        Probe.Reset();
+        while(true)
+        {
+          if(PayloadProbe.IsTip())
+          {
+            return null;
+          }
 
-        StrongerSocketActive = StrongerSocket;
-        WeakerSocketActive = WeakerSocket;
+          PayloadProbe.Pull();
+
+          if(!PayloadProbe.IsPayloadAssigned())
+          {
+            return PayloadProbe.Block;
+          }
+        }
       }
 
+      public SocketProbeHeader GetProbeAtBlock(UInt256 hash)
+      {
+        HeaderProbe.Reset();
+
+        while (true)
+        {
+          if (HeaderProbe.IsHash(hash))
+          {
+            return HeaderProbe;
+          }
+
+          if (HeaderProbe.IsGenesis())
+          {
+            return null;
+          }
+
+          HeaderProbe.Push();
+        }
+      }
+      
       public void ConnectWeakerSocket(ChainSocket weakerSocket)
       {
         weakerSocket.WeakerSocket = WeakerSocket;
-        weakerSocket.WeakerSocketActive = WeakerSocket;
-
         weakerSocket.StrongerSocket = this;
-        weakerSocket.StrongerSocketActive = this;
 
         if (WeakerSocket != null)
         {
           WeakerSocket.StrongerSocket = weakerSocket;
-          WeakerSocket.StrongerSocketActive = weakerSocket;
         }
 
         WeakerSocket = weakerSocket;
-        WeakerSocketActive = weakerSocket;
       }
       
       void ConnectNextBlock(ChainBlock block, UInt256 headerHash)
       {
-        Block = block;
-        Hash = headerHash;
+        BlockTip = block;
+        HashBlockTip = headerHash;
         AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
-        Height++;
+        HeightBlockTip++;
+
+        if(BlockNoPayloadDeepest == null && !block.IsPayloadAssigned())
+        {
+          BlockNoPayloadDeepest = block;
+        }
       }
 
       void Disconnect()
@@ -106,18 +149,14 @@ namespace BToken.Chaining
         if (StrongerSocket != null)
         {
           StrongerSocket.WeakerSocket = WeakerSocket;
-          StrongerSocket.WeakerSocketActive = WeakerSocket;
         }
         if (WeakerSocket != null)
         {
           WeakerSocket.StrongerSocket = StrongerSocket;
-          WeakerSocket.StrongerSocketActive = StrongerSocket;
         }
 
         StrongerSocket = null;
-        StrongerSocketActive = null;
         WeakerSocket = null;
-        WeakerSocketActive = null;
       }
       
       public bool IsStrongerThan(ChainSocket socket)
@@ -134,7 +173,7 @@ namespace BToken.Chaining
         {
           return true;
         }
-        return Probe.IsStrongerThan(socket.Probe);
+        return HeaderProbe.IsStrongerThan(socket.HeaderProbe);
       }
             
     }

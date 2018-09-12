@@ -11,20 +11,19 @@ namespace BToken.Chaining
   {
     partial class ChainSocket
     {
-      public class SocketProbe
+      public class SocketProbeHeader
       {
-        public ChainSocket Socket { get; private set; }
+        ChainSocket Socket;
         
         public ChainBlock Block;
         public UInt256 Hash;
-        public double AccumulatedDifficulty;
 
         public uint Depth;
         bool IsDeeperThanCheckpoint;
+        public double AccumulatedDifficulty;
 
 
-
-        public SocketProbe(ChainSocket socket)
+        public SocketProbeHeader(ChainSocket socket)
         {
           Socket = socket;
           Reset();
@@ -32,8 +31,8 @@ namespace BToken.Chaining
 
         public void Reset()
         {
-          Block = Socket.Block;
-          Hash = Socket.Hash;
+          Block = Socket.BlockTip;
+          Hash = Socket.HashBlockTip;
           AccumulatedDifficulty = Socket.AccumulatedDifficulty;
 
           Depth = 0;
@@ -51,7 +50,7 @@ namespace BToken.Chaining
 
           Depth++;
         }
-        
+
         public ChainSocket InsertHeader(NetworkHeader header, UInt256 headerHash)
         {
           ValidateHeader(header, headerHash);
@@ -139,20 +138,11 @@ namespace BToken.Chaining
           blockPrevious.BlocksNext.Add(block);
         }
 
-        public uint GetHeight() => Socket.Height - Depth;
+        public uint GetHeight() => Socket.HeightBlockTip - Depth;
         public bool IsHash(UInt256 hash) => Hash.isEqual(hash);
         public bool IsGenesis() => Block == Socket.BlockGenesis;
         public bool IsPayloadAssigned() => Block.IsPayloadAssigned();
-        public bool IsStrongerThan(SocketProbe probe)
-        {
-          if(probe == null)
-          {
-            return false;
-          }
-
-          return AccumulatedDifficulty > probe.AccumulatedDifficulty;
-        }
-
+        public bool IsStrongerThan(SocketProbeHeader probe) => probe == null ? false : AccumulatedDifficulty > probe.AccumulatedDifficulty;
         public BlockLocation GetBlockLocation() => new BlockLocation(GetHeight(), Hash);
       }
     }

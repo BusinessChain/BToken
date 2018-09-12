@@ -15,7 +15,7 @@ namespace BToken.Chaining
         static readonly UInt256 DIFFICULTY_1_TARGET = new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000");
         const double MAX_TARGET = 2.695994666715064E67;
 
-        public static UInt32 GetNextTargetBits(SocketProbe probe)
+        public static UInt32 GetNextTargetBits(SocketProbeHeader probe)
         {
           uint nextHeight = probe.GetHeight() + 1;
           if ((nextHeight % RETARGETING_BLOCK_INTERVAL) == 0)
@@ -27,7 +27,7 @@ namespace BToken.Chaining
 
           return probe.Block.Header.NBits;
         }
-        static UInt256 GetNextTarget(SocketProbe probe)
+        static UInt256 GetNextTarget(SocketProbeHeader probe)
         {
           ChainBlock headerIntervalStart = GetBlockPrevious(probe.Block, RETARGETING_BLOCK_INTERVAL - 1);
           ulong actualTimespan = Limit(probe.Block.Header.UnixTimeSeconds - headerIntervalStart.Header.UnixTimeSeconds);

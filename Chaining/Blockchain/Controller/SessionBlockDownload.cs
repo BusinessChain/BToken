@@ -44,9 +44,7 @@ namespace BToken.Chaining
             Debug.WriteLine("Channel " + Channel.GetHashCode() + " downloaded block at height " + blockLocation.Height);
           }
 
-
           InsertDownloadedBlocksInChain();
-
         }
 
         void InsertDownloadedBlocksInChain()
