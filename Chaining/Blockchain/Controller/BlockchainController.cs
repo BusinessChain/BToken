@@ -112,16 +112,16 @@ namespace BToken.Chaining
 
         while (socket != null)
         {
-          socket.Probe.Reset();
+          socket.HeaderProbe.Reset();
 
-          CreateBlockLocationBatchesPerSocket(socket.Probe, blockLocationBatches);
+          CreateBlockLocationBatchesPerSocket(socket.HeaderProbe, blockLocationBatches);
 
           socket = socket.WeakerSocket;
         }
 
         return blockLocationBatches;
       }
-      void CreateBlockLocationBatchesPerSocket(ChainSocket.SocketProbe socketProbe, List<List<BlockLocation>> blockLocationBatches)
+      void CreateBlockLocationBatchesPerSocket(ChainSocket.SocketProbeHeader socketProbe, List<List<BlockLocation>> blockLocationBatches)
       {
         bool finalBatch = false;
 
@@ -131,7 +131,7 @@ namespace BToken.Chaining
           blockLocationBatches.Add(blockLocationBatch);
         }
       }
-      List<BlockLocation> CreateBlockLocationBatch(ChainSocket.SocketProbe socketProbe, out bool finalList)
+      List<BlockLocation> CreateBlockLocationBatch(ChainSocket.SocketProbeHeader socketProbe, out bool finalList)
       {
         const uint BATCH_SIZE = 5;
         uint batchDepth = 0;

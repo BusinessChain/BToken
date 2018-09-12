@@ -66,6 +66,7 @@
     <Compile Include="Bitcoin\BitcoinTX.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\HeaderLocator.cs" />
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
+    <Compile Include="Chaining\Blockchain\ChainSocket\SocketProbePayload.cs" />
     <Compile Include="Chaining\Blockchain\CheckpointManager.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainChannel.cs" />
@@ -76,7 +77,7 @@
     <Compile Include="Chaining\Blockchain\IBlockPayloadParser.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\ChainSocket.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainException.cs" />
-    <Compile Include="Chaining\Blockchain\ChainSocket\SocketProbe.cs" />
+    <Compile Include="Chaining\Blockchain\ChainSocket\SocketProbeHeader.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\Hashing.cs" />
     <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
