@@ -36,11 +36,16 @@ namespace BToken.Chaining
       SocketMain = new ChainSocket(
         blockchain: this,
         block: genesisBlock,
-        hash: CalculateHash(genesisBlock.Header.getBytes()),
+        hash: GetHashBlock(genesisBlock),
         accumulatedDifficultyPrevious: 0,
         height: 0);
 
       Locator = new HeaderLocator(this, SocketMain.HeaderProbe);
+    }
+    
+    public async Task startAsync()
+    {
+      await Controller.StartAsync();
     }
 
     static UInt256 GetHashBlock(ChainBlock block)
@@ -50,18 +55,12 @@ namespace BToken.Chaining
         return block.BlocksNext[0].Header.HashPrevious;
       }
 
-      return CalculateHash(block.Header.getBytes());
-    }
-    static UInt256 CalculateHash(byte[] byteStream) => new UInt256(Hashing.sha256d(byteStream));
-
-    public async Task startAsync()
-    {
-      await Controller.StartAsync();
+      return new UInt256(Hashing.SHA256d(block.Header.getBytes()));
     }
 
     public List<BlockLocation> GetHeaderLocator() => Locator.BlockLocations;
 
-    ChainBlock GetBlock(UInt256 hash)
+    public ChainBlock GetBlock(UInt256 hash)
     {
       ChainSocket.SocketProbeHeader socketProbe = GetProbeAtBlock(hash);
            
@@ -91,7 +90,7 @@ namespace BToken.Chaining
       }
     }
 
-    void InsertHeader(NetworkHeader header, UInt256 headerHash)
+    public void InsertHeader(NetworkHeader header, UInt256 headerHash)
     {
       ValidateHeader(header, headerHash, out ChainSocket.SocketProbeHeader socketProbeAtHeaderPrevious);
 
@@ -125,7 +124,7 @@ namespace BToken.Chaining
       }
     }
 
-    bool InsertBlock(NetworkBlock networkBlock, UInt256 headerHash)
+    public bool InsertBlock(NetworkBlock networkBlock, UInt256 headerHash)
     {
       IBlockPayload payload = BlockPayloadParser.Parse(networkBlock.Payload);
       ChainSocket socket = SocketMain;
@@ -152,7 +151,7 @@ namespace BToken.Chaining
       return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
     }
 
-    uint GetHeight() => SocketMain.HeightBlockTip;
+    public uint GetHeight() => SocketMain.HeightBlockTip;
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {

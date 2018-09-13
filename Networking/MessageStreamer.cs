@@ -68,7 +68,7 @@ namespace BToken.Networking
 
       byte[] createChecksum(byte[] payload)
       {
-        return Hashing.sha256d(payload).Take(ChecksumSize).ToArray();
+        return Hashing.SHA256d(payload).Take(ChecksumSize).ToArray();
       }
 
       public async Task<NetworkMessage> ReadAsync(CancellationToken cancellationToken)

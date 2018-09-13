@@ -6,18 +6,15 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain
+  public class BlockLocation
   {
-    public class BlockLocation
-    {
-      public uint Height;
-      public UInt256 Hash;
+    public uint Height;
+    public UInt256 Hash;
 
-      public BlockLocation(uint height, UInt256 hash)
-      {
-        Height = height;
-        Hash = hash;
-      }
+    public BlockLocation(uint height, UInt256 hash)
+    {
+      Height = height;
+      Hash = hash;
     }
   }
 }

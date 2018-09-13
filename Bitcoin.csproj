@@ -71,6 +71,7 @@
     <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainChannel.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainSession.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\BlockPayloadLocator.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\Blockchain\IBlockPayloadParser.cs" />

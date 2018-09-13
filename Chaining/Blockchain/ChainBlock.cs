@@ -5,57 +5,54 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public interface IBlockPayload
   {
-    public interface IBlockPayload
+    void ParsePayload(byte[] stream);
+    UInt256 GetPayloadHash();
+  }
+
+  public class ChainBlock
+  {
+    public NetworkHeader Header;
+
+    public ChainBlock BlockPrevious;
+    public List<ChainBlock> BlocksNext = new List<ChainBlock>();
+    IBlockPayload BlockPayload;
+
+    public ChainBlock(
+      UInt32 version,
+      UInt256 hashPrevious,
+      UInt32 unixTimeSeconds,
+      UInt32 nBits,
+      UInt32 nonce,
+      IBlockPayload payload)
     {
-      void ParsePayload(byte[] stream);
-      UInt256 GetPayloadHash();
+      Header = new NetworkHeader(
+        version,
+        hashPrevious,
+        payload.GetPayloadHash(),
+        unixTimeSeconds,
+        nBits,
+        nonce);
+
+      InsertPayload(payload);
     }
 
-    public class ChainBlock
+    public ChainBlock(NetworkHeader header)
     {
-      public NetworkHeader Header;
-
-      public ChainBlock BlockPrevious;
-      public List<ChainBlock> BlocksNext = new List<ChainBlock>();
-      IBlockPayload BlockPayload;
-
-      public ChainBlock(
-        UInt32 version,
-        UInt256 hashPrevious,
-        UInt32 unixTimeSeconds,
-        UInt32 nBits,
-        UInt32 nonce,
-        IBlockPayload payload)
-      {
-        Header = new NetworkHeader(
-          version,
-          hashPrevious,
-          payload.GetPayloadHash(),
-          unixTimeSeconds,
-          nBits,
-          nonce);
-
-        InsertPayload(payload);
-      }
-      
-      public ChainBlock(NetworkHeader header)
-      {
-        Header = header;
-      }
-
-      public void InsertPayload(IBlockPayload payload)
-      {
-        if (!payload.GetPayloadHash().isEqual(Header.PayloadHash))
-        {
-          throw new BlockchainException(BlockCode.INVALID);
-        }
-
-        BlockPayload = payload;
-      }
-
-      public bool IsPayloadAssigned() => BlockPayload != null;
+      Header = header;
     }
+
+    public void InsertPayload(IBlockPayload payload)
+    {
+      if (!payload.GetPayloadHash().isEqual(Header.PayloadHash))
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+
+      BlockPayload = payload;
+    }
+
+    public bool IsPayloadAssigned() => BlockPayload != null;
   }
 }
