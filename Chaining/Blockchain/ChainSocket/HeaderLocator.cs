@@ -78,8 +78,7 @@ namespace BToken.Chaining
         }
 
       }
-
-
+      
     }
   }
 }

@@ -32,21 +32,58 @@ namespace BToken.Chaining
           Block = Block.BlocksNext.First();
           Hash = GetHashBlock(Block);
         }
-        public void GoToBlock(ChainBlock block)
+        
+        public bool InsertPayload(IBlockPayload payload, UInt256 headerHash)
+        {
+          GoToBlock(Socket.BlockUnassignedPayloadDeepest);
+
+          while (true)
+          {
+            if (IsHash(headerHash))
+            {
+              Block.InsertPayload(payload);
+
+              if (IsBlockNoPayloadDeepest())
+              {
+                Socket.BlockUnassignedPayloadDeepest = GetNextUpperBlockNoPayload();
+              }
+
+              return true;
+            }
+
+            if (IsTip())
+            {
+              return false;
+            }
+
+            Pull();
+          }
+        }
+        void GoToBlock(ChainBlock block)
         {
           Block = block;
           Hash = GetHashBlock(block);
         }
-        UInt256 GetHashBlock(ChainBlock block) => block == Socket.BlockTip ? Socket.HashBlockTip : block.BlocksNext[0].Header.HashPrevious;
-
-        public void InsertPayload(IBlockPayload payload)
+        ChainBlock GetNextUpperBlockNoPayload()
         {
-          Block.InsertPayload(payload);
+          while (true)
+          {
+            if (IsTip())
+            {
+              return null;
+            }
+
+            Pull();
+
+            if (!IsPayloadAssigned())
+            {
+              return Block;
+            }
+          }
         }
 
         public bool IsHash(UInt256 hash) => Hash.isEqual(hash);
-        public bool IsGenesis() => Block == Socket.BlockGenesis;
-        public bool IsBlockNoPayloadDeepest() => Block == Socket.BlockNoPayloadDeepest;
+        public bool IsBlockNoPayloadDeepest() => Block == Socket.BlockUnassignedPayloadDeepest;
         public bool IsTip() => Block == Socket.BlockTip;
         public bool IsPayloadAssigned() => Block.IsPayloadAssigned();
       }

@@ -108,7 +108,7 @@ namespace BToken.Chaining
           }          
 
         }
-        bool IsBlockConnectedToHash(UInt256 hash) => Block.BlocksNext.Any(b => CalculateHash(b.Header.getBytes()).isEqual(hash));
+        bool IsBlockConnectedToHash(UInt256 hash) => Block.BlocksNext.Any(b => GetHashBlock(b).isEqual(hash));
         uint GetMedianTimePast()
         {
           const int MEDIAN_TIME_PAST = 11;

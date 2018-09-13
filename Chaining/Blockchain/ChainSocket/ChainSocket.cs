@@ -12,9 +12,9 @@ namespace BToken.Chaining
       Blockchain Blockchain;
 
       ChainBlock BlockTip;
-      ChainBlock BlockNoPayloadDeepest;
-      ChainBlock BlockGenesis;
       public UInt256 HashBlockTip { get; private set; }
+      ChainBlock BlockUnassignedPayloadDeepest;
+      ChainBlock BlockGenesis;
 
       double AccumulatedDifficulty;
       public uint HeightBlockTip { get; private set; }
@@ -44,7 +44,7 @@ namespace BToken.Chaining
 
         if(!block.IsPayloadAssigned())
         {
-          BlockNoPayloadDeepest = block;
+          BlockUnassignedPayloadDeepest = block;
         }
         
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(block.Header.NBits);
@@ -56,47 +56,65 @@ namespace BToken.Chaining
 
       public bool InsertBlockPayload(IBlockPayload payload, UInt256 headerHash)
       {
-        PayloadProbe.GoToBlock(BlockNoPayloadDeepest);
-
-        while (true)
-        {
-          if (PayloadProbe.IsHash(headerHash))
-          {
-            PayloadProbe.InsertPayload(payload);
-
-            if(PayloadProbe.IsBlockNoPayloadDeepest())
-            {
-              BlockNoPayloadDeepest = GetNextUpperBlockNoPayload();
-            }
-
-            return true;
-          }
-
-          if (PayloadProbe.IsTip())
-          {
-            return false;
-          }
-
-          PayloadProbe.Pull();
-        }
+        return PayloadProbe.InsertPayload(payload, headerHash);
       }
-      ChainBlock GetNextUpperBlockNoPayload()
+
+      public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize)
       {
-        while(true)
+        if (IsNoPayloadUnassigned())
         {
-          if(PayloadProbe.IsTip())
+          return new List<UInt256>();
+        }
+
+        return GetLocatorBatchBlocksUnassignedPayload(batchSize, BlockUnassignedPayloadDeepest.Header.HashPrevious);
+      }
+      public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize, UInt256 locationStart)
+      {
+        if (IsNoPayloadUnassigned()) { return new List<UInt256>(); }
+
+        ChainBlock startBlock = GoToLocationStartBlock(BlockUnassignedPayloadDeepest, locationStart);
+        return CollectBlocksUnassignedPayload(startBlock, batchSize);
+      }
+      ChainBlock GoToLocationStartBlock(ChainBlock startBlock, UInt256 locationStart)
+      {
+        while (!startBlock.Header.HashPrevious.isEqual(locationStart))
+        {
+          if (startBlock == BlockTip)
           {
             return null;
           }
 
-          PayloadProbe.Pull();
-
-          if(!PayloadProbe.IsPayloadAssigned())
-          {
-            return PayloadProbe.Block;
-          }
+          startBlock = startBlock.BlocksNext[0];
         }
+
+        return startBlock;
       }
+      List<UInt256> CollectBlocksUnassignedPayload(ChainBlock startBlock, int batchSize)
+      {
+        var locatorBatchBlocksUnassignedPayload = new List<UInt256>();
+        while (locatorBatchBlocksUnassignedPayload.Count < batchSize)
+        {
+          if (startBlock == null)
+          {
+            return locatorBatchBlocksUnassignedPayload;
+          }
+
+          if (!startBlock.IsPayloadAssigned())
+          {
+            locatorBatchBlocksUnassignedPayload.Add(GetHashBlock(startBlock));
+          }
+
+          if (startBlock == BlockTip)
+          {
+            return locatorBatchBlocksUnassignedPayload;
+          }
+
+          startBlock = startBlock.BlocksNext[0];
+        }
+
+        return locatorBatchBlocksUnassignedPayload;
+      }
+      bool IsNoPayloadUnassigned() => BlockUnassignedPayloadDeepest == null;
 
       public SocketProbeHeader GetProbeAtBlock(UInt256 hash)
       {
@@ -138,9 +156,9 @@ namespace BToken.Chaining
         AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
         HeightBlockTip++;
 
-        if(BlockNoPayloadDeepest == null && !block.IsPayloadAssigned())
+        if(BlockUnassignedPayloadDeepest == null && !block.IsPayloadAssigned())
         {
-          BlockNoPayloadDeepest = block;
+          BlockUnassignedPayloadDeepest = block;
         }
       }
 
@@ -175,7 +193,8 @@ namespace BToken.Chaining
         }
         return HeaderProbe.IsStrongerThan(socket.HeaderProbe);
       }
-            
+      
+      
     }
   }
 }

@@ -42,11 +42,17 @@ namespace BToken.Chaining
 
       Locator = new HeaderLocator(this, SocketMain.HeaderProbe);
     }
-    static UInt256 CalculateHash(byte[] byteStream)
+
+    static UInt256 GetHashBlock(ChainBlock block)
     {
-      byte[] hashBytes = Hashing.sha256d(byteStream);
-      return new UInt256(hashBytes);
+      if (block.BlocksNext.Any())
+      {
+        return block.BlocksNext[0].Header.HashPrevious;
+      }
+
+      return CalculateHash(block.Header.getBytes());
     }
+    static UInt256 CalculateHash(byte[] byteStream) => new UInt256(Hashing.sha256d(byteStream));
 
     public async Task startAsync()
     {
