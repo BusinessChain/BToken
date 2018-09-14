@@ -36,7 +36,7 @@ namespace BToken.Chaining
       SocketMain = new ChainSocket(
         blockchain: this,
         block: genesisBlock,
-        hash: GetHashBlock(genesisBlock),
+        hash: new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes())),
         accumulatedDifficultyPrevious: 0,
         height: 0);
 
@@ -47,17 +47,7 @@ namespace BToken.Chaining
     {
       await Controller.StartAsync();
     }
-
-    static UInt256 GetHashBlock(ChainBlock block)
-    {
-      if (block.BlocksNext.Any())
-      {
-        return block.BlocksNext[0].Header.HashPrevious;
-      }
-
-      return new UInt256(Hashing.SHA256d(block.Header.getBytes()));
-    }
-
+    
     public List<BlockLocation> GetHeaderLocator() => Locator.BlockLocations;
 
     public ChainBlock GetBlock(UInt256 hash)
@@ -106,7 +96,7 @@ namespace BToken.Chaining
     }
     void ValidateHeader(NetworkHeader header, UInt256 headerHash, out ChainSocket.SocketProbeHeader socketProbe)
     {
-      if (headerHash.isGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+      if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
       {
         throw new BlockchainException(BlockCode.INVALID);
       }
@@ -124,21 +114,16 @@ namespace BToken.Chaining
       }
     }
 
-    public bool InsertBlock(NetworkBlock networkBlock, UInt256 headerHash)
+    public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash)
     {
       IBlockPayload payload = BlockPayloadParser.Parse(networkBlock.Payload);
       ChainSocket socket = SocketMain;
 
-      while (true)
+      while (socket != null)
       {
-        if(socket == null)
-        {
-          return false;
-        }
-
         if(socket.InsertBlockPayload(payload, headerHash))
         {
-          return true;
+          return;
         }
 
         socket = socket.WeakerSocket;
@@ -182,5 +167,21 @@ namespace BToken.Chaining
 
       socket.ConnectWeakerSocket(newSocket);
     }
+
+    public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize)
+    {
+      var locatorBatchBlocksUnassignedPayload = new List<UInt256>();
+      ChainSocket socket = SocketMain;
+
+      do
+      {
+        locatorBatchBlocksUnassignedPayload.AddRange(socket.GetLocatorBatchBlocksUnassignedPayload(batchSize));
+        batchSize -= locatorBatchBlocksUnassignedPayload.Count;
+        socket = socket.WeakerSocket;
+      } while (batchSize > 0 && socket != null);
+
+      return locatorBatchBlocksUnassignedPayload;
+    }
+
   }
 }

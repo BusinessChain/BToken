@@ -33,7 +33,7 @@ namespace BToken.Chaining
           ulong actualTimespan = Limit(probe.Block.Header.UnixTimeSeconds - headerIntervalStart.Header.UnixTimeSeconds);
           UInt256 targetOld = UInt256.ParseFromCompact(probe.Block.Header.NBits);
 
-          UInt256 targetNew = targetOld.multiplyBy(actualTimespan).divideBy(RETARGETING_TIMESPAN_INTERVAL);
+          UInt256 targetNew = targetOld.MultiplyBy(actualTimespan).DivideBy(RETARGETING_TIMESPAN_INTERVAL);
 
           return UInt256.Min(DIFFICULTY_1_TARGET, targetNew);
         }

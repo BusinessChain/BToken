@@ -23,7 +23,7 @@ namespace BToken.Chaining
         BlockLocation checkpoint = Checkpoints.Find(c => c.Height == height);
         if (checkpoint != null)
         {
-          return checkpoint.Hash.isEqual(hash);
+          return checkpoint.Hash.IsEqual(hash);
         }
 
         return true;

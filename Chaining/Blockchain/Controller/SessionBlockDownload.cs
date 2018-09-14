@@ -17,59 +17,54 @@ namespace BToken.Chaining
     {
       Blockchain Blockchain;
 
-      List<UInt256> BlockLocations;
-      List<NetworkBlock> BlocksDownloaded = new List<NetworkBlock>();
+      BlockPayloadLocator BlockLocator;
+      UInt256 BlockHashDispatched;
+
+      int BlocksDispachtedCount = 0;
 
 
 
-      public SessionBlockDownload(Blockchain blockchain, List<UInt256> blockLocations)
+      public SessionBlockDownload(Blockchain blockchain, BlockPayloadLocator blockLocator)
       {
         Blockchain = blockchain;
-        BlockLocations = blockLocations;
+        BlockLocator = blockLocator;
       }
 
       public override async Task StartAsync(BlockchainChannel channel)
       {
         Channel = channel;
 
-        for (int i = BlockLocations.Count - 1; i >= 0; i--)
+        BlockHashDispatched = BlockLocator.GetBlockHash();
+
+        while (BlockHashDispatched != null)
         {
-          UInt256 blockLocation = BlockLocations[i];
-          BlocksDownloaded.Add(await GetBlockAsync(blockLocation));
-          BlockLocations.RemoveAt(i);
+          NetworkBlock block = await GetBlockDispatchedAsync();
 
-          //Check if we received the block we requested.
-          Debug.WriteLine("Channel " + Channel.GetHashCode());
-        }
+          Blockchain.InsertBlock(block, BlockHashDispatched);
 
-        InsertDownloadedBlocksInChain();
-      }
+          Debug.WriteLine("Channel '{0}' dispatched block '{1}', Total blocks '{2}'", Channel.GetHashCode(), BlockHashDispatched.ToString(), ++BlocksDispachtedCount);
 
-      void InsertDownloadedBlocksInChain()
-      {
-        foreach (NetworkBlock block in BlocksDownloaded)
-        {
-          UInt256 headerHash = new UInt256(Hashing.SHA256d(block.Header.getBytes()));
-
-          try
-          {
-            Blockchain.InsertBlock(block, headerHash);
-          }
-          catch (BlockchainException ex)
-          {
-            Debug.WriteLine("Block insertion failed, Channel " + Channel.GetHashCode() + ", block hash: " + headerHash + "\nException: " + ex.Message);
-          }
+          BlockLocator.RemoveDispatched(BlockHashDispatched);
+          BlockHashDispatched = BlockLocator.GetBlockHash();
         }
       }
 
-      async Task<NetworkBlock> GetBlockAsync(UInt256 blockHash)
+      async Task<NetworkBlock> GetBlockDispatchedAsync()
       {
-        await Channel.RequestBlockAsync(blockHash);
+        await Channel.RequestBlockAsync(BlockHashDispatched);
 
         //CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
         Network.BlockMessage blockMessage = await GetBlockMessageAsync();
+        NetworkBlock block = blockMessage.NetworkBlock;
 
-        return blockMessage.NetworkBlock;
+        UInt256 headerHash = new UInt256(Hashing.SHA256d(block.Header.getBytes()));
+
+        if (!BlockHashDispatched.IsEqual(headerHash))
+        {
+          throw new BlockchainException(BlockCode.INVALID);
+        }
+
+        return block;
       }
 
       async Task<Network.BlockMessage> GetBlockMessageAsync()

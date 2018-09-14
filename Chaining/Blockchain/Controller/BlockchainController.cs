@@ -17,7 +17,7 @@ namespace BToken.Chaining
     Network Network;
     Blockchain Blockchain;
 
-    const int CHANNELS_COUNT = 3;
+    const int CHANNELS_COUNT = 8;
     List<BlockchainChannel> Channels = new List<BlockchainChannel>();
 
     BlockPayloadLocator BlockLocator;
@@ -55,13 +55,7 @@ namespace BToken.Chaining
       Task[] downloadBlocksTask = createChannelTasks.Select(async c =>
       {
         BlockchainChannel channel = await c;
-
-        List<UInt256> blockLocations = BlockLocator.GetBlockLocations();
-        while (blockLocations.Any())
-        {
-          await channel.ExecuteSessionAsync(new SessionBlockDownload(Blockchain, blockLocations));
-          blockLocations = BlockLocator.GetBlockLocations();
-        }
+        await channel.ExecuteSessionAsync(new SessionBlockDownload(Blockchain, BlockLocator));
       }).ToArray();
 
       await Task.WhenAll(downloadBlocksTask);

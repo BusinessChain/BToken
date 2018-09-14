@@ -111,7 +111,7 @@ namespace BToken.Chaining
           return 0;
         }
 
-        int rootHeaderLocatorIndex = HeaderLocator.FindIndex(b => b.Hash.isEqual(headers.First().HashPrevious));
+        int rootHeaderLocatorIndex = HeaderLocator.FindIndex(b => b.Hash.IsEqual(headers.First().HashPrevious));
 
         if (rootHeaderLocatorIndex < 0)
         {
@@ -126,7 +126,7 @@ namespace BToken.Chaining
           BlockLocation rootLocator = HeaderLocator[rootHeaderLocatorIndex];
           BlockLocation nextHigherLocator = HeaderLocator[rootHeaderLocatorIndex - 1];
 
-          if (headers.Any(h => h.HashPrevious.isEqual(nextHigherLocator.Hash)))
+          if (headers.Any(h => h.HashPrevious.IsEqual(nextHigherLocator.Hash)))
           {
             throw new NetworkException("Superfluous locator headers");
           }

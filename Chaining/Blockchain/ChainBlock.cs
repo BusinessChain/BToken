@@ -45,7 +45,7 @@ namespace BToken.Chaining
 
     public void InsertPayload(IBlockPayload payload)
     {
-      if (!payload.GetPayloadHash().isEqual(Header.PayloadHash))
+      if (!payload.GetPayloadHash().IsEqual(Header.PayloadHash))
       {
         throw new BlockchainException(BlockCode.INVALID);
       }

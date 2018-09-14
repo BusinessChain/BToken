@@ -11,17 +11,47 @@ namespace BToken.Chaining
     class BlockPayloadLocator
     {
       Blockchain Blockchain;
-      UInt256 BlockLocationRequestedLast;
 
+      List<UInt256> BlockLocationsQueued = new List<UInt256>();
+      const int BatchSize = 50;
+
+      List<UInt256> BlockLocationsDispatched = new List<UInt256>();
 
       public BlockPayloadLocator(Blockchain blockchain)
       {
         Blockchain = blockchain;
       }
 
-      public List<UInt256> GetBlockLocations()
+      public UInt256 GetBlockHash()
       {
-        throw new NotImplementedException();
+        if(!BlockLocationsQueued.Any())
+        {
+          BlockLocationsQueued = Blockchain.GetLocatorBatchBlocksUnassignedPayload(BatchSize);
+          if(!BlockLocationsQueued.Any())
+          {
+            return null;
+          }
+        }
+
+        UInt256 blockLocation = BlockLocationsQueued[0];
+
+        while(IsDispatched(blockLocation))
+        {
+          BlockLocationsQueued.RemoveAt(0);
+          blockLocation = BlockLocationsQueued[0];
+        }
+
+        BlockLocationsQueued.RemoveAt(0);
+        BlockLocationsDispatched.Add(blockLocation);
+
+        return blockLocation;
+      }
+
+      bool IsDispatched(UInt256 hash) => BlockLocationsDispatched.Any(b => b.IsEqual(hash));
+
+      public void RemoveDispatched(UInt256 hash)
+      {
+        BlockLocationsDispatched.RemoveAll(b => b.IsEqual(hash));
       }
     }
   }

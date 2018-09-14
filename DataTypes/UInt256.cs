@@ -83,7 +83,7 @@ namespace BToken
         }
         else
         {
-          mantissa = parseMantissa(bytes, i);
+          mantissa = ParseMantissa(bytes, i);
           break;
         }
       }
@@ -98,7 +98,7 @@ namespace BToken
 
       return mantissa;
     }
-    static uint parseMantissa(byte[] bytes, int startindex)
+    static uint ParseMantissa(byte[] bytes, int startindex)
     {
       uint mantissa = 0;
 
@@ -137,24 +137,26 @@ namespace BToken
 
     public override string ToString()
     {
-      SoapHexBinary soapHexBinary = new SoapHexBinary(GetBytes());
+      byte[] dataBytes = GetBytes();
+      Array.Reverse(dataBytes);
+      SoapHexBinary soapHexBinary = new SoapHexBinary(dataBytes);
       return soapHexBinary.ToString();
     }
 
-    public UInt256 multiplyBy(ulong factor)
+    public UInt256 MultiplyBy(ulong factor)
     {
       return new UInt256(Data * factor);
     }
-    public UInt256 divideBy(ulong divisor)
+    public UInt256 DivideBy(ulong divisor)
     {
       return new UInt256(Data / divisor);
     }
 
-    public bool isGreaterThan(UInt256 number)
+    public bool IsGreaterThan(UInt256 number)
     {
       return Data > number.Data;
     }
-    public bool isEqual(UInt256 number)
+    public bool IsEqual(UInt256 number)
     {
       if (number == null)
       {
@@ -166,7 +168,7 @@ namespace BToken
 
     public static UInt256 Min(UInt256 number1, UInt256 number2)
     {
-      if (number1.isGreaterThan(number2))
+      if (number1.IsGreaterThan(number2))
       {
         return number2;
       }

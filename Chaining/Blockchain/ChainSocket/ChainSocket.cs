@@ -23,7 +23,6 @@ namespace BToken.Chaining
       public ChainSocket WeakerSocket { get; private set; }
 
       public SocketProbeHeader HeaderProbe { get; private set; }
-      SocketProbePayload PayloadProbe;
 
 
 
@@ -51,54 +50,61 @@ namespace BToken.Chaining
         HeightBlockTip = height;
 
         HeaderProbe = new SocketProbeHeader(this);
-        PayloadProbe = new SocketProbePayload(this);
       }
 
       public bool InsertBlockPayload(IBlockPayload payload, UInt256 headerHash)
       {
-        return PayloadProbe.InsertPayload(payload, headerHash);
-      }
+        ChainBlock block = BlockUnassignedPayloadDeepest;
 
-      public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize)
-      {
-        if (IsNoPayloadUnassigned())
+        while(true)
         {
-          return new List<UInt256>();
+          if(GetHashBlock(block).IsEqual(headerHash))
+          {
+            block.InsertPayload(payload);
+
+            if (block == BlockUnassignedPayloadDeepest)
+            {
+              BlockUnassignedPayloadDeepest = GetNextUpperBlockNoPayload(block);
+            }
+
+            return true;
+          }
+
+          if(block == BlockTip)
+          {
+            return false;
+          }
+
+          block = block.BlocksNext[0];
         }
-
-        return GetLocatorBatchBlocksUnassignedPayload(batchSize, BlockUnassignedPayloadDeepest.Header.HashPrevious);
       }
-      public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize, UInt256 locationStart)
+      ChainBlock GetNextUpperBlockNoPayload(ChainBlock block)
       {
-        if (IsNoPayloadUnassigned()) { return new List<UInt256>(); }
-
-        ChainBlock startBlock = GoToLocationStartBlock(BlockUnassignedPayloadDeepest, locationStart);
-        return CollectBlocksUnassignedPayload(startBlock, batchSize);
-      }
-      ChainBlock GoToLocationStartBlock(ChainBlock startBlock, UInt256 locationStart)
-      {
-        while (!startBlock.Header.HashPrevious.isEqual(locationStart))
+        while (true)
         {
-          if (startBlock == BlockTip)
+          if (block == BlockTip)
           {
             return null;
           }
 
-          startBlock = startBlock.BlocksNext[0];
-        }
+          block = block.BlocksNext[0];
 
-        return startBlock;
+          if (!block.IsPayloadAssigned())
+          {
+            return block;
+          }
+        }
       }
-      List<UInt256> CollectBlocksUnassignedPayload(ChainBlock startBlock, int batchSize)
+
+      public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize)
       {
+        if (IsNoPayloadUnassigned()) { return new List<UInt256>(); }
+
+        ChainBlock startBlock = BlockUnassignedPayloadDeepest;
+
         var locatorBatchBlocksUnassignedPayload = new List<UInt256>();
         while (locatorBatchBlocksUnassignedPayload.Count < batchSize)
         {
-          if (startBlock == null)
-          {
-            return locatorBatchBlocksUnassignedPayload;
-          }
-
           if (!startBlock.IsPayloadAssigned())
           {
             locatorBatchBlocksUnassignedPayload.Add(GetHashBlock(startBlock));
@@ -194,7 +200,15 @@ namespace BToken.Chaining
         return HeaderProbe.IsStrongerThan(socket.HeaderProbe);
       }
       
-      
+      UInt256 GetHashBlock(ChainBlock block)
+      {
+        if(block == BlockTip)
+        {
+          return HashBlockTip;
+        }
+
+        return block.BlocksNext[0].Header.HashPrevious;
+      }
     }
   }
 }
