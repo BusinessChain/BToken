@@ -36,26 +36,21 @@ namespace BToken.Chaining
       SocketMain = new ChainSocket(
         blockchain: this,
         block: genesisBlock,
-        hash: CalculateHash(genesisBlock.Header.getBytes()),
+        hash: new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes())),
         accumulatedDifficultyPrevious: 0,
         height: 0);
 
       Locator = new HeaderLocator(this, SocketMain.HeaderProbe);
     }
-    static UInt256 CalculateHash(byte[] byteStream)
-    {
-      byte[] hashBytes = Hashing.sha256d(byteStream);
-      return new UInt256(hashBytes);
-    }
-
+    
     public async Task startAsync()
     {
       await Controller.StartAsync();
     }
-
+    
     public List<BlockLocation> GetHeaderLocator() => Locator.BlockLocations;
 
-    ChainBlock GetBlock(UInt256 hash)
+    public ChainBlock GetBlock(UInt256 hash)
     {
       ChainSocket.SocketProbeHeader socketProbe = GetProbeAtBlock(hash);
            
@@ -85,7 +80,7 @@ namespace BToken.Chaining
       }
     }
 
-    void InsertHeader(NetworkHeader header, UInt256 headerHash)
+    public void InsertHeader(NetworkHeader header, UInt256 headerHash)
     {
       ValidateHeader(header, headerHash, out ChainSocket.SocketProbeHeader socketProbeAtHeaderPrevious);
 
@@ -101,7 +96,7 @@ namespace BToken.Chaining
     }
     void ValidateHeader(NetworkHeader header, UInt256 headerHash, out ChainSocket.SocketProbeHeader socketProbe)
     {
-      if (headerHash.isGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+      if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
       {
         throw new BlockchainException(BlockCode.INVALID);
       }
@@ -119,21 +114,16 @@ namespace BToken.Chaining
       }
     }
 
-    bool InsertBlock(NetworkBlock networkBlock, UInt256 headerHash)
+    public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash)
     {
       IBlockPayload payload = BlockPayloadParser.Parse(networkBlock.Payload);
       ChainSocket socket = SocketMain;
 
-      while (true)
+      while (socket != null)
       {
-        if(socket == null)
-        {
-          return false;
-        }
-
         if(socket.InsertBlockPayload(payload, headerHash))
         {
-          return true;
+          return;
         }
 
         socket = socket.WeakerSocket;
@@ -146,7 +136,7 @@ namespace BToken.Chaining
       return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
     }
 
-    uint GetHeight() => SocketMain.HeightBlockTip;
+    public uint GetHeight() => SocketMain.HeightBlockTip;
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {
@@ -177,5 +167,21 @@ namespace BToken.Chaining
 
       socket.ConnectWeakerSocket(newSocket);
     }
+
+    public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize)
+    {
+      var locatorBatchBlocksUnassignedPayload = new List<UInt256>();
+      ChainSocket socket = SocketMain;
+
+      do
+      {
+        locatorBatchBlocksUnassignedPayload.AddRange(socket.GetLocatorBatchBlocksUnassignedPayload(batchSize));
+        batchSize -= locatorBatchBlocksUnassignedPayload.Count;
+        socket = socket.WeakerSocket;
+      } while (batchSize > 0 && socket != null);
+
+      return locatorBatchBlocksUnassignedPayload;
+    }
+
   }
 }

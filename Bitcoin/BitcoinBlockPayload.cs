@@ -8,7 +8,7 @@ using BToken.Chaining;
 
 namespace BToken.Bitcoin
 {
-  public class BitcoinBlockPayload : Blockchain.IBlockPayload
+  public class BitcoinBlockPayload : IBlockPayload
   {
     List<BitcoinTX> BitcoinTXs = new List<BitcoinTX>();
     UInt256 MerkleRootHash; // Get rid of this, it is only needed for fake GenesisBlock
@@ -39,7 +39,7 @@ namespace BToken.Bitcoin
       List<byte[]> merkleList = BitcoinTXs.Select(b =>
       {
         byte[] txBytes = b.GetBytes();
-        return Hashing.sha256d(txBytes);
+        return Hashing.SHA256d(txBytes);
       }).ToList();
       
       return new UInt256(GetRoot(merkleList, HASH_BYTE_SIZE));
@@ -57,7 +57,7 @@ namespace BToken.Bitcoin
         for (int i = 0; i < merkleList.Count; i += 2)
         {
           byte[] leafPairHashesConcat = ConcatenateArrays(merkleList[i], merkleList[i + 1], hashByteSize);
-          merkleListNext.Add(Hashing.sha256d(leafPairHashesConcat));
+          merkleListNext.Add(Hashing.SHA256d(leafPairHashesConcat));
         }
 
         merkleList = merkleListNext;

@@ -10,7 +10,7 @@ namespace BToken.Bitcoin
 {
   public class BitcoinBlockPayloadParser : Blockchain.IBlockPayloadParser
   {
-    public Blockchain.IBlockPayload Parse(byte[] payloadStream)
+    public IBlockPayload Parse(byte[] payloadStream)
     {
       var bitcoinTXs = new List<BitcoinTX>();
 

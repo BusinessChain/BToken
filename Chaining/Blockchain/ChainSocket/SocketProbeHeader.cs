@@ -108,7 +108,7 @@ namespace BToken.Chaining
           }          
 
         }
-        bool IsBlockConnectedToHash(UInt256 hash) => Block.BlocksNext.Any(b => CalculateHash(b.Header.getBytes()).isEqual(hash));
+        bool IsBlockConnectedToHash(UInt256 hash) => Block.BlocksNext.Any(b => Socket.GetHashBlock(b).IsEqual(hash));
         uint GetMedianTimePast()
         {
           const int MEDIAN_TIME_PAST = 11;
@@ -139,7 +139,7 @@ namespace BToken.Chaining
         }
 
         public uint GetHeight() => Socket.HeightBlockTip - Depth;
-        public bool IsHash(UInt256 hash) => Hash.isEqual(hash);
+        public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
         public bool IsGenesis() => Block == Socket.BlockGenesis;
         public bool IsPayloadAssigned() => Block.IsPayloadAssigned();
         public bool IsStrongerThan(SocketProbeHeader probe) => probe == null ? false : AccumulatedDifficulty > probe.AccumulatedDifficulty;

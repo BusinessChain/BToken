@@ -11,75 +11,67 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  partial class BlockchainController
   {
-    partial class BlockchainController
+    class SessionBlockDownload : BlockchainSession
     {
-      class SessionBlockDownload : BlockchainSession
+      Blockchain Blockchain;
+
+      BlockPayloadLocator BlockLocator;
+      UInt256 BlockHashDispatched;
+
+      int BlocksDispachtedCount = 0;
+
+
+
+      public SessionBlockDownload(Blockchain blockchain, BlockPayloadLocator blockLocator)
       {
-        Blockchain Blockchain;
+        Blockchain = blockchain;
+        BlockLocator = blockLocator;
+      }
 
-        List<BlockLocation> BlockLocations;
-        List<NetworkBlock> BlocksDownloaded = new List<NetworkBlock>();
-        
+      public override async Task StartAsync(BlockchainChannel channel)
+      {
+        Channel = channel;
 
+        BlockHashDispatched = BlockLocator.GetBlockHash();
 
-        public SessionBlockDownload(Blockchain blockchain, List<BlockLocation> blockLocations)
+        while (BlockHashDispatched != null)
         {
-          Blockchain = blockchain;
-          BlockLocations = blockLocations;
+          NetworkBlock block = await GetBlockDispatchedAsync();
+
+          Blockchain.InsertBlock(block, BlockHashDispatched);
+
+          Debug.WriteLine("Channel '{0}' dispatched block '{1}', Total blocks '{2}'", Channel.GetHashCode(), BlockHashDispatched.ToString(), ++BlocksDispachtedCount);
+
+          BlockLocator.RemoveDispatched(BlockHashDispatched);
+          BlockHashDispatched = BlockLocator.GetBlockHash();
+        }
+      }
+
+      async Task<NetworkBlock> GetBlockDispatchedAsync()
+      {
+        await Channel.RequestBlockAsync(BlockHashDispatched);
+
+        //CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
+        Network.BlockMessage blockMessage = await GetBlockMessageAsync();
+        NetworkBlock block = blockMessage.NetworkBlock;
+
+        UInt256 headerHash = new UInt256(Hashing.SHA256d(block.Header.getBytes()));
+
+        if (!BlockHashDispatched.IsEqual(headerHash))
+        {
+          throw new BlockchainException(BlockCode.INVALID);
         }
 
-        public override async Task StartAsync(BlockchainChannel channel)
-        {
-          Channel = channel;
+        return block;
+      }
 
-          for (int i = BlockLocations.Count - 1; i >= 0; i--)
-          {
-            BlockLocation blockLocation = BlockLocations[i];
-            BlocksDownloaded.Add(await GetBlockAsync(blockLocation.Hash));
-            BlockLocations.RemoveAt(i);
-            
-            //Check if we received the block we requested.
-            Debug.WriteLine("Channel " + Channel.GetHashCode() + " downloaded block at height " + blockLocation.Height);
-          }
+      async Task<Network.BlockMessage> GetBlockMessageAsync()
+      {
+        Network.BlockMessage blockMessage = await Channel.GetNetworkMessageAsync(default(CancellationToken)) as Network.BlockMessage;
 
-          InsertDownloadedBlocksInChain();
-        }
-
-        void InsertDownloadedBlocksInChain()
-        {
-          foreach(NetworkBlock block in BlocksDownloaded)
-          {
-            UInt256 headerHash = CalculateHash(block.Header.getBytes());
-
-            try
-            {
-              Blockchain.InsertBlock(block, headerHash);
-            }
-            catch (BlockchainException ex)
-            {
-              Debug.WriteLine("Block insertion failed, Channel " + Channel.GetHashCode() + ", block hash: " + headerHash + "\nException: " + ex.Message);
-            }
-          }
-        }
-
-        async Task<NetworkBlock> GetBlockAsync(UInt256 blockHash)
-        {
-          await Channel.RequestBlockAsync(blockHash);
-
-          //CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-          Network.BlockMessage blockMessage = await GetBlockMessageAsync();
-
-          return blockMessage.NetworkBlock;
-        }
-
-        async Task<Network.BlockMessage> GetBlockMessageAsync()
-        {
-          Network.BlockMessage blockMessage = await Channel.GetNetworkMessageAsync(default(CancellationToken)) as Network.BlockMessage;
-
-          return blockMessage ?? await GetBlockMessageAsync();
-        }
+        return blockMessage ?? await GetBlockMessageAsync();
       }
     }
   }

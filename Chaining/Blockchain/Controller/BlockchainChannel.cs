@@ -10,121 +10,118 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  partial class BlockchainController
   {
-    partial class BlockchainController
+    partial class BlockchainChannel
     {
-      partial class BlockchainChannel
+      BlockchainController Controller;
+      public BufferBlock<NetworkMessage> Buffer;
+
+
+      public BlockchainChannel() { }
+      public BlockchainChannel(BufferBlock<NetworkMessage> buffer, BlockchainController controller)
       {
-        BlockchainController Controller;
-        public BufferBlock<NetworkMessage> Buffer;
-        
+        Buffer = buffer;
+        Controller = controller;
+      }
 
-        public BlockchainChannel() { }
-        public BlockchainChannel(BufferBlock<NetworkMessage> buffer, BlockchainController controller)
+      public async Task StartMessageListenerAsync()
+      {
+        try
         {
-          Buffer = buffer;
-          Controller = controller;
-        }
-        
-        public async Task StartMessageListenerAsync()
-        {
-          try
+          while (true)
           {
-            while (true)
-            {
-              await ProcessNextMessageAsync();
-            }
-          }
-          catch
-          {
-            BlockchainChannel channel = await Controller.RenewChannelAsync(this);
-            Task startChannelTask = channel.StartMessageListenerAsync();
+            await ProcessNextMessageAsync();
           }
         }
-        
-        public async Task ExecuteSessionAsync(BlockchainSession session)
+        catch
         {
-          try
-          {
-            await session.StartAsync(this);
-          }
-          catch
-          {
-            BlockchainChannel channel = await Controller.RenewChannelAsync(this);
-            await channel.ExecuteSessionAsync(session);
-          }
+          BlockchainChannel channel = await Controller.RenewChannelAsync(this);
+          Task startChannelTask = channel.StartMessageListenerAsync();
         }
+      }
 
-        async Task ProcessNextMessageAsync()
+      public async Task ExecuteSessionAsync(BlockchainSession session)
+      {
+        try
         {
-          NetworkMessage networkMessage = await GetNetworkMessageAsync(default(CancellationToken));
+          await session.StartAsync(this);
+        }
+        catch
+        {
+          BlockchainChannel channel = await Controller.RenewChannelAsync(this);
+          await channel.ExecuteSessionAsync(session);
+        }
+      }
 
-          switch (networkMessage)
+      async Task ProcessNextMessageAsync()
+      {
+        NetworkMessage networkMessage = await GetNetworkMessageAsync(default(CancellationToken));
+
+        switch (networkMessage)
+        {
+          case InvMessage invMessage:
+            //await ProcessInventoryMessageAsync(invMessage);
+            break;
+
+          case Network.HeadersMessage headersMessage:
+            //await ExecuteSessionAsync(new SessionHeaderDownload(headersMessage));
+            break;
+
+          case Network.BlockMessage blockMessage:
+            break;
+
+          default:
+            break;
+        }
+      }
+      public async Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken cancellationToken)
+      {
+        NetworkMessage networkMessage = await Buffer.ReceiveAsync(cancellationToken);
+
+        return networkMessage ?? throw new NetworkException("Network closed channel.");
+      }
+
+      async Task ProcessInventoryMessageAsync(InvMessage invMessage)
+      {
+        foreach (Inventory blockInventory in invMessage.GetBlockInventories())
+        {
+          ChainBlock chainBlock = Controller.Blockchain.GetBlock(blockInventory.Hash);
+
+          if (chainBlock == null)
           {
-            case InvMessage invMessage:
-              //await ProcessInventoryMessageAsync(invMessage);
-              break;
-
-            case Network.HeadersMessage headersMessage:
-              //await ExecuteSessionAsync(new SessionHeaderDownload(headersMessage));
-              break;
-
-            case Network.BlockMessage blockMessage:
-              break;
-
-            default:
-              break;
+            await RequestHeadersAsync(GetHeaderLocator());
+            return;
           }
-        }
-        public async Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken cancellationToken)
-        {
-          NetworkMessage networkMessage = await Buffer.ReceiveAsync(cancellationToken);
-
-          return networkMessage ?? throw new NetworkException("Network closed channel.");
-        }
-        
-        async Task ProcessInventoryMessageAsync(InvMessage invMessage)
-        {
-          foreach (Inventory blockInventory in invMessage.GetBlockInventories())
+          else
           {
-            ChainBlock chainBlock = Controller.Blockchain.GetBlock(blockInventory.Hash);
-
-            if (chainBlock == null)
-            {
-              await RequestHeadersAsync(GetHeaderLocator());
-              return;
-            }
-            else
-            {
-              BlameProtocolError();
-            }
-          }
-        }
-
-        public async Task RequestHeadersAsync(List<BlockLocation> headerLocator) => await Controller.Network.GetHeadersAsync(Buffer, headerLocator.Select(b => b.Hash).ToList());
-        List<BlockLocation> GetHeaderLocator() => Controller.Blockchain.GetHeaderLocator();
-                
-        public async Task DownloadBlocksAsync(List<List<BlockLocation>> blockLocationBatches)
-        {
-          while (blockLocationBatches.Any())
-          {
-            List<BlockLocation> blockLocations = blockLocationBatches[0];
-            blockLocationBatches.RemoveAt(0);
-
-            //await new SessionBlockDownload(this).StartAsync(blockLocations);
+            BlameProtocolError();
           }
         }
-        public async Task RequestBlockAsync(UInt256 blockHash) => await Controller.Network.GetBlockAsync(Buffer, new List<UInt256> { blockHash });
+      }
 
-        void BlameConsensusError()
+      public async Task RequestHeadersAsync(List<BlockLocation> headerLocator) => await Controller.Network.GetHeadersAsync(Buffer, headerLocator.Select(b => b.Hash).ToList());
+      List<BlockLocation> GetHeaderLocator() => Controller.Blockchain.GetHeaderLocator();
+
+      public async Task DownloadBlocksAsync(List<List<BlockLocation>> blockLocationBatches)
+      {
+        while (blockLocationBatches.Any())
         {
-          Controller.Network.BlameConsensusError(Buffer);
+          List<BlockLocation> blockLocations = blockLocationBatches[0];
+          blockLocationBatches.RemoveAt(0);
+
+          //await new SessionBlockDownload(this).StartAsync(blockLocations);
         }
-        void BlameProtocolError()
-        {
-          Controller.Network.BlameProtocolError(Buffer);
-        }
+      }
+      public async Task RequestBlockAsync(UInt256 blockHash) => await Controller.Network.GetBlockAsync(Buffer, new List<UInt256> { blockHash });
+
+      void BlameConsensusError()
+      {
+        Controller.Network.BlameConsensusError(Buffer);
+      }
+      void BlameProtocolError()
+      {
+        Controller.Network.BlameProtocolError(Buffer);
       }
     }
   }

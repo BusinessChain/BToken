@@ -12,9 +12,9 @@ namespace BToken.Chaining
       Blockchain Blockchain;
 
       ChainBlock BlockTip;
-      ChainBlock BlockNoPayloadDeepest;
-      ChainBlock BlockGenesis;
       public UInt256 HashBlockTip { get; private set; }
+      ChainBlock BlockUnassignedPayloadDeepest;
+      ChainBlock BlockGenesis;
 
       double AccumulatedDifficulty;
       public uint HeightBlockTip { get; private set; }
@@ -23,7 +23,6 @@ namespace BToken.Chaining
       public ChainSocket WeakerSocket { get; private set; }
 
       public SocketProbeHeader HeaderProbe { get; private set; }
-      SocketProbePayload PayloadProbe;
 
 
 
@@ -44,59 +43,84 @@ namespace BToken.Chaining
 
         if(!block.IsPayloadAssigned())
         {
-          BlockNoPayloadDeepest = block;
+          BlockUnassignedPayloadDeepest = block;
         }
         
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(block.Header.NBits);
         HeightBlockTip = height;
 
         HeaderProbe = new SocketProbeHeader(this);
-        PayloadProbe = new SocketProbePayload(this);
       }
 
       public bool InsertBlockPayload(IBlockPayload payload, UInt256 headerHash)
       {
-        PayloadProbe.GoToBlock(BlockNoPayloadDeepest);
+        ChainBlock block = BlockUnassignedPayloadDeepest;
 
-        while (true)
+        while(true)
         {
-          if (PayloadProbe.IsHash(headerHash))
+          if(GetHashBlock(block).IsEqual(headerHash))
           {
-            PayloadProbe.InsertPayload(payload);
+            block.InsertPayload(payload);
 
-            if(PayloadProbe.IsBlockNoPayloadDeepest())
+            if (block == BlockUnassignedPayloadDeepest)
             {
-              BlockNoPayloadDeepest = GetNextUpperBlockNoPayload();
+              BlockUnassignedPayloadDeepest = GetNextUpperBlockNoPayload(block);
             }
 
             return true;
           }
 
-          if (PayloadProbe.IsTip())
+          if(block == BlockTip)
           {
             return false;
           }
 
-          PayloadProbe.Pull();
+          block = block.BlocksNext[0];
         }
       }
-      ChainBlock GetNextUpperBlockNoPayload()
+      ChainBlock GetNextUpperBlockNoPayload(ChainBlock block)
       {
-        while(true)
+        while (true)
         {
-          if(PayloadProbe.IsTip())
+          if (block == BlockTip)
           {
             return null;
           }
 
-          PayloadProbe.Pull();
+          block = block.BlocksNext[0];
 
-          if(!PayloadProbe.IsPayloadAssigned())
+          if (!block.IsPayloadAssigned())
           {
-            return PayloadProbe.Block;
+            return block;
           }
         }
       }
+
+      public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize)
+      {
+        if (IsNoPayloadUnassigned()) { return new List<UInt256>(); }
+
+        ChainBlock startBlock = BlockUnassignedPayloadDeepest;
+
+        var locatorBatchBlocksUnassignedPayload = new List<UInt256>();
+        while (locatorBatchBlocksUnassignedPayload.Count < batchSize)
+        {
+          if (!startBlock.IsPayloadAssigned())
+          {
+            locatorBatchBlocksUnassignedPayload.Add(GetHashBlock(startBlock));
+          }
+
+          if (startBlock == BlockTip)
+          {
+            return locatorBatchBlocksUnassignedPayload;
+          }
+
+          startBlock = startBlock.BlocksNext[0];
+        }
+
+        return locatorBatchBlocksUnassignedPayload;
+      }
+      bool IsNoPayloadUnassigned() => BlockUnassignedPayloadDeepest == null;
 
       public SocketProbeHeader GetProbeAtBlock(UInt256 hash)
       {
@@ -138,9 +162,9 @@ namespace BToken.Chaining
         AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
         HeightBlockTip++;
 
-        if(BlockNoPayloadDeepest == null && !block.IsPayloadAssigned())
+        if(BlockUnassignedPayloadDeepest == null && !block.IsPayloadAssigned())
         {
-          BlockNoPayloadDeepest = block;
+          BlockUnassignedPayloadDeepest = block;
         }
       }
 
@@ -175,7 +199,16 @@ namespace BToken.Chaining
         }
         return HeaderProbe.IsStrongerThan(socket.HeaderProbe);
       }
-            
+      
+      UInt256 GetHashBlock(ChainBlock block)
+      {
+        if(block == BlockTip)
+        {
+          return HashBlockTip;
+        }
+
+        return block.BlocksNext[0].Header.HashPrevious;
+      }
     }
   }
 }
