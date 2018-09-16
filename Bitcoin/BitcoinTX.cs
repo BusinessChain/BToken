@@ -9,7 +9,7 @@ namespace BToken.Bitcoin
 {
   public class BitcoinTX
   {
-    const byte WITNESS_IS_PRESENT_FLAG = 0x01;
+    const byte FLAG_WITNESS_IS_PRESENT = 0x01;
 
     class TXInput
     {
@@ -171,7 +171,7 @@ namespace BToken.Bitcoin
       }
 
       var tXWitnesses = new List<TXWitness>();
-      if ((witnessFlag & WITNESS_IS_PRESENT_FLAG) == WITNESS_IS_PRESENT_FLAG)
+      if ((witnessFlag & FLAG_WITNESS_IS_PRESENT) == FLAG_WITNESS_IS_PRESENT)
       {
         for (int i = 0; i < tXInputsCount; i++)
         {
@@ -199,7 +199,7 @@ namespace BToken.Bitcoin
       if (TXWitnesses.Any())
       {
         byteStream.Add(0x00);
-        byteStream.Add(WITNESS_IS_PRESENT_FLAG);
+        byteStream.Add(FLAG_WITNESS_IS_PRESENT);
       }
 
       byteStream.AddRange(VarInt.getBytes(TXInputs.Count));

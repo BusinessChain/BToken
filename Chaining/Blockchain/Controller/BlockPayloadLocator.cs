@@ -22,7 +22,7 @@ namespace BToken.Chaining
         Blockchain = blockchain;
       }
 
-      public UInt256 GetBlockHash()
+      public UInt256 GetBlockHeaderHash()
       {
         if(!BlockLocationsQueued.Any())
         {

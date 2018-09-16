@@ -1,7 +1,10 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.IO;
 using System.Threading.Tasks;
 
 using BToken.Chaining;
@@ -77,6 +80,47 @@ namespace BToken.Bitcoin
     public void ParsePayload(byte[] stream)
     {
       throw new NotImplementedException();
+    }
+
+    byte[] SerializeTXs()
+    {
+      MemoryStream stream = new MemoryStream();
+
+      foreach(BitcoinTX bitcoinTX in BitcoinTXs)
+      {
+        byte[] buffer = bitcoinTX.GetBytes();
+        stream.Write(bitcoinTX.GetBytes(), 0, buffer.Length);
+      }
+
+      return stream.ToArray();
+    }
+
+    public void StoreToDisk(string filename)
+    {
+      string postFixFilename = filename.Substring(filename.Length - 3);
+      string blockchainRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Blockchain", postFixFilename);
+      Directory.CreateDirectory(blockchainRootPath);
+
+      byte[] stream = SerializeTXs();
+      try
+      {
+        string filePath = Path.Combine("Blockchain", postFixFilename, filename + ".dat");
+        File.WriteAllBytes(filePath, stream);
+      }
+      catch (Exception ex)
+      {
+        Debug.WriteLine(ex.Message);
+      }
+
+
+      BitcoinTXs = null;
+    }
+
+    public void LoadFromDisk()
+    {
+      BitcoinTXs = new List<BitcoinTX>();
+
+      // Load
     }
   }
 }
