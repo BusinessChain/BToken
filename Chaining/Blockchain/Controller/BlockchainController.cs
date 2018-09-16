@@ -17,11 +17,13 @@ namespace BToken.Chaining
     Network Network;
     Blockchain Blockchain;
 
-    const int CHANNELS_COUNT = 8;
+    const int CHANNELS_COUNT = 16;
     List<BlockchainChannel> Channels = new List<BlockchainChannel>();
 
     BlockPayloadLocator BlockLocator;
     IBlockPayloadParser BlockPayloadParser;
+    
+    Stopwatch StopWatch = new Stopwatch();
 
 
     public BlockchainController(Network network, Blockchain blockchain, IBlockPayloadParser blockPayloadParser)
@@ -60,8 +62,20 @@ namespace BToken.Chaining
         await channel.ExecuteSessionAsync(new SessionBlockDownload(Blockchain, BlockLocator, BlockPayloadParser));
       }).ToArray();
 
+
+      StopWatch.Start();
+
       await Task.WhenAll(downloadBlocksTask);
-      Debug.WriteLine("All channels completed session");
+
+      StopWatch.Stop();
+      TimeSpan ts = StopWatch.Elapsed;
+      string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+        ts.Hours,
+        ts.Minutes,
+        ts.Seconds,
+        ts.Milliseconds / 10);
+      Debug.WriteLine("All channels completed session, runtime: " + elapsedTime);
+      StopWatch.Reset();
     }
 
     async Task<BlockchainChannel> CreateChannelAsync()

@@ -77,19 +77,19 @@ namespace BToken.Chaining
 
       async Task<NetworkBlock> GetBlockDispatchedAsync()
       {
-        await Channel.RequestBlockAsync(BlockHeaderHashDispatched);
+        await Channel.RequestBlockAsync(BlockHeaderHashDispatched).ConfigureAwait(false);
 
         //CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-        Network.BlockMessage blockMessage = await GetBlockMessageAsync();
+        Network.BlockMessage blockMessage = await GetBlockMessageAsync().ConfigureAwait(false);
 
         return blockMessage.NetworkBlock;
       }
 
       async Task<Network.BlockMessage> GetBlockMessageAsync()
       {
-        Network.BlockMessage blockMessage = await Channel.GetNetworkMessageAsync(default(CancellationToken)) as Network.BlockMessage;
+        Network.BlockMessage blockMessage = await Channel.GetNetworkMessageAsync(default(CancellationToken)).ConfigureAwait(false) as Network.BlockMessage;
 
-        return blockMessage ?? await GetBlockMessageAsync();
+        return blockMessage ?? await GetBlockMessageAsync().ConfigureAwait(false);
       }
     }
   }

@@ -32,22 +32,21 @@ namespace BToken.Chaining
             return null;
           }
         }
-
-        UInt256 blockLocation = BlockLocationsQueued[0];
-
-        while(IsDispatched(blockLocation))
+        
+        do
         {
+          UInt256 blockLocation = BlockLocationsQueued[0];
           BlockLocationsQueued.RemoveAt(0);
-          blockLocation = BlockLocationsQueued[0];
-        }
 
-        BlockLocationsQueued.RemoveAt(0);
-        BlockLocationsDispatched.Add(blockLocation);
+          if (!BlockLocationsDispatched.Any(b => b.IsEqual(blockLocation)))
+          {
+            BlockLocationsDispatched.Add(blockLocation);
+            return blockLocation;
+          }
+        } while (BlockLocationsQueued.Any());
 
-        return blockLocation;
+        return null;
       }
-
-      bool IsDispatched(UInt256 hash) => BlockLocationsDispatched.Any(b => b.IsEqual(hash));
 
       public void RemoveDispatched(UInt256 hash)
       {

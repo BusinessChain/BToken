@@ -34,7 +34,7 @@ namespace BToken.Chaining
             await ProcessNextMessageAsync();
           }
         }
-        catch
+        catch (Exception ex)
         {
           BlockchainChannel channel = await Controller.RenewChannelAsync(this);
           Task startChannelTask = channel.StartMessageListenerAsync();
@@ -47,7 +47,7 @@ namespace BToken.Chaining
         {
           await session.StartAsync(this);
         }
-        catch
+        catch (Exception ex)
         {
           BlockchainChannel channel = await Controller.RenewChannelAsync(this);
           await channel.ExecuteSessionAsync(session);

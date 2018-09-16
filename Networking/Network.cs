@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -129,9 +131,10 @@ namespace BToken.Networking
       {
         await peer.GetBlockAsync(blockHashes);
       }
-      catch
+      catch(Exception ex)
       {
         peer.Dispose();
+        Debug.WriteLine(ex.Message);
         throw new NetworkException("Peer discarded due to connection error.");
       }
     }

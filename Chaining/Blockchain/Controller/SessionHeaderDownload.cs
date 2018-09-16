@@ -28,7 +28,7 @@ namespace BToken.Chaining
         Channel = channel;
 
         List<NetworkHeader> headers = await GetHeadersAsync();
-        await InsertHeadersAsync(await GetHeadersAsync());
+        await InsertHeadersAsync(headers);
       }
 
 

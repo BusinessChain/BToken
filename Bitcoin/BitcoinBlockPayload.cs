@@ -105,7 +105,7 @@ namespace BToken.Bitcoin
       try
       {
         string filePath = Path.Combine("Blockchain", postFixFilename, filename + ".dat");
-        File.WriteAllBytes(filePath, stream);
+        //File.WriteAllBytes(filePath, stream);
       }
       catch (Exception ex)
       {
