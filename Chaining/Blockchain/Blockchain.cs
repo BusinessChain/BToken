@@ -18,7 +18,6 @@ namespace BToken.Chaining
     
     ChainBlock BlockGenesis;
     CheckpointManager Checkpoints;
-    IBlockPayloadParser BlockPayloadParser;
 
     ChainSocket SocketMain;
     HeaderLocator Locator;
@@ -27,11 +26,10 @@ namespace BToken.Chaining
     public Blockchain(Network network, ChainBlock genesisBlock, List<BlockLocation> checkpoints, IBlockPayloadParser blockPayloadParser)
     {
       Network = network;
-      Controller = new BlockchainController(network, this);
+      Controller = new BlockchainController(network, this, blockPayloadParser);
 
       BlockGenesis = genesisBlock;
       Checkpoints = new CheckpointManager(checkpoints);
-      BlockPayloadParser = blockPayloadParser;
 
       SocketMain = new ChainSocket(
         blockchain: this,
@@ -114,20 +112,21 @@ namespace BToken.Chaining
       }
     }
 
-    public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash)
+    public void InsertBlock(IBlockPayload blockPayload, UInt256 headerHash)
     {
-      IBlockPayload payload = BlockPayloadParser.Parse(networkBlock.Payload);
       ChainSocket socket = SocketMain;
 
       while (socket != null)
       {
-        if(socket.InsertBlockPayload(payload, headerHash))
+        if(socket.InsertBlock(blockPayload, headerHash))
         {
           return;
         }
 
         socket = socket.WeakerSocket;
       }
+
+      throw new BlockchainException(BlockCode.ORPHAN);
     }
 
     bool IsTimestampExpired(ulong unixTimeSeconds)

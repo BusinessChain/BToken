@@ -5,19 +5,13 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public interface IBlockPayload
-  {
-    void ParsePayload(byte[] stream);
-    UInt256 GetPayloadHash();
-  }
-
   public class ChainBlock
   {
     public NetworkHeader Header;
 
     public ChainBlock BlockPrevious;
     public List<ChainBlock> BlocksNext = new List<ChainBlock>();
-    IBlockPayload BlockPayload;
+    public IBlockPayload BlockPayload;
 
     public ChainBlock(
       UInt32 version,

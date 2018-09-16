@@ -6,11 +6,8 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain
+  public interface IBlockPayloadParser
   {
-    public interface IBlockPayloadParser
-    {
-      IBlockPayload Parse(byte[] stream);
-    }
+    IBlockPayload Parse(byte[] stream);
   }
 }
