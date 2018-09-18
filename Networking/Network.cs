@@ -119,9 +119,9 @@ namespace BToken.Networking
       faultedPeers.ForEach(p => p.Dispose());
     }
 
-    public async Task GetBlockAsync(List<UInt256> blockHashes)
+    public async Task GetBlocksAsync(List<UInt256> blockHashes)
     {
-      await Peers.First().GetBlockAsync(blockHashes);
+      await Peers.First().GetBlocksAsync(blockHashes);
     }
     public async Task GetBlockAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> blockHashes)
     {
@@ -129,7 +129,7 @@ namespace BToken.Networking
 
       try
       {
-        await peer.GetBlockAsync(blockHashes);
+        await peer.GetBlocksAsync(blockHashes).ConfigureAwait(false);
       }
       catch(Exception ex)
       {

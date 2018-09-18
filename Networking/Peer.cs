@@ -160,10 +160,10 @@ namespace BToken.Networking
 
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      public async Task GetBlockAsync(List<UInt256> hashes)
+      public async Task GetBlocksAsync(List<UInt256> hashes)
       {
         List<Inventory> inventories = hashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h)).ToList();
-        await NetworkMessageStreamer.WriteAsync(new GetDataMessage(inventories));
+        await NetworkMessageStreamer.WriteAsync(new GetDataMessage(inventories)).ConfigureAwait(false);
       }
     }
   }

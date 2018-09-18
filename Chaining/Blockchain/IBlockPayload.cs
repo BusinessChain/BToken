@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using BToken.Networking;
+
 namespace BToken.Chaining
 {
   public interface IBlockPayload
@@ -11,7 +13,7 @@ namespace BToken.Chaining
     void ParsePayload(byte[] stream);
     UInt256 GetPayloadHash();
 
-    void StoreToDisk(string filename);
+    void StoreToDisk(NetworkHeader header, string filename);
     void LoadFromDisk();
   }
 }

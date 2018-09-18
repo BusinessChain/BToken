@@ -15,21 +15,21 @@ namespace BToken.Chaining
   {
     class SessionBlockDownload : BlockchainSession
     {
-      Blockchain Blockchain;
+      BlockchainController Controller;
 
-      BlockPayloadLocator BlockHeaderLocator;
-      UInt256 BlockHeaderHashDispatched;
+      BlockPayloadLocator BlockLocator;
+      List<ChainBlock> BlocksQueued = new List<ChainBlock>();
+      List<ChainBlock> BlocksDispatched = new List<ChainBlock>();
+
+
       int BlocksDispachedCountTotal;
 
-      IBlockPayloadParser BlockPayloadParser;
 
 
-
-      public SessionBlockDownload(Blockchain blockchain, BlockPayloadLocator blockLocator, IBlockPayloadParser blockPayloadParser)
+      public SessionBlockDownload(BlockchainController controller, BlockPayloadLocator blockLocator)
       {
-        Blockchain = blockchain;
-        BlockHeaderLocator = blockLocator;
-        BlockPayloadParser = blockPayloadParser;
+        Controller = controller;
+        BlockLocator = blockLocator;
       }
 
       public override async Task StartAsync(BlockchainChannel channel)
@@ -40,56 +40,93 @@ namespace BToken.Chaining
       }
       async Task DownloadBlocksAsync()
       {
-        BlockHeaderHashDispatched = BlockHeaderLocator.GetBlockHeaderHash();
-
-        while (BlockHeaderHashDispatched != null)
+        do
         {
-          NetworkBlock networkBlock = await GetBlockDispatchedAsync();
+          if (BlocksQueued.Any())
+          {
+            await DownloadBlocksQueuedAsync();
 
-          Validate(networkBlock, out IBlockPayload blockPayload);
+            BlockLocator.RemoveDispatched(BlocksDispatched);
+            BlocksDispatched = new List<ChainBlock>();
+          }
 
-          Blockchain.InsertBlock(blockPayload, BlockHeaderHashDispatched);
+          BlocksQueued = BlockLocator.DispatchBlocks();
 
-          blockPayload.StoreToDisk(BlockHeaderHashDispatched.ToString());
+        } while (BlocksQueued.Any());
+      }
+      
+      async Task DownloadBlocksQueuedAsync()
+      {
+        List<UInt256> headerHashesQueued = BlocksQueued.Select(b => GetHeaderHash(b)).ToList();
+        await Channel.RequestBlocksAsync(headerHashesQueued).ConfigureAwait(false);
 
-          Debug.WriteLine("Channel '{0}' downloaded block '{1}', Total blocks '{2}'", Channel.GetHashCode(), BlockHeaderHashDispatched.ToString(), ++BlocksDispachedCountTotal);
+        while (BlocksQueued.Any())
+        {
+          //CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
+          NetworkBlock networkBlock = await GetBlockMessageAsync().ConfigureAwait(false);
 
-          BlockHeaderLocator.RemoveDispatched(BlockHeaderHashDispatched);
-          BlockHeaderHashDispatched = BlockHeaderLocator.GetBlockHeaderHash();
+          UInt256 networkBlockHeaderHash = GetHeaderHash(networkBlock);
+          ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
+
+          Validate(blockQueued, networkBlock, out IBlockPayload blockPayload);
+
+          blockQueued.BlockPayload = blockPayload;
+          blockPayload.StoreToDisk(blockQueued.Header, networkBlockHeaderHash.ToString());
+
+          BlocksDispatched.Add(blockQueued);
+          BlocksQueued.Remove(blockQueued);
+
+          Debug.WriteLine("Channel '{0}' downloaded block '{1}', Total blocks '{2}'", 
+            Channel.GetHashCode(), networkBlockHeaderHash.ToString(), ++BlocksDispachedCountTotal);
         }
       }
-      void Validate(NetworkBlock networkBlock, out IBlockPayload blockPayload)
-      {
-        UInt256 headerHash = new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
 
-        if (!BlockHeaderHashDispatched.IsEqual(headerHash))
+      ChainBlock PopBlockQueued(NetworkBlock networkBlock, List<UInt256> headerHashesQueued, UInt256 networkBlockHash)
+      {
+        int blockIndex = headerHashesQueued.FindIndex(h => h.IsEqual(networkBlockHash));
+        if (blockIndex < 0)
+        {
+          throw new BlockchainException(BlockCode.ORPHAN);
+        }
+        headerHashesQueued.RemoveAt(0);
+
+        return BlocksQueued[blockIndex];
+      }
+
+      void Validate(ChainBlock blockQueued, NetworkBlock networkBlock, out IBlockPayload blockPayload)
+      {
+        blockPayload = Controller.BlockParser.Parse(networkBlock.Payload);
+        UInt256 payloadHash = blockPayload.GetPayloadHash();
+        if (!payloadHash.IsEqual(blockQueued.Header.PayloadHash))
         {
           throw new BlockchainException(BlockCode.INVALID);
         }
-
-        blockPayload = BlockPayloadParser.Parse(networkBlock.Payload);
-
-        if (!blockPayload.GetPayloadHash().IsEqual(networkBlock.Header.PayloadHash))
-        {
-          throw new BlockchainException(BlockCode.INVALID);
-        }
       }
 
-      async Task<NetworkBlock> GetBlockDispatchedAsync()
+      UInt256 GetHeaderHash(ChainBlock chainBlock)
       {
-        await Channel.RequestBlockAsync(BlockHeaderHashDispatched).ConfigureAwait(false);
+        if(chainBlock.BlocksNext.Any())
+        {
+          return chainBlock.BlocksNext[0].Header.HashPrevious;
+        }
 
-        //CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-        Network.BlockMessage blockMessage = await GetBlockMessageAsync().ConfigureAwait(false);
-
-        return blockMessage.NetworkBlock;
+        return new UInt256(Hashing.SHA256d(chainBlock.Header.getBytes()));
       }
-
-      async Task<Network.BlockMessage> GetBlockMessageAsync()
+      UInt256 GetHeaderHash(NetworkBlock networkBlock)
+      {
+        return new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
+      }
+      
+      async Task<NetworkBlock> GetBlockMessageAsync()
       {
         Network.BlockMessage blockMessage = await Channel.GetNetworkMessageAsync(default(CancellationToken)).ConfigureAwait(false) as Network.BlockMessage;
 
-        return blockMessage ?? await GetBlockMessageAsync().ConfigureAwait(false);
+        if(blockMessage != null)
+        {
+          return blockMessage.NetworkBlock;
+        }
+
+        return await GetBlockMessageAsync().ConfigureAwait(false);
       }
     }
   }
