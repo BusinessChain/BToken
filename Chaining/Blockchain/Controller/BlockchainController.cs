@@ -80,7 +80,7 @@ namespace BToken.Chaining
 
     async Task<BlockchainChannel> CreateChannelAsync()
     {
-      BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainChannelAsync(Blockchain.GetHeight());
+      BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainChannelAsync(Blockchain.GetHeight()).ConfigureAwait(false);
       BlockchainChannel channel = new BlockchainChannel(buffer, this);
       Channels.Add(channel);
       return channel;

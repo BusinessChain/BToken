@@ -15,7 +15,7 @@ namespace BToken.Chaining
       int BatchSizeQueue;
       List<ChainBlock> BlocksQueued = new List<ChainBlock>();
 
-      const int BatchSizeDispatch = 5;
+      const int BatchSizeDispatch = 50;
       List<ChainBlock> BlocksDispatched = new List<ChainBlock>();
 
       public BlockPayloadLocator(Blockchain blockchain, int consumersCount)
@@ -34,9 +34,8 @@ namespace BToken.Chaining
           {
             ChainBlock blockQueued = PopBlockQueued();
 
-            if (BlocksDispatched.Contains(blockQueued)) { continue; }
-
             blocksDispatched.Add(blockQueued);
+            BlocksDispatched.Add(blockQueued);
 
             if (blocksDispatched.Count == BatchSizeDispatch)
             {
@@ -45,11 +44,18 @@ namespace BToken.Chaining
             }
           }
 
-          BlocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue);
-
+          BlocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue).Except(BlocksDispatched).ToList();
+          
         } while (BlocksQueued.Any());
 
-        return blocksDispatched;
+        if (blocksDispatched.Any())
+        {
+          return blocksDispatched;
+        }
+        else
+        {
+          return BlocksDispatched.Take(BatchSizeDispatch).ToList();
+        }
       }
 
       ChainBlock PopBlockQueued()
@@ -61,7 +67,7 @@ namespace BToken.Chaining
       }
 
 
-      public void RemoveDispatched(List<ChainBlock> blocks)
+      public void RemoveDownloaded(List<ChainBlock> blocks)
       {
         BlocksDispatched = BlocksDispatched.Except(blocks).ToList();
       }

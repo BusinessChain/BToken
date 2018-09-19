@@ -30,7 +30,7 @@ namespace BToken.Networking
             case "version":
               VersionMessage versionMessageRemote = new VersionMessage(messageRemote.Payload);
               VersionReceived = true;
-              await ProcessVersionMessageRemoteAsync(versionMessageRemote);
+              await ProcessVersionMessageRemoteAsync(versionMessageRemote).ConfigureAwait(false);
               break;
 
             case "reject":
@@ -46,7 +46,7 @@ namespace BToken.Networking
           ValidateVersionRemoteAsync(versionMessageRemote, out string rejectionReason);
           if (rejectionReason != "")
           {
-            await Peer.SendMessageAsync(new RejectMessage("version", RejectMessage.RejectCode.OBSOLETE, rejectionReason));
+            await Peer.SendMessageAsync(new RejectMessage("version", RejectMessage.RejectCode.OBSOLETE, rejectionReason)).ConfigureAwait(false);
             throw new NetworkException("We rejected rempote peer: " + rejectionReason);
           }
           await Peer.SendMessageAsync(new VerAckMessage());

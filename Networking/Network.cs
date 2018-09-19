@@ -44,13 +44,12 @@ namespace BToken.Networking
       {
         Peer peer = CreatePeer();
         Peers.Add(peer);
-        await peer.startAsync(blockheightLocal);
+        await peer.startAsync(blockheightLocal).ConfigureAwait(false);
         return peer.NetworkMessageBufferBlockchain;
       }
       catch (Exception ex)
       {
-        Console.WriteLine(ex.Message);
-        return await CreateBlockchainChannelAsync(blockheightLocal);
+        return await CreateBlockchainChannelAsync(blockheightLocal).ConfigureAwait(false);
       }
 
     }
