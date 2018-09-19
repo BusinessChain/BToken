@@ -38,7 +38,7 @@ namespace BToken.Networking
 
       public async Task startAsync(uint blockheightLocal)
       {
-        await EstablishPeerConnectionAsync(blockheightLocal);
+        await EstablishPeerConnectionAsync(blockheightLocal).ConfigureAwait(false);
 
         Task processMessagesTask = ProcessMessagesAsync();
       }
@@ -46,8 +46,8 @@ namespace BToken.Networking
       {
         try
         {
-          await ConnectTCPAsync();
-          await handshakeAsync(blockheightLocal);
+          await ConnectTCPAsync().ConfigureAwait(false);
+          await handshakeAsync(blockheightLocal).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -59,20 +59,19 @@ namespace BToken.Networking
       async Task ConnectTCPAsync()
       {
         TcpClient = new TcpClient();
-        await TcpClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port);
+        await TcpClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port).ConfigureAwait(false);
         NetworkMessageStreamer = new MessageStreamer(TcpClient.GetStream());
       }
       async Task handshakeAsync(uint blockchainHeightLocal)
       {
-        await NetworkMessageStreamer.WriteAsync(new VersionMessage(blockchainHeightLocal));
+        await NetworkMessageStreamer.WriteAsync(new VersionMessage(blockchainHeightLocal)).ConfigureAwait(false);
         
-        var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        CancellationToken cancellationToken = cancellationTokenSource.Token;
+        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
 
         while (!ConnectionManager.isHandshakeCompleted())
         {
-          NetworkMessage messageRemote = await NetworkMessageStreamer.ReadAsync(cancellationToken);
-          await ConnectionManager.ProcessResponseToVersionMessageAsync(messageRemote);
+          NetworkMessage messageRemote = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
+          await ConnectionManager.ProcessResponseToVersionMessageAsync(messageRemote).ConfigureAwait(false);
         }
       }
       async Task ProcessMessagesAsync(CancellationToken cancellationToken = default(CancellationToken))
@@ -81,24 +80,24 @@ namespace BToken.Networking
         {
           while (true)
           {
-            NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(cancellationToken);
+            NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
 
             switch (networkMessage.Command)
             {
               case "ping":
-                await ProcessPingMessageAsync(networkMessage);
+                await ProcessPingMessageAsync(networkMessage).ConfigureAwait(false);
                 break;
               case "sendheaders":
-                await ProcessSendHeadersMessageAsync(networkMessage);
+                await ProcessSendHeadersMessageAsync(networkMessage).ConfigureAwait(false);
                 break;
               case "inv":
-                await ProcessInventoryMessageAsync(networkMessage);
+                await ProcessInventoryMessageAsync(networkMessage).ConfigureAwait(false);
                 break;
               case "headers":
-                await ProcessHeadersMessageAsync(networkMessage);
+                await ProcessHeadersMessageAsync(networkMessage).ConfigureAwait(false);
                 break;
               case "block":
-                await ProcessBlockMessageAsync(networkMessage);
+                await ProcessBlockMessageAsync(networkMessage).ConfigureAwait(false);
                 break;
               default:
                 break;
@@ -113,29 +112,29 @@ namespace BToken.Networking
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
       {
         PingMessage pingMessage = new PingMessage(networkMessage);
-        await NetworkMessageStreamer.WriteAsync(new PongMessage(pingMessage.Nonce));
+        await NetworkMessageStreamer.WriteAsync(new PongMessage(pingMessage.Nonce)).ConfigureAwait(false);
       }
-      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage());
+      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage()).ConfigureAwait(false);
       async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
       {
         InvMessage invMessage = new InvMessage(networkMessage);
 
         if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
         {
-          await NetworkMessageBufferBlockchain.SendAsync(invMessage);
+          await NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
         }
         if (invMessage.GetTXInventories().Any())
         {
-          await NetworkMessageBufferUTXO.SendAsync(invMessage);
+          await NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
         };
       }
-      async Task ProcessHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageBufferBlockchain.SendAsync(new HeadersMessage(networkMessage));
-      async Task ProcessBlockMessageAsync(NetworkMessage networkMessage) => await NetworkMessageBufferBlockchain.SendAsync(new BlockMessage(networkMessage));
+      async Task ProcessHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageBufferBlockchain.SendAsync(new HeadersMessage(networkMessage)).ConfigureAwait(false);
+      async Task ProcessBlockMessageAsync(NetworkMessage networkMessage) => await NetworkMessageBufferBlockchain.SendAsync(new BlockMessage(networkMessage)).ConfigureAwait(false);
       public bool IsOwnerOfBuffer(BufferBlock<NetworkMessage> buffer) => buffer == NetworkMessageBufferBlockchain || buffer == NetworkMessageBufferUTXO;
 
-      public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage);
+      public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage).ConfigureAwait(false);
 
-      public async Task GetHeadersAsync(List<UInt256> headerLocator) => await NetworkMessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator));
+      public async Task GetHeadersAsync(List<UInt256> headerLocator) => await NetworkMessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator)).ConfigureAwait(false);
 
       public void Blame(uint penaltyScore)
       {
@@ -160,10 +159,10 @@ namespace BToken.Networking
 
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      public async Task GetBlockAsync(List<UInt256> hashes)
+      public async Task GetBlocksAsync(List<UInt256> hashes)
       {
         List<Inventory> inventories = hashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h)).ToList();
-        await NetworkMessageStreamer.WriteAsync(new GetDataMessage(inventories));
+        await NetworkMessageStreamer.WriteAsync(new GetDataMessage(inventories)).ConfigureAwait(false);
       }
     }
   }

@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.IO;
 
 using BToken.Networking;
 
@@ -13,9 +14,10 @@ namespace BToken.Chaining
 
   public partial class Blockchain
   {
-    Network Network;
+    static string BlockStorageRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Blockchain");
+
     BlockchainController Controller;
-    
+
     ChainBlock BlockGenesis;
     CheckpointManager Checkpoints;
 
@@ -23,14 +25,17 @@ namespace BToken.Chaining
     HeaderLocator Locator;
 
 
-    public Blockchain(Network network, ChainBlock genesisBlock, List<BlockLocation> checkpoints, IBlockPayloadParser blockPayloadParser)
+    public Blockchain(
+      Network network, 
+      ChainBlock genesisBlock, 
+      List<BlockLocation> checkpoints,
+      IBlockParser blockParser)
     {
-      Network = network;
-      Controller = new BlockchainController(network, this, blockPayloadParser);
+      Controller = new BlockchainController(network, this, blockParser);
 
       BlockGenesis = genesisBlock;
       Checkpoints = new CheckpointManager(checkpoints);
-
+            
       SocketMain = new ChainSocket(
         blockchain: this,
         block: genesisBlock,
@@ -80,7 +85,7 @@ namespace BToken.Chaining
 
     public void InsertHeader(NetworkHeader header, UInt256 headerHash)
     {
-      ValidateHeader(header, headerHash, out ChainSocket.SocketProbeHeader socketProbeAtHeaderPrevious);
+      ValidateNetworkHeader(header, headerHash, out ChainSocket.SocketProbeHeader socketProbeAtHeaderPrevious);
 
       ChainSocket socket = socketProbeAtHeaderPrevious.InsertHeader(header, headerHash);
 
@@ -92,7 +97,7 @@ namespace BToken.Chaining
 
       InsertSocket(socket);
     }
-    void ValidateHeader(NetworkHeader header, UInt256 headerHash, out ChainSocket.SocketProbeHeader socketProbe)
+    void ValidateNetworkHeader(NetworkHeader header, UInt256 headerHash, out ChainSocket.SocketProbeHeader socketProbe)
     {
       if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
       {
@@ -111,24 +116,7 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.ORPHAN);
       }
     }
-
-    public void InsertBlock(IBlockPayload blockPayload, UInt256 headerHash)
-    {
-      ChainSocket socket = SocketMain;
-
-      while (socket != null)
-      {
-        if(socket.InsertBlock(blockPayload, headerHash))
-        {
-          return;
-        }
-
-        socket = socket.WeakerSocket;
-      }
-
-      throw new BlockchainException(BlockCode.ORPHAN);
-    }
-
+    
     bool IsTimestampExpired(ulong unixTimeSeconds)
     {
       const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
@@ -167,20 +155,19 @@ namespace BToken.Chaining
       socket.ConnectWeakerSocket(newSocket);
     }
 
-    public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize)
+    public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
     {
-      var locatorBatchBlocksUnassignedPayload = new List<UInt256>();
+      var locatorBatchBlocksUnassignedPayload = new List<ChainBlock>();
       ChainSocket socket = SocketMain;
 
       do
       {
-        locatorBatchBlocksUnassignedPayload.AddRange(socket.GetLocatorBatchBlocksUnassignedPayload(batchSize));
+        locatorBatchBlocksUnassignedPayload.AddRange(socket.GetBlocksUnassignedPayload(batchSize));
         batchSize -= locatorBatchBlocksUnassignedPayload.Count;
         socket = socket.WeakerSocket;
       } while (batchSize > 0 && socket != null);
 
       return locatorBatchBlocksUnassignedPayload;
     }
-
   }
 }

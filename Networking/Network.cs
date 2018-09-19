@@ -44,13 +44,12 @@ namespace BToken.Networking
       {
         Peer peer = CreatePeer();
         Peers.Add(peer);
-        await peer.startAsync(blockheightLocal);
+        await peer.startAsync(blockheightLocal).ConfigureAwait(false);
         return peer.NetworkMessageBufferBlockchain;
       }
       catch (Exception ex)
       {
-        Console.WriteLine(ex.Message);
-        return await CreateBlockchainChannelAsync(blockheightLocal);
+        return await CreateBlockchainChannelAsync(blockheightLocal).ConfigureAwait(false);
       }
 
     }
@@ -119,9 +118,9 @@ namespace BToken.Networking
       faultedPeers.ForEach(p => p.Dispose());
     }
 
-    public async Task GetBlockAsync(List<UInt256> blockHashes)
+    public async Task GetBlocksAsync(List<UInt256> blockHashes)
     {
-      await Peers.First().GetBlockAsync(blockHashes);
+      await Peers.First().GetBlocksAsync(blockHashes);
     }
     public async Task GetBlockAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> blockHashes)
     {
@@ -129,7 +128,7 @@ namespace BToken.Networking
 
       try
       {
-        await peer.GetBlockAsync(blockHashes);
+        await peer.GetBlocksAsync(blockHashes).ConfigureAwait(false);
       }
       catch(Exception ex)
       {

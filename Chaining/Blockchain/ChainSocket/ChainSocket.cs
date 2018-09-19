@@ -1,7 +1,10 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 using BToken.Networking;
 
@@ -21,7 +24,7 @@ namespace BToken.Chaining
       double AccumulatedDifficulty;
       public uint HeightBlockTip { get; private set; }
 
-      public ChainSocket StrongerSocket { get; private set; }
+      ChainSocket StrongerSocket;
       public ChainSocket WeakerSocket { get; private set; }
 
       public SocketProbeHeader HeaderProbe { get; private set; }
@@ -43,7 +46,7 @@ namespace BToken.Chaining
         BlockTip = block;
         HashBlockTip = hash;
 
-        if(!block.IsPayloadAssigned())
+        if(block.BlockPayload == null)
         {
           BlockUnassignedPayloadDeepest = block;
         }
@@ -54,81 +57,35 @@ namespace BToken.Chaining
         HeaderProbe = new SocketProbeHeader(this);
       }
 
-      public bool InsertBlock(IBlockPayload blockPayload, UInt256 headerHash)
+      public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
       {
-        ChainBlock chainBlock = FindBlock(headerHash, BlockUnassignedPayloadDeepest);
-        if (chainBlock == null) { return false; }
+        if (BlockUnassignedPayloadDeepest == null) { return new List<ChainBlock>(); }
 
-        chainBlock.InsertPayload(blockPayload);
-
-        UpdateBlockUnassignedPayloadDeepest();
-
-        return true;
-      }
-      void StoreToDisk(ChainBlock block)
-      {
-
-      }
-      ChainBlock FindBlock(UInt256 headerHash, ChainBlock startBlock)
-      {
-        if (startBlock == null) { return null; }
-
-        ChainBlock block = startBlock;
-
-        while (!GetHash(block).IsEqual(headerHash))
-        {
-          if (block == BlockTip)
-          {
-            return null;
-          }
-
-          block = block.BlocksNext[0];
-        }
-
-        return block;
-      }
-      void UpdateBlockUnassignedPayloadDeepest()
-      {
         ChainBlock block = BlockUnassignedPayloadDeepest;
 
-        while (block.IsPayloadAssigned())
-        {
-          if (block == BlockTip)
-          {
-            BlockUnassignedPayloadDeepest = null;
-          }
-
-          block = block.BlocksNext[0];
-        }
-
-        BlockUnassignedPayloadDeepest = block;
-      }
-
-      public List<UInt256> GetLocatorBatchBlocksUnassignedPayload(int batchSize)
-      {
-        ChainBlock startBlock = BlockUnassignedPayloadDeepest;
-
-        if (startBlock == null) { return new List<UInt256>(); }
-        
-        var locatorBatchBlocksUnassignedPayload = new List<UInt256>();
+        var locatorBatchBlocksUnassignedPayload = new List<ChainBlock>();
         while (locatorBatchBlocksUnassignedPayload.Count < batchSize)
         {
-          if (!startBlock.IsPayloadAssigned())
+          if (block.BlockPayload == null)
           {
-            locatorBatchBlocksUnassignedPayload.Add(GetHash(startBlock));
+            locatorBatchBlocksUnassignedPayload.Add(block);
           }
 
-          if (startBlock == BlockTip)
+          if (block == BlockTip)
           {
             return locatorBatchBlocksUnassignedPayload;
           }
 
-          startBlock = startBlock.BlocksNext[0];
+          block = block.BlocksNext[0];
+
+          if(locatorBatchBlocksUnassignedPayload.Count == 0)
+          {
+            BlockUnassignedPayloadDeepest = block;
+          }
         }
 
         return locatorBatchBlocksUnassignedPayload;
       }
-      bool IsNoPayloadUnassigned() => BlockUnassignedPayloadDeepest == null;
 
       public SocketProbeHeader GetProbeAtBlock(UInt256 hash)
       {
@@ -170,7 +127,7 @@ namespace BToken.Chaining
         AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
         HeightBlockTip++;
 
-        if(BlockUnassignedPayloadDeepest == null && !block.IsPayloadAssigned())
+        if(BlockUnassignedPayloadDeepest == null && block.BlockPayload == null)
         {
           BlockUnassignedPayloadDeepest = block;
         }
@@ -200,7 +157,7 @@ namespace BToken.Chaining
         return AccumulatedDifficulty > socket.AccumulatedDifficulty;
       }
       
-      UInt256 GetHash(ChainBlock block)
+      UInt256 GetHeaderHash(ChainBlock block)
       {
         if(block == BlockTip)
         {

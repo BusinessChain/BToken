@@ -82,7 +82,7 @@ namespace BToken.Chaining
         }
         void ValidateHeader(NetworkHeader header, UInt256 headerHash)
         {
-          if (IsBlockConnectedToHash(headerHash))
+          if (IsBlockConnectedToNextBlock(headerHash))
           {
             throw new BlockchainException(BlockCode.DUPLICATE);
           }
@@ -108,7 +108,7 @@ namespace BToken.Chaining
           }          
 
         }
-        bool IsBlockConnectedToHash(UInt256 hash) => Block.BlocksNext.Any(b => Socket.GetHash(b).IsEqual(hash));
+        bool IsBlockConnectedToNextBlock(UInt256 hash) => Block.BlocksNext.Any(b => Socket.GetHeaderHash(b).IsEqual(hash));
         uint GetMedianTimePast()
         {
           const int MEDIAN_TIME_PAST = 11;

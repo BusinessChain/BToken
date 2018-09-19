@@ -29,7 +29,7 @@ namespace BToken.Chaining
         nBits,
         nonce);
 
-      InsertPayload(payload);
+      BlockPayload = payload;
     }
 
     public ChainBlock(NetworkHeader header)
@@ -37,16 +37,5 @@ namespace BToken.Chaining
       Header = header;
     }
 
-    public void InsertPayload(IBlockPayload payload)
-    {
-      if (!payload.GetPayloadHash().IsEqual(Header.PayloadHash))
-      {
-        throw new BlockchainException(BlockCode.INVALID);
-      }
-
-      BlockPayload = payload;
-    }
-
-    public bool IsPayloadAssigned() => BlockPayload != null;
   }
 }

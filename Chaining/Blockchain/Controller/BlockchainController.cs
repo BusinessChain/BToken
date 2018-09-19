@@ -16,22 +16,22 @@ namespace BToken.Chaining
   {
     Network Network;
     Blockchain Blockchain;
+    IBlockParser BlockParser;
 
-    const int CHANNELS_COUNT = 16;
+    const int CHANNELS_COUNT = 8;
     List<BlockchainChannel> Channels = new List<BlockchainChannel>();
 
     BlockPayloadLocator BlockLocator;
-    IBlockPayloadParser BlockPayloadParser;
     
     Stopwatch StopWatch = new Stopwatch();
 
 
-    public BlockchainController(Network network, Blockchain blockchain, IBlockPayloadParser blockPayloadParser)
+    public BlockchainController(Network network, Blockchain blockchain, IBlockParser blockParser)
     {
       Network = network;
       Blockchain = blockchain;
-      BlockLocator = new BlockPayloadLocator(blockchain);
-      BlockPayloadParser = blockPayloadParser;
+      BlockParser = blockParser;
+      BlockLocator = new BlockPayloadLocator(blockchain, CHANNELS_COUNT);
     }
 
     public async Task StartAsync()
@@ -59,7 +59,7 @@ namespace BToken.Chaining
       Task[] downloadBlocksTask = createChannelTasks.Select(async c =>
       {
         BlockchainChannel channel = await c;
-        await channel.ExecuteSessionAsync(new SessionBlockDownload(Blockchain, BlockLocator, BlockPayloadParser));
+        await channel.ExecuteSessionAsync(new SessionBlockDownload(this, BlockLocator));
       }).ToArray();
 
 
@@ -80,7 +80,7 @@ namespace BToken.Chaining
 
     async Task<BlockchainChannel> CreateChannelAsync()
     {
-      BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainChannelAsync(Blockchain.GetHeight());
+      BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainChannelAsync(Blockchain.GetHeight()).ConfigureAwait(false);
       BlockchainChannel channel = new BlockchainChannel(buffer, this);
       Channels.Add(channel);
       return channel;

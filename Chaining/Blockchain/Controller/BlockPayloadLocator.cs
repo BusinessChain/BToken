@@ -12,45 +12,64 @@ namespace BToken.Chaining
     {
       Blockchain Blockchain;
 
-      List<UInt256> BlockLocationsQueued = new List<UInt256>();
-      const int BatchSize = 50;
+      int BatchSizeQueue;
+      List<ChainBlock> BlocksQueued = new List<ChainBlock>();
 
-      List<UInt256> BlockLocationsDispatched = new List<UInt256>();
+      const int BatchSizeDispatch = 50;
+      List<ChainBlock> BlocksDispatched = new List<ChainBlock>();
 
-      public BlockPayloadLocator(Blockchain blockchain)
+      public BlockPayloadLocator(Blockchain blockchain, int consumersCount)
       {
         Blockchain = blockchain;
+        BatchSizeQueue = BatchSizeDispatch * consumersCount * 2;
       }
 
-      public UInt256 GetBlockHeaderHash()
+      public List<ChainBlock> DispatchBlocks()
       {
-        if(!BlockLocationsQueued.Any())
-        {
-          BlockLocationsQueued = Blockchain.GetLocatorBatchBlocksUnassignedPayload(BatchSize);
-          if(!BlockLocationsQueued.Any())
-          {
-            return null;
-          }
-        }
-        
+        var blocksDispatched = new List<ChainBlock>();
+
         do
         {
-          UInt256 blockLocation = BlockLocationsQueued[0];
-          BlockLocationsQueued.RemoveAt(0);
-
-          if (!BlockLocationsDispatched.Any(b => b.IsEqual(blockLocation)))
+          while (BlocksQueued.Any())
           {
-            BlockLocationsDispatched.Add(blockLocation);
-            return blockLocation;
-          }
-        } while (BlockLocationsQueued.Any());
+            ChainBlock blockQueued = PopBlockQueued();
 
-        return null;
+            blocksDispatched.Add(blockQueued);
+            BlocksDispatched.Add(blockQueued);
+
+            if (blocksDispatched.Count == BatchSizeDispatch)
+            {
+              BlocksDispatched.AddRange(blocksDispatched);
+              return blocksDispatched;
+            }
+          }
+
+          BlocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue).Except(BlocksDispatched).ToList();
+          
+        } while (BlocksQueued.Any());
+
+        if (blocksDispatched.Any())
+        {
+          return blocksDispatched;
+        }
+        else
+        {
+          return BlocksDispatched.Take(BatchSizeDispatch).ToList();
+        }
       }
 
-      public void RemoveDispatched(UInt256 hash)
+      ChainBlock PopBlockQueued()
       {
-        BlockLocationsDispatched.RemoveAll(b => b.IsEqual(hash));
+        ChainBlock blockQueued = BlocksQueued[0];
+        BlocksQueued.RemoveAt(0);
+
+        return blockQueued;
+      }
+
+
+      public void RemoveDownloaded(List<ChainBlock> blocks)
+      {
+        BlocksDispatched = BlocksDispatched.Except(blocks).ToList();
       }
     }
   }

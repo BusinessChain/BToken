@@ -8,6 +8,7 @@ using System.IO;
 using System.Threading.Tasks;
 
 using BToken.Chaining;
+using BToken.Networking;
 
 namespace BToken.Bitcoin
 {
@@ -95,7 +96,7 @@ namespace BToken.Bitcoin
       return stream.ToArray();
     }
 
-    public void StoreToDisk(string filename)
+    public void StoreToDisk(NetworkHeader networkHeader, string filename)
     {
       string postFixFilename = filename.Substring(filename.Length - 3);
       string blockchainRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Blockchain", postFixFilename);

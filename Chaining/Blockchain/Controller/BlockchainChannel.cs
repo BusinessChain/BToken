@@ -77,8 +77,7 @@ namespace BToken.Chaining
       }
       public async Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken cancellationToken)
       {
-        NetworkMessage networkMessage = await Buffer.ReceiveAsync(cancellationToken);
-
+        NetworkMessage networkMessage = await Buffer.ReceiveAsync(cancellationToken).ConfigureAwait(false);
         return networkMessage ?? throw new NetworkException("Network closed channel.");
       }
 
@@ -113,7 +112,7 @@ namespace BToken.Chaining
           //await new SessionBlockDownload(this).StartAsync(blockLocations);
         }
       }
-      public async Task RequestBlockAsync(UInt256 blockHash) => await Controller.Network.GetBlockAsync(Buffer, new List<UInt256> { blockHash });
+      public async Task RequestBlocksAsync(List<UInt256> blockHashes) => await Controller.Network.GetBlockAsync(Buffer, blockHashes).ConfigureAwait(false);
 
       void BlameConsensusError()
       {
