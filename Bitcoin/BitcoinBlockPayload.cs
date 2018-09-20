@@ -77,12 +77,7 @@ namespace BToken.Bitcoin
 
       return arrayConcat;
     }
-
-    public void ParsePayload(byte[] stream)
-    {
-      throw new NotImplementedException();
-    }
-
+    
     byte[] SerializeTXs()
     {
       MemoryStream stream = new MemoryStream();

@@ -20,10 +20,11 @@ namespace BToken.Bitcoin
       : base(
           version,
           hashPrevious,
+          payload.GetPayloadHash(),
           unixTimeSeconds,
           nBits,
           nonce,
-          payload)
+          new BlockArchiver.BlockStore())
     { }
   }
 

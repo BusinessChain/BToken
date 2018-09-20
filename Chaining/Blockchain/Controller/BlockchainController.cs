@@ -22,8 +22,7 @@ namespace BToken.Chaining
     List<BlockchainChannel> Channels = new List<BlockchainChannel>();
 
     BlockPayloadLocator BlockLocator;
-    
-    Stopwatch StopWatch = new Stopwatch();
+    BlockArchiver Archiver;
 
 
     public BlockchainController(Network network, Blockchain blockchain, IBlockParser blockParser)
@@ -32,13 +31,14 @@ namespace BToken.Chaining
       Blockchain = blockchain;
       BlockParser = blockParser;
       BlockLocator = new BlockPayloadLocator(blockchain, CHANNELS_COUNT);
+      Archiver = new BlockArchiver();
     }
 
     public async Task StartAsync()
     {
       await DownloadHeadersAsync();
 
-      await DownloadPayloadsAsync();
+      await DownloadBlocksAsync();
 
       //StartListeningToNetworkAsync();
     }
@@ -48,7 +48,8 @@ namespace BToken.Chaining
       await CreateChannelAsync();
       await Channels.First().ExecuteSessionAsync(new SessionHeaderDownload(Blockchain));
     }
-    async Task DownloadPayloadsAsync()
+
+    async Task DownloadBlocksAsync()
     {
       var createChannelTasks = new List<Task<BlockchainChannel>>();
       for (int i = 0; i < CHANNELS_COUNT; i++)
@@ -62,20 +63,7 @@ namespace BToken.Chaining
         await channel.ExecuteSessionAsync(new SessionBlockDownload(this, BlockLocator));
       }).ToArray();
 
-
-      StopWatch.Start();
-
       await Task.WhenAll(downloadBlocksTask);
-
-      StopWatch.Stop();
-      TimeSpan ts = StopWatch.Elapsed;
-      string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
-        ts.Hours,
-        ts.Minutes,
-        ts.Seconds,
-        ts.Milliseconds / 10);
-      Debug.WriteLine("All channels completed session, runtime: " + elapsedTime);
-      StopWatch.Reset();
     }
 
     async Task<BlockchainChannel> CreateChannelAsync()
