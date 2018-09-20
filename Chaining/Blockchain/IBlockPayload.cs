@@ -10,7 +10,6 @@ namespace BToken.Chaining
 {
   public interface IBlockPayload
   {
-    void ParsePayload(byte[] stream);
     UInt256 GetPayloadHash();
 
     void StoreToDisk(NetworkHeader header, string filename);

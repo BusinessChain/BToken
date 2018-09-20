@@ -11,25 +11,26 @@ namespace BToken.Chaining
 
     public ChainBlock BlockPrevious;
     public List<ChainBlock> BlocksNext = new List<ChainBlock>();
-    public IBlockPayload BlockPayload;
+    public BlockArchiver.BlockStore BlockStore;
 
     public ChainBlock(
       UInt32 version,
       UInt256 hashPrevious,
+      UInt256 payloadHash,
       UInt32 unixTimeSeconds,
       UInt32 nBits,
       UInt32 nonce,
-      IBlockPayload payload)
+      BlockArchiver.BlockStore blockStore)
     {
       Header = new NetworkHeader(
         version,
         hashPrevious,
-        payload.GetPayloadHash(),
+        payloadHash,
         unixTimeSeconds,
         nBits,
         nonce);
 
-      BlockPayload = payload;
+      BlockStore = blockStore;
     }
 
     public ChainBlock(NetworkHeader header)

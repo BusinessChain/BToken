@@ -67,10 +67,12 @@
     <Compile Include="Chaining\Blockchain\ChainSocket\HeaderLocator.cs" />
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
     <Compile Include="Chaining\Blockchain\CheckpointManager.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\BlockArchiver.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainChannel.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainSession.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockPayloadLocator.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\BlockStore.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\Blockchain\IBlockPayload.cs" />
@@ -78,6 +80,7 @@
     <Compile Include="Chaining\Blockchain\ChainSocket\ChainSocket.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainException.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\SocketProbeHeader.cs" />
+    <Compile Include="Chaining\Blockchain\IBlockStore.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\Hashing.cs" />
     <Compile Include="Chaining\Blockchain\ChainBlock.cs" />

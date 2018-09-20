@@ -46,7 +46,7 @@ namespace BToken.Chaining
         BlockTip = block;
         HashBlockTip = hash;
 
-        if(block.BlockPayload == null)
+        if(block.BlockStore == null)
         {
           BlockUnassignedPayloadDeepest = block;
         }
@@ -66,7 +66,7 @@ namespace BToken.Chaining
         var locatorBatchBlocksUnassignedPayload = new List<ChainBlock>();
         while (locatorBatchBlocksUnassignedPayload.Count < batchSize)
         {
-          if (block.BlockPayload == null)
+          if (block.BlockStore == null)
           {
             locatorBatchBlocksUnassignedPayload.Add(block);
           }
@@ -127,7 +127,7 @@ namespace BToken.Chaining
         AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
         HeightBlockTip++;
 
-        if(BlockUnassignedPayloadDeepest == null && block.BlockPayload == null)
+        if(BlockUnassignedPayloadDeepest == null && block.BlockStore == null)
         {
           BlockUnassignedPayloadDeepest = block;
         }
