@@ -19,7 +19,6 @@ namespace BToken.Chaining
     IBlockParser BlockParser;
 
     const int CHANNELS_COUNT = 8;
-    List<BlockchainChannel> Channels = new List<BlockchainChannel>();
 
     BlockPayloadLocator BlockLocator;
     BlockArchiver Archiver;
@@ -36,56 +35,44 @@ namespace BToken.Chaining
 
     public async Task StartAsync()
     {
-      await DownloadHeadersAsync();
+      Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
 
-      await DownloadBlocksAsync();
+      BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
+      await DownloadHeadersAsync(channelFirst);
+
+      BlockchainChannel[] channels = await Task.WhenAll(createChannelsTasks);
+      await DownloadBlocksAsync(channels);
 
       //StartListeningToNetworkAsync();
     }
-
-    async Task DownloadHeadersAsync()
+    Task<BlockchainChannel>[] CreateChannels()
     {
-      await CreateChannelAsync();
-      await Channels.First().ExecuteSessionAsync(new SessionHeaderDownload(Blockchain));
-    }
-
-    async Task DownloadBlocksAsync()
-    {
-      var createChannelTasks = new List<Task<BlockchainChannel>>();
+      var channelsTasks = new List<BlockchainChannel>();
       for (int i = 0; i < CHANNELS_COUNT; i++)
       {
-        createChannelTasks.Add(CreateChannelAsync());
+        channelsTasks.Add(new BlockchainChannel(this));
       }
-
-      Task[] downloadBlocksTask = createChannelTasks.Select(async c =>
+      
+      return channelsTasks.Select(async c =>
       {
-        BlockchainChannel channel = await c;
-        await channel.ExecuteSessionAsync(new SessionBlockDownload(this, BlockLocator));
+        await c.ConnectAsync();
+        return c;
+      }).ToArray();
+    }
+
+    async Task DownloadHeadersAsync(BlockchainChannel channel)
+    {
+      await channel.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain));
+    }
+
+    async Task DownloadBlocksAsync(BlockchainChannel[] channels)
+    {
+      Task[] downloadBlocksTask = channels.Select(async c =>
+      {
+        await c.ExecuteSessionAsync(new SessionBlockDownload(this, BlockLocator));
       }).ToArray();
 
       await Task.WhenAll(downloadBlocksTask);
-    }
-
-    async Task<BlockchainChannel> CreateChannelAsync()
-    {
-      BufferBlock<NetworkMessage> buffer = await Network.CreateBlockchainChannelAsync(Blockchain.GetHeight()).ConfigureAwait(false);
-      BlockchainChannel channel = new BlockchainChannel(buffer, this);
-      Channels.Add(channel);
-      return channel;
-    }
-
-    async Task<BlockchainChannel> RenewChannelAsync(BlockchainChannel channel)
-    {
-      CloseChannel(channel);
-
-      BlockchainChannel newChannel = await CreateChannelAsync();
-      Channels.Add(newChannel);
-      return newChannel;
-    }
-    void CloseChannel(BlockchainChannel channel)
-    {
-      Network.CloseChannel(channel.Buffer);
-      Channels.Remove(channel);
     }
 
   }
