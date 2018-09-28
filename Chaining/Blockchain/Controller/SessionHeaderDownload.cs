@@ -141,16 +141,21 @@ namespace BToken.Chaining
         await Channel.RequestHeadersAsync(HeaderLocator);
 
         CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-        Network.HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken);
-
-        return headersMessage.Headers;
+        return await GetHeadersMessageAsync(cancellationToken);
       }
 
-      async Task<Network.HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
+      async Task<List<NetworkHeader>> GetHeadersMessageAsync(CancellationToken cancellationToken)
       {
-        Network.HeadersMessage headersMessage = await Channel.GetNetworkMessageAsync(cancellationToken) as Network.HeadersMessage;
+        while(true)
+        {
+          NetworkMessage networkMessage = await Channel.GetNetworkMessageAsync(cancellationToken).ConfigureAwait(false);
+          Network.HeadersMessage headersMessage = networkMessage as Network.HeadersMessage;
 
-        return headersMessage ?? await GetHeadersMessageAsync(cancellationToken);
+          if (headersMessage != null)
+          {
+            return headersMessage.Headers;
+          }
+        }
       }
 
     }

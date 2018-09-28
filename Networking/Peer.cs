@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -36,33 +38,29 @@ namespace BToken.Networking
       }
 
 
-      public async Task startAsync(uint blockheightLocal)
-      {
-        await EstablishPeerConnectionAsync(blockheightLocal).ConfigureAwait(false);
-
-        Task processMessagesTask = ProcessMessagesAsync();
-      }
-      async Task EstablishPeerConnectionAsync(uint blockheightLocal)
+      public async Task StartAsync()
       {
         try
         {
-          await ConnectTCPAsync().ConfigureAwait(false);
-          await handshakeAsync(blockheightLocal).ConfigureAwait(false);
+          while (true)
+          {
+            await ProcessNetworkMessageAsync().ConfigureAwait(false);
+          }
         }
         catch (Exception ex)
         {
+          Debug.WriteLine("Peer::ProcessMessagesAsync: " + ex.Message);
           Dispose();
-
-          throw new NetworkException(string.Format("Connection failed with peer '{0}:{1}'", IPEndPoint.Address.ToString(), IPEndPoint.Port.ToString()), ex);
         }
       }
-      async Task ConnectTCPAsync()
+
+      public async Task ConnectTCPAsync()
       {
         TcpClient = new TcpClient();
         await TcpClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port).ConfigureAwait(false);
         NetworkMessageStreamer = new MessageStreamer(TcpClient.GetStream());
       }
-      async Task handshakeAsync(uint blockchainHeightLocal)
+      public async Task HandshakeAsync(uint blockchainHeightLocal)
       {
         await NetworkMessageStreamer.WriteAsync(new VersionMessage(blockchainHeightLocal)).ConfigureAwait(false);
         
@@ -74,39 +72,32 @@ namespace BToken.Networking
           await ConnectionManager.ProcessResponseToVersionMessageAsync(messageRemote).ConfigureAwait(false);
         }
       }
-      async Task ProcessMessagesAsync(CancellationToken cancellationToken = default(CancellationToken))
+      async Task ProcessNetworkMessageAsync(CancellationToken cancellationToken = default(CancellationToken))
       {
-        try
+        while (true)
         {
-          while (true)
-          {
-            NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
+          NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
 
-            switch (networkMessage.Command)
-            {
-              case "ping":
-                await ProcessPingMessageAsync(networkMessage).ConfigureAwait(false);
-                break;
-              case "sendheaders":
-                await ProcessSendHeadersMessageAsync(networkMessage).ConfigureAwait(false);
-                break;
-              case "inv":
-                await ProcessInventoryMessageAsync(networkMessage).ConfigureAwait(false);
-                break;
-              case "headers":
-                await ProcessHeadersMessageAsync(networkMessage).ConfigureAwait(false);
-                break;
-              case "block":
-                await ProcessBlockMessageAsync(networkMessage).ConfigureAwait(false);
-                break;
-              default:
-                break;
-            }
+          switch (networkMessage.Command)
+          {
+            case "ping":
+              await ProcessPingMessageAsync(networkMessage).ConfigureAwait(false);
+              break;
+            case "sendheaders":
+              await ProcessSendHeadersMessageAsync(networkMessage).ConfigureAwait(false);
+              break;
+            case "inv":
+              await ProcessInventoryMessageAsync(networkMessage).ConfigureAwait(false);
+              break;
+            case "headers":
+              await ProcessHeadersMessageAsync(networkMessage).ConfigureAwait(false);
+              break;
+            case "block":
+              await ProcessBlockMessageAsync(networkMessage).ConfigureAwait(false);
+              break;
+            default:
+              break;
           }
-        }
-        catch (Exception ex)
-        {
-          Dispose();
         }
       }
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
