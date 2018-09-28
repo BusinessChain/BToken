@@ -80,7 +80,6 @@ namespace BToken.Chaining
 
           BlocksDownloaded.Add(blockQueued);
           BlocksQueued.Remove(blockQueued);
-
         }
 
         return blockPayloads;
@@ -124,14 +123,16 @@ namespace BToken.Chaining
       
       async Task<NetworkBlock> GetBlockMessageAsync(CancellationToken cancellationToken)
       {
-        Network.BlockMessage blockMessage = await Channel.GetNetworkMessageAsync(cancellationToken).ConfigureAwait(false) as Network.BlockMessage;
-
-        if(blockMessage != null)
+        while(true)
         {
-          return blockMessage.NetworkBlock;
-        }
+          NetworkMessage networkMessage = await Channel.GetNetworkMessageAsync(cancellationToken).ConfigureAwait(false);
+          Network.BlockMessage blockMessage = networkMessage as Network.BlockMessage;
 
-        return await GetBlockMessageAsync(cancellationToken).ConfigureAwait(false);
+          if (blockMessage != null)
+          {
+            return blockMessage.NetworkBlock;
+          }
+        }
       }
     }
   }

@@ -40,23 +40,29 @@ namespace BToken.Networking
 
     public async Task<BufferBlock<NetworkMessage>> CreateBlockchainChannelAsync(uint blockheightLocal)
     {
-      try
+      int connectionTries = 0;
+      while (true)
       {
-        Peer peer = CreatePeer();
-        Peers.Add(peer);
-        await peer.startAsync(blockheightLocal).ConfigureAwait(false);
-        return peer.NetworkMessageBufferBlockchain;
-      }
-      catch (Exception ex)
-      {
-        return await CreateBlockchainChannelAsync(blockheightLocal).ConfigureAwait(false);
-      }
+        try
+        {
+          IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
+          Peer peer = new Peer(new IPEndPoint(iPAddress, Port), this);
 
-    }
-    Peer CreatePeer()
-    {
-      IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
-      return new Peer(new IPEndPoint(iPAddress, Port), this);
+          await peer.ConnectTCPAsync().ConfigureAwait(false);
+          await peer.HandshakeAsync(blockheightLocal).ConfigureAwait(false);
+
+          Peers.Add(peer);
+
+          Task peerStartTask = peer.StartAsync();
+
+          return peer.NetworkMessageBufferBlockchain;
+        }
+        catch (Exception ex)
+        {
+          Debug.WriteLine("Network::CreateBlockchainChannel: " + ex.Message
+            + "\nConnection tries: '{0}'", ++connectionTries);
+        }
+      }
     }
 
     public void CloseChannel(BufferBlock<NetworkMessage> buffer)
@@ -120,7 +126,7 @@ namespace BToken.Networking
       {
         try
         {
-          await peer.PingAsync();
+          await peer.PingAsync().ConfigureAwait(false);
         }
         catch
         {
@@ -133,7 +139,7 @@ namespace BToken.Networking
 
     public async Task GetBlocksAsync(List<UInt256> blockHashes)
     {
-      await Peers.First().GetBlocksAsync(blockHashes);
+      await Peers.First().GetBlocksAsync(blockHashes).ConfigureAwait(false);
     }
     public async Task GetBlockAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> blockHashes)
     {

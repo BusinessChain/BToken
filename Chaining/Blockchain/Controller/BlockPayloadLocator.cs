@@ -35,7 +35,6 @@ namespace BToken.Chaining
             ChainBlock blockQueued = PopBlockQueued();
 
             blocksDispatched.Add(blockQueued);
-            BlocksDispatched.Add(blockQueued);
 
             if (blocksDispatched.Count == BatchSizeDispatch)
             {

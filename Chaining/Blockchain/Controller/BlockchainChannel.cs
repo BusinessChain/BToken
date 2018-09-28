@@ -123,16 +123,6 @@ namespace BToken.Chaining
       public async Task RequestHeadersAsync(List<BlockLocation> headerLocator) => await Controller.Network.GetHeadersAsync(Buffer, headerLocator.Select(b => b.Hash).ToList());
       List<BlockLocation> GetHeaderLocator() => Controller.Blockchain.GetHeaderLocator();
 
-      public async Task DownloadBlocksAsync(List<List<BlockLocation>> blockLocationBatches)
-      {
-        while (blockLocationBatches.Any())
-        {
-          List<BlockLocation> blockLocations = blockLocationBatches[0];
-          blockLocationBatches.RemoveAt(0);
-
-          //await new SessionBlockDownload(this).StartAsync(blockLocations);
-        }
-      }
       public async Task RequestBlocksAsync(List<UInt256> blockHashes) => await Controller.Network.GetBlockAsync(Buffer, blockHashes).ConfigureAwait(false);
 
       void BlameConsensusError()
