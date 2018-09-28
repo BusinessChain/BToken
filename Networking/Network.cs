@@ -74,14 +74,19 @@ namespace BToken.Networking
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
 
+      if (peer == null)
+      {
+        throw new NetworkException("No peer owning this buffer exists.");
+      }
+
       try
       {
-        await peer.GetHeadersAsync(headerLocator);
+        await peer.GetHeadersAsync(headerLocator).ConfigureAwait(false);
       }
       catch
       {
         peer.Dispose();
-        throw new NetworkException("Peer discarded due to connection error.");
+        throw new NetworkException("Peer has been disposed.");
       }
     }
     Peer GetPeerOwnerOfBuffer(BufferBlock<NetworkMessage> buffer) => Peers.Find(p => p.IsOwnerOfBuffer(buffer));
@@ -89,11 +94,19 @@ namespace BToken.Networking
     public void BlameProtocolError(BufferBlock<NetworkMessage> buffer)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
+      if (peer == null)
+      {
+        throw new NetworkException("No peer owning this buffer exists.");
+      }
       peer.Blame(20);
     }
     public void BlameConsensusError(BufferBlock<NetworkMessage> buffer)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
+      if (peer == null)
+      {
+        throw new NetworkException("No peer owning this buffer exists.");
+      }
       peer.Blame(100);
     }
     
@@ -125,6 +138,11 @@ namespace BToken.Networking
     public async Task GetBlockAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> blockHashes)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);
+
+      if (peer == null)
+      {
+        throw new NetworkException("No peer owning this buffer exists.");
+      }
 
       try
       {
