@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -19,39 +21,57 @@ namespace BToken.Chaining
 
 
       public BlockchainChannel() { }
-      public BlockchainChannel(BufferBlock<NetworkMessage> buffer, BlockchainController controller)
+      public BlockchainChannel(BlockchainController controller)
       {
-        Buffer = buffer;
         Controller = controller;
       }
 
-      public async Task StartMessageListenerAsync()
-      {
-        try
-        {
-          while (true)
-          {
-            await ProcessNextMessageAsync();
-          }
-        }
-        catch (Exception ex)
-        {
-          BlockchainChannel channel = await Controller.RenewChannelAsync(this);
-          Task startChannelTask = channel.StartMessageListenerAsync();
-        }
-      }
+      //public async Task StartMessageListenerAsync()
+      //{
+      //  try
+      //  {
+      //    while (true)
+      //    {
+      //      await ProcessNextMessageAsync();
+      //    }
+      //  }
+      //  catch (Exception ex)
+      //  {
+      //    BlockchainChannel channel = await Controller.RenewChannelAsync(this);
+      //    Task startChannelTask = channel.StartMessageListenerAsync();
+      //  }
+      //}
 
       public async Task ExecuteSessionAsync(BlockchainSession session)
       {
-        try
+        while(true)
         {
-          await session.StartAsync(this);
+          int sessionExcecutionTries = 0;
+          try
+          {
+            await session.StartAsync(this);
+            return;
+          }
+          catch (Exception ex)
+          {
+            Debug.WriteLine("BlockchainController::ExcecuteChannelSession:" + ex.Message +
+            ", Session excecution tries: '{0}'", ++sessionExcecutionTries);
+
+            await ReconnectAsync();
+          }
         }
-        catch (Exception ex)
-        {
-          BlockchainChannel channel = await Controller.RenewChannelAsync(this);
-          await channel.ExecuteSessionAsync(session);
-        }
+      }
+
+      public async Task ConnectAsync()
+      {
+        uint blockchainHeight = Controller.Blockchain.GetHeight();
+        Buffer = await Controller.Network.CreateBlockchainChannelAsync(blockchainHeight).ConfigureAwait(false);
+      }
+
+      async Task ReconnectAsync()
+      {
+        Controller.Network.CloseChannel(Buffer);
+        await ConnectAsync();
       }
 
       async Task ProcessNextMessageAsync()
@@ -75,6 +95,7 @@ namespace BToken.Chaining
             break;
         }
       }
+
       public async Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken cancellationToken)
       {
         NetworkMessage networkMessage = await Buffer.ReceiveAsync(cancellationToken).ConfigureAwait(false);
