@@ -83,11 +83,11 @@ namespace BToken.Chaining
       }
     }
 
-    public void InsertHeader(NetworkHeader header, UInt256 headerHash)
+    public void InsertBlock(ChainBlock block, UInt256 headerHash)
     {
-      ValidateNetworkHeader(header, headerHash, out ChainSocket.SocketProbeHeader socketProbeAtHeaderPrevious);
+      ValidateNetworkHeader(block.Header, headerHash, out ChainSocket.SocketProbeHeader socketProbeAtHeaderPrevious);
 
-      ChainSocket socket = socketProbeAtHeaderPrevious.InsertHeader(header, headerHash);
+      ChainSocket socket = socketProbeAtHeaderPrevious.InsertBlock(block, headerHash);
 
       if (socket == SocketMain)
       {

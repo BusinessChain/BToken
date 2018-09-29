@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,6 +18,7 @@ namespace BToken.Chaining
     {
       Blockchain Blockchain;
       List<BlockLocation> HeaderLocator;
+      List<NetworkHeader> Headers = new List<NetworkHeader>();
 
 
       public SessionHeaderDownload(Blockchain blockchain)
@@ -27,41 +30,48 @@ namespace BToken.Chaining
       {
         Channel = channel;
 
-        List<NetworkHeader> headers = await GetHeadersAsync();
-        await InsertHeadersAsync(headers);
+        await DownloadHeadersAsync().ConfigureAwait(false);
       }
 
-
-      async Task InsertHeadersAsync(List<NetworkHeader> headers)
+      async Task DownloadHeadersAsync()
       {
-        while (headers.Any())
+        await ReceiveHeaders().ConfigureAwait(false);
+
+        while (Headers.Any())
         {
-          foreach (NetworkHeader header in headers)
+          InsertHeaders();
+          
+          await ReceiveHeaders().ConfigureAwait(false);
+        }
+      }
+      async Task ReceiveHeaders() => Headers = await GetHeadersAsync();
+
+      void InsertHeaders()
+      {
+        foreach (NetworkHeader header in Headers)
+        {
+          UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
+          var block = new ChainBlock(header);
+
+          try
           {
-            UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
-
-            try
+            Blockchain.InsertBlock(block, headerHash);
+          }
+          catch (BlockchainException ex)
+          {
+            switch (ex.ErrorCode)
             {
-              Blockchain.InsertHeader(header, headerHash);
-            }
-            catch (BlockchainException ex)
-            {
-              switch (ex.ErrorCode)
-              {
-                case BlockCode.ORPHAN:
-                  await ProcessOrphanSessionAsync(headerHash);
-                  return;
+              case BlockCode.ORPHAN:
+                //await ProcessOrphanSessionAsync(headerHash);
+                return;
 
-                case BlockCode.DUPLICATE:
-                  return;
+              case BlockCode.DUPLICATE:
+                return;
 
-                default:
-                  throw ex;
-              }
+              default:
+                throw ex;
             }
           }
-
-          headers = await GetHeadersAsync();
         }
       }
 
@@ -76,10 +86,11 @@ namespace BToken.Chaining
           foreach (NetworkHeader header in headers)
           {
             UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
+            ChainBlock block = new ChainBlock(header);
 
             try
             {
-              Blockchain.InsertHeader(header, headerHash);
+              Blockchain.InsertBlock(block, headerHash);
             }
             catch (BlockchainException ex)
             {
@@ -138,10 +149,10 @@ namespace BToken.Chaining
       async Task<List<NetworkHeader>> GetHeadersAsync()
       {
         HeaderLocator = Blockchain.GetHeaderLocator();
-        await Channel.RequestHeadersAsync(HeaderLocator);
+        await Channel.RequestHeadersAsync(HeaderLocator).ConfigureAwait(false);
 
         CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-        return await GetHeadersMessageAsync(cancellationToken);
+        return await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
       }
 
       async Task<List<NetworkHeader>> GetHeadersMessageAsync(CancellationToken cancellationToken)

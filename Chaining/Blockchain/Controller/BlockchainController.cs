@@ -53,10 +53,10 @@ namespace BToken.Chaining
         channelsTasks.Add(new BlockchainChannel(this));
       }
       
-      return channelsTasks.Select(async c =>
+      return channelsTasks.Select(async channel =>
       {
-        await c.ConnectAsync();
-        return c;
+        await channel.ConnectAsync();
+        return channel;
       }).ToArray();
     }
 
@@ -67,9 +67,9 @@ namespace BToken.Chaining
 
     async Task DownloadBlocksAsync(BlockchainChannel[] channels)
     {
-      Task[] downloadBlocksTask = channels.Select(async c =>
+      Task[] downloadBlocksTask = channels.Select(async channel =>
       {
-        await c.ExecuteSessionAsync(new SessionBlockDownload(this, BlockLocator));
+        await channel.ExecuteSessionAsync(new SessionBlockDownload(this, BlockLocator));
       }).ToArray();
 
       await Task.WhenAll(downloadBlocksTask);
