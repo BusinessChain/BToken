@@ -47,9 +47,10 @@ namespace BToken.Chaining
         while(true)
         {
           int sessionExcecutionTries = 0;
+
           try
           {
-            await session.StartAsync(this);
+            await session.StartAsync(this).ConfigureAwait(false);
             return;
           }
           catch (Exception ex)
@@ -57,7 +58,7 @@ namespace BToken.Chaining
             Debug.WriteLine("BlockchainController::ExcecuteChannelSession:" + ex.Message +
             ", Session excecution tries: '{0}'", ++sessionExcecutionTries);
 
-            await ReconnectAsync();
+            await ReconnectAsync().ConfigureAwait(false);
           }
         }
       }
@@ -71,7 +72,7 @@ namespace BToken.Chaining
       async Task ReconnectAsync()
       {
         Controller.Network.CloseChannel(Buffer);
-        await ConnectAsync();
+        await ConnectAsync().ConfigureAwait(false);
       }
 
       async Task ProcessNextMessageAsync()
@@ -99,7 +100,9 @@ namespace BToken.Chaining
       public async Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken cancellationToken)
       {
         NetworkMessage networkMessage = await Buffer.ReceiveAsync(cancellationToken).ConfigureAwait(false);
-        return networkMessage ?? throw new NetworkException("Network closed channel.");
+
+        return networkMessage 
+          ?? throw new NetworkException("Network closed channel.");
       }
 
       async Task ProcessInventoryMessageAsync(InvMessage invMessage)

@@ -51,11 +51,9 @@ namespace BToken.Chaining
           Depth++;
         }
 
-        public ChainSocket InsertHeader(NetworkHeader header, UInt256 headerHash)
+        public ChainSocket InsertBlock(ChainBlock block, UInt256 headerHash)
         {
-          ValidateHeader(header, headerHash);
-
-          var block = new ChainBlock(header);
+          ValidateHeader(block.Header, headerHash);
           
           ConnectBlocks(Block, block);
 
@@ -108,6 +106,7 @@ namespace BToken.Chaining
           }          
 
         }
+
         bool IsBlockConnectedToNextBlock(UInt256 hash) => Block.BlocksNext.Any(b => Socket.GetHeaderHash(b).IsEqual(hash));
         uint GetMedianTimePast()
         {

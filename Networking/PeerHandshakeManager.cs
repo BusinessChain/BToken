@@ -47,7 +47,7 @@ namespace BToken.Networking
           if (rejectionReason != "")
           {
             await Peer.SendMessageAsync(new RejectMessage("version", RejectMessage.RejectCode.OBSOLETE, rejectionReason)).ConfigureAwait(false);
-            throw new NetworkException("We rejected rempote peer: " + rejectionReason);
+            throw new NetworkException("Remote peer rejected: " + rejectionReason);
           }
           await Peer.SendMessageAsync(new VerAckMessage());
         }

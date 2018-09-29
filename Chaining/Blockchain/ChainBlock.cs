@@ -37,6 +37,11 @@ namespace BToken.Chaining
     {
       Header = header;
     }
+    public ChainBlock(NetworkHeader header, BlockArchiver.BlockStore blockStore)
+      :this(header)
+    {
+      BlockStore = blockStore;
+    }
 
   }
 }

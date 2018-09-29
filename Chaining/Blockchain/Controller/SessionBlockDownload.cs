@@ -57,7 +57,7 @@ namespace BToken.Chaining
       }
       
 
-      async Task<List<IBlockPayload>> DownloadBlocksQueuedAsync()
+      async Task DownloadBlocksQueuedAsync()
       {
         var blockPayloads = new List<IBlockPayload>();
 
@@ -68,7 +68,7 @@ namespace BToken.Chaining
 
         while (BlocksQueued.Any())
         {
-          CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(10)).Token;
+          CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token;
           NetworkBlock networkBlock = await GetBlockMessageAsync(cancellationToken);
           
           UInt256 networkBlockHeaderHash = GetHeaderHash(networkBlock);
@@ -81,8 +81,6 @@ namespace BToken.Chaining
           BlocksDownloaded.Add(blockQueued);
           BlocksQueued.Remove(blockQueued);
         }
-
-        return blockPayloads;
       }
 
       ChainBlock PopBlockQueued(NetworkBlock networkBlock, List<UInt256> headerHashesQueued, UInt256 networkBlockHash)
