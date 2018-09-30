@@ -8,10 +8,14 @@ namespace BToken.Chaining
 {
   public partial class BlockArchiver
   {
+    public struct FileID
+    {
+      public uint DirectoryEnumerator, FileEnumerator;
+    }
+
     public class BlockStore
     {
-      public uint DirectoryEnumerator;
-      public uint FileEnumerator;
+      public FileID FileID;
     }
   }
 }

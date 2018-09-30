@@ -62,19 +62,18 @@ namespace BToken.Chaining
         var blockPayloads = new List<IBlockPayload>();
 
         List<UInt256> headerHashesQueued = BlocksQueued.Select(b => GetHeaderHash(b)).ToList();
-
-        await Channel.RequestBlocksAsync(headerHashesQueued).ConfigureAwait(false);
-
-
+        await Channel.RequestBlocksAsync(headerHashesQueued);
+        
         while (BlocksQueued.Any())
         {
           CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token;
-          NetworkBlock networkBlock = await GetBlockMessageAsync(cancellationToken).ConfigureAwait(false);
+          NetworkBlock networkBlock = await GetNetworkBlockAsync(cancellationToken);
           
           UInt256 networkBlockHeaderHash = GetHeaderHash(networkBlock);
           ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
 
           Validate(blockQueued, networkBlock);
+          // wenn die validierung im chainblock erfolgen würde, könnte code zusammengefasst werden.
 
           blockQueued.BlockStore = Controller.Archiver.ArchiveBlock(networkBlock);
 
@@ -95,11 +94,11 @@ namespace BToken.Chaining
         return BlocksQueued[blockIndex];
       }
 
-      void Validate(ChainBlock blockQueued, NetworkBlock networkBlock)
+      void Validate(ChainBlock chainBlock, NetworkBlock networkBlock)
       {
         IBlockPayload payload = Controller.BlockParser.Parse(networkBlock.Payload);
         UInt256 payloadHash = payload.GetPayloadHash();
-        if (!payloadHash.IsEqual(blockQueued.Header.PayloadHash))
+        if (!payloadHash.IsEqual(chainBlock.Header.PayloadHash))
         {
           throw new BlockchainException(BlockCode.INVALID);
         }
@@ -119,7 +118,7 @@ namespace BToken.Chaining
         return new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
       }
       
-      async Task<NetworkBlock> GetBlockMessageAsync(CancellationToken cancellationToken)
+      async Task<NetworkBlock> GetNetworkBlockAsync(CancellationToken cancellationToken)
       {
         while(true)
         {

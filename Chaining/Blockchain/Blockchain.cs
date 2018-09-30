@@ -9,7 +9,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public enum BlockCode { ORPHAN, DUPLICATE, INVALID, EXPIRED };
+  public enum BlockCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
 
 
   public partial class Blockchain
@@ -104,9 +104,9 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.INVALID);
       }
 
-      if (IsTimestampExpired(header.UnixTimeSeconds))
+      if (IsTimestampPremature(header.UnixTimeSeconds))
       {
-        throw new BlockchainException(BlockCode.EXPIRED);
+        throw new BlockchainException(BlockCode.PREMATURE);
       }
 
       socketProbe = GetProbeAtBlock(header.HashPrevious);
@@ -116,8 +116,7 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.ORPHAN);
       }
     }
-    
-    bool IsTimestampExpired(ulong unixTimeSeconds)
+    bool IsTimestampPremature(ulong unixTimeSeconds)
     {
       const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
       return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
@@ -157,17 +156,17 @@ namespace BToken.Chaining
 
     public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
     {
-      var locatorBatchBlocksUnassignedPayload = new List<ChainBlock>();
+      var blocksUnassignedPayload = new List<ChainBlock>();
       ChainSocket socket = SocketMain;
 
       do
       {
-        locatorBatchBlocksUnassignedPayload.AddRange(socket.GetBlocksUnassignedPayload(batchSize));
-        batchSize -= locatorBatchBlocksUnassignedPayload.Count;
+        blocksUnassignedPayload.AddRange(socket.GetBlocksUnassignedPayload(batchSize));
+        batchSize -= blocksUnassignedPayload.Count;
         socket = socket.WeakerSocket;
       } while (batchSize > 0 && socket != null);
 
-      return locatorBatchBlocksUnassignedPayload;
+      return blocksUnassignedPayload;
     }
   }
 }

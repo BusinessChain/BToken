@@ -8,7 +8,7 @@ using BToken.Networking;
 
 namespace BToken.Bitcoin
 {
-  class BitcoinNode
+  public class BitcoinNode
   {
     public Network Network { get; private set; }
     public Blockchain Blockchain { get; private set; }
@@ -33,7 +33,7 @@ namespace BToken.Bitcoin
 
     public async Task startAsync()
     {
-      await Blockchain.startAsync();
+      await Blockchain.startAsync().ConfigureAwait(false);
       //await UTXO.startAsync();
     }
   }

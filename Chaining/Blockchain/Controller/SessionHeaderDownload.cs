@@ -17,12 +17,14 @@ namespace BToken.Chaining
     class SessionHeaderDownload : BlockchainSession
     {
       Blockchain Blockchain;
+      BlockchainController Controller;
       List<BlockLocation> HeaderLocator;
       List<NetworkHeader> Headers = new List<NetworkHeader>();
 
 
-      public SessionHeaderDownload(Blockchain blockchain)
+      public SessionHeaderDownload(BlockchainController controller, Blockchain blockchain)
       {
+        Controller = controller;
         Blockchain = blockchain;
       }
 
@@ -51,11 +53,10 @@ namespace BToken.Chaining
         foreach (NetworkHeader header in Headers)
         {
           UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
-          var block = new ChainBlock(header);
 
           try
           {
-            Blockchain.InsertBlock(block, headerHash);
+            Blockchain.InsertBlock(new ChainBlock(header), headerHash);
           }
           catch (BlockchainException ex)
           {

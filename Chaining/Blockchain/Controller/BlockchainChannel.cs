@@ -50,7 +50,7 @@ namespace BToken.Chaining
 
           try
           {
-            await session.StartAsync(this).ConfigureAwait(false);
+            await session.StartAsync(this);
             return;
           }
           catch (Exception ex)
@@ -58,7 +58,7 @@ namespace BToken.Chaining
             Debug.WriteLine("BlockchainController::ExcecuteChannelSession:" + ex.Message +
             ", Session excecution tries: '{0}'", ++sessionExcecutionTries);
 
-            await ReconnectAsync().ConfigureAwait(false);
+            await ReconnectAsync();
           }
         }
       }

@@ -16,7 +16,7 @@ namespace BToken.Networking
       {
         int startIndex = 0;
 
-        int headersCount = (int)VarInt.getUInt64(Payload, ref startIndex);
+        int headersCount = (int)VarInt.GetUInt64(Payload, ref startIndex);
         for (int i = 0; i < headersCount; i++)
         {
           Headers.Add(NetworkHeader.ParseHeader(Payload, out int txCount, ref startIndex));

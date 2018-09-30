@@ -1,24 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace BToken
 {
   public static class VarInt
   {
-    public static List<byte> getBytes(int value)
+    public static List<byte> GetBytes(int value)
     {
-      return getBytes((ulong)value);
+      return GetBytes((ulong)value);
     }
-    public static List<byte> getBytes(ulong value)
+    public static List<byte> GetBytes(ulong value)
     {
       List<byte> serializedValue = new List<byte>();
 
       byte prefix;
       int length;
-      assignPrefixAndLength(value, out prefix, out length);
+      AssignPrefixAndLength(value, out prefix, out length);
 
       serializedValue.Add(prefix);
       for (int i = 1; i < length; i++)
@@ -29,7 +29,7 @@ namespace BToken
 
       return serializedValue;
     }
-    static void assignPrefixAndLength(ulong value, out byte prefix, out int length)
+    static void AssignPrefixAndLength(ulong value, out byte prefix, out int length)
     {
       if (value <= 252)
       {
@@ -53,13 +53,36 @@ namespace BToken
       }
     }
 
-    public static UInt64 getUInt64(byte[] buffer, ref int startIndex)
+    public static UInt64 ParseVarInt(UInt64 prefix, Stream stream)
+    {
+      byte[] buffer = new byte[0];
+
+      if (prefix == 0xfd)
+      {
+        stream.Read(buffer, 0, 2);
+        prefix = BitConverter.ToUInt16(buffer, 0);
+      }
+      else if (prefix == 0xfe)
+      {
+        stream.Read(buffer, 0, 4);
+        prefix = BitConverter.ToUInt32(buffer, 0);
+      }
+      else if (prefix == 0xff)
+      {
+        stream.Read(buffer, 0, 8);
+        prefix = BitConverter.ToUInt64(buffer, 0);
+      }
+
+      return prefix;
+    }
+
+    public static UInt64 GetUInt64(byte[] buffer, ref int startIndex)
     {
       byte prefix = buffer[startIndex];
       startIndex++;
-      return convertBytesToInt(prefix, buffer, ref startIndex);
+      return ConvertBytesToInt(prefix, buffer, ref startIndex);
     }
-    static UInt64 convertBytesToInt(UInt64 prefix, byte[] buffer, ref int startIndex)
+    static UInt64 ConvertBytesToInt(UInt64 prefix, byte[] buffer, ref int startIndex)
     {
       try
       {

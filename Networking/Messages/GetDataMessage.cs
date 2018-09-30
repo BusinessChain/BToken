@@ -23,7 +23,7 @@ namespace BToken.Networking
       {
         List<byte> payload = new List<byte>();
 
-        payload.AddRange(VarInt.getBytes(Inventories.Count()));
+        payload.AddRange(VarInt.GetBytes(Inventories.Count()));
 
         for (int i = 0; i < Inventories.Count(); i++)
         {
