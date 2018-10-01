@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
+using System.Diagnostics;
 using System.Data;
 using System.Drawing;
 using System.Linq;
@@ -16,8 +16,7 @@ namespace BToken
 {
   public partial class Form1 : Form
   {
-    BitcoinNode Node;
-
+    BitcoinNode Node = new BitcoinNode();
 
     public Form1()
     {
@@ -25,8 +24,7 @@ namespace BToken
 
       try
       {
-        Node = new BitcoinNode();
-        Task runNodeTask = Node.startAsync();
+        Task startNodeTask = Node.StartAsync();
       }
       catch (Exception ex)
       {

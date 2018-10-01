@@ -1,5 +1,7 @@
-﻿using System;
-using System.Linq;
+﻿using System.Diagnostics;
+
+using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
@@ -46,9 +48,9 @@ namespace BToken.Chaining
       Locator = new HeaderLocator(this, SocketMain.HeaderProbe);
     }
     
-    public async Task startAsync()
+    public async Task StartAsync()
     {
-      await Controller.StartAsync();
+      await Controller.StartAsync().ConfigureAwait(false);
     }
     
     public List<BlockLocation> GetHeaderLocator() => Locator.BlockLocations;

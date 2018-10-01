@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -31,9 +33,9 @@ namespace BToken.Bitcoin
       UTXO = new UnspentTXOutputs(Blockchain, Network);
     }
 
-    public async Task startAsync()
+    public async Task StartAsync()
     {
-      await Blockchain.startAsync().ConfigureAwait(false);
+      await Blockchain.StartAsync().ConfigureAwait(false);
       //await UTXO.startAsync();
     }
   }

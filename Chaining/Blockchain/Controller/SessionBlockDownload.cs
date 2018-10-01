@@ -73,7 +73,6 @@ namespace BToken.Chaining
           ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
 
           Validate(blockQueued, networkBlock);
-          // wenn die validierung im chainblock erfolgen würde, könnte code zusammengefasst werden.
 
           blockQueued.BlockStore = Controller.Archiver.ArchiveBlock(networkBlock);
 
