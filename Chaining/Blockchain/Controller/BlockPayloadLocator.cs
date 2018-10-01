@@ -15,7 +15,7 @@ namespace BToken.Chaining
       int BatchSizeQueue;
       List<ChainBlock> BlocksQueued = new List<ChainBlock>();
 
-      const int BatchSizeDispatch = 50;
+      const int BatchSizeDispatch = 10;
       List<ChainBlock> BlocksDispatched = new List<ChainBlock>();
 
       public BlockPayloadLocator(Blockchain blockchain, int consumersCount)
