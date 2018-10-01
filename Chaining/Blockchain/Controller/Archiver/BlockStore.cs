@@ -10,7 +10,9 @@ namespace BToken.Chaining
   {
     public struct FileID
     {
-      public uint DirectoryEnumerator, FileEnumerator;
+      public uint ShardIndex;
+      public uint DirectoryIndex;
+      public uint FileIndex;
     }
 
     public class BlockStore

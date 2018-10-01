@@ -35,8 +35,9 @@ namespace BToken.Chaining
       {
         FileID fileID = new FileID
         {
-          DirectoryEnumerator = 0,
-          FileEnumerator = 0
+          ShardIndex = 0,
+          DirectoryIndex = 0,
+          FileIndex = 0
         };
 
         while (true) // run until exception is thrown
@@ -87,8 +88,9 @@ namespace BToken.Chaining
     {
       string filePath = Path.Combine(
         RootDirectory.Name,
-        DirectoryHandle + fileID.DirectoryEnumerator,
-        FileHandle + fileID.FileEnumerator);
+        ShardHandle + fileID.ShardIndex,
+        DirectoryHandle + fileID.DirectoryIndex,
+        FileHandle + fileID.FileIndex);
 
       return new FileStream(
         filePath,
@@ -101,20 +103,20 @@ namespace BToken.Chaining
     
     static FileID IncrementFileID(FileID fileID)
     {
-      if (fileID.FileEnumerator == ITEM_COUNT_PER_DIRECTORY - 1)
+      if (fileID.FileIndex == ITEM_COUNT_PER_DIRECTORY - 1)
       {
         return new FileID()
         {
-          DirectoryEnumerator = ++fileID.DirectoryEnumerator,
-          FileEnumerator = 0,
+          DirectoryIndex = ++fileID.DirectoryIndex,
+          FileIndex = 0,
         };
       }
       else
       {
         return new FileID()
         {
-          DirectoryEnumerator = fileID.DirectoryEnumerator,
-          FileEnumerator = ++fileID.FileEnumerator,
+          DirectoryIndex = fileID.DirectoryIndex,
+          FileIndex = ++fileID.FileIndex,
         };
       }
     }

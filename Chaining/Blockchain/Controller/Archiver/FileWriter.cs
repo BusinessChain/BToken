@@ -19,12 +19,18 @@ namespace BToken.Chaining
       FileStream FileStream;
 
 
-      public FileWriter(BlockArchiver archiver, uint shardEnumerator)
+      public FileWriter(BlockArchiver archiver, uint shardIndex)
       {
         Archiver = archiver;
-        ShardEnumerator = shardEnumerator;
+        ShardEnumerator = shardIndex;
 
-        FileID = new FileID();
+        FileID = new FileID
+        {
+          ShardIndex = shardIndex,
+          DirectoryIndex = 0,
+          FileIndex = 0
+        };
+
         FileStream = CreateFile();
       }
 
@@ -32,14 +38,14 @@ namespace BToken.Chaining
       {
         string directoryPath = Path.Combine(
           ArchiveRootPath,
-          ShardHandle + ShardEnumerator,
-          DirectoryHandle + FileID.DirectoryEnumerator);
+          ShardHandle + FileID.ShardIndex,
+          DirectoryHandle + FileID.DirectoryIndex);
 
         Directory.CreateDirectory(directoryPath);
 
         string filePath = Path.Combine(
           directoryPath,
-          FileHandle + FileID.FileEnumerator);
+          FileHandle + FileID.FileIndex);
 
         return new FileStream(
           filePath,
