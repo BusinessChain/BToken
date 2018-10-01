@@ -44,21 +44,26 @@ namespace BToken.Chaining
 
       public async Task ExecuteSessionAsync(BlockchainSession session)
       {
-        while(true)
-        {
-          int sessionExcecutionTries = 0;
+        int sessionExcecutionTries = 0;
 
+        while (true)
+        {
           try
           {
+            if(!IsConnected())
+            {
+              await ConnectAsync().ConfigureAwait(false);
+            }
+
             await session.StartAsync(this).ConfigureAwait(false);
             return;
           }
           catch (Exception ex)
           {
-            Debug.WriteLine("BlockchainController::ExcecuteChannelSession:" + ex.Message +
+            Debug.WriteLine("BlockchainChannel::ExcecuteChannelSession:" + ex.Message +
             ", Session excecution tries: '{0}'", ++sessionExcecutionTries);
 
-            await ReconnectAsync().ConfigureAwait(false);
+            Disconnect();
           }
         }
       }
@@ -69,10 +74,15 @@ namespace BToken.Chaining
         Buffer = await Controller.Network.CreateBlockchainChannelAsync(blockchainHeight).ConfigureAwait(false);
       }
 
-      async Task ReconnectAsync()
+      void Disconnect()
       {
         Controller.Network.CloseChannel(Buffer);
-        await ConnectAsync().ConfigureAwait(false);
+        Buffer = null;
+      }
+
+      bool IsConnected()
+      {
+        return Buffer != null;
       }
 
       async Task ProcessNextMessageAsync()

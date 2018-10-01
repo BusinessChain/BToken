@@ -18,7 +18,7 @@ namespace BToken.Networking
     void deserializePayload()
     {
       int startIndex = 0;
-      int inventoryCount = (int)VarInt.getUInt64(Payload, ref startIndex);
+      int inventoryCount = (int)VarInt.GetUInt64(Payload, ref startIndex);
 
       deserializeInventories(Payload, ref startIndex, inventoryCount);
     }

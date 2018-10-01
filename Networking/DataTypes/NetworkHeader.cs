@@ -61,7 +61,7 @@ namespace BToken.Networking
       UInt32 nonce = BitConverter.ToUInt32(byteStream, startIndex);
       startIndex += 4;
 
-      txCount = (int)VarInt.getUInt64(byteStream, ref startIndex);
+      txCount = (int)VarInt.GetUInt64(byteStream, ref startIndex);
 
       return new NetworkHeader(
         version, 

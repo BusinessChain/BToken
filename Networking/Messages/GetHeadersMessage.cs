@@ -27,7 +27,7 @@ namespace BToken.Networking
         List<byte> payload = new List<byte>();
 
         payload.AddRange(BitConverter.GetBytes(ProtocolVersion));
-        payload.AddRange(VarInt.getBytes(HeaderLocator.Count()));
+        payload.AddRange(VarInt.GetBytes(HeaderLocator.Count()));
 
         for (int i = 0; i < HeaderLocator.Count(); i++)
         {

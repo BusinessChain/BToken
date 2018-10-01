@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -8,7 +10,7 @@ using BToken.Networking;
 
 namespace BToken.Bitcoin
 {
-  class BitcoinNode
+  public class BitcoinNode
   {
     public Network Network { get; private set; }
     public Blockchain Blockchain { get; private set; }
@@ -31,9 +33,9 @@ namespace BToken.Bitcoin
       UTXO = new UnspentTXOutputs(Blockchain, Network);
     }
 
-    public async Task startAsync()
+    public async Task StartAsync()
     {
-      await Blockchain.startAsync();
+      await Blockchain.StartAsync().ConfigureAwait(false);
       //await UTXO.startAsync();
     }
   }

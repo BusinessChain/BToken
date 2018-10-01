@@ -37,6 +37,8 @@ namespace BToken.Chaining
     {
       Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
 
+      //Archiver.LoadBlockchain(Blockchain, BlockParser);
+
       BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
       await DownloadHeadersAsync(channelFirst);
 
@@ -62,7 +64,7 @@ namespace BToken.Chaining
 
     async Task DownloadHeadersAsync(BlockchainChannel channel)
     {
-      await channel.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain));
+      await channel.ExecuteSessionAsync(new SessionHeaderDownload(this, Blockchain));
     }
 
     async Task DownloadBlocksAsync(BlockchainChannel[] channels)

@@ -20,6 +20,8 @@ namespace BToken.Chaining
       BlockPayloadLocator BlockLocator;
       List<ChainBlock> BlocksQueued = new List<ChainBlock>();
       List<ChainBlock> BlocksDownloaded = new List<ChainBlock>();
+
+      BlockArchiver.FileWriter FileWriter;
       
       int BlocksDispachedCountTotal;
       
@@ -28,13 +30,16 @@ namespace BToken.Chaining
       {
         Controller = controller;
         BlockLocator = blockLocator;
+        FileWriter = Controller.Archiver.GetWriter();
       }
 
       public override async Task StartAsync(BlockchainChannel channel)
       {
         Channel = channel;
 
-        await DownloadBlocksAsync();
+        await DownloadBlocksAsync().ConfigureAwait(false);
+
+        FileWriter.Dispose();
       }
       async Task DownloadBlocksAsync()
       {
@@ -42,7 +47,7 @@ namespace BToken.Chaining
         {
           if (BlocksQueued.Any())
           {
-            await DownloadBlocksQueuedAsync();
+            await DownloadBlocksQueuedAsync().ConfigureAwait(false);
 
             Debug.WriteLine("Channel '{0}' downloaded '{1}' blocks, Total blocks '{2}'",
               Channel.GetHashCode(), BlocksDownloaded.Count, BlocksDispachedCountTotal += BlocksDownloaded.Count);
@@ -62,21 +67,22 @@ namespace BToken.Chaining
         var blockPayloads = new List<IBlockPayload>();
 
         List<UInt256> headerHashesQueued = BlocksQueued.Select(b => GetHeaderHash(b)).ToList();
-
         await Channel.RequestBlocksAsync(headerHashesQueued).ConfigureAwait(false);
-
-
+        
         while (BlocksQueued.Any())
         {
-          CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token;
-          NetworkBlock networkBlock = await GetBlockMessageAsync(cancellationToken).ConfigureAwait(false);
+          CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token;
+          NetworkBlock networkBlock = await GetNetworkBlockAsync(cancellationToken).ConfigureAwait(false);
           
           UInt256 networkBlockHeaderHash = GetHeaderHash(networkBlock);
           ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
 
           Validate(blockQueued, networkBlock);
 
-          blockQueued.BlockStore = Controller.Archiver.ArchiveBlock(networkBlock);
+          if(blockQueued.BlockStore == null)
+          {
+            blockQueued.BlockStore = FileWriter.ArchiveBlock(networkBlock);
+          }
 
           BlocksDownloaded.Add(blockQueued);
           BlocksQueued.Remove(blockQueued);
@@ -95,11 +101,11 @@ namespace BToken.Chaining
         return BlocksQueued[blockIndex];
       }
 
-      void Validate(ChainBlock blockQueued, NetworkBlock networkBlock)
+      void Validate(ChainBlock chainBlock, NetworkBlock networkBlock)
       {
         IBlockPayload payload = Controller.BlockParser.Parse(networkBlock.Payload);
         UInt256 payloadHash = payload.GetPayloadHash();
-        if (!payloadHash.IsEqual(blockQueued.Header.PayloadHash))
+        if (!payloadHash.IsEqual(chainBlock.Header.PayloadHash))
         {
           throw new BlockchainException(BlockCode.INVALID);
         }
@@ -119,7 +125,7 @@ namespace BToken.Chaining
         return new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
       }
       
-      async Task<NetworkBlock> GetBlockMessageAsync(CancellationToken cancellationToken)
+      async Task<NetworkBlock> GetNetworkBlockAsync(CancellationToken cancellationToken)
       {
         while(true)
         {

@@ -32,13 +32,13 @@ namespace BToken.Bitcoin
   {
     public BitcoinGenesisBlock()
      : base(
-    #region Block 541950
+    #region Block 543828
     //version: 0x20000000,
-    //hashPrevious: new UInt256("000000000000000000245985678bbe8753c07568fcda21f200178234764aeb40"),
-    //unixTimeSeconds: 1537278202,
-    //nBits: 388503969,
-    //nonce: 4093590991,
-    //payload: new BitcoinBlockPayload(new UInt256("a6a1df0d702ab4d56353f09ec172cdc22f740e61186a9bf5c647ec22d6abdf45")))
+    //hashPrevious: new UInt256("000000000000000000010008b376d5e7cfe1c3c43031d951fb42b8ddaf897243"),
+    //unixTimeSeconds: 1538348166,
+    //nBits: 388454943,
+    //nonce: 286865835,
+    //payload: new BitcoinBlockPayload(new UInt256("1743d8ad2df689df3a9f8c03239523a879ae88257292befb318eee7f9e59cf30")))
     #endregion
 
     #region Block 540288
@@ -48,15 +48,6 @@ namespace BToken.Bitcoin
     //nBits: 388503969,
     //nonce: 3607916943,
     //payload: new BitcoinBlockPayload(new UInt256("7a76769b0b393c7df65498cf3148ad3b0a24a36aa6cf43fe0788317e75713764")))
-    #endregion
-
-    #region Block 538272
-    //version: 0x20000000,
-    //hashPrevious: new UInt256("0000000000000000001d9d48d93793aaa85b5f6d17c176d4ef905c7e7112b1cf"),
-    //unixTimeSeconds: 1535129431,
-    //nBits: 388618029,
-    //nonce: 2367954839,
-    //payload: new BitcoinBlockPayload(new UInt256("3ad0fa0e8c100db5831ebea7cabf6addae2c372e6e1d84f6243555df5bbfa351")))
     #endregion
 
     #region GenesisBlock

@@ -38,7 +38,7 @@ namespace BToken.Bitcoin
         UInt32 indexPreviousOutput = BitConverter.ToUInt32(byteStream, startIndex);
         startIndex += 4;
 
-        int unlockingScriptLength = (int)VarInt.getUInt64(byteStream, ref startIndex);
+        int unlockingScriptLength = (int)VarInt.GetUInt64(byteStream, ref startIndex);
         byte[] unlockingScript = new byte[unlockingScriptLength];
         Array.Copy(byteStream, startIndex, unlockingScript, 0, unlockingScriptLength);
         startIndex += unlockingScriptLength;
@@ -59,7 +59,7 @@ namespace BToken.Bitcoin
 
         byteStream.AddRange(TXIDPreviousOutput.GetBytes());
         byteStream.AddRange(BitConverter.GetBytes(IndexPreviousOutput));
-        byteStream.AddRange(VarInt.getBytes(UnlockingScript.Length));
+        byteStream.AddRange(VarInt.GetBytes(UnlockingScript.Length));
         byteStream.AddRange(UnlockingScript);
         byteStream.AddRange(BitConverter.GetBytes(Sequence));
 
@@ -84,7 +84,7 @@ namespace BToken.Bitcoin
         UInt64 value = BitConverter.ToUInt64(byteStream, startIndex);
         startIndex += 8;
 
-        int lockingScriptLength = (int)VarInt.getUInt64(byteStream, ref startIndex);
+        int lockingScriptLength = (int)VarInt.GetUInt64(byteStream, ref startIndex);
         byte[] lockingScript = new byte[lockingScriptLength];
         Array.Copy(byteStream, startIndex, lockingScript, 0, lockingScriptLength);
         startIndex += lockingScriptLength;
@@ -99,7 +99,7 @@ namespace BToken.Bitcoin
         List<byte> byteStream = new List<byte>();
 
         byteStream.AddRange(BitConverter.GetBytes(Value));
-        byteStream.AddRange(VarInt.getBytes(LockingScript.Length));
+        byteStream.AddRange(VarInt.GetBytes(LockingScript.Length));
         byteStream.AddRange(LockingScript);
 
         return byteStream.ToArray();
@@ -156,14 +156,14 @@ namespace BToken.Bitcoin
         startIndex += 1;
       }
 
-      int tXInputsCount = (int)VarInt.getUInt64(byteStream, ref startIndex);
+      int tXInputsCount = (int)VarInt.GetUInt64(byteStream, ref startIndex);
       var tXInputs = new List<TXInput>();
       for (int i = 0; i < tXInputsCount; i++)
       {
         tXInputs.Add(TXInput.Parse(byteStream, ref startIndex));
       }
 
-      int tXOutputsCount = (int)VarInt.getUInt64(byteStream, ref startIndex);
+      int tXOutputsCount = (int)VarInt.GetUInt64(byteStream, ref startIndex);
       var tXOutputs = new List<TXOutput>();
       for (int i = 0; i < tXOutputsCount; i++)
       {
@@ -202,13 +202,13 @@ namespace BToken.Bitcoin
         byteStream.Add(FLAG_WITNESS_IS_PRESENT);
       }
 
-      byteStream.AddRange(VarInt.getBytes(TXInputs.Count));
+      byteStream.AddRange(VarInt.GetBytes(TXInputs.Count));
       foreach (TXInput tXInput in TXInputs)
       {
         byteStream.AddRange(tXInput.GetBytes());
       }
 
-      byteStream.AddRange(VarInt.getBytes(TXOutputs.Count));
+      byteStream.AddRange(VarInt.GetBytes(TXOutputs.Count));
       foreach (TXOutput tXOutput in TXOutputs)
       {
         byteStream.AddRange(tXOutput.GetBytes());
