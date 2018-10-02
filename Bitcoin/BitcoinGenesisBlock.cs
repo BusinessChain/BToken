@@ -41,13 +41,13 @@ namespace BToken.Bitcoin
     //payload: new BitcoinBlockPayload(new UInt256("1743d8ad2df689df3a9f8c03239523a879ae88257292befb318eee7f9e59cf30")))
     #endregion
 
-    #region Block 540288
+    #region Block 504000
     //version: 0x20000000,
-    //hashPrevious: new UInt256("0000000000000000001877e616b546d1ba5cf9e8b8edd9eba480a4fbb9f02bce"),
-    //unixTimeSeconds: 1536290079,
-    //nBits: 388503969,
-    //nonce: 3607916943,
-    //payload: new BitcoinBlockPayload(new UInt256("7a76769b0b393c7df65498cf3148ad3b0a24a36aa6cf43fe0788317e75713764")))
+    //hashPrevious: new UInt256("000000000000000000720da39f66f29337b9a29223e1ce05fd5ee57bb72a9223"),
+    //unixTimeSeconds: 1515827554,
+    //nBits: 394155916,
+    //nonce: 3750147913,
+    //payload: new BitcoinBlockPayload(new UInt256("6195fe0cded5aeb07c8d36826758343778ccd81e4285bba0f76e35e8549ab93c")))
     #endregion
 
     #region GenesisBlock

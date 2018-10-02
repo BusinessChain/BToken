@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
@@ -51,7 +53,7 @@ namespace BToken.Chaining
           filePath,
           FileMode.OpenOrCreate,
           FileAccess.ReadWrite,
-          FileShare.Read,
+          FileShare.None,
           BLOCK_REGISTER_BYTESIZE_MAX
           );
       }
@@ -85,7 +87,7 @@ namespace BToken.Chaining
       {
         FileStream.Close();
 
-        FileID = IncrementFileID(FileID);
+        IncrementFileID(ref FileID);
         
         FileStream = CreateFile();
       }
