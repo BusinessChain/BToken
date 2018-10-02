@@ -16,32 +16,21 @@ namespace BToken
 {
   public partial class Form1 : Form
   {
-    BitcoinNode Node = new BitcoinNode();
-
     public Form1()
     {
       InitializeComponent();
-
-      try
-      {
-        Task startNodeTask = Node.StartAsync();
-      }
-      catch (Exception ex)
-      {
-        MessageBox.Show(string.Format("Ups, something went wrong: '{0}'", ex.Message));
-      }
     }
     
     private async void getHeadersButton_Click(object sender, EventArgs e)
     {
       List<UInt256> headers = new List<UInt256>() { new UInt256("0000000000000000001b25d108e90678516c91cf26332e44cd616655e56d1467") };
       //await Node.Network.GetHeadersAsync(headers);
-      await Node.Network.GetHeadersAsync(Node.Blockchain.GetHeaderLocator().Select(b => b.Hash).ToList());
+      await Program.Node.Network.GetHeadersAsync(Program.Node.Blockchain.GetHeaderLocator().Select(b => b.Hash).ToList());
     }
 
     private async void button_ping_Click(object sender, EventArgs e)
     {
-      await Node.Network.PingAsync();
+      await Program.Node.Network.PingAsync();
     }
 
     private async void button_GetBlock_Click(object sender, EventArgs e)
@@ -49,7 +38,7 @@ namespace BToken
       List<UInt256> hashes = new List<UInt256>() {
         new UInt256("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
       };
-      await Node.Network.GetBlocksAsync(hashes);
+      await Program.Node.Network.GetBlocksAsync(hashes);
 
       // await Blocks
     }
