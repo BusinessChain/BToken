@@ -59,7 +59,8 @@ namespace BToken.Chaining
       public BlockStore ArchiveBlock(NetworkBlock block)
       {
         byte[] headerBytes = block.Header.getBytes();
-        int blockByteSize = headerBytes.Length + block.Payload.Length;
+        byte[] txCount = VarInt.GetBytes(block.TXCount).ToArray();
+        int blockByteSize = headerBytes.Length + txCount.Length + block.Payload.Length;
 
         if (blockByteSize > BLOCK_REGISTER_BYTESIZE_MAX)
         {
@@ -74,6 +75,7 @@ namespace BToken.Chaining
         byte[] blockSizeVarIntBytes = VarInt.GetBytes(blockByteSize).ToArray();
         FileStream.Write(blockSizeVarIntBytes, 0, blockSizeVarIntBytes.Length);
         FileStream.Write(headerBytes, 0, headerBytes.Length);
+        FileStream.Write(txCount, 0, txCount.Length);
         FileStream.Write(block.Payload, 0, block.Payload.Length);
 
         return new BlockStore() { FileID = FileID };

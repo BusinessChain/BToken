@@ -125,7 +125,6 @@ namespace BToken.Chaining
     {
       try
       {
-        Debug.WriteLine("BlockArchiver::GetWriter:ThreadID: " + Thread.CurrentThread.ManagedThreadId);
         return new FileWriter(this, ShardEnumerator++);
       }
       catch(Exception ex)
