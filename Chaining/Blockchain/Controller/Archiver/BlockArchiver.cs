@@ -20,7 +20,7 @@ namespace BToken.Chaining
     static string ShardHandle = "Shard";
     uint ShardEnumerator;
 
-    const int ITEM_COUNT_PER_DIRECTORY = 0x40;
+    const int ITEM_COUNT_PER_DIRECTORY = 0x4;
     static string DirectoryHandle = "Shelf";
 
     const int BLOCK_REGISTER_BYTESIZE_MAX = 0x400000;
@@ -101,23 +101,16 @@ namespace BToken.Chaining
         );
     }
     
-    static FileID IncrementFileID(ref FileID fileID)
+    static void IncrementFileID(ref FileID fileID)
     {
       if (fileID.FileIndex == ITEM_COUNT_PER_DIRECTORY - 1)
       {
-        return new FileID()
-        {
-          DirectoryIndex = ++fileID.DirectoryIndex,
-          FileIndex = 0,
-        };
+        fileID.DirectoryIndex++;
+        fileID.FileIndex = 0;
       }
       else
       {
-        return new FileID()
-        {
-          DirectoryIndex = fileID.DirectoryIndex,
-          FileIndex = ++fileID.FileIndex,
-        };
+        fileID.FileIndex++;
       }
     }
 
