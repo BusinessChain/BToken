@@ -13,6 +13,7 @@ namespace BToken.Bitcoin
   public class BitcoinNode
   {
     public Network Network { get; private set; }
+    BlockchainController BlockchainController;
     public Blockchain Blockchain { get; private set; }
     UnspentTXOutputs UTXO;
 
@@ -27,15 +28,16 @@ namespace BToken.Bitcoin
     public BitcoinNode()
     {
       Network = new Network();
-      
-      Blockchain = new Blockchain(Network, GenesisBlock, Checkpoints, new BitcoinBlockPayloadParser());
+
+      Blockchain = new Blockchain(GenesisBlock, Checkpoints);
+      BlockchainController = new BlockchainController(Network, Blockchain, new BitcoinBlockPayloadParser());
 
       UTXO = new UnspentTXOutputs(Blockchain, Network);
     }
 
     public async Task StartAsync()
     {
-      await Blockchain.StartAsync().ConfigureAwait(false);
+      await BlockchainController.StartAsync().ConfigureAwait(false);
       //await UTXO.startAsync();
     }
   }

@@ -15,11 +15,7 @@ namespace BToken.Chaining
 
 
   public partial class Blockchain
-  {
-    static string BlockStorageRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Blockchain");
-
-    BlockchainController Controller;
-
+  {    
     ChainBlock BlockGenesis;
     CheckpointManager Checkpoints;
 
@@ -27,13 +23,10 @@ namespace BToken.Chaining
     HeaderLocator Locator;
 
 
-    public Blockchain(
-      Network network, 
+    public Blockchain( 
       ChainBlock genesisBlock, 
-      List<BlockLocation> checkpoints,
-      IBlockParser blockParser)
+      List<BlockLocation> checkpoints)
     {
-      Controller = new BlockchainController(network, this, blockParser);
 
       BlockGenesis = genesisBlock;
       Checkpoints = new CheckpointManager(checkpoints);
@@ -46,11 +39,6 @@ namespace BToken.Chaining
         height: 0);
 
       Locator = new HeaderLocator(this, SocketMain.HeaderProbe);
-    }
-    
-    public async Task StartAsync()
-    {
-      await Controller.StartAsync().ConfigureAwait(false);
     }
     
     public List<BlockLocation> GetHeaderLocator() => Locator.BlockLocations;
