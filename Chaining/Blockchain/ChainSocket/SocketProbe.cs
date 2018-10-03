@@ -11,7 +11,7 @@ namespace BToken.Chaining
   {
     partial class ChainSocket
     {
-      public class SocketProbeHeader
+      public class SocketProbe
       {
         ChainSocket Socket;
         
@@ -23,7 +23,7 @@ namespace BToken.Chaining
         double AccumulatedDifficulty;
 
 
-        public SocketProbeHeader(ChainSocket socket)
+        public SocketProbe(ChainSocket socket)
         {
           Socket = socket;
           Reset();
@@ -32,7 +32,7 @@ namespace BToken.Chaining
         public void Reset()
         {
           Block = Socket.BlockTip;
-          Hash = Socket.HashBlockTip;
+          Hash = Socket.BlockTipHash;
           AccumulatedDifficulty = Socket.AccumulatedDifficulty;
 
           Depth = 0;
@@ -120,7 +120,7 @@ namespace BToken.Chaining
           {
             timestampsPast.Add(block.Header.UnixTimeSeconds);
 
-            if (block == Socket.Blockchain.BlockGenesis)
+            if (block.BlockPrevious == null)
             { break; }
 
             block = block.BlockPrevious;
@@ -137,10 +137,10 @@ namespace BToken.Chaining
           blockPrevious.BlocksNext.Add(block);
         }
 
-        public uint GetHeight() => Socket.HeightBlockTip - Depth;
+        public uint GetHeight() => Socket.BlockTipHeight - Depth;
         public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
         public bool IsGenesis() => Block == Socket.BlockGenesis;
-        public bool IsStrongerThan(SocketProbeHeader probe) => probe == null ? false : AccumulatedDifficulty > probe.AccumulatedDifficulty;
+        public bool IsStrongerThan(SocketProbe probe) => probe == null ? false : AccumulatedDifficulty > probe.AccumulatedDifficulty;
         public BlockLocation GetBlockLocation() => new BlockLocation(GetHeight(), Hash);
       }
     }

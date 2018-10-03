@@ -15,14 +15,14 @@ namespace BToken.Chaining
       public List<BlockLocation> BlockLocations { get; private set; }
       
 
-      public HeaderLocator(Blockchain blockchain, ChainSocket.SocketProbeHeader socketProbe)
+      public HeaderLocator(Blockchain blockchain, ChainSocket.SocketProbe socketProbe)
       {
         Blockchain = blockchain;
 
         BlockLocations = Create(socketProbe);
       }
       
-      public List<BlockLocation> Create(ChainSocket.SocketProbeHeader socketProbe)
+      public List<BlockLocation> Create(ChainSocket.SocketProbe socketProbe)
       {
         List<BlockLocation> headerLocator = new List<BlockLocation>();
         socketProbe.Reset();
