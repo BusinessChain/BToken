@@ -118,7 +118,6 @@ namespace BToken.Chaining
     {
       try
       {
-        Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
         return new FileWriter(this, ShardEnumerator++);
       }
       catch(Exception ex)

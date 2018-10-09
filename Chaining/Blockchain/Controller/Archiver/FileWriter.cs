@@ -54,8 +54,7 @@ namespace BToken.Chaining
           FileMode.OpenOrCreate,
           FileAccess.ReadWrite,
           FileShare.None,
-          BLOCK_REGISTER_BYTESIZE_MAX
-          );
+          BLOCK_REGISTER_BYTESIZE_MAX);
       }
 
       public BlockStore ArchiveBlock(NetworkBlock block)

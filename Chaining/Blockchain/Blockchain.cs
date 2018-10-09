@@ -15,104 +15,110 @@ namespace BToken.Chaining
 
 
   public partial class Blockchain
-  {    
-    ChainBlock BlockGenesis;
+  {
+    ChainBlock GenesisBlock;
+    UInt256 GenesisBlockHash;
+
     CheckpointManager Checkpoints;
 
     ChainSocket SocketMain;
-    HeaderLocator Locator;
 
 
     public Blockchain( 
       ChainBlock genesisBlock, 
       List<BlockLocation> checkpoints)
     {
+      GenesisBlock = genesisBlock;
+      GenesisBlockHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes()));
 
-      BlockGenesis = genesisBlock;
       Checkpoints = new CheckpointManager(checkpoints);
-            
+
       SocketMain = new ChainSocket(
         blockchain: this,
-        block: genesisBlock,
-        hash: new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes())),
-        accumulatedDifficultyPrevious: 0,
-        height: 0);
-
-      Locator = new HeaderLocator(this, SocketMain.HeaderProbe);
+        blockGenesis: genesisBlock,
+        blockGenesisHash: GenesisBlockHash);
     }
     
-    public List<BlockLocation> GetHeaderLocator() => Locator.BlockLocations;
+    public List<BlockLocation> GetBlockLocations() => SocketMain.GetBlockLocations();
+
+    public static Blockchain Merge(Blockchain chain1, Blockchain chain2)
+    {
+      try
+      {
+        //InsertBlock funzt nur für einzelne Blöcke
+        chain1.InsertBlock(chain2.GenesisBlock, chain2.GenesisBlockHash);
+
+        // Deshalb muss hier entweder iterativ alle Blöcke in den anderen Strang eingflügt werden
+        // Oder aber man schreibt einen speziellen Chainmerger was zu bevorzugen ist.
+
+        return chain1;
+      }
+      catch(BlockchainException ex)
+      {
+        if(ex.ErrorCode == BlockCode.ORPHAN)
+        {
+          chain2.InsertBlock(chain1.GenesisBlock, chain1.GenesisBlockHash);
+          return chain2;
+        }
+
+        throw ex;
+      }
+    }
 
     public ChainBlock GetBlock(UInt256 hash)
     {
-      ChainSocket.SocketProbeHeader socketProbe = GetProbeAtBlock(hash);
-           
-      return socketProbe == null ? null : socketProbe.Block;
+      try
+      {
+        ChainSocket socket = GetSocket(hash);
+        return socket.Probe.Block;
+      }
+      catch (BlockchainException)
+      {
+        return null;
+      }
     }
 
-    ChainSocket.SocketProbeHeader GetProbeAtBlock(UInt256 hash)
+    ChainSocket GetSocket(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
-      ChainSocket.SocketProbeHeader probe = null;
 
       while (true)
       {
         if(socket == null)
         {
-          return null;
+          throw new BlockchainException(BlockCode.ORPHAN);
         }
-
-        probe = socket.GetProbeAtBlock(hash);
-
-        if (probe != null)
+        
+        if (socket.GetProbeAtBlock(hash) != null)
         {
-          return probe;
+          return socket;
         }
 
-        socket = socket.WeakerSocket;
+        socket = socket.SocketWeaker;
       }
     }
 
     public void InsertBlock(ChainBlock block, UInt256 headerHash)
     {
-      ValidateNetworkHeader(block.Header, headerHash, out ChainSocket.SocketProbeHeader socketProbeAtHeaderPrevious);
+      ChainSocket socketBlockPrevious = GetSocket(block.Header.HashPrevious);
 
-      ChainSocket socket = socketProbeAtHeaderPrevious.InsertBlock(block, headerHash);
-
-      if (socket == SocketMain)
-      {
-        Locator.Update(socket.HeightBlockTip, socket.HashBlockTip);
-        return;
-      }
-
-      InsertSocket(socket);
+      socketBlockPrevious.InsertBlock(block, headerHash);
     }
-    void ValidateNetworkHeader(NetworkHeader header, UInt256 headerHash, out ChainSocket.SocketProbeHeader socketProbe)
+
+    void InsertSocket(ChainSocket socket)
     {
-      if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+      if (socket.IsStrongerThan(SocketMain))
       {
-        throw new BlockchainException(BlockCode.INVALID);
+        socket.ConnectAsSocketWeaker(SocketMain);
+        SocketMain = socket;
       }
-
-      if (IsTimestampPremature(header.UnixTimeSeconds))
+      else
       {
-        throw new BlockchainException(BlockCode.PREMATURE);
-      }
-
-      socketProbe = GetProbeAtBlock(header.HashPrevious);
-
-      if (socketProbe == null)
-      {
-        throw new BlockchainException(BlockCode.ORPHAN);
+        SocketMain.InsertSocketRecursive(socket);
       }
     }
-    bool IsTimestampPremature(ulong unixTimeSeconds)
-    {
-      const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-      return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
-    }
 
-    public uint GetHeight() => SocketMain.HeightBlockTip;
+    public uint GetHeight() => SocketMain.BlockTipHeight;
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {
@@ -124,26 +130,6 @@ namespace BToken.Chaining
       return GetBlockPrevious(block.BlockPrevious, --depth);
     }
     
-    void InsertSocket(ChainSocket newSocket)
-    {
-      if (newSocket.IsStrongerThan(SocketMain))
-      {
-        newSocket.ConnectWeakerSocket(SocketMain);
-        SocketMain = newSocket;
-
-        Locator.Create(SocketMain.HeaderProbe);
-        return;
-      }
-
-      ChainSocket socket = SocketMain;
-      while (!newSocket.IsStrongerThan(socket.WeakerSocket))
-      {
-        socket = socket.WeakerSocket;
-      }
-
-      socket.ConnectWeakerSocket(newSocket);
-    }
-
     public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
     {
       var blocksUnassignedPayload = new List<ChainBlock>();
@@ -153,7 +139,7 @@ namespace BToken.Chaining
       {
         blocksUnassignedPayload.AddRange(socket.GetBlocksUnassignedPayload(batchSize));
         batchSize -= blocksUnassignedPayload.Count;
-        socket = socket.WeakerSocket;
+        socket = socket.SocketWeaker;
       } while (batchSize > 0 && socket != null);
 
       return blocksUnassignedPayload;

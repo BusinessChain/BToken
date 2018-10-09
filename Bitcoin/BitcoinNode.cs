@@ -20,7 +20,7 @@ namespace BToken.Bitcoin
     ChainBlock GenesisBlock = new BitcoinGenesisBlock();
     List<BlockLocation> Checkpoints = new List<BlockLocation>()
       {
-        //new BlockLocation(height : 11111, hash : new UInt256("0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d")),
+        new BlockLocation(height : 11111, hash : new UInt256("0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d")),
         //new BlockLocation(height : 250000, hash : new UInt256("000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214")),
         //new BlockLocation(height : 535419, hash : new UInt256("000000000000000000209ecbacceb3e7b8ec520ed7f1cfafbe149dd2b9007d39"))
       }; // ascending sort in height mandatory
