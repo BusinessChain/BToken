@@ -35,15 +35,15 @@ namespace BToken.Chaining
 
     public async Task StartAsync()
     {
-      Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
+      //Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
 
-      //Archiver.LoadBlockchain(Blockchain, BlockParser);
+      Archiver.LoadBlockchain(Blockchain, BlockParser);
 
-      BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
-      await DownloadHeadersAsync(channelFirst);
+      //BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
+      //await DownloadHeadersAsync(channelFirst);
 
-      BlockchainChannel[] channels = await Task.WhenAll(createChannelsTasks);
-      await DownloadBlocksAsync(channels);
+      //BlockchainChannel[] channels = await Task.WhenAll(createChannelsTasks);
+      //await DownloadBlocksAsync(channels);
 
       //StartListeningToNetworkAsync();
     }

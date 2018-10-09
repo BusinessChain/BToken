@@ -40,29 +40,25 @@ namespace BToken.Chaining
           FileIndex = 0
         };
 
+        // Parse entire File , create all the ChainSockets with chain of possibly 50 blocks per sockets
+
         while (true) // run until exception is thrown
         {
           using (FileStream blockRegisterStream = OpenFile(fileID))
           {
             int prefixInt = blockRegisterStream.ReadByte();
-            while (prefixInt > 0)
+            do
             {
-              int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
-              byte[] blockBytes = new byte[blockLength];
-              int i = blockRegisterStream.Read(blockBytes, 0, blockLength);
-
-              NetworkBlock networkBlock = NetworkBlock.ParseBlock(blockBytes);
+              NetworkBlock networkBlock = ParseNetworkBlock(blockRegisterStream, prefixInt);
               ChainBlock chainBlock = new ChainBlock(networkBlock.Header);
-              UInt256 headerHash = new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
+              UInt256 headerHash = new UInt256(Hashing.SHA256d(chainBlock.Header.getBytes()));
 
               blockchain.InsertBlock(chainBlock, headerHash);
 
-              Validate(chainBlock, networkBlock, blockParser);
-
-              chainBlock.BlockStore = new BlockStore() { FileID = fileID };
+              InsertPayload(chainBlock, networkBlock, blockParser, fileID);
 
               prefixInt = blockRegisterStream.ReadByte();
-            }
+            } while (prefixInt > 0);
           }
 
           IncrementFileID(ref fileID);
@@ -74,7 +70,21 @@ namespace BToken.Chaining
       }
 
     }
-    void Validate(ChainBlock chainBlock, NetworkBlock networkBlock, IBlockParser blockParser)
+    NetworkBlock ParseNetworkBlock(FileStream blockRegisterStream, int prefixInt)
+    {
+      int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
+      byte[] blockBytes = new byte[blockLength];
+      int i = blockRegisterStream.Read(blockBytes, 0, blockLength);
+
+      return NetworkBlock.ParseBlock(blockBytes);
+    }
+    void InsertPayload(ChainBlock chainBlock, NetworkBlock networkBlock, IBlockParser blockParser, FileID payloadStoreID)
+    {
+      ValidatePayload(chainBlock, networkBlock, blockParser);
+
+      chainBlock.BlockStore = new BlockStore() { FileID = payloadStoreID };
+    }
+    void ValidatePayload(ChainBlock chainBlock, NetworkBlock networkBlock, IBlockParser blockParser)
     {
       IBlockPayload payload = blockParser.Parse(networkBlock.Payload);
       UInt256 payloadHash = payload.GetPayloadHash();
