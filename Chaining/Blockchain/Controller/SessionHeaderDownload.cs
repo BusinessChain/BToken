@@ -149,7 +149,7 @@ namespace BToken.Chaining
 
       async Task<List<NetworkHeader>> GetHeadersAsync()
       {
-        HeaderLocator = Blockchain.GetHeaderLocator();
+        HeaderLocator = Blockchain.GetBlockLocations();
         await Channel.RequestHeadersAsync(HeaderLocator).ConfigureAwait(false);
 
         CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
