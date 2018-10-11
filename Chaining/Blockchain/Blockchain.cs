@@ -93,7 +93,7 @@ namespace BToken.Chaining
           throw new BlockchainException(BlockCode.ORPHAN);
         }
         
-        if (socket.GetProbeAtBlock(hash) != null)
+        if (socket.GetProbeAtBlock(hash))
         {
           return socket;
         }
@@ -109,6 +109,7 @@ namespace BToken.Chaining
     }
     void InsertBlock(ChainBlock chainBlock, UInt256 headerHash)
     {
+      // maybe return probe directly
       ChainSocket socketWithProbeAtBlockPrevious = GetSocket(chainBlock.Header.HashPrevious);
       socketWithProbeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
     }

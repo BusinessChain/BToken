@@ -40,6 +40,26 @@ namespace BToken.Chaining
           IsDeeperThanCheckpoint = false;
         }
 
+        public bool GetAtBlock(UInt256 hash)
+        {
+          Reset();
+
+          while (true)
+          {
+            if (IsHash(hash))
+            {
+              return true;
+            }
+
+            if (IsGenesis())
+            {
+              return false;
+            }
+
+            Push();
+          }
+        }
+
         public void Push()
         {
           Hash = Block.Header.HashPrevious;

@@ -100,24 +100,9 @@ namespace BToken.Chaining
       }
       public bool AllPayloadsAssigned() => BlockUnassignedPayloadDeepest == null;
 
-      public SocketProbe GetProbeAtBlock(UInt256 hash)
+      public bool GetProbeAtBlock(UInt256 hash)
       {
-        Probe.Reset();
-
-        while (true)
-        {
-          if (Probe.IsHash(hash))
-          {
-            return Probe;
-          }
-
-          if (Probe.IsGenesis())
-          {
-            return null;
-          }
-
-          Probe.Push();
-        }
+        return Probe.GetAtBlock(hash);
       }
       
       public void InsertBlock(ChainBlock block, UInt256 headerHash)
