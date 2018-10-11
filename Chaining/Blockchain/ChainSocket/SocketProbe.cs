@@ -73,6 +73,8 @@ namespace BToken.Chaining
 
         public void InsertBlock(ChainBlock block, UInt256 headerHash)
         {
+          ValidateHeader(block.Header, headerHash);
+
           ConnectChainBlock(block);
 
           if (!IsTip())
@@ -83,6 +85,55 @@ namespace BToken.Chaining
           {
             ExtendChain(block, headerHash);
           }
+        }
+        void ValidateHeader(NetworkHeader header, UInt256 headerHash)
+        {
+          CheckProofOfWorkClaim(header, headerHash);
+          CheckTimeStamp(header);
+
+          if (IsBlockConnectedToNextBlock(headerHash))
+          {
+            throw new BlockchainException(BlockCode.DUPLICATE);
+          }
+
+          if (header.NBits != TargetManager.GetNextTargetBits(this))
+          {
+            throw new BlockchainException(BlockCode.INVALID);
+          }
+
+          if (header.UnixTimeSeconds <= GetMedianTimePast())
+          {
+            throw new BlockchainException(BlockCode.INVALID);
+          }
+
+          if (!Socket.Blockchain.Checkpoints.ValidateBlockLocation(GetHeight() + 1, headerHash))
+          {
+            throw new BlockchainException(BlockCode.INVALID);
+          }
+
+          if (IsDeeperThanCheckpoint)
+          {
+            throw new BlockchainException(BlockCode.INVALID);
+          }
+        }
+        void CheckProofOfWorkClaim(NetworkHeader header, UInt256 headerHash)
+        {
+          if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+          {
+            throw new BlockchainException(BlockCode.INVALID);
+          }
+        }
+        void CheckTimeStamp(NetworkHeader header)
+        {
+          if (IsTimestampPremature(header.UnixTimeSeconds))
+          {
+            throw new BlockchainException(BlockCode.PREMATURE);
+          }
+        }
+        bool IsTimestampPremature(ulong unixTimeSeconds)
+        {
+          const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+          return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
         }
         void ConnectChainBlock(ChainBlock block)
         {
@@ -141,36 +192,7 @@ namespace BToken.Chaining
 
           Disconnect();
         }
-
-        public void ValidateHeader(NetworkHeader header, UInt256 headerHash)
-        {
-          if (IsBlockConnectedToNextBlock(headerHash))
-          {
-            throw new BlockchainException(BlockCode.DUPLICATE);
-          }
-
-          if (header.NBits != TargetManager.GetNextTargetBits(this))
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }
-
-          if (header.UnixTimeSeconds <= GetMedianTimePast())
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }
-
-          if (!Socket.Blockchain.Checkpoints.ValidateBlockLocation(GetHeight() + 1, headerHash))
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }
-
-          if (IsDeeperThanCheckpoint)
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }          
-
-        }
-
+        
         public void Disconnect()
         {
           Socket.Disconnect();

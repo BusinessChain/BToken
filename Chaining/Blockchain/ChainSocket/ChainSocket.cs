@@ -105,40 +105,6 @@ namespace BToken.Chaining
         return Probe.GetAtBlock(hash);
       }
       
-      public void InsertBlock(ChainBlock block, UInt256 headerHash)
-      {
-        ValidateHeader(block, headerHash);
-
-        Probe.InsertBlock(block, headerHash);
-      }
-      void ValidateHeader(ChainBlock block, UInt256 headerHash)
-      {
-        CheckProofOfWorkClaim(block.Header, headerHash);
-        CheckTimeStamp(block.Header);
-
-        Probe.ValidateHeader(block.Header, headerHash);
-      }
-      void CheckProofOfWorkClaim(NetworkHeader header, UInt256 headerHash)
-      {
-        if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
-        {
-          throw new BlockchainException(BlockCode.INVALID);
-        }
-      }
-      void CheckTimeStamp(NetworkHeader header)
-      {
-        if (IsTimestampPremature(header.UnixTimeSeconds))
-        {
-          throw new BlockchainException(BlockCode.PREMATURE);
-        }
-      }
-      bool IsTimestampPremature(ulong unixTimeSeconds)
-      {
-        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-        return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
-      }
-
-
       public void InsertSocketRecursive(ChainSocket socket)
       {
         if(socket.IsStrongerThan(SocketWeaker))

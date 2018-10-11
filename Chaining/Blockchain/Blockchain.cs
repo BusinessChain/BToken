@@ -73,8 +73,8 @@ namespace BToken.Chaining
     {
       try
       {
-        ChainSocket socket = GetSocket(hash);
-        return socket.Probe.Block;
+        ChainSocket.SocketProbe probe = GetProbe(hash);
+        return probe.Block;
       }
       catch (BlockchainException)
       {
@@ -82,7 +82,7 @@ namespace BToken.Chaining
       }
     }
 
-    ChainSocket GetSocket(UInt256 hash)
+    ChainSocket.SocketProbe GetProbe(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
 
@@ -95,7 +95,7 @@ namespace BToken.Chaining
         
         if (socket.GetProbeAtBlock(hash))
         {
-          return socket;
+          return socket.Probe;
         }
 
         socket = socket.SocketWeaker;
@@ -110,8 +110,8 @@ namespace BToken.Chaining
     void InsertBlock(ChainBlock chainBlock, UInt256 headerHash)
     {
       // maybe return probe directly
-      ChainSocket socketWithProbeAtBlockPrevious = GetSocket(chainBlock.Header.HashPrevious);
-      socketWithProbeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
+      ChainSocket.SocketProbe probeAtBlockPrevious = GetProbe(chainBlock.Header.HashPrevious);
+      probeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
     }
     public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash, BlockArchiver.BlockStore payloadStoreID)
     {
