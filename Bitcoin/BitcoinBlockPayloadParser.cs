@@ -8,7 +8,7 @@ using BToken.Chaining;
 
 namespace BToken.Bitcoin
 {
-  public class BitcoinBlockPayloadParser : IBlockParser
+  public class BitcoinBlockPayloadParser : IBlockPayloadParser
   {
     public IBlockPayload Parse(byte[] payloadStream)
     {
@@ -21,6 +21,12 @@ namespace BToken.Bitcoin
       }
 
       return new BitcoinBlockPayload(bitcoinTXs);
+    }
+
+    public UInt256 GetPayloadHash(byte[] payload)
+    {
+      IBlockPayload blockPayload = Parse(payload);
+      return blockPayload.GetPayloadHash();
     }
   }
 }

@@ -53,6 +53,8 @@ namespace BToken.Chaining
 
         public void InsertBlock(ChainBlock block, UInt256 headerHash)
         {
+          ConnectChainBlock(block);
+
           if (!IsTip())
           {
             ForkChain(block, headerHash);
@@ -61,6 +63,11 @@ namespace BToken.Chaining
           {
             ExtendChain(block, headerHash);
           }
+        }
+        void ConnectChainBlock(ChainBlock block)
+        {
+          block.BlockPrevious = Block;
+          Block.BlocksNext.Add(block);
         }
         void ForkChain(ChainBlock block, UInt256 headerHash)
         {

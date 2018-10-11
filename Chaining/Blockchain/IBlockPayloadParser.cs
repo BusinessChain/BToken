@@ -6,8 +6,9 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public interface IBlockParser
+  public interface IBlockPayloadParser
   {
     IBlockPayload Parse(byte[] stream);
+    UInt256 GetPayloadHash(byte[] payload);
   }
 }

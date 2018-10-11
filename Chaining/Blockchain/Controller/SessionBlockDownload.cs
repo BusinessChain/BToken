@@ -77,12 +77,9 @@ namespace BToken.Chaining
           UInt256 networkBlockHeaderHash = GetHeaderHash(networkBlock);
           ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
 
-          Validate(blockQueued, networkBlock);
-
-          if(blockQueued.BlockStore == null)
-          {
-            blockQueued.BlockStore = FileWriter.ArchiveBlock(networkBlock);
-          }
+          BlockArchiver.BlockStore payloadStoreID = FileWriter.PeekPayloadID(networkBlock.Payload.Length);
+          Blockchain.InsertPayload(blockQueued, networkBlock.Payload, payloadStoreID);
+          FileWriter.ArchiveBlock(networkBlock);
 
           BlocksDownloaded.Add(blockQueued);
           BlocksQueued.Remove(blockQueued);
@@ -99,16 +96,6 @@ namespace BToken.Chaining
         headerHashesQueued.RemoveAt(0);
 
         return BlocksQueued[blockIndex];
-      }
-
-      void Validate(ChainBlock chainBlock, NetworkBlock networkBlock)
-      {
-        IBlockPayload payload = Controller.BlockParser.Parse(networkBlock.Payload);
-        UInt256 payloadHash = payload.GetPayloadHash();
-        if (!payloadHash.IsEqual(chainBlock.Header.PayloadHash))
-        {
-          throw new BlockchainException(BlockCode.INVALID);
-        }
       }
 
       UInt256 GetHeaderHash(ChainBlock chainBlock)

@@ -56,7 +56,7 @@ namespace BToken.Chaining
 
           try
           {
-            Blockchain.InsertBlock(new ChainBlock(header), headerHash);
+            Blockchain.InsertHeader(header, headerHash);
           }
           catch (BlockchainException ex)
           {
@@ -87,11 +87,10 @@ namespace BToken.Chaining
           foreach (NetworkHeader header in headers)
           {
             UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
-            ChainBlock block = new ChainBlock(header);
 
             try
             {
-              Blockchain.InsertBlock(block, headerHash);
+              Blockchain.InsertHeader(header, headerHash);
             }
             catch (BlockchainException ex)
             {

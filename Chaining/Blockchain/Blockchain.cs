@@ -16,6 +16,8 @@ namespace BToken.Chaining
 
   public partial class Blockchain
   {
+    static IBlockPayloadParser PayloadParser;
+
     ChainBlock GenesisBlock;
     UInt256 GenesisBlockHash;
 
@@ -24,10 +26,12 @@ namespace BToken.Chaining
     ChainSocket SocketMain;
 
 
-    public Blockchain( 
+    public Blockchain(
+      IBlockPayloadParser payloadParser,
       ChainBlock genesisBlock, 
       List<BlockLocation> checkpoints)
     {
+      PayloadParser = payloadParser;
       GenesisBlock = genesisBlock;
       GenesisBlockHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes()));
 
@@ -41,29 +45,29 @@ namespace BToken.Chaining
     
     public List<BlockLocation> GetBlockLocations() => SocketMain.GetBlockLocations();
 
-    public static Blockchain Merge(Blockchain chain1, Blockchain chain2)
-    {
-      try
-      {
-        //InsertBlock funzt nur für einzelne Blöcke
-        chain1.InsertBlock(chain2.GenesisBlock, chain2.GenesisBlockHash);
+    //public static Blockchain Merge(Blockchain chain1, Blockchain chain2)
+    //{
+    //  try
+    //  {
+    //    //InsertBlock funzt nur für einzelne Blöcke
+    //    chain1.InsertBlock(chain2.GenesisBlock, chain2.GenesisBlockHash);
 
-        // Deshalb muss hier entweder iterativ alle Blöcke in den anderen Strang eingflügt werden
-        // Oder aber man schreibt einen speziellen Chainmerger was zu bevorzugen ist.
+    //    // Deshalb muss hier entweder iterativ alle Blöcke in den anderen Strang eingflügt werden
+    //    // Oder aber man schreibt einen speziellen Chainmerger was zu bevorzugen ist.
 
-        return chain1;
-      }
-      catch(BlockchainException ex)
-      {
-        if(ex.ErrorCode == BlockCode.ORPHAN)
-        {
-          chain2.InsertBlock(chain1.GenesisBlock, chain1.GenesisBlockHash);
-          return chain2;
-        }
+    //    return chain1;
+    //  }
+    //  catch(BlockchainException ex)
+    //  {
+    //    if(ex.ErrorCode == BlockCode.ORPHAN)
+    //    {
+    //      chain2.InsertBlock(chain1.GenesisBlock, chain1.GenesisBlockHash);
+    //      return chain2;
+    //    }
 
-        throw ex;
-      }
-    }
+    //    throw ex;
+    //  }
+    //}
 
     public ChainBlock GetBlock(UInt256 hash)
     {
@@ -98,11 +102,35 @@ namespace BToken.Chaining
       }
     }
 
-    public void InsertBlock(ChainBlock block, UInt256 headerHash)
+    public void InsertHeader(NetworkHeader header, UInt256 headerHash)
     {
-      ChainSocket socketBlockPrevious = GetSocket(block.Header.HashPrevious);
+      var chainBlock = new ChainBlock(header);
+      InsertBlock(chainBlock, headerHash);
+    }
+    void InsertBlock(ChainBlock chainBlock, UInt256 headerHash)
+    {
+      ChainSocket socketWithProbeAtBlockPrevious = GetSocket(chainBlock.Header.HashPrevious);
+      socketWithProbeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
+    }
+    public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash, BlockArchiver.BlockStore payloadStoreID)
+    {
+      var chainBlock = new ChainBlock(networkBlock.Header);
+      InsertBlock(chainBlock, headerHash);
+      InsertPayload(chainBlock, networkBlock.Payload, payloadStoreID);
+    }
 
-      socketBlockPrevious.InsertBlock(block, headerHash);
+    public static void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockArchiver.BlockStore payloadStoreID)
+    {
+      ValidatePayload(chainBlock, payload);
+      chainBlock.BlockStore = payloadStoreID;
+    }
+    static void ValidatePayload(ChainBlock chainBlock, byte[] payload)
+    {
+      UInt256 payloadHash = PayloadParser.GetPayloadHash(payload);
+      if (!payloadHash.IsEqual(chainBlock.Header.PayloadHash))
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
     }
 
     void InsertSocket(ChainSocket socket)

@@ -124,7 +124,7 @@ namespace BToken.Chaining
       {
         ValidateHeader(block, headerHash);
 
-        ConnectBlock(block, headerHash);
+        Probe.InsertBlock(block, headerHash);
       }
       void ValidateHeader(ChainBlock block, UInt256 headerHash)
       {
@@ -147,23 +147,12 @@ namespace BToken.Chaining
           throw new BlockchainException(BlockCode.PREMATURE);
         }
       }
-      static void ConnectChainBlocks(ChainBlock blockPrevious, ChainBlock block)
-      {
-        block.BlockPrevious = blockPrevious;
-        blockPrevious.BlocksNext.Add(block);
-      }
       bool IsTimestampPremature(ulong unixTimeSeconds)
       {
         const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
         return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
       }
 
-      void ConnectBlock(ChainBlock block, UInt256 headerHash)
-      {
-        ConnectChainBlocks(Probe.Block, block);
-
-        Probe.InsertBlock(block, headerHash);
-      }
 
       public void InsertSocketRecursive(ChainSocket socket)
       {

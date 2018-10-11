@@ -29,8 +29,8 @@ namespace BToken.Bitcoin
     {
       Network = new Network();
 
-      Blockchain = new Blockchain(GenesisBlock, Checkpoints);
-      BlockchainController = new BlockchainController(Network, Blockchain, new BitcoinBlockPayloadParser());
+      Blockchain = new Blockchain(new BitcoinBlockPayloadParser(), GenesisBlock, Checkpoints);
+      BlockchainController = new BlockchainController(Network, Blockchain);
 
       UTXO = new UnspentTXOutputs(Blockchain, Network);
     }

@@ -29,7 +29,7 @@ namespace BToken.Chaining
     public BlockArchiver()
     { }
 
-    public void LoadBlockchain(Blockchain blockchain, IBlockParser blockParser)
+    public void LoadBlockchain(Blockchain blockchain)
     {
       try
       {
@@ -40,8 +40,6 @@ namespace BToken.Chaining
           FileIndex = 0
         };
 
-        // Parse entire File , create all the ChainSockets with chain of possibly 50 blocks per sockets
-
         while (true) // run until exception is thrown
         {
           using (FileStream blockRegisterStream = OpenFile(fileID))
@@ -50,12 +48,9 @@ namespace BToken.Chaining
             do
             {
               NetworkBlock networkBlock = ParseNetworkBlock(blockRegisterStream, prefixInt);
-              ChainBlock chainBlock = new ChainBlock(networkBlock.Header);
-              UInt256 headerHash = new UInt256(Hashing.SHA256d(chainBlock.Header.getBytes()));
+              UInt256 headerHash = new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
 
-              blockchain.InsertBlock(chainBlock, headerHash);
-
-              InsertPayload(chainBlock, networkBlock, blockParser, fileID);
+              blockchain.InsertBlock(networkBlock, headerHash, new BlockStore(fileID));
 
               prefixInt = blockRegisterStream.ReadByte();
             } while (prefixInt > 0);
@@ -77,21 +72,6 @@ namespace BToken.Chaining
       int i = blockRegisterStream.Read(blockBytes, 0, blockLength);
 
       return NetworkBlock.ParseBlock(blockBytes);
-    }
-    void InsertPayload(ChainBlock chainBlock, NetworkBlock networkBlock, IBlockParser blockParser, FileID payloadStoreID)
-    {
-      ValidatePayload(chainBlock, networkBlock, blockParser);
-
-      chainBlock.BlockStore = new BlockStore() { FileID = payloadStoreID };
-    }
-    void ValidatePayload(ChainBlock chainBlock, NetworkBlock networkBlock, IBlockParser blockParser)
-    {
-      IBlockPayload payload = blockParser.Parse(networkBlock.Payload);
-      UInt256 payloadHash = payload.GetPayloadHash();
-      if (!payloadHash.IsEqual(chainBlock.Header.PayloadHash))
-      {
-        throw new BlockchainException(BlockCode.INVALID);
-      }
     }
 
     static FileStream OpenFile(FileID fileID)
