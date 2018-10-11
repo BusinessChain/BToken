@@ -93,7 +93,7 @@ namespace BToken.Chaining
           throw new BlockchainException(BlockCode.ORPHAN);
         }
         
-        if (socket.GetProbeAtBlock(hash))
+        if (socket.LocateProbeAtBlock(hash))
         {
           return socket.Probe;
         }
@@ -109,9 +109,26 @@ namespace BToken.Chaining
     }
     void InsertBlock(ChainBlock chainBlock, UInt256 headerHash)
     {
-      // maybe return probe directly
       ChainSocket.SocketProbe probeAtBlockPrevious = GetProbe(chainBlock.Header.HashPrevious);
+      ValidateCheckpoint(probeAtBlockPrevious, headerHash);
       probeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
+    }
+    void ValidateCheckpoint(ChainSocket.SocketProbe probe, UInt256 headerHash)
+    {
+      uint nextBlockHeight = probe.GetHeight() + 1;
+
+      bool chainLongerThanHighestCheckpoint = probe.GetHeightTip() >= Checkpoints.HighestCheckpointHight;
+      bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > Checkpoints.HighestCheckpointHight);
+
+      if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+
+      if (!Checkpoints.ValidateBlockLocation(nextBlockHeight, headerHash))
+      { 
+        throw new BlockchainException(BlockCode.INVALID);
+      }
     }
     public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash, BlockArchiver.BlockStore payloadStoreID)
     {

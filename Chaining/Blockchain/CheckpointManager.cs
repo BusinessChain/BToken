@@ -10,12 +10,14 @@ namespace BToken.Chaining
   {
     class CheckpointManager
     {
+      public uint HighestCheckpointHight { get; private set; }
       List<BlockLocation> Checkpoints;
 
 
       public CheckpointManager(List<BlockLocation> checkpoints)
       {
-        Checkpoints = checkpoints; // sort checkpoints then delete comment in Bitcoin.cs
+        Checkpoints = checkpoints;
+        HighestCheckpointHight = checkpoints.Max(x => x.Height);
       }
 
       public bool ValidateBlockLocation(uint height, UInt256 hash)
@@ -27,11 +29,6 @@ namespace BToken.Chaining
         }
 
         return true;
-      }
-
-      public bool IsCheckpoint(uint height)
-      {
-        return Checkpoints.Any(c => c.Height == height);
       }
     }
   }

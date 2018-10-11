@@ -14,8 +14,6 @@ namespace BToken.Chaining
   {
     partial class ChainSocket
     {
-      Blockchain Blockchain;
-
       ChainBlock BlockTip;
       public UInt256 BlockTipHash { get; private set; }
       public uint BlockTipHeight { get; private set; }
@@ -56,8 +54,6 @@ namespace BToken.Chaining
         double accumulatedDifficultyPrevious,
         BlockLocator blockLocator)
       {
-        Blockchain = blockchain;
-
         BlockTip = blockTip;
         BlockTipHash = blockTipHash;
         BlockTipHeight = blockTipHeight;
@@ -66,7 +62,7 @@ namespace BToken.Chaining
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockTip.Header.NBits);
         Locator = blockLocator;
         
-        Probe = new SocketProbe(this);
+        Probe = new SocketProbe(blockchain, this);
       }
 
       public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
@@ -100,7 +96,7 @@ namespace BToken.Chaining
       }
       public bool AllPayloadsAssigned() => BlockUnassignedPayloadDeepest == null;
 
-      public bool GetProbeAtBlock(UInt256 hash)
+      public bool LocateProbeAtBlock(UInt256 hash)
       {
         return Probe.GetAtBlock(hash);
       }
@@ -164,7 +160,6 @@ namespace BToken.Chaining
       }
 
       public List<BlockLocation> GetBlockLocations() => Locator.BlockLocations;
-
 
     }
   }
