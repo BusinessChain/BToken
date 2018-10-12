@@ -12,7 +12,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class ChainSocket
+    public partial class ChainSocket
     {
       ChainBlock BlockTip;
       public UInt256 BlockTipHash { get; private set; }

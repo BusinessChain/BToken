@@ -16,11 +16,8 @@ namespace BToken.Chaining
 
   public partial class Blockchain
   {
-    static IBlockPayloadParser PayloadParser;
-
-    ChainBlock GenesisBlock;
-    UInt256 GenesisBlockHash;
-
+    IBlockPayloadParser PayloadParser;
+    
     CheckpointManager Checkpoints;
 
     ChainSocket SocketMain;
@@ -32,15 +29,13 @@ namespace BToken.Chaining
       List<BlockLocation> checkpoints)
     {
       PayloadParser = payloadParser;
-      GenesisBlock = genesisBlock;
-      GenesisBlockHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes()));
 
       Checkpoints = new CheckpointManager(checkpoints);
 
       SocketMain = new ChainSocket(
         blockchain: this,
         blockGenesis: genesisBlock,
-        blockGenesisHash: GenesisBlockHash);
+        blockGenesisHash: new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes())));
     }
     
     public List<BlockLocation> GetBlockLocations() => SocketMain.GetBlockLocations();
@@ -137,12 +132,12 @@ namespace BToken.Chaining
       InsertPayload(chainBlock, networkBlock.Payload, payloadStoreID);
     }
 
-    public static void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockArchiver.BlockStore payloadStoreID)
+    public void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockArchiver.BlockStore payloadStoreID)
     {
       ValidatePayload(chainBlock, payload);
       chainBlock.BlockStore = payloadStoreID;
     }
-    static void ValidatePayload(ChainBlock chainBlock, byte[] payload)
+    void ValidatePayload(ChainBlock chainBlock, byte[] payload)
     {
       UInt256 payloadHash = PayloadParser.GetPayloadHash(payload);
       if (!payloadHash.IsEqual(chainBlock.Header.PayloadHash))

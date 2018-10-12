@@ -31,6 +31,8 @@ namespace BToken.Chaining
 
     public void LoadBlockchain(Blockchain blockchain)
     {
+      var chainSocketsPerFile = new List<Blockchain.ChainSocket>();
+
       try
       {
         FileID fileID = new FileID
