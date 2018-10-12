@@ -12,10 +12,8 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class ChainSocket
+    public partial class ChainSocket
     {
-      Blockchain Blockchain;
-
       ChainBlock BlockTip;
       public UInt256 BlockTipHash { get; private set; }
       public uint BlockTipHeight { get; private set; }
@@ -56,8 +54,6 @@ namespace BToken.Chaining
         double accumulatedDifficultyPrevious,
         BlockLocator blockLocator)
       {
-        Blockchain = blockchain;
-
         BlockTip = blockTip;
         BlockTipHash = blockTipHash;
         BlockTipHeight = blockTipHeight;
@@ -66,7 +62,7 @@ namespace BToken.Chaining
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockTip.Header.NBits);
         Locator = blockLocator;
         
-        Probe = new SocketProbe(this);
+        Probe = new SocketProbe(blockchain, this);
       }
 
       public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
@@ -100,71 +96,11 @@ namespace BToken.Chaining
       }
       public bool AllPayloadsAssigned() => BlockUnassignedPayloadDeepest == null;
 
-      public SocketProbe GetProbeAtBlock(UInt256 hash)
+      public bool LocateProbeAtBlock(UInt256 hash)
       {
-        Probe.Reset();
-
-        while (true)
-        {
-          if (Probe.IsHash(hash))
-          {
-            return Probe;
-          }
-
-          if (Probe.IsGenesis())
-          {
-            return null;
-          }
-
-          Probe.Push();
-        }
+        return Probe.GetAtBlock(hash);
       }
       
-      public void InsertBlock(ChainBlock block, UInt256 headerHash)
-      {
-        ValidateHeader(block, headerHash);
-
-        ConnectBlock(block, headerHash);
-      }
-      void ValidateHeader(ChainBlock block, UInt256 headerHash)
-      {
-        CheckProofOfWorkClaim(block.Header, headerHash);
-        CheckTimeStamp(block.Header);
-
-        Probe.ValidateHeader(block.Header, headerHash);
-      }
-      void CheckProofOfWorkClaim(NetworkHeader header, UInt256 headerHash)
-      {
-        if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
-        {
-          throw new BlockchainException(BlockCode.INVALID);
-        }
-      }
-      void CheckTimeStamp(NetworkHeader header)
-      {
-        if (IsTimestampPremature(header.UnixTimeSeconds))
-        {
-          throw new BlockchainException(BlockCode.PREMATURE);
-        }
-      }
-      static void ConnectChainBlocks(ChainBlock blockPrevious, ChainBlock block)
-      {
-        block.BlockPrevious = blockPrevious;
-        blockPrevious.BlocksNext.Add(block);
-      }
-      bool IsTimestampPremature(ulong unixTimeSeconds)
-      {
-        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-        return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
-      }
-
-      void ConnectBlock(ChainBlock block, UInt256 headerHash)
-      {
-        ConnectChainBlocks(Probe.Block, block);
-
-        Probe.InsertBlock(block, headerHash);
-      }
-
       public void InsertSocketRecursive(ChainSocket socket)
       {
         if(socket.IsStrongerThan(SocketWeaker))
@@ -224,7 +160,6 @@ namespace BToken.Chaining
       }
 
       public List<BlockLocation> GetBlockLocations() => Locator.BlockLocations;
-
 
     }
   }

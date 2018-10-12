@@ -29,8 +29,10 @@ namespace BToken.Chaining
     public BlockArchiver()
     { }
 
-    public void LoadBlockchain(Blockchain blockchain, IBlockParser blockParser)
+    public void LoadBlockchain(Blockchain blockchain)
     {
+      var chainSocketsPerFile = new List<Blockchain.ChainSocket>();
+
       try
       {
         FileID fileID = new FileID
@@ -45,24 +47,15 @@ namespace BToken.Chaining
           using (FileStream blockRegisterStream = OpenFile(fileID))
           {
             int prefixInt = blockRegisterStream.ReadByte();
-            while (prefixInt > 0)
+            do
             {
-              int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
-              byte[] blockBytes = new byte[blockLength];
-              int i = blockRegisterStream.Read(blockBytes, 0, blockLength);
-
-              NetworkBlock networkBlock = NetworkBlock.ParseBlock(blockBytes);
-              ChainBlock chainBlock = new ChainBlock(networkBlock.Header);
+              NetworkBlock networkBlock = ParseNetworkBlock(blockRegisterStream, prefixInt);
               UInt256 headerHash = new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
 
-              blockchain.InsertBlock(chainBlock, headerHash);
-
-              Validate(chainBlock, networkBlock, blockParser);
-
-              chainBlock.BlockStore = new BlockStore() { FileID = fileID };
+              blockchain.InsertBlock(networkBlock, headerHash, new BlockStore(fileID));
 
               prefixInt = blockRegisterStream.ReadByte();
-            }
+            } while (prefixInt > 0);
           }
 
           IncrementFileID(ref fileID);
@@ -74,14 +67,13 @@ namespace BToken.Chaining
       }
 
     }
-    void Validate(ChainBlock chainBlock, NetworkBlock networkBlock, IBlockParser blockParser)
+    NetworkBlock ParseNetworkBlock(FileStream blockRegisterStream, int prefixInt)
     {
-      IBlockPayload payload = blockParser.Parse(networkBlock.Payload);
-      UInt256 payloadHash = payload.GetPayloadHash();
-      if (!payloadHash.IsEqual(chainBlock.Header.PayloadHash))
-      {
-        throw new BlockchainException(BlockCode.INVALID);
-      }
+      int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
+      byte[] blockBytes = new byte[blockLength];
+      int i = blockRegisterStream.Read(blockBytes, 0, blockLength);
+
+      return NetworkBlock.ParseBlock(blockBytes);
     }
 
     static FileStream OpenFile(FileID fileID)

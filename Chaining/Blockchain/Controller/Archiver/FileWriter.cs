@@ -61,26 +61,41 @@ namespace BToken.Chaining
       {
         byte[] headerBytes = block.Header.getBytes();
         byte[] txCount = VarInt.GetBytes(block.TXCount).ToArray();
-        int blockByteSize = headerBytes.Length + txCount.Length + block.Payload.Length;
+        int payloadLength = headerBytes.Length + txCount.Length + block.Payload.Length;
 
-        if (blockByteSize > BLOCK_REGISTER_BYTESIZE_MAX)
+        if (payloadLength > BLOCK_REGISTER_BYTESIZE_MAX)
         {
-          throw new BlockchainException(string.Format("Network block too big. Maximum size '{0}', current size '{1}'", BLOCK_REGISTER_BYTESIZE_MAX, blockByteSize));
+          throw new BlockchainException(string.Format("Network block too big. Maximum size '{0}', current size '{1}'", BLOCK_REGISTER_BYTESIZE_MAX, payloadLength));
         }
 
-        if (FileStream.Length + blockByteSize > BLOCK_REGISTER_BYTESIZE_MAX)
+        if (!IsPayloadFitInCurrentFile(payloadLength))
         {
           CreateNewFileStream();
         }
 
-        byte[] blockSizeVarIntBytes = VarInt.GetBytes(blockByteSize).ToArray();
+        byte[] blockSizeVarIntBytes = VarInt.GetBytes(payloadLength).ToArray();
         FileStream.Write(blockSizeVarIntBytes, 0, blockSizeVarIntBytes.Length);
         FileStream.Write(headerBytes, 0, headerBytes.Length);
         FileStream.Write(txCount, 0, txCount.Length);
         FileStream.Write(block.Payload, 0, block.Payload.Length);
 
-        return new BlockStore() { FileID = FileID };
+        return new BlockStore(FileID);
       }
+      public BlockStore PeekPayloadID(int payloadLength)
+      {
+        if (IsPayloadFitInCurrentFile(payloadLength))
+        {
+          return new BlockStore(FileID);
+        }
+        else
+        {
+          FileID fileID = FileID;
+          IncrementFileID(ref fileID);
+          return new BlockStore(fileID);
+        }
+      }
+
+      bool IsPayloadFitInCurrentFile(int blockByteSize) => FileStream.Length + blockByteSize <= BLOCK_REGISTER_BYTESIZE_MAX;
 
       void CreateNewFileStream()
       {

@@ -16,61 +16,60 @@ namespace BToken.Chaining
 
   public partial class Blockchain
   {
-    ChainBlock GenesisBlock;
-    UInt256 GenesisBlockHash;
-
+    IBlockPayloadParser PayloadParser;
+    
     CheckpointManager Checkpoints;
 
     ChainSocket SocketMain;
 
 
-    public Blockchain( 
+    public Blockchain(
+      IBlockPayloadParser payloadParser,
       ChainBlock genesisBlock, 
       List<BlockLocation> checkpoints)
     {
-      GenesisBlock = genesisBlock;
-      GenesisBlockHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes()));
+      PayloadParser = payloadParser;
 
       Checkpoints = new CheckpointManager(checkpoints);
 
       SocketMain = new ChainSocket(
         blockchain: this,
         blockGenesis: genesisBlock,
-        blockGenesisHash: GenesisBlockHash);
+        blockGenesisHash: new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes())));
     }
     
     public List<BlockLocation> GetBlockLocations() => SocketMain.GetBlockLocations();
 
-    public static Blockchain Merge(Blockchain chain1, Blockchain chain2)
-    {
-      try
-      {
-        //InsertBlock funzt nur für einzelne Blöcke
-        chain1.InsertBlock(chain2.GenesisBlock, chain2.GenesisBlockHash);
+    //public static Blockchain Merge(Blockchain chain1, Blockchain chain2)
+    //{
+    //  try
+    //  {
+    //    //InsertBlock funzt nur für einzelne Blöcke
+    //    chain1.InsertBlock(chain2.GenesisBlock, chain2.GenesisBlockHash);
 
-        // Deshalb muss hier entweder iterativ alle Blöcke in den anderen Strang eingflügt werden
-        // Oder aber man schreibt einen speziellen Chainmerger was zu bevorzugen ist.
+    //    // Deshalb muss hier entweder iterativ alle Blöcke in den anderen Strang eingflügt werden
+    //    // Oder aber man schreibt einen speziellen Chainmerger was zu bevorzugen ist.
 
-        return chain1;
-      }
-      catch(BlockchainException ex)
-      {
-        if(ex.ErrorCode == BlockCode.ORPHAN)
-        {
-          chain2.InsertBlock(chain1.GenesisBlock, chain1.GenesisBlockHash);
-          return chain2;
-        }
+    //    return chain1;
+    //  }
+    //  catch(BlockchainException ex)
+    //  {
+    //    if(ex.ErrorCode == BlockCode.ORPHAN)
+    //    {
+    //      chain2.InsertBlock(chain1.GenesisBlock, chain1.GenesisBlockHash);
+    //      return chain2;
+    //    }
 
-        throw ex;
-      }
-    }
+    //    throw ex;
+    //  }
+    //}
 
     public ChainBlock GetBlock(UInt256 hash)
     {
       try
       {
-        ChainSocket socket = GetSocket(hash);
-        return socket.Probe.Block;
+        ChainSocket.SocketProbe probe = GetProbe(hash);
+        return probe.Block;
       }
       catch (BlockchainException)
       {
@@ -78,7 +77,7 @@ namespace BToken.Chaining
       }
     }
 
-    ChainSocket GetSocket(UInt256 hash)
+    ChainSocket.SocketProbe GetProbe(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
 
@@ -89,20 +88,62 @@ namespace BToken.Chaining
           throw new BlockchainException(BlockCode.ORPHAN);
         }
         
-        if (socket.GetProbeAtBlock(hash) != null)
+        if (socket.LocateProbeAtBlock(hash))
         {
-          return socket;
+          return socket.Probe;
         }
 
         socket = socket.SocketWeaker;
       }
     }
 
-    public void InsertBlock(ChainBlock block, UInt256 headerHash)
+    public void InsertHeader(NetworkHeader header, UInt256 headerHash)
     {
-      ChainSocket socketBlockPrevious = GetSocket(block.Header.HashPrevious);
+      var chainBlock = new ChainBlock(header);
+      InsertBlock(chainBlock, headerHash);
+    }
+    void InsertBlock(ChainBlock chainBlock, UInt256 headerHash)
+    {
+      ChainSocket.SocketProbe probeAtBlockPrevious = GetProbe(chainBlock.Header.HashPrevious);
+      ValidateCheckpoint(probeAtBlockPrevious, headerHash);
+      probeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
+    }
+    void ValidateCheckpoint(ChainSocket.SocketProbe probe, UInt256 headerHash)
+    {
+      uint nextBlockHeight = probe.GetHeight() + 1;
 
-      socketBlockPrevious.InsertBlock(block, headerHash);
+      bool chainLongerThanHighestCheckpoint = probe.GetHeightTip() >= Checkpoints.HighestCheckpointHight;
+      bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > Checkpoints.HighestCheckpointHight);
+
+      if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+
+      if (!Checkpoints.ValidateBlockLocation(nextBlockHeight, headerHash))
+      { 
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+    }
+    public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash, BlockArchiver.BlockStore payloadStoreID)
+    {
+      var chainBlock = new ChainBlock(networkBlock.Header);
+      InsertBlock(chainBlock, headerHash);
+      InsertPayload(chainBlock, networkBlock.Payload, payloadStoreID);
+    }
+
+    public void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockArchiver.BlockStore payloadStoreID)
+    {
+      ValidatePayload(chainBlock, payload);
+      chainBlock.BlockStore = payloadStoreID;
+    }
+    void ValidatePayload(ChainBlock chainBlock, byte[] payload)
+    {
+      UInt256 payloadHash = PayloadParser.GetPayloadHash(payload);
+      if (!payloadHash.IsEqual(chainBlock.Header.PayloadHash))
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
     }
 
     void InsertSocket(ChainSocket socket)

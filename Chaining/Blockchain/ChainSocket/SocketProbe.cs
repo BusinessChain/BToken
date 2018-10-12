@@ -13,18 +13,19 @@ namespace BToken.Chaining
     {
       public class SocketProbe
       {
-        public ChainSocket Socket { get; private set; }
+        Blockchain Blockchain;
+        ChainSocket Socket;
 
         public ChainBlock Block;
         UInt256 Hash;
 
         public uint Depth;
-        bool IsDeeperThanCheckpoint;
         public double AccumulatedDifficulty { get; private set; }
 
 
-        public SocketProbe(ChainSocket socket)
+        public SocketProbe(Blockchain blockchain, ChainSocket socket)
         {
+          Blockchain = blockchain;
           Socket = socket;
           Reset();
         }
@@ -36,8 +37,26 @@ namespace BToken.Chaining
           AccumulatedDifficulty = Socket.AccumulatedDifficulty;
 
           Depth = 0;
+        }
 
-          IsDeeperThanCheckpoint = false;
+        public bool GetAtBlock(UInt256 hash)
+        {
+          Reset();
+
+          while (true)
+          {
+            if (IsHash(hash))
+            {
+              return true;
+            }
+
+            if (IsGenesis())
+            {
+              return false;
+            }
+
+            Push();
+          }
         }
 
         public void Push()
@@ -46,13 +65,15 @@ namespace BToken.Chaining
           Block = Block.BlockPrevious;
           AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.Header.NBits);
 
-          IsDeeperThanCheckpoint |= Socket.Blockchain.Checkpoints.IsCheckpoint(GetHeight());
-
           Depth++;
         }
 
         public void InsertBlock(ChainBlock block, UInt256 headerHash)
         {
+          ValidateHeader(block.Header, headerHash);
+
+          ConnectChainBlock(block);
+
           if (!IsTip())
           {
             ForkChain(block, headerHash);
@@ -62,12 +83,56 @@ namespace BToken.Chaining
             ExtendChain(block, headerHash);
           }
         }
+        void ValidateHeader(NetworkHeader header, UInt256 headerHash)
+        {
+          CheckProofOfWorkClaim(header, headerHash);
+          CheckTimeStamp(header);
+
+          if (IsBlockConnectedToNextBlock(headerHash))
+          {
+            throw new BlockchainException(BlockCode.DUPLICATE);
+          }
+
+          if (header.NBits != TargetManager.GetNextTargetBits(this))
+          {
+            throw new BlockchainException(BlockCode.INVALID);
+          }
+
+          if (header.UnixTimeSeconds <= GetMedianTimePast())
+          {
+            throw new BlockchainException(BlockCode.INVALID);
+          }
+        }
+        void CheckProofOfWorkClaim(NetworkHeader header, UInt256 headerHash)
+        {
+          if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+          {
+            throw new BlockchainException(BlockCode.INVALID);
+          }
+        }
+        void CheckTimeStamp(NetworkHeader header)
+        {
+          if (IsTimestampPremature(header.UnixTimeSeconds))
+          {
+            throw new BlockchainException(BlockCode.PREMATURE);
+          }
+        }
+        bool IsTimestampPremature(ulong unixTimeSeconds)
+        {
+          const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+          return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
+        }
+        void ConnectChainBlock(ChainBlock block)
+        {
+          block.BlockPrevious = Block;
+          Block.BlocksNext.Add(block);
+        }
         void ForkChain(ChainBlock block, UInt256 headerHash)
         {
           uint blockTipHeight = GetHeight() + 1;
 
           var socketForkChain = new ChainSocket(
-            blockchain: Socket.Blockchain,
+            blockchain: Blockchain,
             blockTip: block,
             blockTipHash: headerHash,
             blockTipHeight: blockTipHeight,
@@ -76,7 +141,7 @@ namespace BToken.Chaining
             accumulatedDifficultyPrevious: AccumulatedDifficulty,
             blockLocator: new BlockLocator(blockTipHeight, headerHash));
 
-          Socket.Blockchain.InsertSocket(socketForkChain);
+          Blockchain.InsertSocket(socketForkChain);
         }
         void ExtendChain(ChainBlock block, UInt256 headerHash)
         {
@@ -101,7 +166,7 @@ namespace BToken.Chaining
           locator.Update(blockTipHeight, headerHash);
 
           var socketExtendChain = new ChainSocket(
-            blockchain: Socket.Blockchain,
+            blockchain: Blockchain,
             blockTip: block,
             blockTipHash: headerHash,
             blockTipHeight: blockTipHeight,
@@ -110,40 +175,11 @@ namespace BToken.Chaining
             accumulatedDifficultyPrevious: AccumulatedDifficulty,
             blockLocator: locator);
 
-          Socket.Blockchain.InsertSocket(socketExtendChain);
+          Blockchain.InsertSocket(socketExtendChain);
 
           Disconnect();
         }
-
-        public void ValidateHeader(NetworkHeader header, UInt256 headerHash)
-        {
-          if (IsBlockConnectedToNextBlock(headerHash))
-          {
-            throw new BlockchainException(BlockCode.DUPLICATE);
-          }
-
-          if (header.NBits != TargetManager.GetNextTargetBits(this))
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }
-
-          if (header.UnixTimeSeconds <= GetMedianTimePast())
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }
-
-          if (!Socket.Blockchain.Checkpoints.ValidateBlockLocation(GetHeight() + 1, headerHash))
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }
-
-          if (IsDeeperThanCheckpoint)
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }          
-
-        }
-
+        
         public void Disconnect()
         {
           Socket.Disconnect();
@@ -173,7 +209,8 @@ namespace BToken.Chaining
           return timestampsPast[timestampsPast.Count / 2];
         }
 
-        public uint GetHeight() => Socket.BlockTipHeight - Depth;
+        public uint GetHeightTip() => Socket.BlockTipHeight;
+        public uint GetHeight() => GetHeightTip() - Depth;
         public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
         public bool IsGenesis() => Block == Socket.BlockGenesis;
         public bool IsTip() => Block == Socket.BlockTip;

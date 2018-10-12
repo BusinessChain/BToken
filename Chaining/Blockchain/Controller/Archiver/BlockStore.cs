@@ -17,7 +17,16 @@ namespace BToken.Chaining
 
     public class BlockStore
     {
-      public FileID FileID;
+      public FileID FileID { get; private set; }
+
+      public BlockStore()
+      {
+        FileID = new FileID();
+      }
+      public BlockStore(FileID fileID)
+      {
+        FileID = fileID;
+      }
     }
   }
 }

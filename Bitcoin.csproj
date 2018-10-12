@@ -83,7 +83,6 @@
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
     <Compile Include="Chaining\Blockchain\CheckpointManager.cs" />
     <Compile Include="Chaining\Blockchain\Controller\Archiver\BlockArchiver.cs" />
-    <Compile Include="Chaining\Blockchain\Controller\Archiver\BlockchainLoader.cs" />
     <Compile Include="Chaining\Blockchain\Controller\Archiver\FileWriter.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainChannel.cs" />
@@ -93,7 +92,7 @@
     <Compile Include="Chaining\Blockchain\Controller\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\Blockchain\IBlockPayload.cs" />
-    <Compile Include="Chaining\Blockchain\IBlockParser.cs" />
+    <Compile Include="Chaining\Blockchain\IBlockPayloadParser.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\ChainSocket.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainException.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\SocketProbe.cs" />

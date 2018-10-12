@@ -16,7 +16,6 @@ namespace BToken.Chaining
   {
     Network Network;
     Blockchain Blockchain;
-    IBlockParser BlockParser;
 
     const int CHANNELS_COUNT = 8;
 
@@ -24,11 +23,10 @@ namespace BToken.Chaining
     BlockArchiver Archiver;
 
 
-    public BlockchainController(Network network, Blockchain blockchain, IBlockParser blockParser)
+    public BlockchainController(Network network, Blockchain blockchain)
     {
       Network = network;
       Blockchain = blockchain;
-      BlockParser = blockParser;
       BlockLocator = new BlockPayloadLocator(blockchain, CHANNELS_COUNT);
       Archiver = new BlockArchiver();
     }
@@ -37,7 +35,7 @@ namespace BToken.Chaining
     {
       Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
 
-      //Archiver.LoadBlockchain(Blockchain, BlockParser);
+      //Archiver.LoadBlockchain(Blockchain);
 
       BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
       await DownloadHeadersAsync(channelFirst);
