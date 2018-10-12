@@ -20,7 +20,7 @@ namespace BToken.Chaining
     
     CheckpointManager Checkpoints;
 
-    ChainSocket SocketMain;
+    SocketProbe ProbeMain;
 
 
     public Blockchain(
@@ -32,10 +32,9 @@ namespace BToken.Chaining
 
       Checkpoints = new CheckpointManager(checkpoints);
 
-      SocketMain = new ChainSocket(
+      ProbeMain = new SocketProbe(
         blockchain: this,
-        blockGenesis: genesisBlock,
-        blockGenesisHash: new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes())));
+        genesisBlock: genesisBlock);
     }
     
     public List<BlockLocation> GetBlockLocations() => SocketMain.GetBlockLocations();
@@ -68,7 +67,7 @@ namespace BToken.Chaining
     {
       try
       {
-        ChainSocket.SocketProbe probe = GetProbe(hash);
+        SocketProbe probe = GetProbe(hash);
         return probe.Block;
       }
       catch (BlockchainException)
@@ -77,7 +76,7 @@ namespace BToken.Chaining
       }
     }
 
-    ChainSocket.SocketProbe GetProbe(UInt256 hash)
+    SocketProbe GetProbe(UInt256 hash)
     {
       ChainSocket socket = SocketMain;
 
@@ -104,11 +103,11 @@ namespace BToken.Chaining
     }
     void InsertBlock(ChainBlock chainBlock, UInt256 headerHash)
     {
-      ChainSocket.SocketProbe probeAtBlockPrevious = GetProbe(chainBlock.Header.HashPrevious);
+      SocketProbe probeAtBlockPrevious = GetProbe(chainBlock.Header.HashPrevious);
       ValidateCheckpoint(probeAtBlockPrevious, headerHash);
       probeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
     }
-    void ValidateCheckpoint(ChainSocket.SocketProbe probe, UInt256 headerHash)
+    void ValidateCheckpoint(SocketProbe probe, UInt256 headerHash)
     {
       uint nextBlockHeight = probe.GetHeight() + 1;
 
