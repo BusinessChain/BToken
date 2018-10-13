@@ -5,7 +5,7 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    public partial class SocketProbe
+    partial class SocketProbe
     {
       static class TargetManager
       {

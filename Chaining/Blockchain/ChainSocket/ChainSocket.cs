@@ -16,16 +16,15 @@ namespace BToken.Chaining
     {
       partial class ChainSocket
       {
-        public ChainBlock BlockTip { get; private set; }
-        public UInt256 BlockTipHash { get; private set; }
-        public uint BlockTipHeight { get; private set; }
-        public double AccumulatedDifficulty { get; private set; }
+        public ChainBlock BlockTip;
+        public UInt256 BlockTipHash;
+        public uint BlockTipHeight;
+        public double AccumulatedDifficulty;
 
         public ChainBlock BlockGenesis { get; private set; }
-        public ChainBlock BlockUnassignedPayloadDeepest { get; private set; }
+        public ChainBlock BlockUnassignedPayloadDeepest;
 
         public SocketProbe Probe { get; private set; }
-        BlockLocator Locator;
 
         ChainSocket SocketStronger;
         public ChainSocket SocketWeaker { get; private set; }
@@ -42,7 +41,6 @@ namespace BToken.Chaining
              blockGenesis: blockGenesis,
              blockUnassignedPayloadDeepest: null,
              accumulatedDifficultyPrevious: 0,
-             blockLocator: new BlockLocator(0, blockGenesisHash),
              probe: probe)
         { }
 
@@ -53,7 +51,6 @@ namespace BToken.Chaining
           ChainBlock blockGenesis,
           ChainBlock blockUnassignedPayloadDeepest,
           double accumulatedDifficultyPrevious,
-          BlockLocator blockLocator,
           SocketProbe probe)
         {
           BlockTip = blockTip;
@@ -62,47 +59,12 @@ namespace BToken.Chaining
           BlockGenesis = blockGenesis;
           BlockUnassignedPayloadDeepest = blockUnassignedPayloadDeepest;
           AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockTip.Header.NBits);
-          Locator = blockLocator;
 
           Probe = probe;
         }
 
-        public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
-        {
-          if (AllPayloadsAssigned()) { return new List<ChainBlock>(); }
-
-          ChainBlock block = BlockUnassignedPayloadDeepest;
-
-          var locatorBatchBlocksUnassignedPayload = new List<ChainBlock>();
-          while (locatorBatchBlocksUnassignedPayload.Count < batchSize)
-          {
-            if (block.BlockStore == null)
-            {
-              locatorBatchBlocksUnassignedPayload.Add(block);
-            }
-
-            if (block == BlockTip)
-            {
-              return locatorBatchBlocksUnassignedPayload;
-            }
-
-            block = block.BlocksNext[0];
-
-            if (locatorBatchBlocksUnassignedPayload.Count == 0)
-            {
-              BlockUnassignedPayloadDeepest = block;
-            }
-          }
-
-          return locatorBatchBlocksUnassignedPayload;
-        }
         public bool AllPayloadsAssigned() => BlockUnassignedPayloadDeepest == null;
-
-        public bool LocateProbeAtBlock(UInt256 hash)
-        {
-          return Probe.GetAtBlock(hash);
-        }
-
+        
         public void InsertSocketRecursive(ChainSocket socket)
         {
           if (socket.IsStrongerThan(SocketWeaker))
@@ -130,7 +92,7 @@ namespace BToken.Chaining
           SocketWeaker = socket;
         }
 
-        void Disconnect()
+        public void Disconnect()
         {
           if (SocketStronger != null)
           {
@@ -150,19 +112,7 @@ namespace BToken.Chaining
           }
           return AccumulatedDifficulty > socket.AccumulatedDifficulty;
         }
-
-        UInt256 GetHeaderHash(ChainBlock block)
-        {
-          if (block == BlockTip)
-          {
-            return BlockTipHash;
-          }
-
-          return block.BlocksNext[0].Header.HashPrevious;
-        }
-
-        public List<BlockLocation> GetBlockLocations() => Locator.BlockLocations;
-
+        
       }
     }
   }

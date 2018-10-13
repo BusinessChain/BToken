@@ -37,7 +37,7 @@ namespace BToken.Chaining
         genesisBlock: genesisBlock);
     }
     
-    public List<BlockLocation> GetBlockLocations() => SocketMain.GetBlockLocations();
+    public List<BlockLocation> GetBlockLocations() => ProbeMain.GetBlockLocations();
 
     //public static Blockchain Merge(Blockchain chain1, Blockchain chain2)
     //{
@@ -78,21 +78,21 @@ namespace BToken.Chaining
 
     SocketProbe GetProbe(UInt256 hash)
     {
-      ChainSocket socket = SocketMain;
+      SocketProbe probe = ProbeMain;
 
       while (true)
       {
-        if(socket == null)
+        if(probe == null)
         {
           throw new BlockchainException(BlockCode.ORPHAN);
         }
         
-        if (socket.LocateProbeAtBlock(hash))
+        if (probe.GetAtBlock(hash))
         {
-          return socket.Probe;
+          return probe;
         }
 
-        socket = socket.SocketWeaker;
+        probe = probe.GetProbeWeaker();
       }
     }
 
@@ -124,14 +124,14 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
-    public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash, BlockArchiver.BlockStore payloadStoreID)
+    public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash, BlockStore payloadStoreID)
     {
       var chainBlock = new ChainBlock(networkBlock.Header);
       InsertBlock(chainBlock, headerHash);
       InsertPayload(chainBlock, networkBlock.Payload, payloadStoreID);
     }
 
-    public void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockArchiver.BlockStore payloadStoreID)
+    public void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockStore payloadStoreID)
     {
       ValidatePayload(chainBlock, payload);
       chainBlock.BlockStore = payloadStoreID;
@@ -145,20 +145,20 @@ namespace BToken.Chaining
       }
     }
 
-    void InsertSocket(ChainSocket socket)
+    void InsertProbe(SocketProbe probe)
     {
-      if (socket.IsStrongerThan(SocketMain))
+      if (probe.IsStrongerThan(ProbeMain))
       {
-        socket.ConnectAsSocketWeaker(SocketMain);
-        SocketMain = socket;
+        probe.ConnectAsProbeWeaker(ProbeMain);
+        ProbeMain = probe;
       }
       else
       {
-        SocketMain.InsertSocketRecursive(socket);
+        ProbeMain.InsertProbeRecursive(probe);
       }
     }
 
-    public uint GetHeight() => SocketMain.BlockTipHeight;
+    public uint GetHeight() => ProbeMain.GetHeightTip();
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {
@@ -173,14 +173,14 @@ namespace BToken.Chaining
     public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
     {
       var blocksUnassignedPayload = new List<ChainBlock>();
-      ChainSocket socket = SocketMain;
+      SocketProbe probe = ProbeMain;
 
       do
       {
-        blocksUnassignedPayload.AddRange(socket.GetBlocksUnassignedPayload(batchSize));
+        blocksUnassignedPayload.AddRange(probe.GetBlocksUnassignedPayload(batchSize));
         batchSize -= blocksUnassignedPayload.Count;
-        socket = socket.SocketWeaker;
-      } while (batchSize > 0 && socket != null);
+        probe = probe.GetProbeWeaker();
+      } while (batchSize > 0 && probe != null);
 
       return blocksUnassignedPayload;
     }

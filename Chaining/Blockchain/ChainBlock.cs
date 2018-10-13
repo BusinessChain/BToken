@@ -11,7 +11,7 @@ namespace BToken.Chaining
 
     public ChainBlock BlockPrevious;
     public List<ChainBlock> BlocksNext = new List<ChainBlock>();
-    public BlockArchiver.BlockStore BlockStore;
+    public BlockStore BlockStore;
 
     public ChainBlock(
       UInt32 version,
@@ -20,7 +20,7 @@ namespace BToken.Chaining
       UInt32 unixTimeSeconds,
       UInt32 nBits,
       UInt32 nonce,
-      BlockArchiver.BlockStore blockStore)
+      BlockStore blockStore)
     {
       Header = new NetworkHeader(
         version,
