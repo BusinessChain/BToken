@@ -8,9 +8,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
+using BToken.Chaining;
+
 namespace BToken.Networking
 {
-  public partial class Network
+  public partial class Network : Blockchain.IBlockchainNetwork
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;

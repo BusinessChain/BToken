@@ -7,16 +7,19 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  partial class BlockchainController
+  public partial class Blockchain
   {
-    abstract class BlockchainSession
+    partial class BlockchainController
     {
-      protected BlockchainChannel Channel;
+      abstract class BlockchainSession
+      {
+        protected BlockchainChannel Channel;
 
 
-      public BlockchainSession() { }
+        public BlockchainSession() { }
 
-      public abstract Task StartAsync(BlockchainChannel channel);
+        public abstract Task StartAsync(BlockchainChannel channel);
+      }
     }
   }
 }

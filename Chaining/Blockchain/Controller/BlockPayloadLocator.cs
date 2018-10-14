@@ -6,69 +6,72 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  partial class BlockchainController
+  public partial class Blockchain
   {
-    class BlockPayloadLocator
+    partial class BlockchainController
     {
-      Blockchain Blockchain;
-
-      int BatchSizeQueue;
-      List<ChainBlock> BlocksQueued = new List<ChainBlock>();
-
-      const int BatchSizeDispatch = 50;
-      List<ChainBlock> BlocksDispatched = new List<ChainBlock>();
-
-      public BlockPayloadLocator(Blockchain blockchain, int consumersCount)
+      class BlockPayloadLocator
       {
-        Blockchain = blockchain;
-        BatchSizeQueue = BatchSizeDispatch * consumersCount * 2;
-      }
+        Blockchain Blockchain;
 
-      public List<ChainBlock> DispatchBlocks()
-      {
-        var blocksDispatched = new List<ChainBlock>();
+        int BatchSizeQueue;
+        List<ChainBlock> BlocksQueued = new List<ChainBlock>();
 
-        do
+        const int BatchSizeDispatch = 50;
+        List<ChainBlock> BlocksDispatched = new List<ChainBlock>();
+
+        public BlockPayloadLocator(Blockchain blockchain, int consumersCount)
         {
-          while (BlocksQueued.Any())
+          Blockchain = blockchain;
+          BatchSizeQueue = BatchSizeDispatch * consumersCount * 2;
+        }
+
+        public List<ChainBlock> DispatchBlocks()
+        {
+          var blocksDispatched = new List<ChainBlock>();
+
+          do
           {
-            ChainBlock blockQueued = PopBlockQueued();
-
-            blocksDispatched.Add(blockQueued);
-            BlocksDispatched.Add(blockQueued);
-
-            if (blocksDispatched.Count == BatchSizeDispatch)
+            while (BlocksQueued.Any())
             {
-              return blocksDispatched;
+              ChainBlock blockQueued = PopBlockQueued();
+
+              blocksDispatched.Add(blockQueued);
+              BlocksDispatched.Add(blockQueued);
+
+              if (blocksDispatched.Count == BatchSizeDispatch)
+              {
+                return blocksDispatched;
+              }
             }
+
+            BlocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue).Except(BlocksDispatched).ToList();
+
+          } while (BlocksQueued.Any());
+
+          if (blocksDispatched.Any())
+          {
+            return blocksDispatched;
           }
-
-          BlocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue).Except(BlocksDispatched).ToList();
-          
-        } while (BlocksQueued.Any());
-
-        if (blocksDispatched.Any())
-        {
-          return blocksDispatched;
+          else
+          {
+            return BlocksDispatched.Take(BatchSizeDispatch).ToList();
+          }
         }
-        else
+
+        ChainBlock PopBlockQueued()
         {
-          return BlocksDispatched.Take(BatchSizeDispatch).ToList();
+          ChainBlock blockQueued = BlocksQueued[0];
+          BlocksQueued.RemoveAt(0);
+
+          return blockQueued;
         }
-      }
-
-      ChainBlock PopBlockQueued()
-      {
-        ChainBlock blockQueued = BlocksQueued[0];
-        BlocksQueued.RemoveAt(0);
-
-        return blockQueued;
-      }
 
 
-      public void RemoveDownloaded(List<ChainBlock> blocks)
-      {
-        BlocksDispatched = BlocksDispatched.Except(blocks).ToList();
+        public void RemoveDownloaded(List<ChainBlock> blocks)
+        {
+          BlocksDispatched = BlocksDispatched.Except(blocks).ToList();
+        }
       }
     }
   }
