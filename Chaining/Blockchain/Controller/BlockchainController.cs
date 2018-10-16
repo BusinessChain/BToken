@@ -17,7 +17,7 @@ namespace BToken.Chaining
   {
     partial class BlockchainController
     {
-      IBlockchainNetwork Network;
+      Network Network;
       Blockchain Blockchain;
 
       const int CHANNELS_COUNT = 8;
@@ -26,7 +26,7 @@ namespace BToken.Chaining
       BlockArchiver Archiver;
 
 
-      public BlockchainController(IBlockchainNetwork network, Blockchain blockchain)
+      public BlockchainController(Network network, Blockchain blockchain)
       {
         Network = network;
         Blockchain = blockchain;

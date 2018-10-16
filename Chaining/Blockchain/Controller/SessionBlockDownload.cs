@@ -39,7 +39,7 @@ namespace BToken.Chaining
         {
           Channel = channel;
 
-          await DownloadBlocksAsync().ConfigureAwait(false);
+          await DownloadBlocksAsync();
 
           FileWriter.Dispose();
         }
@@ -47,9 +47,9 @@ namespace BToken.Chaining
         {
           do
           {
-            if (BlocksQueued.Any())
+            if (BlocksQueued.Count > 0)
             {
-              await DownloadBlocksQueuedAsync().ConfigureAwait(false);
+              await DownloadBlocksQueuedAsync();
 
               Debug.WriteLine("Channel '{0}' downloaded '{1}' blocks, Total blocks '{2}'",
                 Channel.GetHashCode(), BlocksDownloaded.Count, BlocksDispachedCountTotal += BlocksDownloaded.Count);
@@ -57,10 +57,10 @@ namespace BToken.Chaining
               BlockLocator.RemoveDownloaded(BlocksDownloaded);
               BlocksDownloaded = new List<ChainBlock>();
             }
-
+            
             BlocksQueued = BlockLocator.DispatchBlocks();
 
-          } while (BlocksQueued.Any());
+          } while (BlocksQueued.Count > 0);
         }
 
 
@@ -69,12 +69,12 @@ namespace BToken.Chaining
           var blockPayloads = new List<IBlockPayload>();
 
           List<UInt256> headerHashesQueued = BlocksQueued.Select(b => GetHeaderHash(b)).ToList();
-          await Channel.RequestBlocksAsync(headerHashesQueued).ConfigureAwait(false);
+          await Channel.RequestBlocksAsync(headerHashesQueued);
 
-          while (BlocksQueued.Any())
+          while (BlocksQueued.Count > 0)
           {
             CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token;
-            NetworkBlock networkBlock = await GetNetworkBlockAsync(cancellationToken).ConfigureAwait(false);
+            NetworkBlock networkBlock = await GetNetworkBlockAsync(cancellationToken);
 
             UInt256 networkBlockHeaderHash = GetHeaderHash(networkBlock);
             ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
@@ -102,6 +102,11 @@ namespace BToken.Chaining
 
         UInt256 GetHeaderHash(ChainBlock chainBlock)
         {
+          if (chainBlock == null)
+          {
+            Console.WriteLine("DispatchBlocks :: BlocksQueued contains null");
+          }
+
           if (chainBlock.BlocksNext.Any())
           {
             return chainBlock.BlocksNext[0].Header.HashPrevious;

@@ -11,8 +11,5 @@ namespace BToken.Chaining
   public interface IBlockPayload
   {
     UInt256 GetPayloadHash();
-
-    void StoreToDisk(NetworkHeader header, string filename);
-    void LoadFromDisk();
   }
 }

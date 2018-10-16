@@ -91,32 +91,5 @@ namespace BToken.Bitcoin
       return stream.ToArray();
     }
 
-    public void StoreToDisk(NetworkHeader networkHeader, string filename)
-    {
-      string postFixFilename = filename.Substring(filename.Length - 3);
-      string blockchainRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Blockchain", postFixFilename);
-      Directory.CreateDirectory(blockchainRootPath);
-
-      byte[] stream = SerializeTXs();
-      try
-      {
-        string filePath = Path.Combine("Blockchain", postFixFilename, filename + ".dat");
-        //File.WriteAllBytes(filePath, stream);
-      }
-      catch (Exception ex)
-      {
-        Debug.WriteLine(ex.Message);
-      }
-
-
-      BitcoinTXs = null;
-    }
-
-    public void LoadFromDisk()
-    {
-      BitcoinTXs = new List<BitcoinTX>();
-
-      // Load
-    }
   }
 }

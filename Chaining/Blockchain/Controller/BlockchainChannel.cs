@@ -52,12 +52,12 @@ namespace BToken.Chaining
           {
             try
             {
-              if (!IsConnected())
+              if (Buffer == null)
               {
-                await ConnectAsync().ConfigureAwait(false);
+                await ConnectAsync();
               }
 
-              await session.StartAsync(this).ConfigureAwait(false);
+              await session.StartAsync(this);
               return;
             }
             catch (Exception ex)
@@ -80,11 +80,6 @@ namespace BToken.Chaining
         {
           Controller.Network.CloseChannel(Buffer);
           Buffer = null;
-        }
-
-        bool IsConnected()
-        {
-          return Buffer != null;
         }
 
         async Task ProcessNextMessageAsync()

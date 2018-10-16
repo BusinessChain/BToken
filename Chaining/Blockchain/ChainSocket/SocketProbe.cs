@@ -277,6 +277,10 @@ namespace BToken.Chaining
           }
         }
 
+        if (blocksUnassignedPayload.Any(b => b == null))
+        {
+          Console.WriteLine("GetBlocksUnassignedPayload :: BlocksQueued contains null");
+        }
         return blocksUnassignedPayload;
       }
 

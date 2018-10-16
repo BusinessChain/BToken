@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 
 using System;
-using System.Threading;
+using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
@@ -26,8 +26,8 @@ namespace BToken.Chaining
 
 
     public Blockchain(
-      string genesisBlockString,
-      IBlockchainNetwork network,
+      ChainBlock genesisBlock,
+      Network network,
       IBlockPayloadParser payloadParser,
       List<BlockLocation> checkpoints)
     {
@@ -37,14 +37,9 @@ namespace BToken.Chaining
 
       Checkpoints = new CheckpointManager(checkpoints);
 
-      ChainBlock genesisBlock = CreateGenesisBlock(genesisBlockString);
       ProbeMain = new SocketProbe(
         blockchain: this,
         genesisBlock: genesisBlock);
-
-    }
-    ChainBlock CreateGenesisBlock(string genesisBlockString)
-    {
 
     }
 

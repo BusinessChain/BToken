@@ -13,6 +13,7 @@ namespace BToken.Chaining
 
       public ChainBlock BlockPrevious;
       public List<ChainBlock> BlocksNext = new List<ChainBlock>();
+
       public BlockStore BlockStore;
 
       public ChainBlock(
@@ -21,8 +22,7 @@ namespace BToken.Chaining
         UInt256 payloadHash,
         UInt32 unixTimeSeconds,
         UInt32 nBits,
-        UInt32 nonce,
-        BlockStore blockStore)
+        UInt32 nonce)
       {
         Header = new NetworkHeader(
           version,
@@ -31,18 +31,11 @@ namespace BToken.Chaining
           unixTimeSeconds,
           nBits,
           nonce);
-
-        BlockStore = blockStore;
       }
-
+      
       public ChainBlock(NetworkHeader header)
       {
         Header = header;
-      }
-      public ChainBlock(NetworkHeader header, BlockStore blockStore)
-        : this(header)
-      {
-        BlockStore = blockStore;
       }
 
     }

@@ -1,6 +1,9 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -28,40 +31,52 @@ namespace BToken.Chaining
 
         public List<ChainBlock> DispatchBlocks()
         {
-          var blocksDispatched = new List<ChainBlock>();
-
-          do
+          try
           {
-            while (BlocksQueued.Any())
+            var blocksDispatched = new List<ChainBlock>();
+
+            do
             {
-              ChainBlock blockQueued = PopBlockQueued();
-
-              blocksDispatched.Add(blockQueued);
-              BlocksDispatched.Add(blockQueued);
-
-              if (blocksDispatched.Count == BatchSizeDispatch)
+              while (BlocksQueued.Count > 0)
               {
-                return blocksDispatched;
+                ChainBlock blockQueued = PopBlockQueued();
+
+                blocksDispatched.Add(blockQueued);
+                BlocksDispatched.Add(blockQueued);
+
+                if (blocksDispatched.Count == BatchSizeDispatch)
+                {
+                  return blocksDispatched;
+                }
               }
+              
+              List<ChainBlock> blocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue);
+              IEnumerable<ChainBlock> blocksQueuedNotYetDispatched = blocksQueued.Except(BlocksDispatched);
+              BlocksQueued = blocksQueuedNotYetDispatched.ToList();
+
+            } while (BlocksQueued.Count > 0);
+
+            if (blocksDispatched.Count > 0)
+            {
+              return blocksDispatched;
             }
-
-            BlocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue).Except(BlocksDispatched).ToList();
-
-          } while (BlocksQueued.Any());
-
-          if (blocksDispatched.Any())
-          {
-            return blocksDispatched;
+            else
+            {
+              return BlocksDispatched.Take(BatchSizeDispatch).ToList();
+            }
           }
-          else
+          catch(Exception ex)
           {
-            return BlocksDispatched.Take(BatchSizeDispatch).ToList();
+            Debug.WriteLine(ex.Message);
+            throw ex;
           }
+          
         }
 
         ChainBlock PopBlockQueued()
         {
           ChainBlock blockQueued = BlocksQueued[0];
+          
           BlocksQueued.RemoveAt(0);
 
           return blockQueued;
