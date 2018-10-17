@@ -19,7 +19,7 @@ namespace BToken.Chaining
       {
         BlockchainController Controller;
 
-        BlockPayloadLocator BlockLocator;
+        const int BatchSize = 50;
         List<ChainBlock> BlocksQueued = new List<ChainBlock>();
         List<ChainBlock> BlocksDownloaded = new List<ChainBlock>();
 
@@ -28,10 +28,9 @@ namespace BToken.Chaining
         int BlocksDispachedCountTotal;
 
 
-        public SessionBlockDownload(BlockchainController controller, BlockPayloadLocator blockLocator)
+        public SessionBlockDownload(BlockchainController controller)
         {
           Controller = controller;
-          BlockLocator = blockLocator;
           FileWriter = Controller.Archiver.GetWriter();
         }
 
@@ -54,11 +53,10 @@ namespace BToken.Chaining
               Debug.WriteLine("Channel '{0}' downloaded '{1}' blocks, Total blocks '{2}'",
                 Channel.GetHashCode(), BlocksDownloaded.Count, BlocksDispachedCountTotal += BlocksDownloaded.Count);
 
-              BlockLocator.RemoveDownloaded(BlocksDownloaded);
               BlocksDownloaded = new List<ChainBlock>();
             }
             
-            BlocksQueued = BlockLocator.DispatchBlocks();
+            BlocksQueued = Controller.Blockchain.GetBlocksUnassignedPayload(BatchSize);
 
           } while (BlocksQueued.Count > 0);
         }

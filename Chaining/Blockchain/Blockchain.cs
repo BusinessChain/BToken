@@ -22,6 +22,7 @@ namespace BToken.Chaining
     CheckpointManager Checkpoints;
 
     SocketProbe ProbeMain;
+    BlockPayloadLocator BlockLocator;
 
 
 
@@ -40,6 +41,8 @@ namespace BToken.Chaining
       ProbeMain = new SocketProbe(
         blockchain: this,
         genesisBlock: genesisBlock);
+
+      BlockLocator = new BlockPayloadLocator(this);
 
     }
 

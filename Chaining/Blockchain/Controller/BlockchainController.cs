@@ -22,7 +22,6 @@ namespace BToken.Chaining
 
       const int CHANNELS_COUNT = 8;
 
-      BlockPayloadLocator BlockLocator;
       BlockArchiver Archiver;
 
 
@@ -30,7 +29,6 @@ namespace BToken.Chaining
       {
         Network = network;
         Blockchain = blockchain;
-        BlockLocator = new BlockPayloadLocator(blockchain, CHANNELS_COUNT);
         Archiver = new BlockArchiver();
       }
 
@@ -72,7 +70,7 @@ namespace BToken.Chaining
       {
         Task[] downloadBlocksTask = channels.Select(async channel =>
         {
-          await channel.ExecuteSessionAsync(new SessionBlockDownload(this, BlockLocator));
+          await channel.ExecuteSessionAsync(new SessionBlockDownload(this));
         }).ToArray();
 
         await Task.WhenAll(downloadBlocksTask);

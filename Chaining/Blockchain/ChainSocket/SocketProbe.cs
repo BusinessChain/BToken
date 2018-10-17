@@ -209,7 +209,7 @@ namespace BToken.Chaining
 
         if (AllPayloadsAssigned())
         {
-          Socket.BlockUnassignedPayloadDeepest = block;
+          Socket.BlockHighestAssigned = block;
         }
 
         if (this != Blockchain.ProbeMain)
@@ -252,13 +252,15 @@ namespace BToken.Chaining
       }
       public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
       {
-        if (AllPayloadsAssigned()) { return new List<ChainBlock>(); }
+        if (Socket.BlockHighestAssigned == Socket.BlockTip) { return new List<ChainBlock>(); }
 
-        GetAtBlock(GetHeaderHash(Socket.BlockUnassignedPayloadDeepest));
+        Block = Socket.BlockHighestAssigned.BlocksNext[0];
         
         var blocksUnassignedPayload = new List<ChainBlock>();
         while (blocksUnassignedPayload.Count < batchSize)
         {
+          Socket.BlockHighestAssigned = Block;
+
           if (Block.BlockStore == null)
           {
             blocksUnassignedPayload.Add(Block);
@@ -270,17 +272,8 @@ namespace BToken.Chaining
           }
 
           Block = Block.BlocksNext[0];
-
-          if (blocksUnassignedPayload.Count == 0)
-          {
-            Socket.BlockUnassignedPayloadDeepest = Block;
-          }
         }
 
-        if (blocksUnassignedPayload.Any(b => b == null))
-        {
-          Console.WriteLine("GetBlocksUnassignedPayload :: BlocksQueued contains null");
-        }
         return blocksUnassignedPayload;
       }
 
