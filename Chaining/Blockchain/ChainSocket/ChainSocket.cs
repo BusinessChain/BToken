@@ -39,7 +39,7 @@ namespace BToken.Chaining
              blockTipHash: blockGenesisHash,
              blockTipHeight: 0,
              blockGenesis: blockGenesis,
-             blockUnassignedPayloadDeepest: null,
+             blockHighestAssigned: blockGenesis,
              accumulatedDifficultyPrevious: 0,
              probe: probe)
         { }
@@ -49,7 +49,7 @@ namespace BToken.Chaining
           UInt256 blockTipHash,
           uint blockTipHeight,
           ChainBlock blockGenesis,
-          ChainBlock blockUnassignedPayloadDeepest,
+          ChainBlock blockHighestAssigned,
           double accumulatedDifficultyPrevious,
           SocketProbe probe)
         {
@@ -57,14 +57,12 @@ namespace BToken.Chaining
           BlockTipHash = blockTipHash;
           BlockTipHeight = blockTipHeight;
           BlockGenesis = blockGenesis;
-          BlockHighestAssigned = blockUnassignedPayloadDeepest;
+          BlockHighestAssigned = blockHighestAssigned;
           AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockTip.Header.NBits);
 
           Probe = probe;
         }
-
-        public bool AllPayloadsAssigned() => BlockHighestAssigned == null;
-        
+                
         public void InsertSocketRecursive(ChainSocket socket)
         {
           if (socket.IsStrongerThan(SocketWeaker))

@@ -45,7 +45,7 @@ namespace BToken.Chaining
         UInt256 blockTipHash,
         uint blockTipHeight,
         ChainBlock blockGenesis,
-        ChainBlock blockUnassignedPayloadDeepest,
+        ChainBlock blockHighestAssigned,
         double accumulatedDifficultyPrevious,
         BlockLocator blockLocator)
       {
@@ -56,7 +56,7 @@ namespace BToken.Chaining
           blockTipHash: blockTipHash,
           blockTipHeight: blockTipHeight,
           blockGenesis: blockGenesis,
-          blockUnassignedPayloadDeepest: blockUnassignedPayloadDeepest,
+          blockHighestAssigned: blockHighestAssigned,
           accumulatedDifficultyPrevious: accumulatedDifficultyPrevious,
           probe: this);
 
@@ -185,6 +185,7 @@ namespace BToken.Chaining
       }
       void ForkChain(ChainBlock block, UInt256 headerHash)
       {
+        ChainBlock blockHighestAssigned = block.BlockStore != null ? block : null;
         uint blockTipHeight = GetHeight() + 1;
 
         SocketProbe newSocketProbe = new SocketProbe(
@@ -193,7 +194,7 @@ namespace BToken.Chaining
           blockTipHash: headerHash,
           blockTipHeight: blockTipHeight,
           blockGenesis: block,
-          blockUnassignedPayloadDeepest: block,
+          blockHighestAssigned: blockHighestAssigned,
           accumulatedDifficultyPrevious: AccumulatedDifficulty,
           blockLocator: new BlockLocator(blockTipHeight, headerHash));
 
@@ -207,7 +208,7 @@ namespace BToken.Chaining
         Socket.AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
         UpdateLocator();
 
-        if (AllPayloadsAssigned())
+        if (block.BlockStore != null && Block.BlockStore != null)
         {
           Socket.BlockHighestAssigned = block;
         }
@@ -282,7 +283,6 @@ namespace BToken.Chaining
       public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
       public bool IsGenesis() => Block == Socket.BlockGenesis;
       public bool IsTip() => Block == Socket.BlockTip;
-      public bool AllPayloadsAssigned() => Socket.AllPayloadsAssigned();
       public bool IsStrongerThan(SocketProbe probe) => probe == null ? false : Socket.AccumulatedDifficulty > probe.Socket.AccumulatedDifficulty;
       public BlockLocation GetBlockLocation() => new BlockLocation(GetHeight(), Hash);
     }
