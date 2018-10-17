@@ -13,11 +13,9 @@ namespace BToken.Bitcoin
   public class BitcoinNode
   {
     public Network Network { get; private set; }
-    BlockchainController BlockchainController;
     public Blockchain Blockchain { get; private set; }
     UnspentTXOutputs UTXO;
 
-    ChainBlock GenesisBlock = new BitcoinGenesisBlock();
     List<BlockLocation> Checkpoints = new List<BlockLocation>()
       {
         new BlockLocation(height : 11111, hash : new UInt256("0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d")),
@@ -29,15 +27,14 @@ namespace BToken.Bitcoin
     {
       Network = new Network();
 
-      Blockchain = new Blockchain(new BitcoinBlockPayloadParser(), GenesisBlock, Checkpoints);
-      BlockchainController = new BlockchainController(Network, Blockchain);
+      Blockchain = new Blockchain(new BitcoinGenesisBlock(), Network, new BitcoinBlockPayloadParser(), Checkpoints);
 
       UTXO = new UnspentTXOutputs(Blockchain, Network);
     }
 
     public async Task StartAsync()
     {
-      await BlockchainController.StartAsync().ConfigureAwait(false);
+      await Blockchain.StartAsync().ConfigureAwait(false);
       //await UTXO.startAsync();
     }
   }

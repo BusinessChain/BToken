@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 
 using System;
-using System.Threading;
+using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
@@ -16,29 +16,42 @@ namespace BToken.Chaining
 
   public partial class Blockchain
   {
+    BlockchainController Controller;
     IBlockPayloadParser PayloadParser;
     
     CheckpointManager Checkpoints;
 
-    ChainSocket SocketMain;
+    SocketProbe ProbeMain;
+    BlockPayloadLocator BlockLocator;
+
 
 
     public Blockchain(
+      ChainBlock genesisBlock,
+      Network network,
       IBlockPayloadParser payloadParser,
-      ChainBlock genesisBlock, 
       List<BlockLocation> checkpoints)
     {
+      Controller = new BlockchainController(network, this);
+
       PayloadParser = payloadParser;
 
       Checkpoints = new CheckpointManager(checkpoints);
 
-      SocketMain = new ChainSocket(
+      ProbeMain = new SocketProbe(
         blockchain: this,
-        blockGenesis: genesisBlock,
-        blockGenesisHash: new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes())));
+        genesisBlock: genesisBlock);
+
+      BlockLocator = new BlockPayloadLocator(this);
+
     }
-    
-    public List<BlockLocation> GetBlockLocations() => SocketMain.GetBlockLocations();
+
+    public async Task StartAsync()
+    {
+      await Controller.StartAsync();
+    }
+
+    public List<BlockLocation> GetBlockLocations() => ProbeMain.GetBlockLocations();
 
     //public static Blockchain Merge(Blockchain chain1, Blockchain chain2)
     //{
@@ -64,51 +77,51 @@ namespace BToken.Chaining
     //  }
     //}
 
-    public ChainBlock GetBlock(UInt256 hash)
-    {
-      try
-      {
-        ChainSocket.SocketProbe probe = GetProbe(hash);
-        return probe.Block;
-      }
-      catch (BlockchainException)
-      {
-        return null;
-      }
-    }
+    //public ChainBlock GetBlock(UInt256 hash)
+    //{
+    //  try
+    //  {
+    //    SocketProbe probe = GetProbe(hash);
+    //    return probe.Block;
+    //  }
+    //  catch (BlockchainException)
+    //  {
+    //    return null;
+    //  }
+    //}
 
-    ChainSocket.SocketProbe GetProbe(UInt256 hash)
+    SocketProbe GetProbe(UInt256 hash)
     {
-      ChainSocket socket = SocketMain;
+      SocketProbe probe = ProbeMain;
 
       while (true)
       {
-        if(socket == null)
+        if(probe == null)
         {
           throw new BlockchainException(BlockCode.ORPHAN);
         }
         
-        if (socket.LocateProbeAtBlock(hash))
+        if (probe.GetAtBlock(hash))
         {
-          return socket.Probe;
+          return probe;
         }
 
-        socket = socket.SocketWeaker;
+        probe = probe.GetProbeWeaker();
       }
     }
 
-    public void InsertHeader(NetworkHeader header, UInt256 headerHash)
+    void InsertHeader(NetworkHeader header, UInt256 headerHash)
     {
       var chainBlock = new ChainBlock(header);
       InsertBlock(chainBlock, headerHash);
     }
     void InsertBlock(ChainBlock chainBlock, UInt256 headerHash)
     {
-      ChainSocket.SocketProbe probeAtBlockPrevious = GetProbe(chainBlock.Header.HashPrevious);
+      SocketProbe probeAtBlockPrevious = GetProbe(chainBlock.Header.HashPrevious);
       ValidateCheckpoint(probeAtBlockPrevious, headerHash);
       probeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
     }
-    void ValidateCheckpoint(ChainSocket.SocketProbe probe, UInt256 headerHash)
+    void ValidateCheckpoint(SocketProbe probe, UInt256 headerHash)
     {
       uint nextBlockHeight = probe.GetHeight() + 1;
 
@@ -125,14 +138,13 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
-    public void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash, BlockArchiver.BlockStore payloadStoreID)
+    void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash, BlockStore payloadStoreID)
     {
       var chainBlock = new ChainBlock(networkBlock.Header);
       InsertBlock(chainBlock, headerHash);
       InsertPayload(chainBlock, networkBlock.Payload, payloadStoreID);
     }
-
-    public void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockArchiver.BlockStore payloadStoreID)
+    void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockStore payloadStoreID)
     {
       ValidatePayload(chainBlock, payload);
       chainBlock.BlockStore = payloadStoreID;
@@ -146,20 +158,20 @@ namespace BToken.Chaining
       }
     }
 
-    void InsertSocket(ChainSocket socket)
+    void InsertProbe(SocketProbe probe)
     {
-      if (socket.IsStrongerThan(SocketMain))
+      if (probe.IsStrongerThan(ProbeMain))
       {
-        socket.ConnectAsSocketWeaker(SocketMain);
-        SocketMain = socket;
+        probe.ConnectAsProbeWeaker(ProbeMain);
+        ProbeMain = probe;
       }
       else
       {
-        SocketMain.InsertSocketRecursive(socket);
+        ProbeMain.InsertProbeRecursive(probe);
       }
     }
 
-    public uint GetHeight() => SocketMain.BlockTipHeight;
+    uint GetHeight() => ProbeMain.GetHeightTip();
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {
@@ -171,17 +183,17 @@ namespace BToken.Chaining
       return GetBlockPrevious(block.BlockPrevious, --depth);
     }
     
-    public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
+    List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
     {
       var blocksUnassignedPayload = new List<ChainBlock>();
-      ChainSocket socket = SocketMain;
+      SocketProbe probe = ProbeMain;
 
       do
       {
-        blocksUnassignedPayload.AddRange(socket.GetBlocksUnassignedPayload(batchSize));
+        blocksUnassignedPayload.AddRange(probe.GetBlocksUnassignedPayload(batchSize));
         batchSize -= blocksUnassignedPayload.Count;
-        socket = socket.SocketWeaker;
-      } while (batchSize > 0 && socket != null);
+        probe = probe.GetProbeWeaker();
+      } while (batchSize > 0 && probe != null);
 
       return blocksUnassignedPayload;
     }

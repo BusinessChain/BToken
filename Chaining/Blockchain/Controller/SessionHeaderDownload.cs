@@ -12,79 +12,47 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class BlockchainController
+  public partial class Blockchain
   {
-    class SessionHeaderDownload : BlockchainSession
+    partial class BlockchainController
     {
-      Blockchain Blockchain;
-      BlockchainController Controller;
-      List<BlockLocation> HeaderLocator;
-      List<NetworkHeader> Headers = new List<NetworkHeader>();
-
-
-      public SessionHeaderDownload(BlockchainController controller, Blockchain blockchain)
+      class SessionHeaderDownload : BlockchainSession
       {
-        Controller = controller;
-        Blockchain = blockchain;
-      }
+        Blockchain Blockchain;
+        BlockchainController Controller;
+        List<BlockLocation> HeaderLocator;
+        List<NetworkHeader> Headers = new List<NetworkHeader>();
 
-      public override async Task StartAsync(BlockchainChannel channel)
-      {
-        Channel = channel;
 
-        await DownloadHeadersAsync().ConfigureAwait(false);
-      }
-
-      async Task DownloadHeadersAsync()
-      {
-        await ReceiveHeaders().ConfigureAwait(false);
-
-        while (Headers.Any())
+        public SessionHeaderDownload(BlockchainController controller, Blockchain blockchain)
         {
-          InsertHeaders();
-          
+          Controller = controller;
+          Blockchain = blockchain;
+        }
+
+        public override async Task StartAsync(BlockchainChannel channel)
+        {
+          Channel = channel;
+
+          await DownloadHeadersAsync().ConfigureAwait(false);
+        }
+
+        async Task DownloadHeadersAsync()
+        {
           await ReceiveHeaders().ConfigureAwait(false);
-        }
-      }
-      async Task ReceiveHeaders() => Headers = await GetHeadersAsync();
 
-      void InsertHeaders()
-      {
-        foreach (NetworkHeader header in Headers)
-        {
-          UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
-
-          try
+          while (Headers.Any())
           {
-            Blockchain.InsertHeader(header, headerHash);
-          }
-          catch (BlockchainException ex)
-          {
-            switch (ex.ErrorCode)
-            {
-              case BlockCode.ORPHAN:
-                //await ProcessOrphanSessionAsync(headerHash);
-                return;
+            InsertHeaders();
 
-              case BlockCode.DUPLICATE:
-                return;
-
-              default:
-                throw ex;
-            }
+            await ReceiveHeaders().ConfigureAwait(false);
           }
         }
-      }
+        async Task ReceiveHeaders() => Headers = await GetHeadersAsync();
 
-      async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
-      {
-        List<NetworkHeader> headers = await GetHeadersAsync();
-
-        uint countDuplicatesAccepted = GetCountDuplicatesAccepted(headers);
-
-        do
+        void InsertHeaders()
         {
-          foreach (NetworkHeader header in headers)
+          foreach (NetworkHeader header in Headers)
           {
             UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
 
@@ -96,11 +64,11 @@ namespace BToken.Chaining
             {
               switch (ex.ErrorCode)
               {
+                case BlockCode.ORPHAN:
+                  //await ProcessOrphanSessionAsync(headerHash);
+                  return;
+
                 case BlockCode.DUPLICATE:
-                  if (countDuplicatesAccepted-- > 0)
-                  {
-                    break;
-                  }
                   return;
 
                 default:
@@ -108,67 +76,102 @@ namespace BToken.Chaining
               }
             }
           }
-
-          headers = await GetHeadersAsync();
-
-        } while (headers.Any());
-
-        // should we check whether advertised oprhan was provided? I would say unnecessary
-      }
-      uint GetCountDuplicatesAccepted(List<NetworkHeader> headers)
-      {
-        if (!headers.Any())
-        {
-          return 0;
         }
 
-        int rootHeaderLocatorIndex = HeaderLocator.FindIndex(b => b.Hash.IsEqual(headers.First().HashPrevious));
+        async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
+        {
+          List<NetworkHeader> headers = await GetHeadersAsync();
 
-        if (rootHeaderLocatorIndex < 0)
-        {
-          throw new NetworkException("Headers do not link in locator");
-        }
-        if (rootHeaderLocatorIndex == 0)
-        {
-          return 0;
-        }
-        else
-        {
-          BlockLocation rootLocator = HeaderLocator[rootHeaderLocatorIndex];
-          BlockLocation nextHigherLocator = HeaderLocator[rootHeaderLocatorIndex - 1];
+          uint countDuplicatesAccepted = GetCountDuplicatesAccepted(headers);
 
-          if (headers.Any(h => h.HashPrevious.IsEqual(nextHigherLocator.Hash)))
+          do
           {
-            throw new NetworkException("Superfluous locator headers");
+            foreach (NetworkHeader header in headers)
+            {
+              UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
+
+              try
+              {
+                Blockchain.InsertHeader(header, headerHash);
+              }
+              catch (BlockchainException ex)
+              {
+                switch (ex.ErrorCode)
+                {
+                  case BlockCode.DUPLICATE:
+                    if (countDuplicatesAccepted-- > 0)
+                    {
+                      break;
+                    }
+                    return;
+
+                  default:
+                    throw ex;
+                }
+              }
+            }
+
+            headers = await GetHeadersAsync();
+
+          } while (headers.Any());
+
+          // should we check whether advertised oprhan was provided? I would say unnecessary
+        }
+        uint GetCountDuplicatesAccepted(List<NetworkHeader> headers)
+        {
+          if (!headers.Any())
+          {
+            return 0;
           }
 
-          return nextHigherLocator.Height - rootLocator.Height - 1;
-        }
-      }
+          int rootHeaderLocatorIndex = HeaderLocator.FindIndex(b => b.Hash.IsEqual(headers.First().HashPrevious));
 
-      async Task<List<NetworkHeader>> GetHeadersAsync()
-      {
-        HeaderLocator = Blockchain.GetBlockLocations();
-        await Channel.RequestHeadersAsync(HeaderLocator).ConfigureAwait(false);
-
-        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-        return await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
-      }
-
-      async Task<List<NetworkHeader>> GetHeadersMessageAsync(CancellationToken cancellationToken)
-      {
-        while(true)
-        {
-          NetworkMessage networkMessage = await Channel.GetNetworkMessageAsync(cancellationToken).ConfigureAwait(false);
-          Network.HeadersMessage headersMessage = networkMessage as Network.HeadersMessage;
-
-          if (headersMessage != null)
+          if (rootHeaderLocatorIndex < 0)
           {
-            return headersMessage.Headers;
+            throw new NetworkException("Headers do not link in locator");
+          }
+          if (rootHeaderLocatorIndex == 0)
+          {
+            return 0;
+          }
+          else
+          {
+            BlockLocation rootLocator = HeaderLocator[rootHeaderLocatorIndex];
+            BlockLocation nextHigherLocator = HeaderLocator[rootHeaderLocatorIndex - 1];
+
+            if (headers.Any(h => h.HashPrevious.IsEqual(nextHigherLocator.Hash)))
+            {
+              throw new NetworkException("Superfluous locator headers");
+            }
+
+            return nextHigherLocator.Height - rootLocator.Height - 1;
           }
         }
-      }
 
+        async Task<List<NetworkHeader>> GetHeadersAsync()
+        {
+          HeaderLocator = Blockchain.GetBlockLocations();
+          await Channel.RequestHeadersAsync(HeaderLocator).ConfigureAwait(false);
+
+          CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
+          return await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        async Task<List<NetworkHeader>> GetHeadersMessageAsync(CancellationToken cancellationToken)
+        {
+          while (true)
+          {
+            NetworkMessage networkMessage = await Channel.GetNetworkMessageAsync(cancellationToken).ConfigureAwait(false);
+            Network.HeadersMessage headersMessage = networkMessage as Network.HeadersMessage;
+
+            if (headersMessage != null)
+            {
+              return headersMessage.Headers;
+            }
+          }
+        }
+
+      }
     }
   }
 }

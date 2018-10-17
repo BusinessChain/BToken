@@ -12,110 +12,113 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class BlockArchiver
+  public partial class Blockchain
   {
-    readonly static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
-    static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
-
-    static string ShardHandle = "Shard";
-    uint ShardEnumerator;
-
-    const int ITEM_COUNT_PER_DIRECTORY = 0x4;
-    static string DirectoryHandle = "Shelf";
-
-    const int BLOCK_REGISTER_BYTESIZE_MAX = 0x400000;
-    static string FileHandle = "BlockRegister";
-
-    public BlockArchiver()
-    { }
-
-    public void LoadBlockchain(Blockchain blockchain)
+    partial class BlockArchiver
     {
-      var chainSocketsPerFile = new List<Blockchain.ChainSocket>();
+      readonly static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
+      static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
 
-      try
+      static string ShardHandle = "Shard";
+      uint ShardEnumerator;
+
+      const int ITEM_COUNT_PER_DIRECTORY = 0x4;
+      static string DirectoryHandle = "Shelf";
+
+      const int BLOCK_REGISTER_BYTESIZE_MAX = 0x400000;
+      static string FileHandle = "BlockRegister";
+
+      public BlockArchiver()
+      { }
+
+      public void LoadBlockchain(Blockchain blockchain)
       {
-        FileID fileID = new FileID
-        {
-          ShardIndex = 0,
-          DirectoryIndex = 0,
-          FileIndex = 0
-        };
+        var chainSocketsPerFile = new List<SocketProbe>();
 
-        while (true) // run until exception is thrown
+        try
         {
-          using (FileStream blockRegisterStream = OpenFile(fileID))
+          FileID fileID = new FileID
           {
-            int prefixInt = blockRegisterStream.ReadByte();
-            do
+            ShardIndex = 0,
+            DirectoryIndex = 0,
+            FileIndex = 0
+          };
+
+          while (true) // run until exception is thrown
+          {
+            using (FileStream blockRegisterStream = OpenFile(fileID))
             {
-              NetworkBlock networkBlock = ParseNetworkBlock(blockRegisterStream, prefixInt);
-              UInt256 headerHash = new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
+              int prefixInt = blockRegisterStream.ReadByte();
+              do
+              {
+                NetworkBlock networkBlock = ParseNetworkBlock(blockRegisterStream, prefixInt);
+                UInt256 headerHash = new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
 
-              blockchain.InsertBlock(networkBlock, headerHash, new BlockStore(fileID));
+                blockchain.InsertBlock(networkBlock, headerHash, new BlockStore(fileID));
 
-              prefixInt = blockRegisterStream.ReadByte();
-            } while (prefixInt > 0);
+                prefixInt = blockRegisterStream.ReadByte();
+              } while (prefixInt > 0);
+            }
+
+            IncrementFileID(ref fileID);
           }
+        }
+        catch (Exception ex)
+        {
+          Debug.WriteLine("BlockArchiver::LoadBlockchain:" + ex.Message);
+        }
 
-          IncrementFileID(ref fileID);
+      }
+      NetworkBlock ParseNetworkBlock(FileStream blockRegisterStream, int prefixInt)
+      {
+        int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
+        byte[] blockBytes = new byte[blockLength];
+        int i = blockRegisterStream.Read(blockBytes, 0, blockLength);
+
+        return NetworkBlock.ParseBlock(blockBytes);
+      }
+
+      static FileStream OpenFile(FileID fileID)
+      {
+        string filePath = Path.Combine(
+          RootDirectory.Name,
+          ShardHandle + fileID.ShardIndex,
+          DirectoryHandle + fileID.DirectoryIndex,
+          FileHandle + fileID.FileIndex);
+
+        return new FileStream(
+          filePath,
+          FileMode.Open,
+          FileAccess.Read,
+          FileShare.Read,
+          BLOCK_REGISTER_BYTESIZE_MAX
+          );
+      }
+
+      static void IncrementFileID(ref FileID fileID)
+      {
+        if (fileID.FileIndex == ITEM_COUNT_PER_DIRECTORY - 1)
+        {
+          fileID.DirectoryIndex++;
+          fileID.FileIndex = 0;
+        }
+        else
+        {
+          fileID.FileIndex++;
         }
       }
-      catch (Exception ex)
-      {
-        Debug.WriteLine("BlockArchiver::LoadBlockchain:" + ex.Message);
-      }
 
-    }
-    NetworkBlock ParseNetworkBlock(FileStream blockRegisterStream, int prefixInt)
-    {
-      int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
-      byte[] blockBytes = new byte[blockLength];
-      int i = blockRegisterStream.Read(blockBytes, 0, blockLength);
-
-      return NetworkBlock.ParseBlock(blockBytes);
-    }
-
-    static FileStream OpenFile(FileID fileID)
-    {
-      string filePath = Path.Combine(
-        RootDirectory.Name,
-        ShardHandle + fileID.ShardIndex,
-        DirectoryHandle + fileID.DirectoryIndex,
-        FileHandle + fileID.FileIndex);
-
-      return new FileStream(
-        filePath,
-        FileMode.Open,
-        FileAccess.Read,
-        FileShare.Read,
-        BLOCK_REGISTER_BYTESIZE_MAX
-        );
-    }
-    
-    static void IncrementFileID(ref FileID fileID)
-    {
-      if (fileID.FileIndex == ITEM_COUNT_PER_DIRECTORY - 1)
+      public FileWriter GetWriter()
       {
-        fileID.DirectoryIndex++;
-        fileID.FileIndex = 0;
-      }
-      else
-      {
-        fileID.FileIndex++;
-      }
-    }
-
-    public FileWriter GetWriter()
-    {
-      try
-      {
-        return new FileWriter(this, ShardEnumerator++);
-      }
-      catch(Exception ex)
-      {
-        Debug.WriteLine("BlockArchiver::GetWriter: " + ex.Message);
-        throw ex;
+        try
+        {
+          return new FileWriter(this, ShardEnumerator++);
+        }
+        catch (Exception ex)
+        {
+          Debug.WriteLine("BlockArchiver::GetWriter: " + ex.Message);
+          throw ex;
+        }
       }
     }
   }

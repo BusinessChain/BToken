@@ -1,12 +1,16 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  partial class BlockchainController
+  public partial class Blockchain
   {
     class BlockPayloadLocator
     {
@@ -16,12 +20,13 @@ namespace BToken.Chaining
       List<ChainBlock> BlocksQueued = new List<ChainBlock>();
 
       const int BatchSizeDispatch = 50;
-      List<ChainBlock> BlocksDispatched = new List<ChainBlock>();
 
-      public BlockPayloadLocator(Blockchain blockchain, int consumersCount)
+      BlockingCollection<ChainBlock> BlocksDispatched;
+
+
+      public BlockPayloadLocator(Blockchain blockchain)
       {
         Blockchain = blockchain;
-        BatchSizeQueue = BatchSizeDispatch * consumersCount * 2;
       }
 
       public List<ChainBlock> DispatchBlocks()
@@ -30,7 +35,7 @@ namespace BToken.Chaining
 
         do
         {
-          while (BlocksQueued.Any())
+          while (BlocksQueued.Count > 0)
           {
             ChainBlock blockQueued = PopBlockQueued();
 
@@ -43,11 +48,13 @@ namespace BToken.Chaining
             }
           }
 
-          BlocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue).Except(BlocksDispatched).ToList();
-          
-        } while (BlocksQueued.Any());
+          List<ChainBlock> blocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue);
+          IEnumerable<ChainBlock> blocksQueuedNotYetDispatched = blocksQueued.Except(BlocksDispatched);
+          BlocksQueued = blocksQueuedNotYetDispatched.ToList();
 
-        if (blocksDispatched.Any())
+        } while (BlocksQueued.Count > 0);
+
+        if (blocksDispatched.Count > 0)
         {
           return blocksDispatched;
         }
@@ -55,20 +62,16 @@ namespace BToken.Chaining
         {
           return BlocksDispatched.Take(BatchSizeDispatch).ToList();
         }
+
       }
 
       ChainBlock PopBlockQueued()
       {
         ChainBlock blockQueued = BlocksQueued[0];
+
         BlocksQueued.RemoveAt(0);
 
         return blockQueued;
-      }
-
-
-      public void RemoveDownloaded(List<ChainBlock> blocks)
-      {
-        BlocksDispatched = BlocksDispatched.Except(blocks).ToList();
       }
     }
   }

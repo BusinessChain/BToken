@@ -5,7 +5,7 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    partial class ChainSocket
+    partial class SocketProbe
     {
       static class TargetManager
       {
@@ -51,7 +51,7 @@ namespace BToken.Chaining
 
           return actualTimespan;
         }
-        
+
         public static double GetDifficulty(UInt32 nBits)
         {
           return MAX_TARGET / (double)UInt256.ParseFromCompact(nBits);

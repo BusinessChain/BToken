@@ -9,215 +9,282 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    partial class ChainSocket
+    partial class SocketProbe
     {
-      public class SocketProbe
+      Blockchain Blockchain;
+      ChainSocket Socket;
+
+      BlockLocator Locator;
+
+      public ChainBlock Block;
+      UInt256 Hash;
+      public double AccumulatedDifficulty { get; private set; }
+      public uint Depth;
+
+
+
+      public SocketProbe(Blockchain blockchain, ChainBlock genesisBlock)
       {
-        Blockchain Blockchain;
-        ChainSocket Socket;
+        Blockchain = blockchain;
 
-        public ChainBlock Block;
-        UInt256 Hash;
+        UInt256 blockGenesisHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes()));
 
-        public uint Depth;
-        public double AccumulatedDifficulty { get; private set; }
+        Socket = new ChainSocket(
+          blockGenesis: genesisBlock,
+          blockGenesisHash: blockGenesisHash,
+          probe: this);
 
+        Locator = new BlockLocator(0, blockGenesisHash);
 
-        public SocketProbe(Blockchain blockchain, ChainSocket socket)
+        Initialize();
+      }
+
+      SocketProbe(
+        Blockchain blockchain,
+        ChainBlock blockTip,
+        UInt256 blockTipHash,
+        uint blockTipHeight,
+        ChainBlock blockGenesis,
+        ChainBlock blockUnassignedPayloadDeepest,
+        double accumulatedDifficultyPrevious,
+        BlockLocator blockLocator)
+      {
+        Blockchain = blockchain;
+
+        Socket = new ChainSocket(
+          blockTip: blockTip,
+          blockTipHash: blockTipHash,
+          blockTipHeight: blockTipHeight,
+          blockGenesis: blockGenesis,
+          blockUnassignedPayloadDeepest: blockUnassignedPayloadDeepest,
+          accumulatedDifficultyPrevious: accumulatedDifficultyPrevious,
+          probe: this);
+
+        Initialize();
+      }
+
+      public void Initialize()
+      {
+        Block = Socket.BlockTip;
+        Hash = Socket.BlockTipHash;
+        AccumulatedDifficulty = Socket.AccumulatedDifficulty;
+        Depth = 0;
+      }
+
+      public bool GetAtBlock(UInt256 hash)
+      {
+        Initialize();
+
+        while (true)
         {
-          Blockchain = blockchain;
-          Socket = socket;
-          Reset();
-        }
-
-        public void Reset()
-        {
-          Block = Socket.BlockTip;
-          Hash = Socket.BlockTipHash;
-          AccumulatedDifficulty = Socket.AccumulatedDifficulty;
-
-          Depth = 0;
-        }
-
-        public bool GetAtBlock(UInt256 hash)
-        {
-          Reset();
-
-          while (true)
+          if (IsHash(hash))
           {
-            if (IsHash(hash))
-            {
-              return true;
-            }
-
-            if (IsGenesis())
-            {
-              return false;
-            }
-
-            Push();
-          }
-        }
-
-        public void Push()
-        {
-          Hash = Block.Header.HashPrevious;
-          Block = Block.BlockPrevious;
-          AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.Header.NBits);
-
-          Depth++;
-        }
-
-        public void InsertBlock(ChainBlock block, UInt256 headerHash)
-        {
-          ValidateHeader(block.Header, headerHash);
-
-          ConnectChainBlock(block);
-
-          if (!IsTip())
-          {
-            ForkChain(block, headerHash);
-          }
-          else
-          {
-            ExtendChain(block, headerHash);
-          }
-        }
-        void ValidateHeader(NetworkHeader header, UInt256 headerHash)
-        {
-          CheckProofOfWorkClaim(header, headerHash);
-          CheckTimeStamp(header);
-
-          if (IsBlockConnectedToNextBlock(headerHash))
-          {
-            throw new BlockchainException(BlockCode.DUPLICATE);
+            return true;
           }
 
-          if (header.NBits != TargetManager.GetNextTargetBits(this))
+          if (IsGenesis())
           {
-            throw new BlockchainException(BlockCode.INVALID);
+            return false;
           }
 
-          if (header.UnixTimeSeconds <= GetMedianTimePast())
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }
+          Push();
         }
-        void CheckProofOfWorkClaim(NetworkHeader header, UInt256 headerHash)
+      }
+
+      public void Push()
+      {
+        Hash = Block.Header.HashPrevious;
+        Block = Block.BlockPrevious;
+        AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.Header.NBits);
+
+        Depth++;
+      }
+
+      public void InsertBlock(ChainBlock block, UInt256 headerHash)
+      {
+        ValidateHeader(block.Header, headerHash);
+
+        ConnectChainBlock(block);
+
+        if (IsTip())
         {
-          if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
-          {
-            throw new BlockchainException(BlockCode.INVALID);
-          }
+          ExtendChain(block, headerHash);
         }
-        void CheckTimeStamp(NetworkHeader header)
+        else
         {
-          if (IsTimestampPremature(header.UnixTimeSeconds))
-          {
-            throw new BlockchainException(BlockCode.PREMATURE);
-          }
+          ForkChain(block, headerHash);
         }
-        bool IsTimestampPremature(ulong unixTimeSeconds)
+      }
+      void ValidateHeader(NetworkHeader header, UInt256 headerHash)
+      {
+        CheckProofOfWork(header, headerHash);
+        CheckTimeStamp(header);
+
+        if (IsBlockConnectedToNextBlock(headerHash))
         {
-          const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-          return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
+          throw new BlockchainException(BlockCode.DUPLICATE);
         }
-        void ConnectChainBlock(ChainBlock block)
+
+        if (header.UnixTimeSeconds <= GetMedianTimePast())
         {
-          block.BlockPrevious = Block;
-          Block.BlocksNext.Add(block);
+          throw new BlockchainException(BlockCode.INVALID);
         }
-        void ForkChain(ChainBlock block, UInt256 headerHash)
+      }
+      bool IsBlockConnectedToNextBlock(UInt256 hash) => Block.BlocksNext.Any(b => GetHeaderHash(b).IsEqual(hash));
+      uint GetMedianTimePast()
+      {
+        const int MEDIAN_TIME_PAST = 11;
+
+        List<uint> timestampsPast = new List<uint>();
+        ChainBlock block = Block;
+
+        int depth = 0;
+        while (depth < MEDIAN_TIME_PAST)
         {
-          uint blockTipHeight = GetHeight() + 1;
+          timestampsPast.Add(block.Header.UnixTimeSeconds);
 
-          var socketForkChain = new ChainSocket(
-            blockchain: Blockchain,
-            blockTip: block,
-            blockTipHash: headerHash,
-            blockTipHeight: blockTipHeight,
-            blockGenesis: block,
-            blockUnassignedPayloadDeepest: block,
-            accumulatedDifficultyPrevious: AccumulatedDifficulty,
-            blockLocator: new BlockLocator(blockTipHeight, headerHash));
+          if (block.BlockPrevious == null)
+          { break; }
 
-          Blockchain.InsertSocket(socketForkChain);
+          block = block.BlockPrevious;
+          depth++;
         }
-        void ExtendChain(ChainBlock block, UInt256 headerHash)
+
+        timestampsPast.Sort();
+
+        return timestampsPast[timestampsPast.Count / 2];
+      }
+      void CheckProofOfWork(NetworkHeader header, UInt256 headerHash)
+      {
+        if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
         {
-          ChainBlock blockGenesis = Socket.BlockGenesis;
-
-          ChainBlock blockUnassignedPayloadDeepest = null;
-          if (!AllPayloadsAssigned())
-          {
-            blockUnassignedPayloadDeepest = Socket.BlockUnassignedPayloadDeepest;
-          }
-          else
-          {
-            if (block.BlockStore == null)
-            {
-              blockUnassignedPayloadDeepest = block;
-            }
-          }
-
-          uint blockTipHeight = GetHeight() + 1;
-
-          BlockLocator locator = Socket.Locator;
-          locator.Update(blockTipHeight, headerHash);
-
-          var socketExtendChain = new ChainSocket(
-            blockchain: Blockchain,
-            blockTip: block,
-            blockTipHash: headerHash,
-            blockTipHeight: blockTipHeight,
-            blockGenesis: blockGenesis,
-            blockUnassignedPayloadDeepest: blockUnassignedPayloadDeepest,
-            accumulatedDifficultyPrevious: AccumulatedDifficulty,
-            blockLocator: locator);
-
-          Blockchain.InsertSocket(socketExtendChain);
-
-          Disconnect();
+          throw new BlockchainException(BlockCode.INVALID);
         }
-        
-        public void Disconnect()
+
+        if (header.NBits != TargetManager.GetNextTargetBits(this))
+        {
+          throw new BlockchainException(BlockCode.INVALID);
+        }
+      }
+      void CheckTimeStamp(NetworkHeader header)
+      {
+        if (IsTimestampPremature(header.UnixTimeSeconds))
+        {
+          throw new BlockchainException(BlockCode.PREMATURE);
+        }
+      }
+      bool IsTimestampPremature(ulong unixTimeSeconds)
+      {
+        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+        return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
+      }
+      void ConnectChainBlock(ChainBlock block)
+      {
+        block.BlockPrevious = Block;
+        Block.BlocksNext.Add(block);
+      }
+      void ForkChain(ChainBlock block, UInt256 headerHash)
+      {
+        uint blockTipHeight = GetHeight() + 1;
+
+        SocketProbe newSocketProbe = new SocketProbe(
+          blockchain: Blockchain,
+          blockTip: block,
+          blockTipHash: headerHash,
+          blockTipHeight: blockTipHeight,
+          blockGenesis: block,
+          blockUnassignedPayloadDeepest: block,
+          accumulatedDifficultyPrevious: AccumulatedDifficulty,
+          blockLocator: new BlockLocator(blockTipHeight, headerHash));
+
+        Blockchain.InsertProbe(newSocketProbe);
+      }
+      void ExtendChain(ChainBlock block, UInt256 headerHash)
+      {
+        Socket.BlockTip = block;
+        Socket.BlockTipHash = headerHash;
+        Socket.BlockTipHeight++;
+        Socket.AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
+        UpdateLocator();
+
+        if (AllPayloadsAssigned())
+        {
+          Socket.BlockHighestAssigned = block;
+        }
+
+        if (this != Blockchain.ProbeMain)
         {
           Socket.Disconnect();
+          Blockchain.InsertProbe(this);
         }
-        bool IsBlockConnectedToNextBlock(UInt256 hash) => Block.BlocksNext.Any(b => Socket.GetHeaderHash(b).IsEqual(hash));
-        uint GetMedianTimePast()
+      }
+
+      public void ConnectAsProbeWeaker(SocketProbe probe)
+      {
+        Socket.ConnectAsSocketWeaker(probe.Socket);
+      }
+      public void InsertProbeRecursive(SocketProbe probe)
+      {
+        Socket.InsertSocketRecursive(probe.Socket);
+      }
+
+      public List<BlockLocation> GetBlockLocations() => Locator.BlockLocations;
+      void UpdateLocator() => Locator.Update(Socket.BlockTipHeight, Socket.BlockTipHash);
+
+      public SocketProbe GetProbeWeaker()
+      {
+        if(Socket.SocketWeaker == null)
         {
-          const int MEDIAN_TIME_PAST = 11;
+          return null;
+        }
 
-          List<uint> timestampsPast = new List<uint>();
-          ChainBlock block = Block;
+        return Socket.SocketWeaker.Probe;
+      }
 
-          int depth = 0;
-          while (depth < MEDIAN_TIME_PAST)
+      public UInt256 GetHeaderHash(ChainBlock block)
+      {
+        if (block == Socket.BlockTip)
+        {
+          return Socket.BlockTipHash;
+        }
+
+        return block.BlocksNext[0].Header.HashPrevious;
+      }
+      public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
+      {
+        if (Socket.BlockHighestAssigned == Socket.BlockTip) { return new List<ChainBlock>(); }
+
+        Block = Socket.BlockHighestAssigned.BlocksNext[0];
+        
+        var blocksUnassignedPayload = new List<ChainBlock>();
+        while (blocksUnassignedPayload.Count < batchSize)
+        {
+          Socket.BlockHighestAssigned = Block;
+
+          if (Block.BlockStore == null)
           {
-            timestampsPast.Add(block.Header.UnixTimeSeconds);
-
-            if (block.BlockPrevious == null)
-            { break; }
-
-            block = block.BlockPrevious;
-            depth++;
+            blocksUnassignedPayload.Add(Block);
           }
 
-          timestampsPast.Sort();
+          if (IsTip())
+          {
+            return blocksUnassignedPayload;
+          }
 
-          return timestampsPast[timestampsPast.Count / 2];
+          Block = Block.BlocksNext[0];
         }
 
-        public uint GetHeightTip() => Socket.BlockTipHeight;
-        public uint GetHeight() => GetHeightTip() - Depth;
-        public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
-        public bool IsGenesis() => Block == Socket.BlockGenesis;
-        public bool IsTip() => Block == Socket.BlockTip;
-        public bool AllPayloadsAssigned() => Socket.AllPayloadsAssigned();
-        public bool IsStrongerThan(SocketProbe probe) => probe == null ? false : AccumulatedDifficulty > probe.AccumulatedDifficulty;
-        public BlockLocation GetBlockLocation() => new BlockLocation(GetHeight(), Hash);
+        return blocksUnassignedPayload;
       }
+
+      public uint GetHeightTip() => Socket.BlockTipHeight;
+      public uint GetHeight() => GetHeightTip() - Depth;
+      public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
+      public bool IsGenesis() => Block == Socket.BlockGenesis;
+      public bool IsTip() => Block == Socket.BlockTip;
+      public bool AllPayloadsAssigned() => Socket.AllPayloadsAssigned();
+      public bool IsStrongerThan(SocketProbe probe) => probe == null ? false : Socket.AccumulatedDifficulty > probe.Socket.AccumulatedDifficulty;
+      public BlockLocation GetBlockLocation() => new BlockLocation(GetHeight(), Hash);
     }
   }
 }
