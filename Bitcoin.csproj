@@ -82,7 +82,9 @@
     <Compile Include="Chaining\Blockchain\ChainSocket\BlockLocator.cs" />
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
     <Compile Include="Chaining\Blockchain\CheckpointManager.cs" />
-    <Compile Include="Chaining\Blockchain\Controller\Archiver\BlockArchiver.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\Archiver\ArchiveLoader.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\Archiver\ArchiveShardLoader.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\Archiver\Archiver.cs" />
     <Compile Include="Chaining\Blockchain\Controller\Archiver\FileWriter.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainChannel.cs" />

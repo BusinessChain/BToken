@@ -23,7 +23,7 @@ namespace BToken.Chaining
         List<ChainBlock> BlocksQueued = new List<ChainBlock>();
         List<ChainBlock> BlocksDownloaded = new List<ChainBlock>();
 
-        BlockArchiver.FileWriter FileWriter;
+        Archiver.FileWriter FileWriter;
 
         int BlocksDispachedCountTotal;
 
