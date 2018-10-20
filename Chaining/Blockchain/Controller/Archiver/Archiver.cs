@@ -27,7 +27,7 @@ namespace BToken.Chaining
       const int ITEM_COUNT_PER_DIRECTORY = 0x4;
       static string DirectoryHandle = "Shelf";
 
-      const int BLOCK_REGISTER_BYTESIZE_MAX = 0x400000;
+      const int BLOCK_REGISTER_BYTESIZE_MAX = 0x40000;
       static string FileHandle = "BlockRegister";
 
            
@@ -82,6 +82,12 @@ namespace BToken.Chaining
       static NetworkBlock ParseNetworkBlock(FileStream blockRegisterStream)
       {
         int prefixInt = blockRegisterStream.ReadByte();
+
+        if(prefixInt == -1)
+        {
+          return null;
+        }
+
         int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
         byte[] blockBytes = new byte[blockLength];
         int i = blockRegisterStream.Read(blockBytes, 0, blockLength);

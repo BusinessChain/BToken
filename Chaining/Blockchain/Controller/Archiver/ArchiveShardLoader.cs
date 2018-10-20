@@ -1,6 +1,8 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Text.RegularExpressions;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -17,36 +19,46 @@ namespace BToken.Chaining
         FileStream FileStream;
         FileID FileID;
 
+
         NetworkBlock BlockNext;
 
 
         public ArchiveShardLoader(string shardRootPath)
         {
-          string[] directories = Directory.GetDirectories(shardRootPath);
+          uint shardIndex = uint.Parse(Regex.Match(shardRootPath, @"\d+$").Value);
 
           FileID = new FileID
           {
+            ShardIndex = shardIndex,
             DirectoryIndex = 0,
             FileIndex = 0
           };
+
+          FileStream = OpenFile(FileID);
         }
 
         public NetworkBlock PeekBlockNext(out BlockStore blockStore)
         {
           if(BlockNext == null)
           {
-            try
+            BlockNext = ParseNetworkBlock(FileStream);
+            if (BlockNext == null)
             {
-              NetworkBlock networkBlock = ParseNetworkBlock(FileStream);
-              if (networkBlock == null)
+              FileStream.Dispose();
+
+              IncrementFileID(ref FileID);
+
+              try
               {
-                // open next file
-                // if not exist, return null
+                FileStream = OpenFile(FileID);
               }
-            }
-            catch(Exception ex)
-            {
-              Console.WriteLine(ex.Message);
+              catch (FileNotFoundException)
+              {
+                blockStore = null;
+                return null;
+              }
+
+              BlockNext = ParseNetworkBlock(FileStream);
             }
           }
 

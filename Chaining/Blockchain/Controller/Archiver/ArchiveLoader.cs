@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
@@ -16,8 +18,7 @@ namespace BToken.Chaining
       {
         Blockchain Blockchain;
         List<ArchiveShardLoader> ShardLoaders = new List<ArchiveShardLoader>();
-
-
+        
         public ArchiveLoader(Blockchain blockchain)
         {
           Blockchain = blockchain;
@@ -29,17 +30,20 @@ namespace BToken.Chaining
           BlockStore blockStore;
           NetworkBlock block = shardLoader.PeekBlockNext(out blockStore);
 
+
           while (block != null)
           {
             UInt256 headerHash = new UInt256(Hashing.SHA256d(block.Header.getBytes()));
 
             try
             {
+              Debug.WriteLine("insert block: "+ Blockchain.GetHeight());
               Blockchain.InsertBlock(block, headerHash, blockStore);
               shardLoader.DispatchBlockNext();
             }
             catch (BlockchainException ex)
             {
+              Debug.WriteLine("BlockchainException: " + ex.ErrorCode + ", Block height: " + Blockchain.GetHeight());
               switch (ex.ErrorCode)
               {
                 case BlockCode.ORPHAN:
@@ -81,7 +85,7 @@ namespace BToken.Chaining
 
         static List<ArchiveShardLoader> GetArchiveShardLoaders()
         {
-          string[] shardDirectories = Directory.GetDirectories(ArchiveRootPath);
+          string[] shardDirectories = Directory.GetDirectories(ArchiveRootPath, "Shard?");
           return shardDirectories.Select(s => new ArchiveShardLoader(s)).ToList();
         }
 
