@@ -97,7 +97,7 @@
     <Compile Include="Chaining\Blockchain\IBlockPayloadParser.cs" />
     <Compile Include="Chaining\Blockchain\ChainSocket\ChainSocket.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainException.cs" />
-    <Compile Include="Chaining\Blockchain\ChainSocket\SocketProbe.cs" />
+    <Compile Include="Chaining\Blockchain\ChainSocket\Chain.cs" />
     <Compile Include="Chaining\Blockchain\IBlockStore.cs" />
     <Compile Include="Chaining\Blockchain\IBlockchainNetwork.cs" />
     <Compile Include="DataTypes\UInt256.cs" />

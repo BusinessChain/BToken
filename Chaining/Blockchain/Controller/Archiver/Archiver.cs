@@ -17,9 +17,12 @@ namespace BToken.Chaining
     partial class Archiver
     {
       Blockchain Blockchain;
+      FileStream FileHeaderchain;
 
       readonly static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
+
+      static string FilePathHeaderchain = "Headerchain";
 
       static string ShardHandle = "Shard";
       uint ShardEnumerator;
@@ -34,8 +37,18 @@ namespace BToken.Chaining
       public Archiver(Blockchain blockchain)
       {
         Blockchain = blockchain;
+        FileHeaderchain = OpenHeaderchainFile();
       }
+      static FileStream OpenHeaderchainFile()
+      {
+        string filePath = Path.Combine(RootDirectory.Name, FilePathHeaderchain);
 
+        return new FileStream(
+          filePath,
+          FileMode.OpenOrCreate,
+          FileAccess.ReadWrite,
+          FileShare.None);
+      }
 
       public void LoadBlockchain()
       {
@@ -43,42 +56,8 @@ namespace BToken.Chaining
         {
           loader.Load();
         }
-        
-
-        //try
-        //{
-        //  FileID fileID = new FileID
-        //  {
-        //    ShardIndex = 0,
-        //    DirectoryIndex = 0,
-        //    FileIndex = 0
-        //  };
-
-        //  while (true) // run until exception is thrown
-        //  {
-        //    using (FileStream blockRegisterStream = OpenFile(fileID))
-        //    {
-        //      int prefixInt = blockRegisterStream.ReadByte();
-        //      do
-        //      {
-        //        NetworkBlock networkBlock = ParseNetworkBlock(blockRegisterStream, prefixInt);
-        //        UInt256 headerHash = new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
-
-        //        blockchain.InsertBlock(networkBlock, headerHash, new BlockStore(fileID));
-
-        //        prefixInt = blockRegisterStream.ReadByte();
-        //      } while (prefixInt > 0);
-        //    }
-
-        //    IncrementFileID(ref fileID);
-        //  }
-        //}
-        //catch (Exception ex)
-        //{
-        //  Debug.WriteLine("BlockArchiver::LoadBlockchain:" + ex.Message);
-        //}
-
       }
+
       static NetworkBlock ParseNetworkBlock(FileStream blockRegisterStream)
       {
         int prefixInt = blockRegisterStream.ReadByte();
@@ -108,8 +87,7 @@ namespace BToken.Chaining
           FileMode.Open,
           FileAccess.Read,
           FileShare.Read,
-          BLOCK_REGISTER_BYTESIZE_MAX
-          );
+          BLOCK_REGISTER_BYTESIZE_MAX);
       }
 
       static void IncrementFileID(ref FileID fileID)

@@ -8,7 +8,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class SocketProbe
+    partial class Chain
     {
       class BlockLocator
       {
