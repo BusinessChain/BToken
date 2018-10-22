@@ -22,27 +22,27 @@ namespace BToken.Chaining
 
       const int CHANNELS_COUNT = 8;
 
-      BlockArchiver Archiver;
+      Archiver Archiver;
 
 
       public BlockchainController(Network network, Blockchain blockchain)
       {
         Network = network;
         Blockchain = blockchain;
-        Archiver = new BlockArchiver();
+        Archiver = new Archiver(blockchain);
       }
 
       public async Task StartAsync()
       {
-        Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
+        //Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
 
-        //Archiver.LoadBlockchain(Blockchain);
+        Archiver.LoadBlockchain();
 
-        BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
-        await DownloadHeadersAsync(channelFirst);
+        //BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
+        //await DownloadHeadersAsync(channelFirst);
 
-        BlockchainChannel[] channels = await Task.WhenAll(createChannelsTasks);
-        await DownloadBlocksAsync(channels);
+        //BlockchainChannel[] channels = await Task.WhenAll(createChannelsTasks);
+        //await DownloadBlocksAsync(channels);
 
         //StartListeningToNetworkAsync();
       }

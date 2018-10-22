@@ -12,18 +12,18 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class BlockArchiver
+    partial class Archiver
     {
       public class FileWriter
       {
-        BlockArchiver Archiver;
+        Archiver Archiver;
         readonly uint ShardEnumerator;
 
         FileID FileID;
         FileStream FileStream;
 
 
-        public FileWriter(BlockArchiver archiver, uint shardIndex)
+        public FileWriter(Archiver archiver, uint shardIndex)
         {
           Archiver = archiver;
           ShardEnumerator = shardIndex;

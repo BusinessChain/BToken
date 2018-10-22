@@ -55,20 +55,23 @@ namespace BToken
 
     public static UInt64 ParseVarInt(UInt64 prefix, Stream stream)
     {
-      byte[] buffer = new byte[0];
+      byte[] buffer;
 
       if (prefix == 0xfd)
       {
+        buffer = new byte[2];
         stream.Read(buffer, 0, 2);
         prefix = BitConverter.ToUInt16(buffer, 0);
       }
       else if (prefix == 0xfe)
       {
+        buffer = new byte[4];
         stream.Read(buffer, 0, 4);
         prefix = BitConverter.ToUInt32(buffer, 0);
       }
       else if (prefix == 0xff)
       {
+        buffer = new byte[8];
         stream.Read(buffer, 0, 8);
         prefix = BitConverter.ToUInt64(buffer, 0);
       }
