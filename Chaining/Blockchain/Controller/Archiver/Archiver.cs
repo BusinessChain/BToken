@@ -17,13 +17,10 @@ namespace BToken.Chaining
     partial class Archiver
     {
       Blockchain Blockchain;
-      FileStream FileHeaderchain;
 
       readonly static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
-
-      static string FilePathHeaderchain = "Headerchain";
-
+      
       static string ShardHandle = "Shard";
       uint ShardEnumerator;
 
@@ -37,17 +34,6 @@ namespace BToken.Chaining
       public Archiver(Blockchain blockchain)
       {
         Blockchain = blockchain;
-        FileHeaderchain = OpenHeaderchainFile();
-      }
-      static FileStream OpenHeaderchainFile()
-      {
-        string filePath = Path.Combine(RootDirectory.Name, FilePathHeaderchain);
-
-        return new FileStream(
-          filePath,
-          FileMode.OpenOrCreate,
-          FileAccess.ReadWrite,
-          FileShare.None);
       }
 
       public void LoadBlockchain()

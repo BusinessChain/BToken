@@ -13,8 +13,9 @@ namespace BToken.Chaining
     {
       Blockchain Blockchain;
       ChainSocket Socket;
-
+      
       BlockLocator Locator;
+      ChainArchiver Archiver;
 
       public ChainBlock Block;
       UInt256 Hash;
