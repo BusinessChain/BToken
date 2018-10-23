@@ -16,13 +16,12 @@ namespace BToken.Chaining
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
 
       BlockchainController Controller;
-      string FilePath;
+      static string FilePath = Path.Combine(RootDirectory.Name, "Headerchain");
 
 
       public HeaderArchiver(BlockchainController controller)
       {
         Controller = controller;
-        FilePath = Path.Combine(RootDirectory.Name, "Headerchain");
       }
 
 
@@ -31,10 +30,10 @@ namespace BToken.Chaining
         FileStream FileStream;
 
 
-        public HeaderWriter(HeaderArchiver archiver)
+        public HeaderWriter()
         {
           FileStream = new FileStream(
-            archiver.FilePath,
+            FilePath,
             FileMode.Append,
             FileAccess.Write,
             FileShare.None);
@@ -56,10 +55,10 @@ namespace BToken.Chaining
         FileStream FileStream;
         
         
-        public HeaderReader(HeaderArchiver archiver)
+        public HeaderReader()
         {
           FileStream = new FileStream(
-            archiver.FilePath,
+            FilePath,
             FileMode.Open,
             FileAccess.Read,
             FileShare.Read);

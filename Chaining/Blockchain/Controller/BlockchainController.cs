@@ -23,7 +23,6 @@ namespace BToken.Chaining
       const int CHANNELS_COUNT = 8;
 
       Archiver Archiver;
-      HeaderArchiver HeaderArchiver;
 
 
       public BlockchainController(Network network, Blockchain blockchain)
@@ -31,7 +30,6 @@ namespace BToken.Chaining
         Network = network;
         Blockchain = blockchain;
         Archiver = new Archiver(blockchain);
-        HeaderArchiver = new HeaderArchiver(this);
       }
 
       public async Task StartAsync()
@@ -67,7 +65,7 @@ namespace BToken.Chaining
       {
         try
         {
-          using (var archiveReader = new HeaderArchiver.HeaderReader(HeaderArchiver))
+          using (var archiveReader = new HeaderArchiver.HeaderReader())
           {
             NetworkHeader header = archiveReader.GetNextHeader();
 

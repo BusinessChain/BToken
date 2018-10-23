@@ -42,7 +42,7 @@ namespace BToken.Chaining
 
         async Task DownloadHeadersAsync()
         {
-          using (var archiveWriter = new HeaderArchiver.HeaderWriter(Controller.HeaderArchiver))
+          using (var archiveWriter = new HeaderArchiver.HeaderWriter())
           {
             await ReceiveHeaders().ConfigureAwait(false);
 
