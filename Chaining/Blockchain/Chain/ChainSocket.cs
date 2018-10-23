@@ -12,7 +12,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public partial class SocketProbe
+    public partial class Chain
     {
       partial class ChainSocket
       {
@@ -24,7 +24,7 @@ namespace BToken.Chaining
         public ChainBlock BlockGenesis { get; private set; }
         public ChainBlock BlockHighestAssigned;
 
-        public SocketProbe Probe { get; private set; }
+        public Chain Chain { get; private set; }
 
         ChainSocket SocketStronger;
         public ChainSocket SocketWeaker { get; private set; }
@@ -33,7 +33,7 @@ namespace BToken.Chaining
         public ChainSocket(
           ChainBlock blockGenesis,
           UInt256 blockGenesisHash,
-          SocketProbe probe)
+          Chain chain)
           : this(
              blockTip: blockGenesis,
              blockTipHash: blockGenesisHash,
@@ -41,7 +41,7 @@ namespace BToken.Chaining
              blockGenesis: blockGenesis,
              blockHighestAssigned: blockGenesis,
              accumulatedDifficultyPrevious: 0,
-             probe: probe)
+             chain: chain)
         { }
 
         public ChainSocket(
@@ -51,7 +51,7 @@ namespace BToken.Chaining
           ChainBlock blockGenesis,
           ChainBlock blockHighestAssigned,
           double accumulatedDifficultyPrevious,
-          SocketProbe probe)
+          Chain chain)
         {
           BlockTip = blockTip;
           BlockTipHash = blockTipHash;
@@ -60,7 +60,7 @@ namespace BToken.Chaining
           BlockHighestAssigned = blockHighestAssigned;
           AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockTip.Header.NBits);
 
-          Probe = probe;
+          Chain = chain;
         }
                 
         public void InsertSocketRecursive(ChainSocket socket)

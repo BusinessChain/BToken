@@ -110,11 +110,11 @@ namespace BToken.Chaining
             return chainBlock.BlocksNext[0].Header.HashPrevious;
           }
 
-          return new UInt256(Hashing.SHA256d(chainBlock.Header.getBytes()));
+          return new UInt256(Hashing.SHA256d(chainBlock.Header.GetBytes()));
         }
         UInt256 GetHeaderHash(NetworkBlock networkBlock)
         {
-          return new UInt256(Hashing.SHA256d(networkBlock.Header.getBytes()));
+          return new UInt256(Hashing.SHA256d(networkBlock.Header.GetBytes()));
         }
 
         async Task<NetworkBlock> GetNetworkBlockAsync(CancellationToken cancellationToken)

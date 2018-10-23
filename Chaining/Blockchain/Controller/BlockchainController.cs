@@ -23,6 +23,7 @@ namespace BToken.Chaining
       const int CHANNELS_COUNT = 8;
 
       Archiver Archiver;
+      HeaderArchiver HeaderArchiver;
 
 
       public BlockchainController(Network network, Blockchain blockchain)
@@ -30,16 +31,17 @@ namespace BToken.Chaining
         Network = network;
         Blockchain = blockchain;
         Archiver = new Archiver(blockchain);
+        HeaderArchiver = new HeaderArchiver(this);
       }
 
       public async Task StartAsync()
       {
-        //Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
+        Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
 
-        Archiver.LoadBlockchain();
-
-        //BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
-        //await DownloadHeadersAsync(channelFirst);
+        LoadHeadersFromArchive();
+        
+        BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
+        await DownloadHeadersAsync(channelFirst);
 
         //BlockchainChannel[] channels = await Task.WhenAll(createChannelsTasks);
         //await DownloadBlocksAsync(channels);
@@ -61,9 +63,32 @@ namespace BToken.Chaining
         }).ToArray();
       }
 
+      void LoadHeadersFromArchive()
+      {
+        try
+        {
+          using (var archiveReader = new HeaderArchiver.HeaderReader(HeaderArchiver))
+          {
+            NetworkHeader header = archiveReader.GetNextHeader();
+
+            while (header != null)
+            {
+              UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
+              Blockchain.InsertHeader(header, headerHash);
+
+              header = archiveReader.GetNextHeader();
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          Debug.WriteLine(ex.Message);
+        }
+      }
+
       async Task DownloadHeadersAsync(BlockchainChannel channel)
       {
-        await channel.ExecuteSessionAsync(new SessionHeaderDownload(this, Blockchain));
+        await channel.ExecuteSessionAsync(new SessionHeaderDownload(this));
       }
 
       async Task DownloadBlocksAsync(BlockchainChannel[] channels)

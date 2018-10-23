@@ -33,7 +33,7 @@ namespace BToken.Chaining
 
           while (block != null)
           {
-            UInt256 headerHash = new UInt256(Hashing.SHA256d(block.Header.getBytes()));
+            UInt256 headerHash = new UInt256(Hashing.SHA256d(block.Header.GetBytes()));
 
             try
             {

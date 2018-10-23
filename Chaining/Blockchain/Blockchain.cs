@@ -21,9 +21,8 @@ namespace BToken.Chaining
     
     CheckpointManager Checkpoints;
 
-    SocketProbe ProbeMain;
+    Chain MainChain;
     BlockPayloadLocator BlockLocator;
-
 
 
     public Blockchain(
@@ -38,7 +37,7 @@ namespace BToken.Chaining
 
       Checkpoints = new CheckpointManager(checkpoints);
 
-      ProbeMain = new SocketProbe(
+      MainChain = new Chain(
         blockchain: this,
         genesisBlock: genesisBlock);
 
@@ -51,7 +50,7 @@ namespace BToken.Chaining
       await Controller.StartAsync();
     }
 
-    public List<BlockLocation> GetBlockLocations() => ProbeMain.GetBlockLocations();
+    public List<BlockLocation> GetBlockLocations() => MainChain.GetBlockLocations();
 
     //public static Blockchain Merge(Blockchain chain1, Blockchain chain2)
     //{
@@ -65,9 +64,9 @@ namespace BToken.Chaining
 
     //    return chain1;
     //  }
-    //  catch(BlockchainException ex)
+    //  catch (BlockchainException ex)
     //  {
-    //    if(ex.ErrorCode == BlockCode.ORPHAN)
+    //    if (ex.ErrorCode == BlockCode.ORPHAN)
     //    {
     //      chain2.InsertBlock(chain1.GenesisBlock, chain1.GenesisBlockHash);
     //      return chain2;
@@ -81,8 +80,8 @@ namespace BToken.Chaining
     //{
     //  try
     //  {
-    //    SocketProbe probe = GetProbe(hash);
-    //    return probe.Block;
+    //    Chain chain = GetChain(hash);
+    //    return chain.Block;
     //  }
     //  catch (BlockchainException)
     //  {
@@ -90,23 +89,23 @@ namespace BToken.Chaining
     //  }
     //}
 
-    SocketProbe GetProbe(UInt256 hash)
+    Chain GetChain(UInt256 hash)
     {
-      SocketProbe probe = ProbeMain;
+      Chain chain = MainChain;
 
       while (true)
       {
-        if(probe == null)
+        if(chain == null)
         {
           throw new BlockchainException(BlockCode.ORPHAN);
         }
         
-        if (probe.GetAtBlock(hash))
+        if (chain.GetAtBlock(hash))
         {
-          return probe;
+          return chain;
         }
 
-        probe = probe.GetProbeWeaker();
+        chain = chain.GetChainWeaker();
       }
     }
 
@@ -117,11 +116,11 @@ namespace BToken.Chaining
     }
     void InsertBlock(ChainBlock chainBlock, UInt256 headerHash)
     {
-      SocketProbe probeAtBlockPrevious = GetProbe(chainBlock.Header.HashPrevious);
+      Chain probeAtBlockPrevious = GetChain(chainBlock.Header.HashPrevious);
       ValidateCheckpoint(probeAtBlockPrevious, headerHash);
       probeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
     }
-    void ValidateCheckpoint(SocketProbe probe, UInt256 headerHash)
+    void ValidateCheckpoint(Chain probe, UInt256 headerHash)
     {
       uint nextBlockHeight = probe.GetHeight() + 1;
 
@@ -158,20 +157,20 @@ namespace BToken.Chaining
       }
     }
 
-    void InsertProbe(SocketProbe probe)
+    void InsertChain(Chain chain)
     {
-      if (probe.IsStrongerThan(ProbeMain))
+      if (chain.IsStrongerThan(MainChain))
       {
-        probe.ConnectAsProbeWeaker(ProbeMain);
-        ProbeMain = probe;
+        chain.ConnectAsWeakerChain(MainChain);
+        MainChain = chain;
       }
       else
       {
-        ProbeMain.InsertProbeRecursive(probe);
+        MainChain.InsertChainRecursive(chain);
       }
     }
 
-    uint GetHeight() => ProbeMain.GetHeightTip();
+    uint GetHeight() => MainChain.GetHeightTip();
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {
@@ -186,16 +185,17 @@ namespace BToken.Chaining
     List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
     {
       var blocksUnassignedPayload = new List<ChainBlock>();
-      SocketProbe probe = ProbeMain;
+      Chain chain = MainChain;
 
       do
       {
-        blocksUnassignedPayload.AddRange(probe.GetBlocksUnassignedPayload(batchSize));
+        blocksUnassignedPayload.AddRange(chain.GetBlocksUnassignedPayload(batchSize));
         batchSize -= blocksUnassignedPayload.Count;
-        probe = probe.GetProbeWeaker();
-      } while (batchSize > 0 && probe != null);
+        chain = chain.GetChainWeaker();
+      } while (batchSize > 0 && chain != null);
 
       return blocksUnassignedPayload;
     }
+
   }
 }

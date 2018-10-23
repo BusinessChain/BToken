@@ -29,7 +29,7 @@ namespace BToken.Networking
       Nonce = nonce;
     }
 
-    public byte[] getBytes()
+    public byte[] GetBytes()
     {
       List<byte> headerSerialized = new List<byte>();
 
@@ -43,25 +43,25 @@ namespace BToken.Networking
       return headerSerialized.ToArray();
     }
 
-    public static NetworkHeader ParseHeader(byte[] byteStream, out int txCount, ref int startIndex)
+    public static NetworkHeader ParseHeader(byte[] buffer, out int txCount, ref int startIndex)
     {
-      UInt32 version = BitConverter.ToUInt32(byteStream, startIndex);
+      UInt32 version = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
 
-      UInt256 previousHeaderHash = new UInt256(byteStream, ref startIndex);
+      UInt256 previousHeaderHash = new UInt256(buffer, ref startIndex);
 
-      UInt256 merkleRootHash = new UInt256(byteStream, ref startIndex);
+      UInt256 merkleRootHash = new UInt256(buffer, ref startIndex);
 
-      UInt32 unixTimeSeconds = BitConverter.ToUInt32(byteStream, startIndex);
+      UInt32 unixTimeSeconds = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
 
-      UInt32 nBits = BitConverter.ToUInt32(byteStream, startIndex);
+      UInt32 nBits = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
 
-      UInt32 nonce = BitConverter.ToUInt32(byteStream, startIndex);
+      UInt32 nonce = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
 
-      txCount = (int)VarInt.GetUInt64(byteStream, ref startIndex);
+      txCount = (int)VarInt.GetUInt64(buffer, ref startIndex);
 
       return new NetworkHeader(
         version, 

@@ -23,11 +23,14 @@ namespace BToken.Chaining
         List<BlockLocation> HeaderLocator;
         List<NetworkHeader> Headers = new List<NetworkHeader>();
 
+        Archiver.FileWriter FileWriter;
 
-        public SessionHeaderDownload(BlockchainController controller, Blockchain blockchain)
+
+        public SessionHeaderDownload(BlockchainController controller)
         {
           Controller = controller;
-          Blockchain = blockchain;
+          Blockchain = controller.Blockchain;
+          FileWriter = Controller.Archiver.GetWriter();
         }
 
         public override async Task StartAsync(BlockchainChannel channel)
@@ -39,26 +42,30 @@ namespace BToken.Chaining
 
         async Task DownloadHeadersAsync()
         {
-          await ReceiveHeaders().ConfigureAwait(false);
-
-          while (Headers.Any())
+          using (var archiveWriter = new HeaderArchiver.HeaderWriter(Controller.HeaderArchiver))
           {
-            InsertHeaders();
-
             await ReceiveHeaders().ConfigureAwait(false);
+
+            while (Headers.Any())
+            {
+              InsertHeaders(archiveWriter);
+
+              await ReceiveHeaders().ConfigureAwait(false);
+            }
           }
         }
         async Task ReceiveHeaders() => Headers = await GetHeadersAsync();
 
-        void InsertHeaders()
+        void InsertHeaders(HeaderArchiver.HeaderWriter archiveWriter)
         {
           foreach (NetworkHeader header in Headers)
           {
-            UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
+            UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
 
             try
             {
               Blockchain.InsertHeader(header, headerHash);
+              archiveWriter.StoreHeader(header);
             }
             catch (BlockchainException ex)
             {
@@ -88,7 +95,7 @@ namespace BToken.Chaining
           {
             foreach (NetworkHeader header in headers)
             {
-              UInt256 headerHash = new UInt256(Hashing.SHA256d(header.getBytes()));
+              UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
 
               try
               {
