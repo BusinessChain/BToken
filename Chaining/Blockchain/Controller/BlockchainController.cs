@@ -23,6 +23,7 @@ namespace BToken.Chaining
       const int CHANNELS_COUNT = 8;
 
       Archiver Archiver;
+      HeaderArchiver HeaderArchiver;
 
 
       public BlockchainController(Network network, Blockchain blockchain)
@@ -30,13 +31,15 @@ namespace BToken.Chaining
         Network = network;
         Blockchain = blockchain;
         Archiver = new Archiver(blockchain);
+        HeaderArchiver = new HeaderArchiver(this);
       }
 
       public async Task StartAsync()
       {
         Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
 
-        //Archiver.LoadHeaderchain();
+        LoadHeadersFromArchive();
+        
         BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
         await DownloadHeadersAsync(channelFirst);
 
@@ -58,6 +61,29 @@ namespace BToken.Chaining
           await channel.ConnectAsync();
           return channel;
         }).ToArray();
+      }
+
+      void LoadHeadersFromArchive()
+      {
+        try
+        {
+          using (var archiveReader = new HeaderArchiver.HeaderReader(HeaderArchiver))
+          {
+            NetworkHeader header = archiveReader.GetNextHeader();
+
+            while (header != null)
+            {
+              UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
+              Blockchain.InsertHeader(header, headerHash);
+
+              header = archiveReader.GetNextHeader();
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          Debug.WriteLine(ex.Message);
+        }
       }
 
       async Task DownloadHeadersAsync(BlockchainChannel channel)

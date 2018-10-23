@@ -61,7 +61,7 @@ namespace BToken.Chaining
 
         public BlockStore ArchiveBlock(NetworkBlock block)
         {
-          byte[] headerBytes = block.Header.getBytes();
+          byte[] headerBytes = block.Header.GetBytes();
           byte[] txCount = VarInt.GetBytes(block.TXCount).ToArray();
           int payloadLength = headerBytes.Length + txCount.Length + block.Payload.Length;
 

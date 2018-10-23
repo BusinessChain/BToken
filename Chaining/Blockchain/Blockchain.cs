@@ -25,7 +25,6 @@ namespace BToken.Chaining
     BlockPayloadLocator BlockLocator;
 
 
-
     public Blockchain(
       ChainBlock genesisBlock,
       Network network,
@@ -197,5 +196,6 @@ namespace BToken.Chaining
 
       return blocksUnassignedPayload;
     }
+
   }
 }

@@ -81,7 +81,7 @@
     <Compile Include="Bitcoin\BitcoinTX.cs" />
     <Compile Include="Chaining\Blockchain\Chain\BlockLocator.cs" />
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
-    <Compile Include="Chaining\Blockchain\Chain\ChainArchiver.cs" />
+    <Compile Include="Chaining\Blockchain\HeaderArchiver.cs" />
     <Compile Include="Chaining\Blockchain\CheckpointManager.cs" />
     <Compile Include="Chaining\Blockchain\Controller\Archiver\ArchiveLoader.cs" />
     <Compile Include="Chaining\Blockchain\Controller\Archiver\ArchiveShardLoader.cs" />

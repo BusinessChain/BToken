@@ -15,7 +15,6 @@ namespace BToken.Chaining
       ChainSocket Socket;
       
       BlockLocator Locator;
-      ChainArchiver Archiver;
 
       public ChainBlock Block;
       UInt256 Hash;
@@ -28,7 +27,7 @@ namespace BToken.Chaining
       {
         Blockchain = blockchain;
 
-        UInt256 blockGenesisHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.getBytes()));
+        UInt256 blockGenesisHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.GetBytes()));
 
         Socket = new ChainSocket(
           blockGenesis: genesisBlock,
@@ -207,6 +206,7 @@ namespace BToken.Chaining
         Socket.BlockTipHash = headerHash;
         Socket.BlockTipHeight++;
         Socket.AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
+
         UpdateLocator();
 
         if (block.BlockStore != null && Block.BlockStore != null)
@@ -243,7 +243,7 @@ namespace BToken.Chaining
         return Socket.SocketWeaker.Chain;
       }
 
-      public UInt256 GetHeaderHash(ChainBlock block)
+      UInt256 GetHeaderHash(ChainBlock block)
       {
         if (block == Socket.BlockTip)
         {
@@ -278,7 +278,7 @@ namespace BToken.Chaining
 
         return blocksUnassignedPayload;
       }
-
+      
       public uint GetHeightTip() => Socket.BlockTipHeight;
       public uint GetHeight() => GetHeightTip() - Depth;
       public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
