@@ -37,21 +37,21 @@ namespace BToken.Chaining
         {
           Channel = channel;
 
-          await DownloadHeadersAsync().ConfigureAwait(false);
-        }
-
-        async Task DownloadHeadersAsync()
-        {
           using (var archiveWriter = new HeaderArchiver.HeaderWriter())
           {
+            await DownloadHeadersAsync(archiveWriter).ConfigureAwait(false);
+          }
+        }
+
+        async Task DownloadHeadersAsync(HeaderArchiver.HeaderWriter archiveWriter)
+        {
+          await ReceiveHeaders().ConfigureAwait(false);
+
+          while (Headers.Any())
+          {
+            InsertHeaders(archiveWriter);
+
             await ReceiveHeaders().ConfigureAwait(false);
-
-            while (Headers.Any())
-            {
-              InsertHeaders(archiveWriter);
-
-              await ReceiveHeaders().ConfigureAwait(false);
-            }
           }
         }
         async Task ReceiveHeaders() => Headers = await GetHeadersAsync();
@@ -161,10 +161,11 @@ namespace BToken.Chaining
           await Channel.RequestHeadersAsync(HeaderLocator).ConfigureAwait(false);
 
           CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-          return await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
+          Network.HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
+          return headersMessage.Headers;
         }
 
-        async Task<List<NetworkHeader>> GetHeadersMessageAsync(CancellationToken cancellationToken)
+        async Task<Network.HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
         {
           while (true)
           {
@@ -173,7 +174,7 @@ namespace BToken.Chaining
 
             if (headersMessage != null)
             {
-              return headersMessage.Headers;
+              return headersMessage;
             }
           }
         }

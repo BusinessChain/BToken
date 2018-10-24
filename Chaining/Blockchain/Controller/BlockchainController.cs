@@ -21,7 +21,8 @@ namespace BToken.Chaining
       Blockchain Blockchain;
 
       const int CHANNELS_COUNT = 8;
-
+      List<BlockchainChannel> Channels = new List<BlockchainChannel>();
+      
       Archiver Archiver;
 
 
@@ -29,35 +30,41 @@ namespace BToken.Chaining
       {
         Network = network;
         Blockchain = blockchain;
+
+        for (int i = 0; i < CHANNELS_COUNT; i++)
+        {
+          Channels.Add(new BlockchainChannel(this));
+        }
+
         Archiver = new Archiver(blockchain);
       }
 
       public async Task StartAsync()
       {
-        Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
+        Task<BlockchainChannel>[] connectChannelsTasks = ConnectChannelsAsync();
 
         LoadHeadersFromArchive();
         
-        BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
-        await DownloadHeadersAsync(channelFirst);
+        BlockchainChannel channelConnectedFirst = await await Task.WhenAny(connectChannelsTasks);
+        await DownloadHeadersAsync(channelConnectedFirst);
 
-        //BlockchainChannel[] channels = await Task.WhenAll(createChannelsTasks);
-        //await DownloadBlocksAsync(channels);
-
-        //StartListeningToNetworkAsync();
+        StartListeners(connectChannelsTasks);
       }
-      Task<BlockchainChannel>[] CreateChannels()
+      Task<BlockchainChannel>[] ConnectChannelsAsync()
       {
-        var channelsTasks = new List<BlockchainChannel>();
-        for (int i = 0; i < CHANNELS_COUNT; i++)
-        {
-          channelsTasks.Add(new BlockchainChannel(this));
-        }
-
-        return channelsTasks.Select(async channel =>
+        return Channels.Select(async channel =>
         {
           await channel.ConnectAsync();
           return channel;
+        }).ToArray();
+
+      }
+      void StartListeners(Task<BlockchainChannel>[] createChannelsTasks)
+      {
+        createChannelsTasks.Select(async createChannelsTask =>
+        {
+          BlockchainChannel channel = await createChannelsTask;
+          await channel.StartMessageListenerAsync();
         }).ToArray();
       }
 

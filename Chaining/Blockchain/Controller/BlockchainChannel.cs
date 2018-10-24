@@ -28,21 +28,13 @@ namespace BToken.Chaining
           Controller = controller;
         }
 
-        //public async Task StartMessageListenerAsync()
-        //{
-        //  try
-        //  {
-        //    while (true)
-        //    {
-        //      await ProcessNextMessageAsync();
-        //    }
-        //  }
-        //  catch (Exception ex)
-        //  {
-        //    BlockchainChannel channel = await Controller.RenewChannelAsync(this);
-        //    Task startChannelTask = channel.StartMessageListenerAsync();
-        //  }
-        //}
+        public async Task StartMessageListenerAsync()
+        {
+          while (true)
+          {
+            await ProcessNextMessageAsync();
+          }
+        }
 
         public async Task ExecuteSessionAsync(BlockchainSession session)
         {
@@ -73,7 +65,7 @@ namespace BToken.Chaining
         public async Task ConnectAsync()
         {
           uint blockchainHeight = Controller.Blockchain.GetHeight();
-          Buffer = await Controller.Network.CreateBlockchainChannelAsync(blockchainHeight).ConfigureAwait(false);
+          Buffer = await Controller.Network.CreateBlockchainChannelAsync(blockchainHeight);
         }
 
         void Disconnect()
