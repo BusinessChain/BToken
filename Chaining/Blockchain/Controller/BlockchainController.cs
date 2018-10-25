@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -21,7 +21,8 @@ namespace BToken.Chaining
       Blockchain Blockchain;
 
       const int CHANNELS_COUNT = 8;
-
+      List<BlockchainChannel> Channels = new List<BlockchainChannel>();
+      
       Archiver Archiver;
 
 
@@ -29,35 +30,40 @@ namespace BToken.Chaining
       {
         Network = network;
         Blockchain = blockchain;
+
+        for (int i = 0; i < CHANNELS_COUNT; i++)
+        {
+          Channels.Add(new BlockchainChannel(this));
+        }
+
         Archiver = new Archiver(blockchain);
       }
 
       public async Task StartAsync()
       {
-        Task<BlockchainChannel>[] createChannelsTasks = CreateChannels();
+        Task<BlockchainChannel>[] connectChannelsTasks = ConnectChannelsAsync();
 
         LoadHeadersFromArchive();
         
-        BlockchainChannel channelFirst = await await Task.WhenAny(createChannelsTasks);
-        await DownloadHeadersAsync(channelFirst);
+        BlockchainChannel channelConnectedFirst = await await Task.WhenAny(connectChannelsTasks);
+        await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(this));
 
-        //BlockchainChannel[] channels = await Task.WhenAll(createChannelsTasks);
-        //await DownloadBlocksAsync(channels);
-
-        //StartListeningToNetworkAsync();
+        StartListeners(connectChannelsTasks);
       }
-      Task<BlockchainChannel>[] CreateChannels()
+      Task<BlockchainChannel>[] ConnectChannelsAsync()
       {
-        var channelsTasks = new List<BlockchainChannel>();
-        for (int i = 0; i < CHANNELS_COUNT; i++)
-        {
-          channelsTasks.Add(new BlockchainChannel(this));
-        }
-
-        return channelsTasks.Select(async channel =>
+        return Channels.Select(async channel =>
         {
           await channel.ConnectAsync();
           return channel;
+        }).ToArray();
+      }
+      void StartListeners(Task<BlockchainChannel>[] createChannelsTasks)
+      {
+        createChannelsTasks.Select(async createChannelsTask =>
+        {
+          BlockchainChannel channel = await createChannelsTask;
+          Task listenerTask = channel.StartMessageListenerAsync();
         }).ToArray();
       }
 
@@ -71,8 +77,7 @@ namespace BToken.Chaining
 
             while (header != null)
             {
-              UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
-              Blockchain.InsertHeader(header, headerHash);
+              Blockchain.InsertHeader(header);
 
               header = archiveReader.GetNextHeader();
             }
@@ -83,12 +88,7 @@ namespace BToken.Chaining
           Debug.WriteLine(ex.Message);
         }
       }
-
-      async Task DownloadHeadersAsync(BlockchainChannel channel)
-      {
-        await channel.ExecuteSessionAsync(new SessionHeaderDownload(this));
-      }
-
+      
       async Task DownloadBlocksAsync(BlockchainChannel[] channels)
       {
         Task[] downloadBlocksTask = channels.Select(async channel =>

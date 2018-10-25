@@ -60,12 +60,9 @@ namespace BToken.Chaining
         {
           foreach (NetworkHeader header in Headers)
           {
-            UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
-
             try
             {
-              Blockchain.InsertHeader(header, headerHash);
-              archiveWriter.StoreHeader(header);
+              Blockchain.InsertHeader(header);
             }
             catch (BlockchainException ex)
             {
@@ -82,9 +79,10 @@ namespace BToken.Chaining
                   throw ex;
               }
             }
+
+            archiveWriter.StoreHeader(header);
           }
         }
-
         async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
         {
           List<NetworkHeader> headers = await GetHeadersAsync();
@@ -95,11 +93,9 @@ namespace BToken.Chaining
           {
             foreach (NetworkHeader header in headers)
             {
-              UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
-
               try
               {
-                Blockchain.InsertHeader(header, headerHash);
+                Blockchain.InsertHeader(header);
               }
               catch (BlockchainException ex)
               {
@@ -161,10 +157,11 @@ namespace BToken.Chaining
           await Channel.RequestHeadersAsync(HeaderLocator).ConfigureAwait(false);
 
           CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-          return await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
+          Network.HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
+          return headersMessage.Headers;
         }
 
-        async Task<List<NetworkHeader>> GetHeadersMessageAsync(CancellationToken cancellationToken)
+        async Task<Network.HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
         {
           while (true)
           {
@@ -173,7 +170,7 @@ namespace BToken.Chaining
 
             if (headersMessage != null)
             {
-              return headersMessage.Headers;
+              return headersMessage;
             }
           }
         }
