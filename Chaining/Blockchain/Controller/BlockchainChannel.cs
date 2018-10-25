@@ -85,7 +85,7 @@ namespace BToken.Chaining
               break;
 
             case Network.HeadersMessage headersMessage:
-              ProcessHeaderMessage(headersMessage);
+              ProcessHeadersMessage(headersMessage);
               break;
 
             case Network.BlockMessage blockMessage:
@@ -123,25 +123,34 @@ namespace BToken.Chaining
           //}
         }
 
-        void ProcessHeaderMessage(Network.HeadersMessage headersMessage)
+        void ProcessHeadersMessage(Network.HeadersMessage headersMessage)
         {
-          List<NetworkHeader> headers = headersMessage.Headers;
-          // oder ein Lock machen?
-          try
+          foreach (NetworkHeader header in headersMessage.Headers)
           {
-            using (var archiveWriter = new HeaderArchiver.HeaderWriter())
+            try
             {
-              Controller.InsertHeaders(headers, archiveWriter);
+              Controller.Blockchain.InsertHeader(header);
             }
-          }
-          catch(IOException ex)
-          {
-            if(ex.Message.Contains("is being used by another process"))
+            catch (BlockchainException ex)
             {
-              return;
+              switch (ex.ErrorCode)
+              {
+                case BlockCode.ORPHAN:
+                  //await ProcessOrphanSessionAsync(headerHash);
+                  return;
+
+                case BlockCode.DUPLICATE:
+                  return;
+
+                default:
+                  throw ex;
+              }
             }
 
-            throw ex;
+            using (var archiveWriter = new HeaderArchiver.HeaderWriter())
+            {
+              archiveWriter.StoreHeader(header);
+            }
           }
         }
 

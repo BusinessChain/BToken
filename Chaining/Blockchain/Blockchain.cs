@@ -24,6 +24,8 @@ namespace BToken.Chaining
     Chain MainChain;
     BlockPayloadLocator BlockLocator;
 
+    private readonly object lockBlockInsertion = new object();
+
 
     public Blockchain(
       ChainBlock genesisBlock,
@@ -51,44 +53,7 @@ namespace BToken.Chaining
     }
 
     public List<BlockLocation> GetBlockLocations() => MainChain.GetBlockLocations();
-
-    //public static Blockchain Merge(Blockchain chain1, Blockchain chain2)
-    //{
-    //  try
-    //  {
-    //    //InsertBlock funzt nur für einzelne Blöcke
-    //    chain1.InsertBlock(chain2.GenesisBlock, chain2.GenesisBlockHash);
-
-    //    // Deshalb muss hier entweder iterativ alle Blöcke in den anderen Strang eingflügt werden
-    //    // Oder aber man schreibt einen speziellen Chainmerger was zu bevorzugen ist.
-
-    //    return chain1;
-    //  }
-    //  catch (BlockchainException ex)
-    //  {
-    //    if (ex.ErrorCode == BlockCode.ORPHAN)
-    //    {
-    //      chain2.InsertBlock(chain1.GenesisBlock, chain1.GenesisBlockHash);
-    //      return chain2;
-    //    }
-
-    //    throw ex;
-    //  }
-    //}
-
-    //public ChainBlock GetBlock(UInt256 hash)
-    //{
-    //  try
-    //  {
-    //    Chain chain = GetChain(hash);
-    //    return chain.Block;
-    //  }
-    //  catch (BlockchainException)
-    //  {
-    //    return null;
-    //  }
-    //}
-
+    
     Chain GetChain(UInt256 hash)
     {
       Chain chain = MainChain;
@@ -109,16 +74,20 @@ namespace BToken.Chaining
       }
     }
 
-    void InsertHeader(NetworkHeader header, UInt256 headerHash)
+    void InsertHeader(NetworkHeader header)
     {
-      var chainBlock = new ChainBlock(header);
-      InsertBlock(chainBlock, headerHash);
+      InsertBlock(new ChainBlock(header));
     }
-    void InsertBlock(ChainBlock chainBlock, UInt256 headerHash)
+    void InsertBlock(ChainBlock chainBlock)
     {
-      Chain probeAtBlockPrevious = GetChain(chainBlock.Header.HashPrevious);
-      ValidateCheckpoint(probeAtBlockPrevious, headerHash);
-      probeAtBlockPrevious.InsertBlock(chainBlock, headerHash);
+      UInt256 headerHash = new UInt256(Hashing.SHA256d(chainBlock.Header.GetBytes()));
+
+      lock (lockBlockInsertion)
+      {
+        Chain chainAtBlockPrevious = GetChain(chainBlock.Header.HashPrevious);
+        ValidateCheckpoint(chainAtBlockPrevious, headerHash);
+        chainAtBlockPrevious.InsertBlock(chainBlock, headerHash);
+      }
     }
     void ValidateCheckpoint(Chain probe, UInt256 headerHash)
     {
@@ -137,10 +106,10 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
-    void InsertBlock(NetworkBlock networkBlock, UInt256 headerHash, BlockStore payloadStoreID)
+    void InsertBlock(NetworkBlock networkBlock, BlockStore payloadStoreID)
     {
       var chainBlock = new ChainBlock(networkBlock.Header);
-      InsertBlock(chainBlock, headerHash);
+      InsertBlock(chainBlock);
       InsertPayload(chainBlock, networkBlock.Payload, payloadStoreID);
     }
     void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockStore payloadStoreID)

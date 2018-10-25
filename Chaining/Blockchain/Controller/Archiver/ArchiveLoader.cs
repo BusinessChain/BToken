@@ -33,12 +33,10 @@ namespace BToken.Chaining
 
           while (block != null)
           {
-            UInt256 headerHash = new UInt256(Hashing.SHA256d(block.Header.GetBytes()));
-
             try
             {
               Debug.WriteLine("insert block: "+ Blockchain.GetHeight());
-              Blockchain.InsertBlock(block, headerHash, blockStore);
+              Blockchain.InsertBlock(block, blockStore);
               shardLoader.DispatchBlockNext();
             }
             catch (BlockchainException ex)

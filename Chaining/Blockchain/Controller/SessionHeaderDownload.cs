@@ -38,7 +38,6 @@ namespace BToken.Chaining
           Channel = channel;
 
           await DownloadHeadersAsync().ConfigureAwait(false);
-          
         }
 
         async Task DownloadHeadersAsync()
@@ -49,14 +48,41 @@ namespace BToken.Chaining
 
             while (Headers.Any())
             {
-              Controller.InsertHeaders(Headers, archiveWriter);
+              InsertHeaders(archiveWriter);
 
               await ReceiveHeaders().ConfigureAwait(false);
             }
           }
         }
         async Task ReceiveHeaders() => Headers = await GetHeadersAsync();
-        
+
+        void InsertHeaders(HeaderArchiver.HeaderWriter archiveWriter)
+        {
+          foreach (NetworkHeader header in Headers)
+          {
+            try
+            {
+              Blockchain.InsertHeader(header);
+            }
+            catch (BlockchainException ex)
+            {
+              switch (ex.ErrorCode)
+              {
+                case BlockCode.ORPHAN:
+                  //await ProcessOrphanSessionAsync(headerHash);
+                  return;
+
+                case BlockCode.DUPLICATE:
+                  return;
+
+                default:
+                  throw ex;
+              }
+            }
+
+            archiveWriter.StoreHeader(header);
+          }
+        }
         async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
         {
           List<NetworkHeader> headers = await GetHeadersAsync();
@@ -67,11 +93,9 @@ namespace BToken.Chaining
           {
             foreach (NetworkHeader header in headers)
             {
-              UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
-
               try
               {
-                Blockchain.InsertHeader(header, headerHash);
+                Blockchain.InsertHeader(header);
               }
               catch (BlockchainException ex)
               {
