@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -85,7 +85,7 @@ namespace BToken.Chaining
               break;
 
             case Network.HeadersMessage headersMessage:
-              //await ExecuteSessionAsync(new SessionHeaderDownload(headersMessage));
+              ProcessHeaderMessage(headersMessage);
               break;
 
             case Network.BlockMessage blockMessage:
@@ -121,6 +121,28 @@ namespace BToken.Chaining
           //    BlameProtocolError();
           //  }
           //}
+        }
+
+        void ProcessHeaderMessage(Network.HeadersMessage headersMessage)
+        {
+          List<NetworkHeader> headers = headersMessage.Headers;
+          // oder ein Lock machen?
+          try
+          {
+            using (var archiveWriter = new HeaderArchiver.HeaderWriter())
+            {
+              Controller.InsertHeaders(headers, archiveWriter);
+            }
+          }
+          catch(IOException ex)
+          {
+            if(ex.Message.Contains("is being used by another process"))
+            {
+              return;
+            }
+
+            throw ex;
+          }
         }
 
         public async Task RequestHeadersAsync(List<BlockLocation> headerLocator) => await Controller.Network.GetHeadersAsync(Buffer, headerLocator.Select(b => b.Hash).ToList());

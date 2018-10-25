@@ -37,54 +37,26 @@ namespace BToken.Chaining
         {
           Channel = channel;
 
-          using (var archiveWriter = new HeaderArchiver.HeaderWriter())
-          {
-            await DownloadHeadersAsync(archiveWriter).ConfigureAwait(false);
-          }
+          await DownloadHeadersAsync().ConfigureAwait(false);
+          
         }
 
-        async Task DownloadHeadersAsync(HeaderArchiver.HeaderWriter archiveWriter)
+        async Task DownloadHeadersAsync()
         {
-          await ReceiveHeaders().ConfigureAwait(false);
-
-          while (Headers.Any())
+          using (var archiveWriter = new HeaderArchiver.HeaderWriter())
           {
-            InsertHeaders(archiveWriter);
-
             await ReceiveHeaders().ConfigureAwait(false);
+
+            while (Headers.Any())
+            {
+              Controller.InsertHeaders(Headers, archiveWriter);
+
+              await ReceiveHeaders().ConfigureAwait(false);
+            }
           }
         }
         async Task ReceiveHeaders() => Headers = await GetHeadersAsync();
-
-        void InsertHeaders(HeaderArchiver.HeaderWriter archiveWriter)
-        {
-          foreach (NetworkHeader header in Headers)
-          {
-            UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
-
-            try
-            {
-              Blockchain.InsertHeader(header, headerHash);
-              archiveWriter.StoreHeader(header);
-            }
-            catch (BlockchainException ex)
-            {
-              switch (ex.ErrorCode)
-              {
-                case BlockCode.ORPHAN:
-                  //await ProcessOrphanSessionAsync(headerHash);
-                  return;
-
-                case BlockCode.DUPLICATE:
-                  return;
-
-                default:
-                  throw ex;
-              }
-            }
-          }
-        }
-
+        
         async Task ProcessOrphanSessionAsync(UInt256 headerHashOrphan)
         {
           List<NetworkHeader> headers = await GetHeadersAsync();

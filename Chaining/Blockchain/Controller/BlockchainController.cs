@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -46,7 +46,7 @@ namespace BToken.Chaining
         LoadHeadersFromArchive();
         
         BlockchainChannel channelConnectedFirst = await await Task.WhenAny(connectChannelsTasks);
-        await DownloadHeadersAsync(channelConnectedFirst);
+        await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(this));
 
         StartListeners(connectChannelsTasks);
       }
@@ -57,14 +57,13 @@ namespace BToken.Chaining
           await channel.ConnectAsync();
           return channel;
         }).ToArray();
-
       }
       void StartListeners(Task<BlockchainChannel>[] createChannelsTasks)
       {
         createChannelsTasks.Select(async createChannelsTask =>
         {
           BlockchainChannel channel = await createChannelsTask;
-          await channel.StartMessageListenerAsync();
+          Task listenerTask = channel.StartMessageListenerAsync();
         }).ToArray();
       }
 
@@ -90,12 +89,7 @@ namespace BToken.Chaining
           Debug.WriteLine(ex.Message);
         }
       }
-
-      async Task DownloadHeadersAsync(BlockchainChannel channel)
-      {
-        await channel.ExecuteSessionAsync(new SessionHeaderDownload(this));
-      }
-
+      
       async Task DownloadBlocksAsync(BlockchainChannel[] channels)
       {
         Task[] downloadBlocksTask = channels.Select(async channel =>
@@ -105,7 +99,35 @@ namespace BToken.Chaining
 
         await Task.WhenAll(downloadBlocksTask);
       }
+      
+      void InsertHeaders(List<NetworkHeader> headers, HeaderArchiver.HeaderWriter archiveWriter)
+      {
+        foreach (NetworkHeader header in headers)
+        {
+          UInt256 headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
 
+          try
+          {
+            Blockchain.InsertHeader(header, headerHash);
+            archiveWriter.StoreHeader(header);
+          }
+          catch (BlockchainException ex)
+          {
+            switch (ex.ErrorCode)
+            {
+              case BlockCode.ORPHAN:
+                //await ProcessOrphanSessionAsync(headerHash);
+                return;
+
+              case BlockCode.DUPLICATE:
+                return;
+
+              default:
+                throw ex;
+            }
+          }
+        }
+      }
     }
   }
 }
