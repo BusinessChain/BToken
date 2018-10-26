@@ -26,9 +26,9 @@ namespace BToken.Networking
 
       public VersionMessage(byte[] payload) : base("version", payload)
       {
-        deserializePayload();
+        DeserializePayload();
       }
-      void deserializePayload()
+      void DeserializePayload()
       {
         int startIndex = 0;
 
@@ -105,10 +105,10 @@ namespace BToken.Networking
         versionPayload.AddRange(BitConverter.GetBytes(UnixTimeSeconds));
         versionPayload.AddRange(BitConverter.GetBytes(NetworkServicesRemote));
         versionPayload.AddRange(IPAddressRemote.GetAddressBytes());
-        versionPayload.AddRange(GetBytesBigEndian(PortRemote));
+        versionPayload.AddRange(GetBytes(PortRemote));
         versionPayload.AddRange(BitConverter.GetBytes(NetworkServicesLocal));
         versionPayload.AddRange(IPAddressLocal.GetAddressBytes());
-        versionPayload.AddRange(GetBytesBigEndian(PortLocal));
+        versionPayload.AddRange(GetBytes(PortLocal));
         versionPayload.AddRange(BitConverter.GetBytes(Nonce));
         versionPayload.AddRange(VarString.getBytes(UserAgent));
         versionPayload.AddRange(BitConverter.GetBytes(BlockchainHeight));
@@ -116,7 +116,7 @@ namespace BToken.Networking
 
         Payload = versionPayload.ToArray();
       }
-      byte[] GetBytesBigEndian(UInt16 uint16)
+      byte[] GetBytes(UInt16 uint16)
       {
         byte[] byteArray = BitConverter.GetBytes(uint16);
         Array.Reverse(byteArray);

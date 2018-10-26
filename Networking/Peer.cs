@@ -83,6 +83,9 @@ namespace BToken.Networking
             case "ping":
               await ProcessPingMessageAsync(networkMessage).ConfigureAwait(false);
               break;
+            case "addr":
+              ProcessAddressMessage(networkMessage);
+              break;
             case "sendheaders":
               await ProcessSendHeadersMessageAsync(networkMessage).ConfigureAwait(false);
               break;
@@ -99,6 +102,10 @@ namespace BToken.Networking
               break;
           }
         }
+      }
+      void ProcessAddressMessage(NetworkMessage networkMessage)
+      {
+        AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
       {
