@@ -34,7 +34,7 @@ namespace BToken.Bitcoin
 
     public async Task StartAsync()
     {
-      await Network.StartAsync().ConfigureAwait(false);
+      Network.Start();
       await Blockchain.StartAsync().ConfigureAwait(false);
       //await UTXO.startAsync();
     }

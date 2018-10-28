@@ -26,7 +26,7 @@ namespace BToken.Networking
       public BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
       
       public uint PenaltyScore { get; private set; }
-      
+
 
 
       public Peer(IPEndPoint ipEndPoint, Network network)
@@ -35,6 +35,16 @@ namespace BToken.Networking
 
         ConnectionManager = new PeerHandshakeManager(this);
         IPEndPoint = ipEndPoint;
+      }
+      public Peer(TcpClient tcpClient, Network network)
+      {
+        Network = network;
+
+        TcpClient = tcpClient;
+        NetworkMessageStreamer = new MessageStreamer(TcpClient.GetStream());
+
+        ConnectionManager = new PeerHandshakeManager(this);
+        IPEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
       }
 
 
@@ -152,7 +162,7 @@ namespace BToken.Networking
         NetworkMessageBufferBlockchain.Post(null);
         NetworkMessageBufferUTXO.Post(null);
 
-        Network.Peers.Remove(this);
+        Network.PeersOutbound.Remove(this);
       }
 
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));

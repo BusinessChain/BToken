@@ -20,9 +20,11 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      const int CHANNELS_COUNT = 8;
-      List<BlockchainChannel> Channels = new List<BlockchainChannel>();
-      
+      const int CHANNELS_COUNT_OUTBOUND = 1;
+      List<BlockchainChannel> ChannelsOutbound = new List<BlockchainChannel>();
+
+      List<BlockchainChannel> ChannelsInbound = new List<BlockchainChannel>();
+
       Archiver Archiver;
 
 
@@ -31,9 +33,9 @@ namespace BToken.Chaining
         Network = network;
         Blockchain = blockchain;
 
-        for (int i = 0; i < CHANNELS_COUNT; i++)
+        for (int i = 0; i < CHANNELS_COUNT_OUTBOUND; i++)
         {
-          Channels.Add(new BlockchainChannel(this));
+          ChannelsOutbound.Add(new BlockchainChannel(this));
         }
 
         Archiver = new Archiver(blockchain);
@@ -48,17 +50,28 @@ namespace BToken.Chaining
         BlockchainChannel channelConnectedFirst = await await Task.WhenAny(connectChannelsTasks);
         await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(this));
 
-        StartListeners(connectChannelsTasks);
+        StartMessageListeners(connectChannelsTasks);
+
+        Task inboundChannelListenerTask = StartInboundChannelListenerAsync();
+      }
+      async Task StartInboundChannelListenerAsync()
+      {
+        while(ChannelsInbound.Count <= Network.PEERS_COUNT_INBOUND)
+        {
+          var channelInbound = new BlockchainChannel(this);
+          await channelInbound.ConnectInboundAsync();
+          ChannelsInbound.Add(channelInbound);
+        }
       }
       Task<BlockchainChannel>[] ConnectChannelsAsync()
       {
-        return Channels.Select(async channel =>
+        return ChannelsOutbound.Select(async channel =>
         {
           await channel.ConnectAsync();
           return channel;
         }).ToArray();
       }
-      void StartListeners(Task<BlockchainChannel>[] createChannelsTasks)
+      void StartMessageListeners(Task<BlockchainChannel>[] createChannelsTasks)
       {
         createChannelsTasks.Select(async createChannelsTask =>
         {
