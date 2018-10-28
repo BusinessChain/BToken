@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Threading;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
@@ -20,16 +20,19 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NONE; 
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-    static UInt64 Nonce;
-
-    NetworkAddressPool AddressPool;
 
     List<Peer> Peers = new List<Peer>();
+
+    static UInt64 Nonce;
+    NetworkAddressPool AddressPool;
+    TcpListener TcpListener;
 
     public Network()
     {
       Nonce = createNonce();
       AddressPool = new NetworkAddressPool();
+
+      CreateTcpListener();
     }
     static ulong createNonce()
     {
@@ -38,6 +41,39 @@ namespace BToken.Networking
       ulong number = (ulong)rnd.Next();
       number = number << 32;
       return number |= (uint)rnd.Next();
+    }
+    void CreateTcpListener()
+    {
+      try
+      {
+        TcpListener = new TcpListener(IPAddress.Any, Port);
+      }
+      catch (Exception ex)
+      {
+        Debug.WriteLine(ex.ToString());
+      }
+    }
+
+    public async Task StartAsync()
+    {
+      Task startTcpListenerTask = StartTcpListenerAsync();
+    }
+    async Task StartTcpListenerAsync()
+    {
+      TcpListener.Start();
+
+      while(true)
+      {
+        try
+        {
+          TcpClient client = await TcpListener.AcceptTcpClientAsync();
+          Debug.WriteLine("received inbound request from " + client.Client.RemoteEndPoint.ToString());
+        }
+        catch (Exception ex)
+        {
+          Debug.WriteLine(ex.Message);
+        }
+      }
     }
 
     public async Task<BufferBlock<NetworkMessage>> CreateBlockchainChannelAsync(uint blockheightLocal)
