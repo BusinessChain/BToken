@@ -21,13 +21,13 @@ namespace BToken.Chaining
         public uint BlockTipHeight;
         public double AccumulatedDifficulty;
 
-        public ChainBlock BlockGenesis { get; private set; }
+        public ChainBlock BlockGenesis;
         public ChainBlock BlockHighestAssigned;
 
-        public Chain Chain { get; private set; }
+        public Chain Chain;
 
-        ChainSocket SocketStronger;
-        public ChainSocket SocketWeaker { get; private set; }
+        public ChainSocket SocketStronger;
+        public ChainSocket SocketWeaker;
 
 
         public ChainSocket(
@@ -62,7 +62,19 @@ namespace BToken.Chaining
 
           Chain = chain;
         }
-                
+        
+        public ChainSocket GetStrongestSocket()
+        {
+          if(IsStrongest())
+          {
+            return this;
+          }
+          else
+          {
+            return SocketStronger.GetStrongestSocket();
+          }
+        }
+
         public void InsertSocketRecursive(ChainSocket socket)
         {
           if (socket.IsStrongerThan(SocketWeaker))
@@ -74,6 +86,20 @@ namespace BToken.Chaining
             SocketWeaker.InsertSocketRecursive(socket);
           }
         }
+        
+        public bool IsStrongerThan(ChainSocket socket)
+        {
+          if (socket == null)
+          {
+            return true;
+          }
+          return AccumulatedDifficulty > socket.AccumulatedDifficulty;
+        }
+        public bool IsStrongest()
+        {
+          return SocketStronger == null;
+        }
+
         public void ConnectAsSocketWeaker(ChainSocket socket)
         {
           if (socket != null)
@@ -89,7 +115,6 @@ namespace BToken.Chaining
 
           SocketWeaker = socket;
         }
-
         public void Disconnect()
         {
           if (SocketStronger != null)
@@ -101,16 +126,6 @@ namespace BToken.Chaining
             SocketWeaker.SocketStronger = SocketStronger;
           }
         }
-
-        public bool IsStrongerThan(ChainSocket socket)
-        {
-          if (socket == null)
-          {
-            return true;
-          }
-          return AccumulatedDifficulty > socket.AccumulatedDifficulty;
-        }
-        
       }
     }
   }

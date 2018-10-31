@@ -36,9 +36,7 @@ namespace BToken.Chaining
       Checkpoints = new CheckpointManager(checkpoints);
 
       Controller = new BlockchainController(network, this);
-      MainChain = new Chain(
-        blockchain: this,
-        genesisBlock: genesisBlock);
+      MainChain = new Chain(genesisBlock);
 
       //BlockLocator = new BlockPayloadLocator(this);
     }
@@ -121,20 +119,7 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
-
-    void InsertChain(Chain chain)
-    {
-      if (chain.IsStrongerThan(MainChain))
-      {
-        chain.ConnectAsWeakerChain(MainChain);
-        MainChain = chain;
-      }
-      else
-      {
-        MainChain.InsertChainRecursive(chain);
-      }
-    }
-
+    
     uint GetHeight() => MainChain.GetHeightTip();
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
