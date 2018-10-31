@@ -74,12 +74,7 @@ namespace BToken.Networking
           {
             rejectionReason = string.Format("Duplicate Nonce '{0}'.", Nonce);
           }
-
-          if ((RelayOptionFlags)versionMessageRemote.RelayOption != RelayOptionFlags.SendTxStandard)
-          {
-            rejectionReason = string.Format("We only support RelayOption = '{0}'.", RelayOptionFlags.SendTxStandard);
-          }
-
+          
         }
 
         public bool isHandshakeCompleted()

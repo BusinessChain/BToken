@@ -16,7 +16,7 @@ namespace BToken.Networking
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
     const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NETWORK;
-    const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NONE;
+    const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
 

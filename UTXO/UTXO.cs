@@ -9,7 +9,7 @@ using BToken.Networking;
 
 namespace BToken.Accounting
 {
-  class UnspentTXOutputs
+  public class UnspentTXOutputs
   {
     Network NetworkAdapter;
     Blockchain Blockchain;

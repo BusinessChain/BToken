@@ -16,13 +16,12 @@ namespace BToken.Chaining
 
   public partial class Blockchain
   {
-    BlockchainController Controller;
-    IBlockPayloadParser PayloadParser;
-    
+    IPayloadParser PayloadParser;
     CheckpointManager Checkpoints;
 
+    BlockchainController Controller;
     Chain MainChain;
-    BlockPayloadLocator BlockLocator;
+    //BlockPayloadLocator BlockLocator;
 
     private readonly object lockBlockInsertion = new object();
 
@@ -30,21 +29,18 @@ namespace BToken.Chaining
     public Blockchain(
       ChainBlock genesisBlock,
       Network network,
-      IBlockPayloadParser payloadParser,
+      IPayloadParser payloadParser,
       List<BlockLocation> checkpoints)
     {
-      Controller = new BlockchainController(network, this);
-
       PayloadParser = payloadParser;
-
       Checkpoints = new CheckpointManager(checkpoints);
 
+      Controller = new BlockchainController(network, this);
       MainChain = new Chain(
         blockchain: this,
         genesisBlock: genesisBlock);
 
-      BlockLocator = new BlockPayloadLocator(this);
-
+      //BlockLocator = new BlockPayloadLocator(this);
     }
 
     public async Task StartAsync()
