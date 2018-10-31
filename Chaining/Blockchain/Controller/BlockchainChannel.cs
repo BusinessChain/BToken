@@ -22,7 +22,6 @@ namespace BToken.Chaining
         public BufferBlock<NetworkMessage> Buffer;
 
 
-        public BlockchainChannel() { }
         public BlockchainChannel(BlockchainController controller)
         {
           Controller = controller;
@@ -66,6 +65,11 @@ namespace BToken.Chaining
         {
           uint blockchainHeight = Controller.Blockchain.GetHeight();
           Buffer = await Controller.Network.CreateBlockchainChannelAsync(blockchainHeight);
+        }
+        public async Task ConnectInboundAsync()
+        {
+          uint blockchainHeight = Controller.Blockchain.GetHeight();
+          Buffer = await Controller.Network.AcceptInboundBlockchainChannelAsync(blockchainHeight);
         }
 
         void Disconnect()
