@@ -51,14 +51,14 @@ namespace BToken.Chaining
     
     Chain GetChain(UInt256 hash)
     {
-      if (MainChain.Probe.GetAtBlock(hash))
+      if (MainChain.Probe.GotoBlock(hash))
       {
         return MainChain;
       }
 
       foreach(Chain chain in SecondaryChains)
       {
-        if (chain.Probe.GetAtBlock(hash))
+        if (chain.Probe.GotoBlock(hash))
         {
           return chain;
         }
@@ -77,9 +77,25 @@ namespace BToken.Chaining
 
       lock (lockBlockInsertion)
       {
-        Chain chainAtBlockPrevious = GetChain(chainBlock.Header.HashPrevious);
-        ValidateCheckpoint(chainAtBlockPrevious, headerHash);
-        chainAtBlockPrevious.InsertBlock(chainBlock, headerHash);
+        // create the probe on the fly so this becomes thread safe
+        Chain chain = GetChain(chainBlock.Header.HashPrevious);
+        
+        ValidateCheckpoint(chain, headerHash);
+
+        if (chain.Probe.IsTip())
+        {
+          chain.Socket.ExtendChain(chainBlock, headerHash);
+        }
+        else
+        {
+          chain = chain.Probe.ForkChain(chainBlock, headerHash);
+          SecondaryChains.Add(chain);
+        }
+
+        if (chain.IsStrongerThan(MainChain))
+        {
+          MainChain.ReorganizeChain(chain);
+        }
       }
     }
     void ValidateCheckpoint(Chain chain, UInt256 headerHash)

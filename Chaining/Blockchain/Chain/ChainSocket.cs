@@ -14,7 +14,7 @@ namespace BToken.Chaining
   {
     partial class Chain
     {
-      class ChainSocket
+      public class ChainSocket
       {
         public ChainBlock BlockTip;
         public UInt256 BlockTipHash;
@@ -85,6 +85,14 @@ namespace BToken.Chaining
           {
             SocketWeaker.InsertSocketRecursive(socket);
           }
+        }
+
+        public void ExtendChain(ChainBlock block, UInt256 headerHash)
+        {
+          BlockTip = block;
+          BlockTipHash = headerHash;
+          BlockTipHeight++;
+          AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
         }
 
         public bool IsStrongerThan(ChainSocket socket)
