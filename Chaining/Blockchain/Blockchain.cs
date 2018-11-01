@@ -51,14 +51,14 @@ namespace BToken.Chaining
     
     Chain GetChain(UInt256 hash)
     {
-      if (MainChain.GetAtBlock(hash))
+      if (MainChain.Probe.GetAtBlock(hash))
       {
         return MainChain;
       }
 
       foreach(Chain chain in SecondaryChains)
       {
-        if (chain.GetAtBlock(hash))
+        if (chain.Probe.GetAtBlock(hash))
         {
           return chain;
         }
@@ -84,9 +84,9 @@ namespace BToken.Chaining
     }
     void ValidateCheckpoint(Chain chain, UInt256 headerHash)
     {
-      uint nextBlockHeight = chain.GetHeight() + 1;
+      uint nextBlockHeight = chain.Probe.GetHeight() + 1;
 
-      bool chainLongerThanHighestCheckpoint = chain.GetHeightTip() >= Checkpoints.HighestCheckpointHight;
+      bool chainLongerThanHighestCheckpoint = chain.GetHeight() >= Checkpoints.HighestCheckpointHight;
       bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > Checkpoints.HighestCheckpointHight);
 
       if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
@@ -119,7 +119,7 @@ namespace BToken.Chaining
       }
     }
     
-    uint GetHeight() => MainChain.GetHeightTip();
+    uint GetHeight() => MainChain.GetHeight();
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {

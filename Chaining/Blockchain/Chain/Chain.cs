@@ -12,11 +12,7 @@ namespace BToken.Chaining
     partial class Chain
     {
       ChainSocket Socket;
-
-      public ChainBlock Block;
-      UInt256 Hash;
-      public double AccumulatedDifficulty { get; private set; }
-      public uint Depth;
+      public ChainProbe Probe;
 
       BlockLocator Locator;
 
@@ -31,9 +27,10 @@ namespace BToken.Chaining
           blockGenesisHash: blockGenesisHash,
           chain: this);
 
+        Probe = new ChainProbe(this);
+
         Locator = new BlockLocator(0, blockGenesisHash);
 
-        Initialize();
       }
 
       Chain(
@@ -53,46 +50,8 @@ namespace BToken.Chaining
           blockHighestAssigned: blockHighestAssigned,
           accumulatedDifficultyPrevious: accumulatedDifficultyPrevious,
           chain: this);
-
-        Initialize();
       }
 
-      public void Initialize()
-      {
-        Block = Socket.BlockTip;
-        Hash = Socket.BlockTipHash;
-        AccumulatedDifficulty = Socket.AccumulatedDifficulty;
-        Depth = 0;
-      }
-
-      public bool GetAtBlock(UInt256 hash)
-      {
-        Initialize();
-
-        while (true)
-        {
-          if (IsHash(hash))
-          {
-            return true;
-          }
-
-          if (IsGenesis())
-          {
-            return false;
-          }
-
-          Push();
-        }
-      }
-
-      public void Push()
-      {
-        Hash = Block.Header.HashPrevious;
-        Block = Block.BlockPrevious;
-        AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.Header.NBits);
-
-        Depth++;
-      }
 
       public void InsertBlock(ChainBlock block, UInt256 headerHash)
       {
@@ -100,7 +59,7 @@ namespace BToken.Chaining
 
         ConnectChainBlock(block);
 
-        if (IsTip())
+        if (Probe.IsTip())
         {
           ExtendChain(block, headerHash);
         }
@@ -124,13 +83,13 @@ namespace BToken.Chaining
           throw new BlockchainException(BlockCode.INVALID);
         }
       }
-      bool IsBlockConnectedToNextBlock(UInt256 hash) => Block.BlocksNext.Any(b => GetHeaderHash(b).IsEqual(hash));
+      bool IsBlockConnectedToNextBlock(UInt256 hash) => Probe.Block.BlocksNext.Any(b => GetHeaderHash(b).IsEqual(hash));
       uint GetMedianTimePast()
       {
         const int MEDIAN_TIME_PAST = 11;
 
         List<uint> timestampsPast = new List<uint>();
-        ChainBlock block = Block;
+        ChainBlock block = Probe.Block;
 
         int depth = 0;
         while (depth < MEDIAN_TIME_PAST)
@@ -174,13 +133,13 @@ namespace BToken.Chaining
       }
       void ConnectChainBlock(ChainBlock block)
       {
-        block.BlockPrevious = Block;
-        Block.BlocksNext.Add(block);
+        block.BlockPrevious = Probe.Block;
+        Probe.Block.BlocksNext.Add(block);
       }
       void ForkChain(ChainBlock block, UInt256 headerHash)
       {
         ChainBlock blockHighestAssigned = block.BlockStore != null ? block : null;
-        uint blockTipHeight = GetHeight() + 1;
+        uint blockTipHeight = Probe.GetHeight() + 1;
 
         Chain newChain = new Chain(
           blockTip: block,
@@ -188,7 +147,7 @@ namespace BToken.Chaining
           blockTipHeight: blockTipHeight,
           blockGenesis: block,
           blockHighestAssigned: blockHighestAssigned,
-          accumulatedDifficultyPrevious: AccumulatedDifficulty,
+          accumulatedDifficultyPrevious: Probe.AccumulatedDifficulty,
           blockLocator: new BlockLocator(blockTipHeight, headerHash));
 
         Chain strongestChain = Socket.GetStrongestSocket().Chain;
@@ -203,7 +162,7 @@ namespace BToken.Chaining
 
         UpdateLocator();
 
-        if (block.BlockStore != null && Block.BlockStore != null)
+        if (block.BlockStore != null && Probe.Block.BlockStore != null)
         {
           Socket.BlockHighestAssigned = block;
         }
@@ -235,10 +194,10 @@ namespace BToken.Chaining
 
         chain.Socket = Socket;
         chain.Socket.Chain = chain;
-        chain.Initialize();
+        chain.Probe.Initialize();
 
         Socket = socketTemp;
-        Initialize();
+        Probe.Initialize();
       }
       
       public List<BlockLocation> GetBlockLocations() => Locator.BlockLocations;
@@ -267,36 +226,31 @@ namespace BToken.Chaining
       {
         if (Socket.BlockHighestAssigned == Socket.BlockTip) { return new List<ChainBlock>(); }
 
-        Block = Socket.BlockHighestAssigned.BlocksNext[0];
+        Probe.Block = Socket.BlockHighestAssigned.BlocksNext[0];
         
         var blocksUnassignedPayload = new List<ChainBlock>();
         while (blocksUnassignedPayload.Count < batchSize)
         {
-          Socket.BlockHighestAssigned = Block;
+          Socket.BlockHighestAssigned = Probe.Block;
 
-          if (Block.BlockStore == null)
+          if (Probe.Block.BlockStore == null)
           {
-            blocksUnassignedPayload.Add(Block);
+            blocksUnassignedPayload.Add(Probe.Block);
           }
 
-          if (IsTip())
+          if (Probe.IsTip())
           {
             return blocksUnassignedPayload;
           }
 
-          Block = Block.BlocksNext[0];
+          Probe.Block = Probe.Block.BlocksNext[0];
         }
 
         return blocksUnassignedPayload;
       }
       
-      public uint GetHeightTip() => Socket.BlockTipHeight;
-      public uint GetHeight() => GetHeightTip() - Depth;
-      public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
-      public bool IsGenesis() => Block == Socket.BlockGenesis;
-      public bool IsTip() => Block == Socket.BlockTip;
+      public uint GetHeight() => Socket.BlockTipHeight;
       public bool IsStrongerThan(Chain chain) => chain == null ? true : Socket.AccumulatedDifficulty > chain.Socket.AccumulatedDifficulty;
-      public BlockLocation GetBlockLocation() => new BlockLocation(GetHeight(), Hash);
     }
   }
 }
