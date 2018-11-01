@@ -17,10 +17,11 @@ namespace BToken.Chaining
   public partial class Blockchain
   {
     IPayloadParser PayloadParser;
-    CheckpointManager Checkpoints;
 
+    CheckpointManager Checkpoints;
     BlockchainController Controller;
     Chain MainChain;
+    List<Chain> SecondaryChains = new List<Chain>();
     //BlockPayloadLocator BlockLocator;
 
     private readonly object lockBlockInsertion = new object();
@@ -33,8 +34,8 @@ namespace BToken.Chaining
       List<BlockLocation> checkpoints)
     {
       PayloadParser = payloadParser;
-      Checkpoints = new CheckpointManager(checkpoints);
 
+      Checkpoints = new CheckpointManager(checkpoints);
       Controller = new BlockchainController(network, this);
       MainChain = new Chain(genesisBlock);
 
@@ -50,22 +51,20 @@ namespace BToken.Chaining
     
     Chain GetChain(UInt256 hash)
     {
-      Chain chain = MainChain;
-
-      while (true)
+      if (MainChain.GetAtBlock(hash))
       {
-        if(chain == null)
-        {
-          throw new BlockchainException(BlockCode.ORPHAN);
-        }
-        
+        return MainChain;
+      }
+
+      foreach(Chain chain in SecondaryChains)
+      {
         if (chain.GetAtBlock(hash))
         {
           return chain;
         }
-
-        chain = chain.GetChainWeaker();
       }
+
+      throw new BlockchainException(BlockCode.ORPHAN);
     }
 
     void InsertHeader(NetworkHeader header)
@@ -83,11 +82,11 @@ namespace BToken.Chaining
         chainAtBlockPrevious.InsertBlock(chainBlock, headerHash);
       }
     }
-    void ValidateCheckpoint(Chain probe, UInt256 headerHash)
+    void ValidateCheckpoint(Chain chain, UInt256 headerHash)
     {
-      uint nextBlockHeight = probe.GetHeight() + 1;
+      uint nextBlockHeight = chain.GetHeight() + 1;
 
-      bool chainLongerThanHighestCheckpoint = probe.GetHeightTip() >= Checkpoints.HighestCheckpointHight;
+      bool chainLongerThanHighestCheckpoint = chain.GetHeightTip() >= Checkpoints.HighestCheckpointHight;
       bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > Checkpoints.HighestCheckpointHight);
 
       if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)

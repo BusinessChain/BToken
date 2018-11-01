@@ -27,21 +27,21 @@ namespace BToken.Chaining
 
           SortLocator();
         }
-        void SortLocator() => SortLocator(1);
-        void SortLocator(int n)
+        void SortLocator() => SortLocatorRecursive(1);
+        void SortLocatorRecursive(int startIndex)
         {
-          if (n >= BlockLocations.Count - 2)
+          if (startIndex >= BlockLocations.Count - 2)
           {
             return;
           }
 
-          uint depthFromPrior = BlockLocations[n - 1].Height - BlockLocations[n].Height;
-          uint heightFromNextNext = BlockLocations[n].Height - BlockLocations[n + 2].Height;
+          uint depthFromPrior = BlockLocations[startIndex - 1].Height - BlockLocations[startIndex].Height;
+          uint heightFromNext = BlockLocations[startIndex].Height - BlockLocations[startIndex + 2].Height;
 
-          if (heightFromNextNext <= 2 * depthFromPrior)
+          if (heightFromNext <= 2 * depthFromPrior)
           {
-            BlockLocations.RemoveAt(n + 1);
-            SortLocator(n + 1);
+            BlockLocations.RemoveAt(startIndex + 1);
+            SortLocatorRecursive(startIndex + 1);
           }
 
         }

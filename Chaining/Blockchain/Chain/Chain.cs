@@ -12,13 +12,13 @@ namespace BToken.Chaining
     partial class Chain
     {
       ChainSocket Socket;
-      
-      BlockLocator Locator;
 
       public ChainBlock Block;
       UInt256 Hash;
       public double AccumulatedDifficulty { get; private set; }
       public uint Depth;
+
+      BlockLocator Locator;
 
 
 
@@ -220,7 +220,7 @@ namespace BToken.Chaining
       {
         if (chain.IsStrongerThan(this))
         {
-          SwapChain(chain);
+          ReorganizeChain(chain);
           Socket.ConnectAsSocketWeaker(chain.Socket);
         }
         else
@@ -228,7 +228,7 @@ namespace BToken.Chaining
           Socket.InsertSocketRecursive(chain.Socket);
         }
       }
-      void SwapChain(Chain chain)
+      void ReorganizeChain(Chain chain)
       {
         ChainSocket socketTemp = chain.Socket;
         socketTemp.Chain = this;

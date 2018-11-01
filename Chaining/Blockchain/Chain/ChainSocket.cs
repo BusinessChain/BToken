@@ -12,9 +12,9 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public partial class Chain
+    partial class Chain
     {
-      partial class ChainSocket
+      class ChainSocket
       {
         public ChainBlock BlockTip;
         public UInt256 BlockTipHash;
@@ -62,10 +62,10 @@ namespace BToken.Chaining
 
           Chain = chain;
         }
-        
+
         public ChainSocket GetStrongestSocket()
         {
-          if(IsStrongest())
+          if (IsStrongest())
           {
             return this;
           }
@@ -86,7 +86,7 @@ namespace BToken.Chaining
             SocketWeaker.InsertSocketRecursive(socket);
           }
         }
-        
+
         public bool IsStrongerThan(ChainSocket socket)
         {
           if (socket == null)
