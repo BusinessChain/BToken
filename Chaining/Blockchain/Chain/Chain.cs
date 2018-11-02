@@ -51,8 +51,7 @@ namespace BToken.Chaining
           accumulatedDifficultyPrevious: accumulatedDifficultyPrevious,
           chain: this);
       }
-
-
+      
       public void ForkChain(ChainBlock block, UInt256 headerHash)
       {
         ChainBlock blockHighestAssigned = block.BlockStore != null ? block : null;
@@ -66,7 +65,6 @@ namespace BToken.Chaining
           blockHighestAssigned: blockHighestAssigned,
           accumulatedDifficultyPrevious: Probe.AccumulatedDifficulty,
           blockLocator: new BlockLocator(blockTipHeight, headerHash));
-
       }
 
       void InsertChain(Chain chain)

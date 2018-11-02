@@ -48,61 +48,79 @@ namespace BToken.Chaining
     }
 
     public List<BlockLocation> GetBlockLocations() => MainChain.GetBlockLocations();
-    
-    Chain GetChain(UInt256 hash)
+
+    ChainProbe GetChainProbe(UInt256 hash)
     {
-      if (MainChain.Probe.GotoBlock(hash))
+      var probe = new ChainProbe(MainChain);
+
+      if (probe.GotoBlock(hash))
       {
-        return MainChain;
+        return probe;
       }
 
       foreach(Chain chain in SecondaryChains)
       {
-        if (chain.Probe.GotoBlock(hash))
+        probe.Chain = chain;
+
+        if (probe.GotoBlock(hash))
         {
-          return chain;
+          return probe;
         }
       }
 
-      throw new BlockchainException(BlockCode.ORPHAN);
+      return null;
     }
 
     void InsertHeader(NetworkHeader header)
     {
       InsertBlock(new ChainBlock(header));
     }
-    void InsertBlock(ChainBlock chainBlock)
+    void InsertBlock(ChainBlock block)
     {
-      UInt256 headerHash = new UInt256(Hashing.SHA256d(chainBlock.Header.GetBytes()));
+      ChainProbe probe = GetChainProbe(block.Header.HashPrevious);
 
-      lock (lockBlockInsertion)
+      Validate(probe, block, out UInt256 headerHash);
+
+      ConnectChainBlock(block);
+
+      if (probe.IsTip())
       {
-        // create the probe on the fly so this becomes thread safe
-        Chain chain = GetChain(chainBlock.Header.HashPrevious);
-        
-        ValidateCheckpoint(chain, headerHash);
+        probe.Chain.Socket.ExtendChain(block, headerHash);
+      }
+      else
+      {
+        ForkChain(probe.Chain, block, headerHash);
+        //SecondaryChains.Add(chain);
+      }
 
-        if (chain.Probe.IsTip())
-        {
-          chain.Socket.ExtendChain(chainBlock, headerHash);
-        }
-        else
-        {
-          chain = chain.Probe.ForkChain(chainBlock, headerHash);
-          SecondaryChains.Add(chain);
-        }
-
-        if (chain.IsStrongerThan(MainChain))
-        {
-          MainChain.ReorganizeChain(chain);
-        }
+      if (probe.Chain.IsStrongerThan(MainChain))
+      {
+        MainChain.ReorganizeChain(chain);
       }
     }
-    void ValidateCheckpoint(Chain chain, UInt256 headerHash)
+    void Validate(ChainProbe probe, ChainBlock block, out UInt256 headerHash)
     {
-      uint nextBlockHeight = chain.Probe.GetHeight() + 1;
+      if(probe == null)
+      {
+        throw new BlockchainException(BlockCode.ORPHAN);
+      }
 
-      bool chainLongerThanHighestCheckpoint = chain.GetHeight() >= Checkpoints.HighestCheckpointHight;
+      ValidateTimeStamp(block.Header.UnixTimeSeconds);
+
+      headerHash = new UInt256(Hashing.SHA256d(block.Header.GetBytes()));
+
+      ValidateCheckpoint(probe, headerHash);
+
+      ValidateUniqueness(headerHash);
+
+      ValidateProofOfWork(block.Header.NBits, headerHash);
+
+    }
+    void ValidateCheckpoint(ChainProbe probe, UInt256 headerHash)
+    {
+      uint nextBlockHeight = probe.GetHeight() + 1;
+
+      bool chainLongerThanHighestCheckpoint = probe.Chain.GetHeight() >= Checkpoints.HighestCheckpointHight;
       bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > Checkpoints.HighestCheckpointHight);
 
       if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
@@ -115,6 +133,69 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
+    void ValidateProofOfWork(uint nBits, UInt256 headerHash)
+    {
+      if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(nBits)))
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+
+      if (nBits != TargetManager.GetNextTargetBits(this))
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+    }
+    void ValidateTimeStamp(uint unixTimeSeconds)
+    {
+      const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+      bool IsTimestampPremature = (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
+      if (IsTimestampPremature)
+      {
+        throw new BlockchainException(BlockCode.PREMATURE);
+      }
+
+      if (unixTimeSeconds <= GetMedianTimePast())
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+    }
+    void ValidateUniqueness(UInt256 hash)
+    {
+      if (Block.BlocksNext.Any(b => Chain.GetHeaderHash(b).IsEqual(hash)))
+      {
+        throw new BlockchainException(BlockCode.DUPLICATE);
+      }
+    }
+    uint GetMedianTimePast()
+    {
+      const int MEDIAN_TIME_PAST = 11;
+
+      List<uint> timestampsPast = new List<uint>();
+      ChainBlock block = Block;
+
+      int depth = 0;
+      while (depth < MEDIAN_TIME_PAST)
+      {
+        timestampsPast.Add(block.Header.UnixTimeSeconds);
+
+        if (block.BlockPrevious == null)
+        { break; }
+
+        block = block.BlockPrevious;
+        depth++;
+      }
+
+      timestampsPast.Sort();
+
+      return timestampsPast[timestampsPast.Count / 2];
+    }
+    void ConnectChainBlock(ChainBlock block)
+    {
+      block.BlockPrevious = Block;
+      Block.BlocksNext.Add(block);
+    }
+
+
     void InsertBlock(NetworkBlock networkBlock, BlockStore payloadStoreID)
     {
       var chainBlock = new ChainBlock(networkBlock.Header);
