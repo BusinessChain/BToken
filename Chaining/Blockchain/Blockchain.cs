@@ -81,21 +81,21 @@ namespace BToken.Chaining
 
       Validate(probe, block, out UInt256 headerHash);
 
-      ConnectChainBlock(block);
+      probe.ConnectBlock(block);
 
       if (probe.IsTip())
       {
-        probe.Chain.Socket.ExtendChain(block, headerHash);
+        probe.Chain.ExtendChain(block, headerHash);
       }
       else
       {
-        ForkChain(probe.Chain, block, headerHash);
-        //SecondaryChains.Add(chain);
+        probe.ForkChain(block, headerHash);
+        SecondaryChains.Add(probe.Chain);
       }
 
       if (probe.Chain.IsStrongerThan(MainChain))
       {
-        MainChain.ReorganizeChain(chain);
+        //MainChain.ReorganizeChain(probe.Chain);
       }
     }
     void Validate(ChainProbe probe, ChainBlock block, out UInt256 headerHash)
@@ -105,15 +105,15 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.ORPHAN);
       }
 
-      ValidateTimeStamp(block.Header.UnixTimeSeconds);
+      ValidateTimeStamp(probe, block.Header.UnixTimeSeconds);
 
       headerHash = new UInt256(Hashing.SHA256d(block.Header.GetBytes()));
 
       ValidateCheckpoint(probe, headerHash);
 
-      ValidateUniqueness(headerHash);
+      ValidateUniqueness(probe, headerHash);
 
-      ValidateProofOfWork(block.Header.NBits, headerHash);
+      ValidateProofOfWork(probe, block.Header.NBits, headerHash);
 
     }
     void ValidateCheckpoint(ChainProbe probe, UInt256 headerHash)
@@ -133,19 +133,19 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
-    void ValidateProofOfWork(uint nBits, UInt256 headerHash)
+    void ValidateProofOfWork(ChainProbe probe, uint nBits, UInt256 headerHash)
     {
       if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(nBits)))
       {
         throw new BlockchainException(BlockCode.INVALID);
       }
 
-      if (nBits != TargetManager.GetNextTargetBits(this))
+      if (nBits != TargetManager.GetNextTargetBits(probe))
       {
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
-    void ValidateTimeStamp(uint unixTimeSeconds)
+    void ValidateTimeStamp(ChainProbe probe, uint unixTimeSeconds)
     {
       const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
       bool IsTimestampPremature = (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
@@ -154,24 +154,24 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.PREMATURE);
       }
 
-      if (unixTimeSeconds <= GetMedianTimePast())
+      if (unixTimeSeconds <= GetMedianTimePast(probe))
       {
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
-    void ValidateUniqueness(UInt256 hash)
+    void ValidateUniqueness(ChainProbe probe, UInt256 hash)
     {
-      if (Block.BlocksNext.Any(b => Chain.GetHeaderHash(b).IsEqual(hash)))
+      if (probe.Block.BlocksNext.Any(b => probe.Chain.GetHeaderHash(b).IsEqual(hash)))
       {
         throw new BlockchainException(BlockCode.DUPLICATE);
       }
     }
-    uint GetMedianTimePast()
+    uint GetMedianTimePast(ChainProbe probe)
     {
       const int MEDIAN_TIME_PAST = 11;
 
       List<uint> timestampsPast = new List<uint>();
-      ChainBlock block = Block;
+      ChainBlock block = probe.Block;
 
       int depth = 0;
       while (depth < MEDIAN_TIME_PAST)
@@ -188,11 +188,6 @@ namespace BToken.Chaining
       timestampsPast.Sort();
 
       return timestampsPast[timestampsPast.Count / 2];
-    }
-    void ConnectChainBlock(ChainBlock block)
-    {
-      block.BlockPrevious = Block;
-      Block.BlocksNext.Add(block);
     }
 
 
@@ -227,18 +222,18 @@ namespace BToken.Chaining
 
       return GetBlockPrevious(block.BlockPrevious, --depth);
     }
-    
+
     List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
     {
       var blocksUnassignedPayload = new List<ChainBlock>();
-      Chain chain = MainChain;
+      //Chain chain = MainChain;
 
-      do
-      {
-        blocksUnassignedPayload.AddRange(chain.GetBlocksUnassignedPayload(batchSize));
-        batchSize -= blocksUnassignedPayload.Count;
-        chain = chain.GetChainWeaker();
-      } while (batchSize > 0 && chain != null);
+      //do
+      //{
+      //  blocksUnassignedPayload.AddRange(chain.GetBlocksUnassignedPayload(batchSize));
+      //  batchSize -= blocksUnassignedPayload.Count;
+      //  chain = chain.GetChainWeaker();
+      //} while (batchSize > 0 && chain != null);
 
       return blocksUnassignedPayload;
     }

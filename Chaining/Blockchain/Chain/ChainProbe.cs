@@ -27,9 +27,9 @@ namespace BToken.Chaining
 
       public void Initialize()
       {
-        Block = Chain.Socket.BlockTip;
-        Hash = Chain.Socket.BlockTipHash;
-        AccumulatedDifficulty = Chain.Socket.AccumulatedDifficulty;
+        Block = Chain.BlockTip;
+        Hash = Chain.BlockTipHash;
+        AccumulatedDifficulty = Chain.AccumulatedDifficulty;
         Depth = 0;
       }
 
@@ -61,92 +61,31 @@ namespace BToken.Chaining
 
         Depth++;
       }
-
-      public void InsertBlock(ChainBlock block, UInt256 headerHash)
-      {
-        ValidateUniqueness(headerHash);
-        ValidateProofOfWork(block.Header.NBits, headerHash);
-        ValidateTimeStamp(block.Header.UnixTimeSeconds);
-
-        ConnectChainBlock(block);
-
-        if (IsTip())
-        {
-          Chain.Socket.ExtendChain(block, headerHash);
-        }
-        else
-        {
-          ForkChain(block, headerHash);
-        }
-      }
-      uint GetMedianTimePast()
-      {
-        const int MEDIAN_TIME_PAST = 11;
-
-        List<uint> timestampsPast = new List<uint>();
-        ChainBlock block = Block;
-
-        int depth = 0;
-        while (depth < MEDIAN_TIME_PAST)
-        {
-          timestampsPast.Add(block.Header.UnixTimeSeconds);
-
-          if (block.BlockPrevious == null)
-          { break; }
-
-          block = block.BlockPrevious;
-          depth++;
-        }
-
-        timestampsPast.Sort();
-
-        return timestampsPast[timestampsPast.Count / 2];
-      }
-      void ValidateProofOfWork(uint nBits, UInt256 headerHash)
-      {
-        if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(nBits)))
-        {
-          throw new BlockchainException(BlockCode.INVALID);
-        }
-
-        if (nBits != TargetManager.GetNextTargetBits(this))
-        {
-          throw new BlockchainException(BlockCode.INVALID);
-        }
-      }
-      void ValidateTimeStamp(uint unixTimeSeconds)
-      {
-        if (IsTimestampPremature(unixTimeSeconds))
-        {
-          throw new BlockchainException(BlockCode.PREMATURE);
-        }
-
-        if (unixTimeSeconds <= GetMedianTimePast())
-        {
-          throw new BlockchainException(BlockCode.INVALID);
-        }
-      }
-      void ValidateUniqueness(UInt256 hash)
-      {
-        if (Block.BlocksNext.Any(b => Chain.GetHeaderHash(b).IsEqual(hash)))
-        {
-          throw new BlockchainException(BlockCode.DUPLICATE);
-        }
-      }
-      bool IsTimestampPremature(ulong unixTimeSeconds)
-      {
-        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-        return (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
-      }
-      void ConnectChainBlock(ChainBlock block)
+      public void ConnectBlock(ChainBlock block)
       {
         block.BlockPrevious = Block;
         Block.BlocksNext.Add(block);
       }
+      
+      public void ForkChain(ChainBlock block, UInt256 headerHash)
+      {
+        ChainBlock blockHighestAssigned = block.BlockStore != null ? block : null;
+        uint blockTipHeight = GetHeight() + 1;
+
+        Chain = new Chain(
+          blockTip: block,
+          blockTipHash: headerHash,
+          blockTipHeight: blockTipHeight,
+          blockGenesis: block,
+          blockHighestAssigned: blockHighestAssigned,
+          accumulatedDifficultyPrevious: AccumulatedDifficulty,
+          blockLocator: new BlockLocator(blockTipHeight, headerHash));
+
+      }
 
       public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
-      public bool IsTip() => Block == Chain.Socket.BlockTip;
-      public bool IsGenesis() => Block == Chain.Socket.BlockGenesis;
+      public bool IsTip() => Block == Chain.BlockTip;
+      public bool IsGenesis() => Block == Chain.BlockGenesis;
       public uint GetHeight() => Chain.GetHeight() - Depth;
 
     }

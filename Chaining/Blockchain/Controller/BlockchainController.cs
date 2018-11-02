@@ -20,7 +20,7 @@ namespace BToken.Chaining
       Network Network;
       Blockchain Blockchain;
 
-      const int CHANNELS_COUNT_OUTBOUND = 1;
+      const int CHANNELS_COUNT_OUTBOUND = 8;
       List<BlockchainChannel> ChannelsOutbound = new List<BlockchainChannel>();
 
       List<BlockchainChannel> ChannelsInbound = new List<BlockchainChannel>();

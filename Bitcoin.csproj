@@ -97,7 +97,6 @@
     <Compile Include="Chaining\Blockchain\Controller\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\Blockchain\IBlockPayload.cs" />
     <Compile Include="Chaining\Blockchain\IPayloadParser.cs" />
-    <Compile Include="Chaining\Blockchain\Chain\ChainSocket.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainException.cs" />
     <Compile Include="Chaining\Blockchain\Chain\Chain.cs" />
     <Compile Include="Chaining\Blockchain\IBlockStore.cs" />
