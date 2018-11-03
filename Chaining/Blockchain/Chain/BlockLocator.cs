@@ -8,43 +8,83 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class Chain
+    class BlockLocator
     {
-      class BlockLocator
+      Blockchain Blockchain;
+      public List<BlockLocation> BlockLocations { get; private set; } = new List<BlockLocation>();
+
+
+      public BlockLocator(Blockchain blockchain)
       {
-        public List<BlockLocation> BlockLocations { get; private set; } = new List<BlockLocation>();
+        Blockchain = blockchain;
+
+        Update();
+      }
+
+      public void Reorganize()
+      {
+        
+        UInt256 hash = Blockchain.MainChain.BlockTipHash;
+        uint height = Blockchain.MainChain.Height;
+
+        BlockLocations = new List<BlockLocation>() { new BlockLocation(height, hash) };
 
 
-        public BlockLocator(uint height, UInt256 hash)
+        ChainBlock block = Blockchain.MainChain.BlockTip;
+        uint depth = 0;
+        uint nextLocationDepth = 1;
+
+        do
         {
-          Update(height, hash);
-        }
-
-        public void Update(uint height, UInt256 hash)
-        {
-          var newBlockLocation = new BlockLocation(height, hash);
-          BlockLocations.Insert(0, newBlockLocation);
-
-          SortLocator();
-        }
-        void SortLocator() => SortLocator(1);
-        void SortLocator(int n)
-        {
-          if (n >= BlockLocations.Count - 2)
+          if (depth == nextLocationDepth)
           {
-            return;
+            BlockLocations.Add(new BlockLocation(height, hash));
+            nextLocationDepth *= 2;
           }
 
-          uint depthFromPrior = BlockLocations[n - 1].Height - BlockLocations[n].Height;
-          uint heightFromNextNext = BlockLocations[n].Height - BlockLocations[n + 2].Height;
+          depth++;
+          height--;
+          hash = block.Header.HashPrevious;
 
-          if (heightFromNextNext <= 2 * depthFromPrior)
-          {
-            BlockLocations.RemoveAt(n + 1);
-            SortLocator(n + 1);
-          }
+          block = block.BlockPrevious;
+        } while (height > 0);
 
+        BlockLocations.Add(new BlockLocation(height, hash)); // must be Genesis Location
+
+      }
+
+      public void Update()
+      {
+        uint height = Blockchain.MainChain.Height;
+        UInt256 hash = Blockchain.MainChain.BlockTipHash;
+
+        AddLocation(height, hash);
+      }
+
+      void AddLocation(uint height, UInt256 hash)
+      {
+        BlockLocations.Insert(0, new BlockLocation(height, hash));
+
+        SortLocator();
+      }
+      void SortLocator() => SortLocatorRecursive(1);
+      void SortLocatorRecursive(int startIndex)
+      {
+        if (startIndex >= BlockLocations.Count - 2)
+        {
+          return;
         }
+
+        uint depthFromPrior = BlockLocations[startIndex - 1].Height - BlockLocations[startIndex].Height;
+        uint heightFromNext = BlockLocations[startIndex].Height - BlockLocations[startIndex + 2].Height;
+
+        if (heightFromNext <= 2 * depthFromPrior)
+        {
+          BlockLocations.RemoveAt(startIndex + 1);
+        }
+
+        SortLocatorRecursive(startIndex + 1);
+
       }
     }
   }

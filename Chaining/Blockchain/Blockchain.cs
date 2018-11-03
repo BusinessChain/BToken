@@ -17,11 +17,15 @@ namespace BToken.Chaining
   public partial class Blockchain
   {
     IPayloadParser PayloadParser;
-    CheckpointManager Checkpoints;
 
+    CheckpointManager Checkpoints;
     BlockchainController Controller;
     Chain MainChain;
+    List<Chain> SecondaryChains = new List<Chain>();
+    
     //BlockPayloadLocator BlockLocator;
+
+    BlockLocator Locator;
 
     private readonly object lockBlockInsertion = new object();
 
@@ -33,12 +37,13 @@ namespace BToken.Chaining
       List<BlockLocation> checkpoints)
     {
       PayloadParser = payloadParser;
-      Checkpoints = new CheckpointManager(checkpoints);
 
+      Checkpoints = new CheckpointManager(checkpoints);
       Controller = new BlockchainController(network, this);
-      MainChain = new Chain(
-        blockchain: this,
-        genesisBlock: genesisBlock);
+
+      var genesisBlockHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.GetBytes()));
+      MainChain = new Chain(genesisBlock, genesisBlockHash);
+      Locator = new BlockLocator(this);
 
       //BlockLocator = new BlockPayloadLocator(this);
     }
@@ -48,48 +53,86 @@ namespace BToken.Chaining
       await Controller.StartAsync();
     }
 
-    public List<BlockLocation> GetBlockLocations() => MainChain.GetBlockLocations();
-    
-    Chain GetChain(UInt256 hash)
+    public List<BlockLocation> GetBlockLocations() => Locator.BlockLocations;
+
+    ChainProbe GetChainProbe(UInt256 hash)
     {
-      Chain chain = MainChain;
+      var probe = new ChainProbe(MainChain);
 
-      while (true)
+      if (probe.GotoBlock(hash))
       {
-        if(chain == null)
-        {
-          throw new BlockchainException(BlockCode.ORPHAN);
-        }
-        
-        if (chain.GetAtBlock(hash))
-        {
-          return chain;
-        }
-
-        chain = chain.GetChainWeaker();
+        return probe;
       }
+
+      foreach(Chain chain in SecondaryChains)
+      {
+        probe.Chain = chain;
+
+        if (probe.GotoBlock(hash))
+        {
+          return probe;
+        }
+      }
+
+      return null;
     }
 
     void InsertHeader(NetworkHeader header)
     {
       InsertBlock(new ChainBlock(header));
     }
-    void InsertBlock(ChainBlock chainBlock)
+    void InsertBlock(ChainBlock block)
     {
-      UInt256 headerHash = new UInt256(Hashing.SHA256d(chainBlock.Header.GetBytes()));
+      ChainProbe probe = GetChainProbe(block.Header.HashPrevious);
 
-      lock (lockBlockInsertion)
+      Validate(probe, block, out UInt256 headerHash);
+
+      probe.ConnectBlock(block);
+
+      if (probe.IsTip())
       {
-        Chain chainAtBlockPrevious = GetChain(chainBlock.Header.HashPrevious);
-        ValidateCheckpoint(chainAtBlockPrevious, headerHash);
-        chainAtBlockPrevious.InsertBlock(chainBlock, headerHash);
+        probe.Chain.ExtendChain(block, headerHash);
+
+        if (probe.Chain == MainChain)
+        {
+          Locator.Update();
+          return;
+        }
+      }
+      else
+      {
+        probe.ForkChain(block, headerHash);
+        SecondaryChains.Add(probe.Chain);
+      }
+
+      if (probe.Chain.IsStrongerThan(MainChain))
+      {
+        ReorganizeChain(probe.Chain);
       }
     }
-    void ValidateCheckpoint(Chain probe, UInt256 headerHash)
+    void Validate(ChainProbe probe, ChainBlock block, out UInt256 headerHash)
+    {
+      if(probe == null)
+      {
+        throw new BlockchainException(BlockCode.ORPHAN);
+      }
+
+      ValidateTimeStamp(probe, block.Header.UnixTimeSeconds);
+
+      headerHash = new UInt256(Hashing.SHA256d(block.Header.GetBytes()));
+
+      ValidateCheckpoint(probe, headerHash);
+
+      ValidateUniqueness(probe, headerHash);
+
+      ValidateProofOfWork(probe, block.Header.NBits, headerHash);
+
+    }
+    void ValidateCheckpoint(ChainProbe probe, UInt256 headerHash)
     {
       uint nextBlockHeight = probe.GetHeight() + 1;
 
-      bool chainLongerThanHighestCheckpoint = probe.GetHeightTip() >= Checkpoints.HighestCheckpointHight;
+      bool chainLongerThanHighestCheckpoint = probe.Chain.Height >= Checkpoints.HighestCheckpointHight;
       bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > Checkpoints.HighestCheckpointHight);
 
       if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
@@ -102,6 +145,72 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
+    void ValidateProofOfWork(ChainProbe probe, uint nBits, UInt256 headerHash)
+    {
+      if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(nBits)))
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+
+      if (nBits != TargetManager.GetNextTargetBits(probe))
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+    }
+    void ValidateTimeStamp(ChainProbe probe, uint unixTimeSeconds)
+    {
+      const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+      bool IsTimestampPremature = (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
+      if (IsTimestampPremature)
+      {
+        throw new BlockchainException(BlockCode.PREMATURE);
+      }
+
+      if (unixTimeSeconds <= GetMedianTimePast(probe))
+      {
+        throw new BlockchainException(BlockCode.INVALID);
+      }
+    }
+    void ValidateUniqueness(ChainProbe probe, UInt256 hash)
+    {
+      if (probe.Block.BlocksNext.Any(b => probe.Chain.GetHeaderHash(b).IsEqual(hash)))
+      {
+        throw new BlockchainException(BlockCode.DUPLICATE);
+      }
+    }
+    uint GetMedianTimePast(ChainProbe probe)
+    {
+      const int MEDIAN_TIME_PAST = 11;
+
+      List<uint> timestampsPast = new List<uint>();
+      ChainBlock block = probe.Block;
+
+      int depth = 0;
+      while (depth < MEDIAN_TIME_PAST)
+      {
+        timestampsPast.Add(block.Header.UnixTimeSeconds);
+
+        if (block.BlockPrevious == null)
+        { break; }
+
+        block = block.BlockPrevious;
+        depth++;
+      }
+
+      timestampsPast.Sort();
+
+      return timestampsPast[timestampsPast.Count / 2];
+    }
+
+    void ReorganizeChain(Chain chain)
+    {
+      SecondaryChains.Remove(chain);
+      SecondaryChains.Add(MainChain);
+      MainChain = chain;
+
+      Locator.Reorganize();
+    }
+
     void InsertBlock(NetworkBlock networkBlock, BlockStore payloadStoreID)
     {
       var chainBlock = new ChainBlock(networkBlock.Header);
@@ -121,21 +230,8 @@ namespace BToken.Chaining
         throw new BlockchainException(BlockCode.INVALID);
       }
     }
-
-    void InsertChain(Chain chain)
-    {
-      if (chain.IsStrongerThan(MainChain))
-      {
-        chain.ConnectAsWeakerChain(MainChain);
-        MainChain = chain;
-      }
-      else
-      {
-        MainChain.InsertChainRecursive(chain);
-      }
-    }
-
-    uint GetHeight() => MainChain.GetHeightTip();
+    
+    uint GetHeight() => MainChain.Height;
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {
@@ -146,18 +242,18 @@ namespace BToken.Chaining
 
       return GetBlockPrevious(block.BlockPrevious, --depth);
     }
-    
+
     List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
     {
       var blocksUnassignedPayload = new List<ChainBlock>();
       Chain chain = MainChain;
 
-      do
-      {
-        blocksUnassignedPayload.AddRange(chain.GetBlocksUnassignedPayload(batchSize));
-        batchSize -= blocksUnassignedPayload.Count;
-        chain = chain.GetChainWeaker();
-      } while (batchSize > 0 && chain != null);
+      //do
+      //{
+      //  blocksUnassignedPayload.AddRange(chain.GetBlocksUnassignedPayload(batchSize));
+      //  batchSize -= blocksUnassignedPayload.Count;
+      //  chain = chain.GetChainWeaker();
+      //} while (batchSize > 0 && chain != null);
 
       return blocksUnassignedPayload;
     }

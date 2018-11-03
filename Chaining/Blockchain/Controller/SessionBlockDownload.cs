@@ -56,7 +56,7 @@ namespace BToken.Chaining
               BlocksDownloaded = new List<ChainBlock>();
             }
             
-            BlocksQueued = Controller.Blockchain.GetBlocksUnassignedPayload(BatchSize);
+            //BlocksQueued = Controller.Blockchain.GetBlocksUnassignedPayload(BatchSize);
 
           } while (BlocksQueued.Count > 0);
         }
