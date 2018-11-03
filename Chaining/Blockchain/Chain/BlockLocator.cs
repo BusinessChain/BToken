@@ -10,18 +10,60 @@ namespace BToken.Chaining
   {
     class BlockLocator
     {
+      Blockchain Blockchain;
       public List<BlockLocation> BlockLocations { get; private set; } = new List<BlockLocation>();
 
 
-      public BlockLocator(uint height, UInt256 hash)
+      public BlockLocator(Blockchain blockchain)
       {
-        Update(height, hash);
+        Blockchain = blockchain;
+
+        Update();
       }
 
-      public void Update(uint height, UInt256 hash)
+      public void Reorganize()
       {
-        var newBlockLocation = new BlockLocation(height, hash);
-        BlockLocations.Insert(0, newBlockLocation);
+        
+        UInt256 hash = Blockchain.MainChain.BlockTipHash;
+        uint height = Blockchain.MainChain.Height;
+
+        BlockLocations = new List<BlockLocation>() { new BlockLocation(height, hash) };
+
+
+        ChainBlock block = Blockchain.MainChain.BlockTip;
+        uint depth = 0;
+        uint nextLocationDepth = 1;
+
+        do
+        {
+          if (depth == nextLocationDepth)
+          {
+            BlockLocations.Add(new BlockLocation(height, hash));
+            nextLocationDepth *= 2;
+          }
+
+          depth++;
+          height--;
+          hash = block.Header.HashPrevious;
+
+          block = block.BlockPrevious;
+        } while (height > 0);
+
+        BlockLocations.Add(new BlockLocation(height, hash)); // must be Genesis Location
+
+      }
+
+      public void Update()
+      {
+        uint height = Blockchain.MainChain.Height;
+        UInt256 hash = Blockchain.MainChain.BlockTipHash;
+
+        AddLocation(height, hash);
+      }
+
+      void AddLocation(uint height, UInt256 hash)
+      {
+        BlockLocations.Insert(0, new BlockLocation(height, hash));
 
         SortLocator();
       }
@@ -39,8 +81,9 @@ namespace BToken.Chaining
         if (heightFromNext <= 2 * depthFromPrior)
         {
           BlockLocations.RemoveAt(startIndex + 1);
-          SortLocatorRecursive(startIndex + 1);
         }
+
+        SortLocatorRecursive(startIndex + 1);
 
       }
     }

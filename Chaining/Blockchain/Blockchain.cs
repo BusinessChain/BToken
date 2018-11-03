@@ -22,7 +22,10 @@ namespace BToken.Chaining
     BlockchainController Controller;
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
+    
     //BlockPayloadLocator BlockLocator;
+
+    BlockLocator Locator;
 
     private readonly object lockBlockInsertion = new object();
 
@@ -37,7 +40,10 @@ namespace BToken.Chaining
 
       Checkpoints = new CheckpointManager(checkpoints);
       Controller = new BlockchainController(network, this);
-      MainChain = new Chain(genesisBlock);
+
+      var genesisBlockHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.GetBytes()));
+      MainChain = new Chain(genesisBlock, genesisBlockHash);
+      Locator = new BlockLocator(this);
 
       //BlockLocator = new BlockPayloadLocator(this);
     }
@@ -47,7 +53,7 @@ namespace BToken.Chaining
       await Controller.StartAsync();
     }
 
-    public List<BlockLocation> GetBlockLocations() => MainChain.GetBlockLocations();
+    public List<BlockLocation> GetBlockLocations() => Locator.BlockLocations;
 
     ChainProbe GetChainProbe(UInt256 hash)
     {
@@ -86,6 +92,12 @@ namespace BToken.Chaining
       if (probe.IsTip())
       {
         probe.Chain.ExtendChain(block, headerHash);
+
+        if (probe.Chain == MainChain)
+        {
+          Locator.Update();
+          return;
+        }
       }
       else
       {
@@ -95,7 +107,7 @@ namespace BToken.Chaining
 
       if (probe.Chain.IsStrongerThan(MainChain))
       {
-        //MainChain.ReorganizeChain(probe.Chain);
+        ReorganizeChain(probe.Chain);
       }
     }
     void Validate(ChainProbe probe, ChainBlock block, out UInt256 headerHash)
@@ -120,7 +132,7 @@ namespace BToken.Chaining
     {
       uint nextBlockHeight = probe.GetHeight() + 1;
 
-      bool chainLongerThanHighestCheckpoint = probe.Chain.GetHeight() >= Checkpoints.HighestCheckpointHight;
+      bool chainLongerThanHighestCheckpoint = probe.Chain.Height >= Checkpoints.HighestCheckpointHight;
       bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > Checkpoints.HighestCheckpointHight);
 
       if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
@@ -190,6 +202,14 @@ namespace BToken.Chaining
       return timestampsPast[timestampsPast.Count / 2];
     }
 
+    void ReorganizeChain(Chain chain)
+    {
+      SecondaryChains.Remove(chain);
+      SecondaryChains.Add(MainChain);
+      MainChain = chain;
+
+      Locator.Reorganize();
+    }
 
     void InsertBlock(NetworkBlock networkBlock, BlockStore payloadStoreID)
     {
@@ -211,7 +231,7 @@ namespace BToken.Chaining
       }
     }
     
-    uint GetHeight() => MainChain.GetHeight();
+    uint GetHeight() => MainChain.Height;
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
     {
@@ -226,7 +246,7 @@ namespace BToken.Chaining
     List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
     {
       var blocksUnassignedPayload = new List<ChainBlock>();
-      //Chain chain = MainChain;
+      Chain chain = MainChain;
 
       //do
       //{

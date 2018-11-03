@@ -44,7 +44,7 @@ namespace BToken.Chaining
             return true;
           }
 
-          if (IsGenesis())
+          if (IsRoot())
           {
             return false;
           }
@@ -66,7 +66,7 @@ namespace BToken.Chaining
         block.BlockPrevious = Block;
         Block.BlocksNext.Add(block);
       }
-      
+
       public void ForkChain(ChainBlock block, UInt256 headerHash)
       {
         ChainBlock blockHighestAssigned = block.BlockStore != null ? block : null;
@@ -76,17 +76,16 @@ namespace BToken.Chaining
           blockTip: block,
           blockTipHash: headerHash,
           blockTipHeight: blockTipHeight,
-          blockGenesis: block,
+          blockRoot: block,
           blockHighestAssigned: blockHighestAssigned,
-          accumulatedDifficultyPrevious: AccumulatedDifficulty,
-          blockLocator: new BlockLocator(blockTipHeight, headerHash));
+          accumulatedDifficultyPrevious: AccumulatedDifficulty);
 
       }
 
       public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
       public bool IsTip() => Block == Chain.BlockTip;
-      public bool IsGenesis() => Block == Chain.BlockGenesis;
-      public uint GetHeight() => Chain.GetHeight() - Depth;
+      public bool IsRoot() => Block == Chain.BlockRoot;
+      public uint GetHeight() => Chain.Height - Depth;
 
     }
   }

@@ -9,54 +9,42 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    partial class Chain
+    class Chain
     {
-      public ChainBlock BlockTip;
-      public UInt256 BlockTipHash;
-      public uint BlockTipHeight;
-      public double AccumulatedDifficulty;
+      public ChainBlock BlockTip { get; private set; }
+      public UInt256 BlockTipHash { get; private set; }
+      public uint Height { get; private set; }
+      public double AccumulatedDifficulty { get; private set; }
 
-      public ChainBlock BlockGenesis;
-      public ChainBlock BlockHighestAssigned;
-
-      BlockLocator Locator;
+      public ChainBlock BlockRoot { get; private set; }
+      public ChainBlock BlockHighestAssigned { get; private set; }
 
 
 
-      public Chain(ChainBlock genesisBlock)
+      public Chain(ChainBlock blockRoot, UInt256 blockRootHash)
       {
-        UInt256 blockGenesisHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.GetBytes()));
-
-        BlockTip = genesisBlock;
-        BlockTipHash = blockGenesisHash;
-        BlockTipHeight = 0;
-        BlockGenesis = genesisBlock;
-        AccumulatedDifficulty = TargetManager.GetDifficulty(genesisBlock.Header.NBits);
-        
-        Locator = new BlockLocator(0, blockGenesisHash);
+        BlockTip = blockRoot;
+        BlockTipHash = blockRootHash;
+        Height = 0;
+        BlockRoot = blockRoot;
+        AccumulatedDifficulty = TargetManager.GetDifficulty(blockRoot.Header.NBits);
       }
 
       public Chain(
         ChainBlock blockTip,
         UInt256 blockTipHash,
         uint blockTipHeight,
-        ChainBlock blockGenesis,
+        ChainBlock blockRoot,
         ChainBlock blockHighestAssigned,
-        double accumulatedDifficultyPrevious,
-        BlockLocator blockLocator)
+        double accumulatedDifficultyPrevious)
       {
         BlockTip = blockTip;
         BlockTipHash = blockTipHash;
-        BlockTipHeight = blockTipHeight;
-        BlockGenesis = blockGenesis;
+        Height = blockTipHeight;
+        BlockRoot = blockRoot;
         BlockHighestAssigned = blockHighestAssigned;
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockTip.Header.NBits);
-        Locator = blockLocator;
-
-      }
-            
-      public List<BlockLocation> GetBlockLocations() => Locator.BlockLocations;
-      void UpdateLocator() => Locator.Update(BlockTipHeight, BlockTipHash);
+      }            
       
       public UInt256 GetHeaderHash(ChainBlock block)
       {
@@ -72,7 +60,7 @@ namespace BToken.Chaining
       {
         BlockTip = block;
         BlockTipHash = headerHash;
-        BlockTipHeight++;
+        Height++;
         AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
       }
 
@@ -103,7 +91,6 @@ namespace BToken.Chaining
       //  return blocksUnassignedPayload;
       //}
 
-      public uint GetHeight() => BlockTipHeight;
       public bool IsStrongerThan(Chain chain) => chain == null ? true : AccumulatedDifficulty > chain.AccumulatedDifficulty;
     }
   }
