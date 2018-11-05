@@ -36,7 +36,7 @@ namespace BToken.Chaining
             try
             {
               Debug.WriteLine("insert block: "+ Blockchain.GetHeight());
-              Blockchain.InsertBlock(block, blockStore);
+              Blockchain.InsertHeader(block.Header);
               shardLoader.DispatchBlockNext();
             }
             catch (BlockchainException ex)

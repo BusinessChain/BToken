@@ -16,8 +16,6 @@ namespace BToken.Chaining
 
   public partial class Blockchain
   {
-    IPayloadParser PayloadParser;
-
     BlockchainController Controller;
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
@@ -32,11 +30,8 @@ namespace BToken.Chaining
     public Blockchain(
       ChainBlock genesisBlock,
       Network network,
-      IPayloadParser payloadParser,
       List<BlockLocation> checkpoints)
     {
-      PayloadParser = payloadParser;
-
       Controller = new BlockchainController(network, this);
       MainChain = new Chain(genesisBlock);
 
@@ -106,7 +101,6 @@ namespace BToken.Chaining
 
       return null;
     }
-
     void ReorganizeChain(Chain chain)
     {
       SecondaryChains.Remove(chain);
@@ -115,27 +109,7 @@ namespace BToken.Chaining
 
       Locator.Reorganize();
     }
-
-    void InsertBlock(NetworkBlock networkBlock, BlockStore payloadStoreID)
-    {
-      var chainBlock = new ChainBlock(networkBlock.Header);
-      InsertBlock(chainBlock);
-      InsertPayload(chainBlock, networkBlock.Payload, payloadStoreID);
-    }
-    void InsertPayload(ChainBlock chainBlock, byte[] payload, BlockStore payloadStoreID)
-    {
-      ValidatePayload(chainBlock, payload);
-      chainBlock.BlockStore = payloadStoreID;
-    }
-    void ValidatePayload(ChainBlock chainBlock, byte[] payload)
-    {
-      UInt256 payloadHash = PayloadParser.GetPayloadHash(payload);
-      if (!payloadHash.IsEqual(chainBlock.Header.PayloadHash))
-      {
-        throw new BlockchainException(BlockCode.INVALID);
-      }
-    }
-    
+        
     uint GetHeight() => MainChain.Height;
 
     static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)

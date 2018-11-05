@@ -84,7 +84,6 @@
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
     <Compile Include="Chaining\Blockchain\Chain\ChainProbe.cs" />
     <Compile Include="Chaining\Blockchain\HeaderArchiver.cs" />
-    <Compile Include="Chaining\Blockchain\CheckpointManager.cs" />
     <Compile Include="Chaining\Blockchain\Archiver\ArchiveLoader.cs" />
     <Compile Include="Chaining\Blockchain\Archiver\ArchiveShardLoader.cs" />
     <Compile Include="Chaining\Blockchain\Archiver\BlockArchiver.cs" />

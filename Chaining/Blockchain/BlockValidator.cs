@@ -10,11 +10,13 @@ namespace BToken.Chaining
   {
     class BlockValidator
     {
-      CheckpointManager Checkpoints;
+      uint HighestCheckpointHight;
+      List<BlockLocation> Checkpoints;
 
       public BlockValidator(List<BlockLocation> checkpoints)
       {
-        Checkpoints = new CheckpointManager(checkpoints);
+        Checkpoints = checkpoints;
+        HighestCheckpointHight = checkpoints.Max(x => x.Height);
       }
 
       public void Validate(ChainProbe probe, ChainBlock block, out UInt256 headerHash)
@@ -39,18 +41,28 @@ namespace BToken.Chaining
       {
         uint nextBlockHeight = probe.GetHeight() + 1;
 
-        bool chainLongerThanHighestCheckpoint = probe.Chain.Height >= Checkpoints.HighestCheckpointHight;
-        bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > Checkpoints.HighestCheckpointHight);
+        bool chainLongerThanHighestCheckpoint = probe.Chain.Height >= HighestCheckpointHight;
+        bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > HighestCheckpointHight);
 
         if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
         {
           throw new BlockchainException(BlockCode.INVALID);
         }
 
-        if (!Checkpoints.ValidateBlockLocation(nextBlockHeight, headerHash))
+        if (!ValidateBlockLocation(nextBlockHeight, headerHash))
         {
           throw new BlockchainException(BlockCode.INVALID);
         }
+      }
+      bool ValidateBlockLocation(uint height, UInt256 hash)
+      {
+        BlockLocation checkpoint = Checkpoints.Find(c => c.Height == height);
+        if (checkpoint != null)
+        {
+          return checkpoint.Hash.IsEqual(hash);
+        }
+
+        return true;
       }
       void ValidateProofOfWork(ChainProbe probe, uint nBits, UInt256 headerHash)
       {

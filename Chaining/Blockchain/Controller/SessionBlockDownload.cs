@@ -78,7 +78,7 @@ namespace BToken.Chaining
             ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
 
             BlockStore payloadStoreID = FileWriter.PeekPayloadID(networkBlock.Payload.Length);
-            Controller.Blockchain.InsertPayload(blockQueued, networkBlock.Payload, payloadStoreID);
+            //Controller.Blockchain.InsertPayload(blockQueued, networkBlock.Payload, payloadStoreID);
             FileWriter.ArchiveBlock(networkBlock);
 
             BlocksDownloaded.Add(blockQueued);
