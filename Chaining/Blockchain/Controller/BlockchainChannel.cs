@@ -159,7 +159,6 @@ namespace BToken.Chaining
         }
 
         public async Task RequestHeadersAsync(List<BlockLocation> headerLocator) => await Controller.Network.GetHeadersAsync(Buffer, headerLocator.Select(b => b.Hash).ToList());
-        List<BlockLocation> GetHeaderLocator() => Controller.Blockchain.GetBlockLocations();
 
         public async Task RequestBlocksAsync(List<UInt256> blockHashes) => await Controller.Network.GetBlockAsync(Buffer, blockHashes).ConfigureAwait(false);
 

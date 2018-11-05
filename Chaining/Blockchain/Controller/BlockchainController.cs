@@ -45,7 +45,7 @@ namespace BToken.Chaining
         LoadHeadersFromArchive();
         
         BlockchainChannel channelConnectedFirst = await await Task.WhenAny(connectChannelsTasks);
-        await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(this));
+        await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain));
 
         StartMessageListeners(connectChannelsTasks);
 

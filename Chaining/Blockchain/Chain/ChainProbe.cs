@@ -25,7 +25,7 @@ namespace BToken.Chaining
         Initialize();
       }
 
-      public void Initialize()
+      void Initialize()
       {
         Block = Chain.BlockTip;
         Hash = Chain.BlockTipHash;
@@ -53,7 +53,7 @@ namespace BToken.Chaining
         }
       }
 
-      public void Push()
+      void Push()
       {
         Hash = Block.Header.HashPrevious;
         Block = Block.BlockPrevious;

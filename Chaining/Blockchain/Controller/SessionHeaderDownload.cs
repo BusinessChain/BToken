@@ -19,18 +19,16 @@ namespace BToken.Chaining
       class SessionHeaderDownload : BlockchainSession
       {
         Blockchain Blockchain;
-        BlockchainController Controller;
         List<BlockLocation> HeaderLocator;
         List<NetworkHeader> Headers = new List<NetworkHeader>();
 
         BlockArchiver.FileWriter FileWriter;
 
 
-        public SessionHeaderDownload(BlockchainController controller)
+        public SessionHeaderDownload(Blockchain blockchain)
         {
-          Controller = controller;
-          Blockchain = controller.Blockchain;
-          FileWriter = Controller.Blockchain.Archiver.GetWriter();
+          Blockchain = blockchain;
+          FileWriter = Blockchain.Archiver.GetWriter();
         }
 
         public override async Task StartAsync(BlockchainChannel channel)
