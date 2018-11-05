@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using BToken.Networking;
+
 namespace BToken.Chaining
 {
   public partial class Blockchain
@@ -19,23 +21,20 @@ namespace BToken.Chaining
         HighestCheckpointHight = checkpoints.Max(x => x.Height);
       }
 
-      public void Validate(ChainProbe probe, ChainBlock block, out UInt256 headerHash)
+      public void ValidateHeader(ChainProbe probe, NetworkHeader header, out UInt256 headerHash)
       {
         if (probe == null)
         {
           throw new BlockchainException(BlockCode.ORPHAN);
         }
 
-        ValidateTimeStamp(probe, block.Header.UnixTimeSeconds);
+        ValidateTimeStamp(probe, header.UnixTimeSeconds);
 
-        headerHash = new UInt256(Hashing.SHA256d(block.Header.GetBytes()));
+        headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
 
         ValidateCheckpoint(probe, headerHash);
-
         ValidateUniqueness(probe, headerHash);
-
-        ValidateProofOfWork(probe, block.Header.NBits, headerHash);
-
+        ValidateProofOfWork(probe, header.NBits, headerHash);
       }
       void ValidateCheckpoint(ChainProbe probe, UInt256 headerHash)
       {

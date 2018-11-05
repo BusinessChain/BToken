@@ -48,7 +48,7 @@ namespace BToken.Chaining
             }
           }
 
-          List<ChainBlock> blocksQueued = Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue);
+          List<ChainBlock> blocksQueued = new List<ChainBlock>();//Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue);
           IEnumerable<ChainBlock> blocksQueuedNotYetDispatched = blocksQueued.Except(BlocksDispatched);
           BlocksQueued = blocksQueuedNotYetDispatched.ToList();
 

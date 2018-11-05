@@ -16,7 +16,6 @@ namespace BToken.Chaining
 
   public partial class Blockchain
   {
-    BlockchainController Controller;
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
     
@@ -24,7 +23,7 @@ namespace BToken.Chaining
     BlockLocator Locator;
     BlockArchiver Archiver;
 
-    private readonly object lockBlockInsertion = new object();
+    BlockchainController Controller;
 
 
     public Blockchain(
@@ -44,24 +43,18 @@ namespace BToken.Chaining
     {
       await Controller.StartAsync();
     }
-
-    public List<BlockLocation> GetBlockLocations() => Locator.BlockLocations;
     
     void InsertHeader(NetworkHeader header)
     {
-      InsertBlock(new ChainBlock(header));
-    }
-    void InsertBlock(ChainBlock block)
-    {
-      ChainProbe probe = GetChainProbe(block.Header.HashPrevious);
+      ChainProbe probe = GetChainProbe(header.HashPrevious);
 
-      Validator.Validate(probe, block, out UInt256 headerHash);
+      Validator.ValidateHeader(probe, header, out UInt256 headerHash);
 
-      probe.ConnectBlock(block);
+      probe.ConnectHeader(header);
 
       if (probe.IsTip())
       {
-        probe.Chain.ExtendChain(block, headerHash);
+        probe.ExtendChain(headerHash);
 
         if (probe.Chain == MainChain)
         {
@@ -71,7 +64,7 @@ namespace BToken.Chaining
       }
       else
       {
-        probe.ForkChain(block, headerHash);
+        probe.ForkChain(headerHash);
         SecondaryChains.Add(probe.Chain);
       }
 
@@ -109,33 +102,5 @@ namespace BToken.Chaining
 
       Locator.Reorganize();
     }
-        
-    uint GetHeight() => MainChain.Height;
-
-    static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
-    {
-      if (depth == 0 || block.BlockPrevious == null)
-      {
-        return block;
-      }
-
-      return GetBlockPrevious(block.BlockPrevious, --depth);
-    }
-
-    List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
-    {
-      var blocksUnassignedPayload = new List<ChainBlock>();
-      Chain chain = MainChain;
-
-      //do
-      //{
-      //  blocksUnassignedPayload.AddRange(chain.GetBlocksUnassignedPayload(batchSize));
-      //  batchSize -= blocksUnassignedPayload.Count;
-      //  chain = chain.GetChainWeaker();
-      //} while (batchSize > 0 && chain != null);
-
-      return blocksUnassignedPayload;
-    }
-
   }
 }

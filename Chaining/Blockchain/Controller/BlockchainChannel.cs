@@ -63,12 +63,12 @@ namespace BToken.Chaining
 
         public async Task ConnectAsync()
         {
-          uint blockchainHeight = Controller.Blockchain.GetHeight();
+          uint blockchainHeight = Controller.Blockchain.MainChain.Height;
           Buffer = await Controller.Network.CreateBlockchainChannelAsync(blockchainHeight);
         }
         public async Task ConnectInboundAsync()
         {
-          uint blockchainHeight = Controller.Blockchain.GetHeight();
+          uint blockchainHeight = Controller.Blockchain.MainChain.Height;
           Buffer = await Controller.Network.AcceptInboundBlockchainChannelAsync(blockchainHeight);
         }
 
