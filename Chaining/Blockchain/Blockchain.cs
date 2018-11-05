@@ -26,6 +26,7 @@ namespace BToken.Chaining
     //BlockPayloadLocator BlockLocator;
 
     BlockLocator Locator;
+    BlockArchiver Archiver;
 
     private readonly object lockBlockInsertion = new object();
 
@@ -41,9 +42,9 @@ namespace BToken.Chaining
       Checkpoints = new CheckpointManager(checkpoints);
       Controller = new BlockchainController(network, this);
 
-      var genesisBlockHash = new UInt256(Hashing.SHA256d(genesisBlock.Header.GetBytes()));
-      MainChain = new Chain(genesisBlock, genesisBlockHash);
+      MainChain = new Chain(genesisBlock);
       Locator = new BlockLocator(this);
+      Archiver = new BlockArchiver(this);
 
       //BlockLocator = new BlockPayloadLocator(this);
     }

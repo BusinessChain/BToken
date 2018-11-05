@@ -22,10 +22,8 @@ namespace BToken.Chaining
 
       const int CHANNELS_COUNT_OUTBOUND = 8;
       List<BlockchainChannel> ChannelsOutbound = new List<BlockchainChannel>();
-
       List<BlockchainChannel> ChannelsInbound = new List<BlockchainChannel>();
 
-      Archiver Archiver;
 
 
       public BlockchainController(Network network, Blockchain blockchain)
@@ -38,7 +36,6 @@ namespace BToken.Chaining
           ChannelsOutbound.Add(new BlockchainChannel(this));
         }
 
-        Archiver = new Archiver(blockchain);
       }
 
       public async Task StartAsync()

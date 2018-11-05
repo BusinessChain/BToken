@@ -23,14 +23,14 @@ namespace BToken.Chaining
         List<BlockLocation> HeaderLocator;
         List<NetworkHeader> Headers = new List<NetworkHeader>();
 
-        Archiver.FileWriter FileWriter;
+        BlockArchiver.FileWriter FileWriter;
 
 
         public SessionHeaderDownload(BlockchainController controller)
         {
           Controller = controller;
           Blockchain = controller.Blockchain;
-          FileWriter = Controller.Archiver.GetWriter();
+          FileWriter = Controller.Blockchain.Archiver.GetWriter();
         }
 
         public override async Task StartAsync(BlockchainChannel channel)

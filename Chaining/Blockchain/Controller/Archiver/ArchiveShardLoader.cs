@@ -12,7 +12,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class Archiver
+    partial class BlockArchiver
     {
       class ArchiveShardLoader : IDisposable
       {

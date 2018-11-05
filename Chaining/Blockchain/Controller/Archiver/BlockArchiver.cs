@@ -14,7 +14,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class Archiver
+    partial class BlockArchiver
     {
       Blockchain Blockchain;
 
@@ -31,7 +31,7 @@ namespace BToken.Chaining
       static string FileHandle = "BlockRegister";
 
            
-      public Archiver(Blockchain blockchain)
+      public BlockArchiver(Blockchain blockchain)
       {
         Blockchain = blockchain;
       }
