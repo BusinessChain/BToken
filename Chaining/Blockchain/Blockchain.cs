@@ -21,7 +21,7 @@ namespace BToken.Chaining
     
     BlockValidator Validator;
     BlockLocator Locator;
-    BlockArchiver Archiver;
+    IHeaderArchiver Archiver;
 
     BlockchainController Controller;
 
@@ -29,14 +29,15 @@ namespace BToken.Chaining
     public Blockchain(
       ChainBlock genesisBlock,
       Network network,
-      List<BlockLocation> checkpoints)
+      List<BlockLocation> checkpoints,
+      IHeaderArchiver archiver)
     {
       Controller = new BlockchainController(network, this);
       MainChain = new Chain(genesisBlock);
 
       Validator = new BlockValidator(checkpoints);
       Locator = new BlockLocator(this);
-      Archiver = new BlockArchiver(this);
+      Archiver = archiver;
     }
 
     public async Task StartAsync()

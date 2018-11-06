@@ -81,7 +81,7 @@ namespace BToken.Chaining
       {
         try
         {
-          using (var archiveReader = new HeaderArchiver.HeaderReader())
+          using (var archiveReader = Blockchain.Archiver.GetReader())
           {
             NetworkHeader header = archiveReader.GetNextHeader();
 
@@ -99,15 +99,15 @@ namespace BToken.Chaining
         }
       }
       
-      async Task DownloadBlocksAsync(BlockchainChannel[] channels)
-      {
-        Task[] downloadBlocksTask = channels.Select(async channel =>
-        {
-          await channel.ExecuteSessionAsync(new SessionBlockDownload(this));
-        }).ToArray();
+      //async Task DownloadBlocksAsync(BlockchainChannel[] channels)
+      //{
+      //  Task[] downloadBlocksTask = channels.Select(async channel =>
+      //  {
+      //    await channel.ExecuteSessionAsync(new SessionBlockDownload(this));
+      //  }).ToArray();
 
-        await Task.WhenAll(downloadBlocksTask);
-      }
+      //  await Task.WhenAll(downloadBlocksTask);
+      //}
 
     }
   }

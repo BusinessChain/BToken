@@ -31,7 +31,7 @@ namespace BToken.Chaining
         public SessionBlockDownload(BlockchainController controller)
         {
           Controller = controller;
-          FileWriter = Controller.Blockchain.Archiver.GetWriter();
+          //FileWriter = Controller.Blockchain.Archiver.GetWriter();
         }
 
         public override async Task StartAsync(BlockchainChannel channel)

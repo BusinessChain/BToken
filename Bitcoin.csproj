@@ -99,7 +99,7 @@
     <Compile Include="Chaining\Blockchain\IPayloadParser.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainException.cs" />
     <Compile Include="Chaining\Blockchain\Chain\Chain.cs" />
-    <Compile Include="Chaining\Blockchain\IBlockStore.cs" />
+    <Compile Include="Chaining\Blockchain\IHeaderArchiver.cs" />
     <Compile Include="Chaining\Blockchain\IBlockchainNetwork.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\Hashing.cs" />

@@ -151,7 +151,7 @@ namespace BToken.Chaining
               }
             }
 
-            using (var archiveWriter = new HeaderArchiver.HeaderWriter())
+            using (var archiveWriter = Controller.Blockchain.Archiver.GetWriter())
             {
               archiveWriter.StoreHeader(header);
             }

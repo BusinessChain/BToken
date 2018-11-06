@@ -22,13 +22,10 @@ namespace BToken.Chaining
         List<BlockLocation> HeaderLocator;
         List<NetworkHeader> Headers = new List<NetworkHeader>();
 
-        BlockArchiver.FileWriter FileWriter;
-
 
         public SessionHeaderDownload(Blockchain blockchain)
         {
           Blockchain = blockchain;
-          FileWriter = Blockchain.Archiver.GetWriter();
         }
 
         public override async Task StartAsync(BlockchainChannel channel)
@@ -40,7 +37,7 @@ namespace BToken.Chaining
 
         async Task DownloadHeadersAsync()
         {
-          using (var archiveWriter = new HeaderArchiver.HeaderWriter())
+          using (var archiveWriter = Blockchain.Archiver.GetWriter())
           {
             await ReceiveHeaders().ConfigureAwait(false);
 
@@ -54,7 +51,7 @@ namespace BToken.Chaining
         }
         async Task ReceiveHeaders() => Headers = await GetHeadersAsync();
 
-        void InsertHeaders(HeaderArchiver.HeaderWriter archiveWriter)
+        void InsertHeaders(IHeaderWriter archiveWriter)
         {
           foreach (NetworkHeader header in Headers)
           {
