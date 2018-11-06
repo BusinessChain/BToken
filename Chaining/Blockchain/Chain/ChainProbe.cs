@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using BToken.Networking;
+
 namespace BToken.Chaining
 {
   public partial class Blockchain
@@ -25,7 +27,7 @@ namespace BToken.Chaining
         Initialize();
       }
 
-      public void Initialize()
+      void Initialize()
       {
         Block = Chain.BlockTip;
         Hash = Chain.BlockTipHash;
@@ -39,12 +41,12 @@ namespace BToken.Chaining
 
         while (true)
         {
-          if (IsHash(hash))
+          if (Hash.IsEqual(hash))
           {
             return true;
           }
 
-          if (IsRoot())
+          if (Block == Chain.BlockRoot)
           {
             return false;
           }
@@ -52,8 +54,7 @@ namespace BToken.Chaining
           Push();
         }
       }
-
-      public void Push()
+      void Push()
       {
         Hash = Block.Header.HashPrevious;
         Block = Block.BlockPrevious;
@@ -61,14 +62,22 @@ namespace BToken.Chaining
 
         Depth++;
       }
-      public void ConnectBlock(ChainBlock block)
+
+      public void ConnectHeader(NetworkHeader header)
       {
+        var block = new ChainBlock(header);
+
         block.BlockPrevious = Block;
         Block.BlocksNext.Add(block);
       }
-
-      public void ForkChain(ChainBlock block, UInt256 headerHash)
+      public void ExtendChain(UInt256 headerHash)
       {
+        ChainBlock block = Block.BlocksNext.Last();
+        Chain.ExtendChain(block, headerHash);
+      }
+      public void ForkChain(UInt256 headerHash)
+      {
+        ChainBlock block = Block.BlocksNext.Last();
         ChainBlock blockHighestAssigned = block.BlockStore != null ? block : null;
         uint blockTipHeight = GetHeight() + 1;
 
@@ -81,10 +90,8 @@ namespace BToken.Chaining
           accumulatedDifficultyPrevious: AccumulatedDifficulty);
 
       }
-
-      public bool IsHash(UInt256 hash) => Hash.IsEqual(hash);
+      
       public bool IsTip() => Block == Chain.BlockTip;
-      public bool IsRoot() => Block == Chain.BlockRoot;
       public uint GetHeight() => Chain.Height - Depth;
 
     }

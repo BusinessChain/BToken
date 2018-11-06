@@ -18,13 +18,18 @@ namespace BToken.Chaining
     {
       partial class BlockchainChannel
       {
-        BlockchainController Controller;
+        Blockchain Blockchain;
+        Network Network;
+        IHeaderArchiver Archiver;
+
         public BufferBlock<NetworkMessage> Buffer;
 
 
-        public BlockchainChannel(BlockchainController controller)
+        public BlockchainChannel(Blockchain blockchain, Network network, IHeaderArchiver archiver)
         {
-          Controller = controller;
+          Blockchain = blockchain;
+          Network = network;
+          Archiver = archiver;
         }
 
         public async Task StartMessageListenerAsync()
@@ -63,18 +68,18 @@ namespace BToken.Chaining
 
         public async Task ConnectAsync()
         {
-          uint blockchainHeight = Controller.Blockchain.GetHeight();
-          Buffer = await Controller.Network.CreateBlockchainChannelAsync(blockchainHeight);
+          uint blockchainHeight = Blockchain.MainChain.Height;
+          Buffer = await Network.CreateBlockchainChannelAsync(blockchainHeight);
         }
         public async Task ConnectInboundAsync()
         {
-          uint blockchainHeight = Controller.Blockchain.GetHeight();
-          Buffer = await Controller.Network.AcceptInboundBlockchainChannelAsync(blockchainHeight);
+          uint blockchainHeight = Blockchain.MainChain.Height;
+          Buffer = await Network.AcceptInboundBlockchainChannelAsync(blockchainHeight);
         }
 
         void Disconnect()
         {
-          Controller.Network.CloseChannel(Buffer);
+          Network.CloseChannel(Buffer);
           Buffer = null;
         }
 
@@ -133,7 +138,7 @@ namespace BToken.Chaining
           {
             try
             {
-              Controller.Blockchain.InsertHeader(header);
+              Blockchain.InsertHeader(header);
             }
             catch (BlockchainException ex)
             {
@@ -151,25 +156,24 @@ namespace BToken.Chaining
               }
             }
 
-            using (var archiveWriter = new HeaderArchiver.HeaderWriter())
+            using (var archiveWriter = Archiver.GetWriter())
             {
               archiveWriter.StoreHeader(header);
             }
           }
         }
 
-        public async Task RequestHeadersAsync(List<BlockLocation> headerLocator) => await Controller.Network.GetHeadersAsync(Buffer, headerLocator.Select(b => b.Hash).ToList());
-        List<BlockLocation> GetHeaderLocator() => Controller.Blockchain.GetBlockLocations();
+        public async Task RequestHeadersAsync(List<BlockLocation> headerLocator) => await Network.GetHeadersAsync(Buffer, headerLocator.Select(b => b.Hash).ToList());
 
-        public async Task RequestBlocksAsync(List<UInt256> blockHashes) => await Controller.Network.GetBlockAsync(Buffer, blockHashes).ConfigureAwait(false);
+        public async Task RequestBlocksAsync(List<UInt256> blockHashes) => await Network.GetBlockAsync(Buffer, blockHashes).ConfigureAwait(false);
 
         void BlameConsensusError()
         {
-          Controller.Network.BlameConsensusError(Buffer);
+          Network.BlameConsensusError(Buffer);
         }
         void BlameProtocolError()
         {
-          Controller.Network.BlameProtocolError(Buffer);
+          Network.BlameProtocolError(Buffer);
         }
       }
     }

@@ -21,10 +21,10 @@ namespace BToken.Chaining
 
 
 
-      public Chain(ChainBlock blockRoot, UInt256 blockRootHash)
+      public Chain(ChainBlock blockRoot)
       {
         BlockTip = blockRoot;
-        BlockTipHash = blockRootHash;
+        BlockTipHash = new UInt256(Hashing.SHA256d(blockRoot.Header.GetBytes()));
         Height = 0;
         BlockRoot = blockRoot;
         AccumulatedDifficulty = TargetManager.GetDifficulty(blockRoot.Header.NBits);

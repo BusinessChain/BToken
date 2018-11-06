@@ -19,18 +19,15 @@ namespace BToken.Chaining
       class SessionHeaderDownload : BlockchainSession
       {
         Blockchain Blockchain;
-        BlockchainController Controller;
         List<BlockLocation> HeaderLocator;
         List<NetworkHeader> Headers = new List<NetworkHeader>();
+        IHeaderArchiver Archiver;
 
-        Archiver.FileWriter FileWriter;
 
-
-        public SessionHeaderDownload(BlockchainController controller)
+        public SessionHeaderDownload(Blockchain blockchain, IHeaderArchiver archiver)
         {
-          Controller = controller;
-          Blockchain = controller.Blockchain;
-          FileWriter = Controller.Archiver.GetWriter();
+          Blockchain = blockchain;
+          Archiver = archiver;
         }
 
         public override async Task StartAsync(BlockchainChannel channel)
@@ -42,7 +39,7 @@ namespace BToken.Chaining
 
         async Task DownloadHeadersAsync()
         {
-          using (var archiveWriter = new HeaderArchiver.HeaderWriter())
+          using (var archiveWriter = Archiver.GetWriter())
           {
             await ReceiveHeaders().ConfigureAwait(false);
 
@@ -56,7 +53,7 @@ namespace BToken.Chaining
         }
         async Task ReceiveHeaders() => Headers = await GetHeadersAsync();
 
-        void InsertHeaders(HeaderArchiver.HeaderWriter archiveWriter)
+        void InsertHeaders(IHeaderWriter archiveWriter)
         {
           foreach (NetworkHeader header in Headers)
           {
@@ -153,7 +150,7 @@ namespace BToken.Chaining
 
         async Task<List<NetworkHeader>> GetHeadersAsync()
         {
-          HeaderLocator = Blockchain.GetBlockLocations();
+          HeaderLocator = Blockchain.Locator.BlockLocations;
           await Channel.RequestHeadersAsync(HeaderLocator).ConfigureAwait(false);
 
           CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;

@@ -23,7 +23,7 @@ namespace BToken.Chaining
         List<ChainBlock> BlocksQueued = new List<ChainBlock>();
         List<ChainBlock> BlocksDownloaded = new List<ChainBlock>();
 
-        Archiver.FileWriter FileWriter;
+        BlockArchiver.FileWriter FileWriter;
 
         int BlocksDispachedCountTotal;
 
@@ -31,7 +31,7 @@ namespace BToken.Chaining
         public SessionBlockDownload(BlockchainController controller)
         {
           Controller = controller;
-          FileWriter = Controller.Archiver.GetWriter();
+          //FileWriter = Controller.Blockchain.Archiver.GetWriter();
         }
 
         public override async Task StartAsync(BlockchainChannel channel)
@@ -78,7 +78,7 @@ namespace BToken.Chaining
             ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
 
             BlockStore payloadStoreID = FileWriter.PeekPayloadID(networkBlock.Payload.Length);
-            Controller.Blockchain.InsertPayload(blockQueued, networkBlock.Payload, payloadStoreID);
+            //Controller.Blockchain.InsertPayload(blockQueued, networkBlock.Payload, payloadStoreID);
             FileWriter.ArchiveBlock(networkBlock);
 
             BlocksDownloaded.Add(blockQueued);

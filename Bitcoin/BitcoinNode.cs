@@ -24,13 +24,12 @@ namespace BToken.Bitcoin
         new BlockLocation(height : 250000, hash : new UInt256("000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214")),
         new BlockLocation(height : 535419, hash : new UInt256("000000000000000000209ecbacceb3e7b8ec520ed7f1cfafbe149dd2b9007d39"))
       };
+    HeaderArchiver HeaderArchiver = new HeaderArchiver();
 
     public BitcoinNode()
     {
       Network = new Network();
-
-      Blockchain = new Blockchain(BitcoinGenesisBlock, Network, BitcoinPayloadParser, Checkpoints);
-
+      Blockchain = new Blockchain(BitcoinGenesisBlock, Network, Checkpoints, HeaderArchiver);
       UTXO = new UnspentTXOutputs(Blockchain, Network);
     }
 

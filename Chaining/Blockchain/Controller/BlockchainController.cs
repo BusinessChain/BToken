@@ -19,26 +19,25 @@ namespace BToken.Chaining
     {
       Network Network;
       Blockchain Blockchain;
+      IHeaderArchiver Archiver;
 
       const int CHANNELS_COUNT_OUTBOUND = 8;
       List<BlockchainChannel> ChannelsOutbound = new List<BlockchainChannel>();
-
       List<BlockchainChannel> ChannelsInbound = new List<BlockchainChannel>();
 
-      Archiver Archiver;
 
 
-      public BlockchainController(Network network, Blockchain blockchain)
+      public BlockchainController(Network network, Blockchain blockchain, IHeaderArchiver archiver)
       {
         Network = network;
         Blockchain = blockchain;
+        Archiver = archiver;
 
         for (int i = 0; i < CHANNELS_COUNT_OUTBOUND; i++)
         {
-          ChannelsOutbound.Add(new BlockchainChannel(this));
+          ChannelsOutbound.Add(new BlockchainChannel(Blockchain, Network, Archiver));
         }
 
-        Archiver = new Archiver(blockchain);
       }
 
       public async Task StartAsync()
@@ -48,7 +47,7 @@ namespace BToken.Chaining
         LoadHeadersFromArchive();
         
         BlockchainChannel channelConnectedFirst = await await Task.WhenAny(connectChannelsTasks);
-        await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(this));
+        await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain, Archiver));
 
         StartMessageListeners(connectChannelsTasks);
 
@@ -58,7 +57,7 @@ namespace BToken.Chaining
       {
         while(ChannelsInbound.Count <= Network.PEERS_COUNT_INBOUND)
         {
-          var channelInbound = new BlockchainChannel(this);
+          var channelInbound = new BlockchainChannel(Blockchain, Network, Archiver);
           await channelInbound.ConnectInboundAsync();
           ChannelsInbound.Add(channelInbound);
         }
@@ -84,7 +83,7 @@ namespace BToken.Chaining
       {
         try
         {
-          using (var archiveReader = new HeaderArchiver.HeaderReader())
+          using (var archiveReader = Archiver.GetReader())
           {
             NetworkHeader header = archiveReader.GetNextHeader();
 
@@ -102,15 +101,15 @@ namespace BToken.Chaining
         }
       }
       
-      async Task DownloadBlocksAsync(BlockchainChannel[] channels)
-      {
-        Task[] downloadBlocksTask = channels.Select(async channel =>
-        {
-          await channel.ExecuteSessionAsync(new SessionBlockDownload(this));
-        }).ToArray();
+      //async Task DownloadBlocksAsync(BlockchainChannel[] channels)
+      //{
+      //  Task[] downloadBlocksTask = channels.Select(async channel =>
+      //  {
+      //    await channel.ExecuteSessionAsync(new SessionBlockDownload(this));
+      //  }).ToArray();
 
-        await Task.WhenAll(downloadBlocksTask);
-      }
+      //  await Task.WhenAll(downloadBlocksTask);
+      //}
 
     }
   }

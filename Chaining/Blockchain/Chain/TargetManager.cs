@@ -41,6 +41,15 @@ namespace BToken.Chaining
 
         return UInt256.Min(DIFFICULTY_1_TARGET, targetNew);
       }
+      static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
+      {
+        if (depth == 0 || block.BlockPrevious == null)
+        {
+          return block;
+        }
+
+        return GetBlockPrevious(block.BlockPrevious, --depth);
+      }
       static ulong Limit(ulong actualTimespan)
       {
         if (actualTimespan < RETARGETING_TIMESPAN_INTERVAL / 4)
