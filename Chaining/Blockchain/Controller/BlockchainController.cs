@@ -19,6 +19,7 @@ namespace BToken.Chaining
     {
       Network Network;
       Blockchain Blockchain;
+      IHeaderArchiver Archiver;
 
       const int CHANNELS_COUNT_OUTBOUND = 8;
       List<BlockchainChannel> ChannelsOutbound = new List<BlockchainChannel>();
@@ -26,14 +27,15 @@ namespace BToken.Chaining
 
 
 
-      public BlockchainController(Network network, Blockchain blockchain)
+      public BlockchainController(Network network, Blockchain blockchain, IHeaderArchiver archiver)
       {
         Network = network;
         Blockchain = blockchain;
+        Archiver = archiver;
 
         for (int i = 0; i < CHANNELS_COUNT_OUTBOUND; i++)
         {
-          ChannelsOutbound.Add(new BlockchainChannel(this));
+          ChannelsOutbound.Add(new BlockchainChannel(Blockchain, Network, Archiver));
         }
 
       }
@@ -45,7 +47,7 @@ namespace BToken.Chaining
         LoadHeadersFromArchive();
         
         BlockchainChannel channelConnectedFirst = await await Task.WhenAny(connectChannelsTasks);
-        await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain));
+        await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain, Archiver));
 
         StartMessageListeners(connectChannelsTasks);
 
@@ -55,7 +57,7 @@ namespace BToken.Chaining
       {
         while(ChannelsInbound.Count <= Network.PEERS_COUNT_INBOUND)
         {
-          var channelInbound = new BlockchainChannel(this);
+          var channelInbound = new BlockchainChannel(Blockchain, Network, Archiver);
           await channelInbound.ConnectInboundAsync();
           ChannelsInbound.Add(channelInbound);
         }
@@ -81,7 +83,7 @@ namespace BToken.Chaining
       {
         try
         {
-          using (var archiveReader = Blockchain.Archiver.GetReader())
+          using (var archiveReader = Archiver.GetReader())
           {
             NetworkHeader header = archiveReader.GetNextHeader();
 
