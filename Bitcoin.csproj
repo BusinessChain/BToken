@@ -106,6 +106,7 @@
     <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
     <Compile Include="Chaining\Blockchain\Chain\TargetManager.cs" />
     <Compile Include="Networking\DataTypes\NetworkAddress.cs" />
+    <Compile Include="Networking\IPeerSession.cs" />
     <Compile Include="Networking\Messages\AddressMessage.cs" />
     <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\DataTypes\Inventory.cs" />

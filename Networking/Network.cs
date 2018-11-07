@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -19,22 +20,28 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-
-    List<Peer> PeersOutbound = new List<Peer>();
-
+    
     static UInt64 Nonce;
     NetworkAddressPool AddressPool;
 
     TcpListener TcpListener;
     public const int PEERS_COUNT_INBOUND = 8;
-    List<Peer> PeersInbound = new List<Peer>();
+    ConcurrentBag<Peer> PeersInbound = new ConcurrentBag<Peer>();
+
+    public const int PEERS_COUNT_OUTBOUND = 8;
+    ConcurrentBag<Peer> PeersOutbound = new ConcurrentBag<Peer>();
+
+    BufferBlock<IPeerSession> PeerSessionQueue;
+    BufferBlock<Peer> PeersAvailable;
 
     public Network()
     {
       Nonce = createNonce();
       AddressPool = new NetworkAddressPool();
-
+      
       TcpListener = CreateTcpListener();
+
+      CreatePeersOutbound();
     }
     static ulong createNonce()
     {
@@ -56,6 +63,23 @@ namespace BToken.Networking
         return null;
       }
     }
+    void CreatePeersOutbound()
+    {
+      Peer[] peers = new Peer[PEERS_COUNT_OUTBOUND];
+      for (int i = 0; i < PEERS_COUNT_OUTBOUND; i++)
+      {
+        peers[i] = new Peer(this);
+      }
+
+      peers.Select(async peer =>
+      {
+        IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
+        await peer.ConnectAsync(iPAddress);
+        Task peerStartTask = peer.ProcessNetworkMessageAsync();
+
+        await PeersAvailable.SendAsync(peer);
+      }).ToArray();
+    }
 
     public void Start()
     {
@@ -76,7 +100,7 @@ namespace BToken.Networking
 
           PeersInbound.Add(peer);
 
-          Task peerStartTask = peer.StartAsync();
+          Task peerProcessNetworkMessageTask = peer.ProcessNetworkMessageAsync();
 
           return peer.NetworkMessageBufferBlockchain;
         }
@@ -89,22 +113,25 @@ namespace BToken.Networking
 
     public async Task<BufferBlock<NetworkMessage>> CreateBlockchainChannelAsync(uint blockheightLocal)
     {
+      Peer peer = await CreatePeerAsync(blockheightLocal);
+      return peer.NetworkMessageBufferBlockchain;
+    }
+    async Task<Peer> CreatePeerAsync(uint blockheightLocal)
+    {
       int connectionTries = 0;
       while (true)
       {
         try
         {
-          IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
-          Peer peer = new Peer(new IPEndPoint(iPAddress, Port), this);
+          Peer peer = new Peer(this);
 
-          await peer.ConnectTCPAsync().ConfigureAwait(false);
-          await peer.HandshakeAsync(blockheightLocal).ConfigureAwait(false);
+          IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
+          await peer.ConnectAsync(blockheightLocal, iPAddress);
+          Task peerStartTask = peer.ProcessNetworkMessageAsync();
 
           PeersOutbound.Add(peer);
 
-          Task peerStartTask = peer.StartAsync();
-
-          return peer.NetworkMessageBufferBlockchain;
+          return peer;
         }
         catch (Exception ex)
         {
@@ -112,6 +139,7 @@ namespace BToken.Networking
             + "\nConnection tries: '{0}'", ++connectionTries);
         }
       }
+
     }
 
     public void CloseChannel(BufferBlock<NetworkMessage> buffer)

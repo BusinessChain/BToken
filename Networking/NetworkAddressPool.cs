@@ -51,7 +51,7 @@ namespace BToken.Networking
 
         if(SeedNodeIPAddresses.Count == 0)
         {
-         throw new InvalidOperationException("No seed addresses downloaded.");
+         throw new NetworkException("No seed addresses downloaded.");
         }
       }
 
