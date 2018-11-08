@@ -79,7 +79,7 @@ namespace BToken.Networking
         }
       }
 
-      public VersionMessage(UInt32 blockchainHeight) : base("version")
+      public VersionMessage() : base("version")
       {
         ProtocolVersion = Network.ProtocolVersion;
         NetworkServicesLocal = (UInt64)NetworkServicesLocalProvided;
@@ -91,7 +91,7 @@ namespace BToken.Networking
         PortLocal = Network.Port;
         Nonce = Network.Nonce;
         UserAgent = Network.UserAgent;
-        BlockchainHeight = blockchainHeight;
+        BlockchainHeight = 0; // We do not have that information at this point. I recommend this should be ignored.
         RelayOption = Network.RelayOption;
         
         serializePayload();

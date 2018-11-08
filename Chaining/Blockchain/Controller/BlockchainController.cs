@@ -17,7 +17,7 @@ namespace BToken.Chaining
   {
     partial class BlockchainController
     {
-      Network Network;
+      INetwork Network;
       Blockchain Blockchain;
       IHeaderArchiver Archiver;
 
@@ -27,7 +27,7 @@ namespace BToken.Chaining
 
 
 
-      public BlockchainController(Network network, Blockchain blockchain, IHeaderArchiver archiver)
+      public BlockchainController(INetwork network, Blockchain blockchain, IHeaderArchiver archiver)
       {
         Network = network;
         Blockchain = blockchain;
@@ -51,16 +51,16 @@ namespace BToken.Chaining
 
         StartMessageListeners(connectChannelsTasks);
 
-        Task inboundChannelListenerTask = StartInboundChannelListenerAsync();
+        //Task inboundChannelListenerTask = StartInboundChannelListenerAsync();
       }
       async Task StartInboundChannelListenerAsync()
       {
-        while(ChannelsInbound.Count <= Network.PEERS_COUNT_INBOUND)
-        {
-          var channelInbound = new BlockchainChannel(Blockchain, Network, Archiver);
-          await channelInbound.ConnectInboundAsync();
-          ChannelsInbound.Add(channelInbound);
-        }
+        //while(ChannelsInbound.Count <= Network.PEERS_COUNT_INBOUND)
+        //{
+        //  var channelInbound = new BlockchainChannel(Blockchain, Network, Archiver);
+        //  await channelInbound.ConnectInboundAsync();
+        //  ChannelsInbound.Add(channelInbound);
+        //}
       }
       Task<BlockchainChannel>[] ConnectChannelsAsync()
       {

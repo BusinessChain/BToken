@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  class IPeerSession
+  public interface IBlockchain
   {
+    // Serve unolicited request from the network, like getheaders.
   }
 }

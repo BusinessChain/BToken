@@ -13,7 +13,7 @@ namespace BToken.Networking
 {
   partial class Network
   {
-    partial class Peer : IDisposable
+    partial class Peer : IDisposable, INetworkChannel
     {
       Network Network;
       IPEndPoint IPEndPoint;
@@ -47,11 +47,22 @@ namespace BToken.Networking
       }
 
 
-      public async Task ConnectAsync(IPAddress iPAddress)
+      public async Task ConnectAsync()
       {
+        IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
         IPEndPoint = new IPEndPoint(iPAddress, Port);
         await ConnectTCPAsync().ConfigureAwait(false);
         await HandshakeAsync().ConfigureAwait(false);
+        Task peerStartTask = ProcessNetworkMessageAsync();
+        Task sessionListenerTask = StartSessionListenerAsync();
+      }
+      async Task StartSessionListenerAsync()
+      {
+        while (true)
+        {
+          INetworkSession session = await Network.NetworkSessionQueue.ReceiveAsync().ConfigureAwait(false);
+          await ExecuteSessionAsync(session);
+        }
       }
 
       public async Task ConnectTCPAsync()
@@ -62,7 +73,7 @@ namespace BToken.Networking
       }
       public async Task HandshakeAsync()
       {
-        await NetworkMessageStreamer.WriteAsync(new VersionMessage(blockchainHeightLocal)).ConfigureAwait(false);
+        await NetworkMessageStreamer.WriteAsync(new VersionMessage()).ConfigureAwait(false);
         
         CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
 
@@ -159,8 +170,29 @@ namespace BToken.Networking
 
         NetworkMessageBufferBlockchain.Post(null);
         NetworkMessageBufferUTXO.Post(null);
+      }
 
-        Network.PeersOutbound.Remove(this);
+      public async Task ExecuteSessionAsync(INetworkSession session)
+      {
+        int sessionExcecutionTries = 0;
+
+        while (true)
+        {
+          try
+          {
+            await session.StartAsync(this);
+            return;
+          }
+          catch (Exception ex)
+          {
+            Debug.WriteLine("Peer::ExecuteSessionAsync:" + ex.Message +
+            ", Session excecution tries: '{0}'", ++sessionExcecutionTries);
+
+            Dispose();
+
+            await ConnectAsync().ConfigureAwait(false);
+          }
+        }
       }
 
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));

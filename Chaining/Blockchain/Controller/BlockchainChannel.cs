@@ -25,10 +25,10 @@ namespace BToken.Chaining
         public BufferBlock<NetworkMessage> Buffer;
 
 
-        public BlockchainChannel(Blockchain blockchain, Network network, IHeaderArchiver archiver)
+        public BlockchainChannel(Blockchain blockchain, INetwork network, IHeaderArchiver archiver)
         {
           Blockchain = blockchain;
-          Network = network;
+          Network = (Network)network;
           Archiver = archiver;
         }
 

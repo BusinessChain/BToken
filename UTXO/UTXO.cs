@@ -11,14 +11,14 @@ namespace BToken.Accounting
 {
   public class UnspentTXOutputs
   {
-    Network NetworkAdapter;
+    INetwork Network;
     Blockchain Blockchain;
 
 
     // API
-    public UnspentTXOutputs(Blockchain blockchain, Network networkAdapter)
+    public UnspentTXOutputs(Blockchain blockchain, INetwork network)
     {
-      NetworkAdapter = networkAdapter;
+      Network = network;
       Blockchain = blockchain;
     }
 

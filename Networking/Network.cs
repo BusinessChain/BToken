@@ -9,10 +9,11 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
+using BToken.Chaining;
 
 namespace BToken.Networking
 {
-  public partial class Network
+  public partial class Network : INetwork
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
@@ -29,13 +30,15 @@ namespace BToken.Networking
     ConcurrentBag<Peer> PeersInbound = new ConcurrentBag<Peer>();
 
     public const int PEERS_COUNT_OUTBOUND = 8;
-    ConcurrentBag<Peer> PeersOutbound = new ConcurrentBag<Peer>();
+    List<Peer> PeersOutbound = new List<Peer>();
 
-    BufferBlock<IPeerSession> PeerSessionQueue;
-    BufferBlock<Peer> PeersAvailable;
+    BufferBlock<INetworkSession> NetworkSessionQueue = new BufferBlock<INetworkSession>();
 
-    public Network()
+    IBlockchain Blockchain;
+
+    public Network(IBlockchain blockchain)
     {
+      Blockchain = blockchain;
       Nonce = createNonce();
       AddressPool = new NetworkAddressPool();
       
@@ -65,25 +68,23 @@ namespace BToken.Networking
     }
     void CreatePeersOutbound()
     {
-      Peer[] peers = new Peer[PEERS_COUNT_OUTBOUND];
       for (int i = 0; i < PEERS_COUNT_OUTBOUND; i++)
       {
-        peers[i] = new Peer(this);
+        PeersOutbound.Add(new Peer(this));
       }
-
-      peers.Select(async peer =>
-      {
-        IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
-        await peer.ConnectAsync(iPAddress);
-        Task peerStartTask = peer.ProcessNetworkMessageAsync();
-
-        await PeersAvailable.SendAsync(peer);
-      }).ToArray();
     }
 
     public void Start()
     {
+      StartPeersAsync();
       TcpListener.Start(PEERS_COUNT_INBOUND);
+    }
+    void StartPeersAsync()
+    {
+      PeersOutbound.Select(async peer =>
+      {
+        await peer.ConnectAsync().ConfigureAwait(false);
+      }).ToArray();
     }
 
     public async Task<BufferBlock<NetworkMessage>> AcceptInboundBlockchainChannelAsync(uint blockheightLocal)
@@ -96,7 +97,7 @@ namespace BToken.Networking
           Debug.WriteLine("received inbound request from " + client.Client.RemoteEndPoint.ToString());
           Peer peer = new Peer(client, this);
 
-          await peer.HandshakeAsync(blockheightLocal).ConfigureAwait(false);
+          await peer.HandshakeAsync().ConfigureAwait(false);
 
           PeersInbound.Add(peer);
 
@@ -125,9 +126,7 @@ namespace BToken.Networking
         {
           Peer peer = new Peer(this);
 
-          IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
-          await peer.ConnectAsync(blockheightLocal, iPAddress);
-          Task peerStartTask = peer.ProcessNetworkMessageAsync();
+          await peer.ConnectAsync();
 
           PeersOutbound.Add(peer);
 
@@ -152,7 +151,13 @@ namespace BToken.Networking
       }
     }
 
-    public async Task GetHeadersAsync(List<UInt256> headerLocator) => PeersOutbound.ForEach(p => p.GetHeadersAsync(headerLocator));
+    public async Task ExecuteSessionAsync(INetworkSession session)
+    {
+      // allenfalls könnte jeder Peer einen eigenen Queue haben, damit könnten 
+      // Broadcast versendet werden und einzelne Peers angesprochen werden.
+      await NetworkSessionQueue.SendAsync(session);
+    }
+
     public async Task GetHeadersAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> headerLocator)
     {
       Peer peer = GetPeerOwnerOfBuffer(buffer);

@@ -14,7 +14,7 @@ namespace BToken.Chaining
   public enum BlockCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
 
 
-  public partial class Blockchain
+  public partial class Blockchain : IBlockchain
   {
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
@@ -27,7 +27,7 @@ namespace BToken.Chaining
 
     public Blockchain(
       ChainBlock genesisBlock,
-      Network network,
+      INetwork network,
       List<BlockLocation> checkpoints,
       IHeaderArchiver archiver)
     {

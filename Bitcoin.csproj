@@ -101,12 +101,15 @@
     <Compile Include="Chaining\Blockchain\Chain\Chain.cs" />
     <Compile Include="Chaining\Blockchain\IHeaderArchiver.cs" />
     <Compile Include="Chaining\Blockchain\IBlockchainNetwork.cs" />
+    <Compile Include="Chaining\INetwork.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\Hashing.cs" />
     <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
     <Compile Include="Chaining\Blockchain\Chain\TargetManager.cs" />
     <Compile Include="Networking\DataTypes\NetworkAddress.cs" />
-    <Compile Include="Networking\IPeerSession.cs" />
+    <Compile Include="Networking\IBlockchain.cs" />
+    <Compile Include="Networking\INetworkChannel.cs" />
+    <Compile Include="Networking\INetworkSession.cs" />
     <Compile Include="Networking\Messages\AddressMessage.cs" />
     <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\DataTypes\Inventory.cs" />
