@@ -15,9 +15,11 @@ namespace BToken.Chaining
   {
     partial class BlockchainController
     {
-      class SessionBlockDownload : BlockchainSession
+      class SessionBlockDownload
       {
         BlockchainController Controller;
+
+        INetworkChannel Channel;
 
         const int BatchSize = 50;
         List<ChainBlock> BlocksQueued = new List<ChainBlock>();
@@ -34,7 +36,7 @@ namespace BToken.Chaining
           //FileWriter = Controller.Blockchain.Archiver.GetWriter();
         }
 
-        public override async Task StartAsync(BlockchainChannel channel)
+        public async Task StartAsync(INetworkChannel channel)
         {
           Channel = channel;
 

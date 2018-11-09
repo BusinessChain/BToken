@@ -89,8 +89,6 @@
     <Compile Include="Bitcoin\Archiver\BlockArchiver.cs" />
     <Compile Include="Bitcoin\Archiver\FileWriter.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
-    <Compile Include="Chaining\Blockchain\Controller\BlockchainChannel.cs" />
-    <Compile Include="Chaining\Blockchain\Controller\BlockchainSession.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockPayloadLocator.cs" />
     <Compile Include="Bitcoin\Archiver\BlockStore.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionBlockDownload.cs" />

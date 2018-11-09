@@ -27,7 +27,7 @@ namespace BToken.Networking
 
     TcpListener TcpListener;
     public const int PEERS_COUNT_INBOUND = 8;
-    ConcurrentBag<Peer> PeersInbound = new ConcurrentBag<Peer>();
+    List<Peer> PeersInbound = new List<Peer>();
 
     public const int PEERS_COUNT_OUTBOUND = 8;
     List<Peer> PeersOutbound = new List<Peer>();
@@ -35,6 +35,8 @@ namespace BToken.Networking
     BufferBlock<INetworkSession> NetworkSessionQueue = new BufferBlock<INetworkSession>();
 
     IBlockchain Blockchain;
+    public BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
+    public BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
 
     public Network(IBlockchain blockchain)
     {
@@ -42,7 +44,7 @@ namespace BToken.Networking
       Nonce = createNonce();
       AddressPool = new NetworkAddressPool();
       
-      TcpListener = CreateTcpListener();
+      TcpListener = new TcpListener(IPAddress.Any, Port);
 
       CreatePeersOutbound();
     }
@@ -53,18 +55,6 @@ namespace BToken.Networking
       ulong number = (ulong)rnd.Next();
       number = number << 32;
       return number |= (uint)rnd.Next();
-    }
-    static TcpListener CreateTcpListener()
-    {
-      try
-      {
-        return new TcpListener(IPAddress.Any, Port);
-      }
-      catch (Exception ex)
-      {
-        Debug.WriteLine(ex.ToString());
-        return null;
-      }
     }
     void CreatePeersOutbound()
     {
@@ -77,18 +67,20 @@ namespace BToken.Networking
     public void Start()
     {
       StartPeersAsync();
-      TcpListener.Start(PEERS_COUNT_INBOUND);
+      Task inboundPeerListenerTask = StartInboundPeerListenerAsync();
     }
     void StartPeersAsync()
     {
       PeersOutbound.Select(async peer =>
       {
-        await peer.ConnectAsync().ConfigureAwait(false);
+        await peer.ConnectAsync();
       }).ToArray();
     }
 
-    public async Task<BufferBlock<NetworkMessage>> AcceptInboundBlockchainChannelAsync(uint blockheightLocal)
+    public async Task StartInboundPeerListenerAsync()
     {
+      TcpListener.Start(PEERS_COUNT_INBOUND);
+
       while (true)
       {
         try
@@ -96,14 +88,9 @@ namespace BToken.Networking
           TcpClient client = await TcpListener.AcceptTcpClientAsync();
           Debug.WriteLine("received inbound request from " + client.Client.RemoteEndPoint.ToString());
           Peer peer = new Peer(client, this);
-
-          await peer.HandshakeAsync().ConfigureAwait(false);
-
           PeersInbound.Add(peer);
 
-          Task peerProcessNetworkMessageTask = peer.ProcessNetworkMessageAsync();
-
-          return peer.NetworkMessageBufferBlockchain;
+          await peer.ConnectAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -112,43 +99,9 @@ namespace BToken.Networking
       }
     }
 
-    public async Task<BufferBlock<NetworkMessage>> CreateBlockchainChannelAsync(uint blockheightLocal)
+    public async Task<NetworkMessage> GetMessageBlockchainAsync()
     {
-      Peer peer = await CreatePeerAsync(blockheightLocal);
-      return peer.NetworkMessageBufferBlockchain;
-    }
-    async Task<Peer> CreatePeerAsync(uint blockheightLocal)
-    {
-      int connectionTries = 0;
-      while (true)
-      {
-        try
-        {
-          Peer peer = new Peer(this);
-
-          await peer.ConnectAsync();
-
-          PeersOutbound.Add(peer);
-
-          return peer;
-        }
-        catch (Exception ex)
-        {
-          Debug.WriteLine("Network::CreateBlockchainChannel: " + ex.Message
-            + "\nConnection tries: '{0}'", ++connectionTries);
-        }
-      }
-
-    }
-
-    public void CloseChannel(BufferBlock<NetworkMessage> buffer)
-    {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-
-      if(peer != null)
-      {
-        peer.Dispose();
-      }
+      return await NetworkMessageBufferBlockchain.ReceiveAsync();
     }
 
     public async Task ExecuteSessionAsync(INetworkSession session)

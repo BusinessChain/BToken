@@ -9,6 +9,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
+using BToken.Chaining;
+
 namespace BToken.Networking
 {
   partial class Network
@@ -21,10 +23,7 @@ namespace BToken.Networking
 
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
-
-      public BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
-      public BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
-      
+            
       public uint PenaltyScore { get; private set; }
 
 
@@ -138,21 +137,20 @@ namespace BToken.Networking
 
         if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
         {
-          await NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
+          await Network.NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
         }
         if (invMessage.GetTXInventories().Any())
         {
-          await NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
+          await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
         };
       }
-      async Task ProcessHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageBufferBlockchain.SendAsync(new HeadersMessage(networkMessage)).ConfigureAwait(false);
-      async Task ProcessBlockMessageAsync(NetworkMessage networkMessage) => await NetworkMessageBufferBlockchain.SendAsync(new BlockMessage(networkMessage)).ConfigureAwait(false);
-      public bool IsOwnerOfBuffer(BufferBlock<NetworkMessage> buffer) => buffer == NetworkMessageBufferBlockchain || buffer == NetworkMessageBufferUTXO;
+      async Task ProcessHeadersMessageAsync(NetworkMessage networkMessage) => await Network.NetworkMessageBufferBlockchain.SendAsync(new HeadersMessage(networkMessage)).ConfigureAwait(false);
+      async Task ProcessBlockMessageAsync(NetworkMessage networkMessage) => await Network.NetworkMessageBufferBlockchain.SendAsync(new BlockMessage(networkMessage)).ConfigureAwait(false);
+      public bool IsOwnerOfBuffer(BufferBlock<NetworkMessage> buffer) => buffer == Network.NetworkMessageBufferBlockchain || buffer == Network.NetworkMessageBufferUTXO;
 
       public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage).ConfigureAwait(false);
 
-      public async Task GetHeadersAsync(List<UInt256> headerLocator) => await NetworkMessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator)).ConfigureAwait(false);
-
+     
       public void Blame(uint penaltyScore)
       {
         PenaltyScore += penaltyScore;
@@ -167,9 +165,6 @@ namespace BToken.Networking
       public void Dispose()
       {
         TcpClient.Close();
-
-        NetworkMessageBufferBlockchain.Post(null);
-        NetworkMessageBufferUTXO.Post(null);
       }
 
       public async Task ExecuteSessionAsync(INetworkSession session)
@@ -202,6 +197,38 @@ namespace BToken.Networking
         List<Inventory> inventories = hashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h)).ToList();
         await NetworkMessageStreamer.WriteAsync(new GetDataMessage(inventories)).ConfigureAwait(false);
       }
+      public async Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator)
+      {
+        await NetworkMessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator)).ConfigureAwait(false);
+
+        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
+        Network.HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
+        return headersMessage.Headers;
+      }
+      async Task<HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
+      {
+        while (true)
+        {
+          NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
+          Network.HeadersMessage headersMessage = networkMessage as Network.HeadersMessage;
+
+          if (headersMessage != null)
+          {
+            return headersMessage;
+          }
+        }
+      }
+
+
+      public async Task RequestBlocksAsync(List<UInt256> headerHashes)
+      {
+        throw new NotImplementedException();
+      }
+      public async Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken token)
+      {
+        throw new NotImplementedException();
+      }
+
     }
   }
 }

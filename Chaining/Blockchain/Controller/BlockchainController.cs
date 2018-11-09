@@ -21,64 +21,23 @@ namespace BToken.Chaining
       Blockchain Blockchain;
       IHeaderArchiver Archiver;
 
-      const int CHANNELS_COUNT_OUTBOUND = 8;
-      List<BlockchainChannel> ChannelsOutbound = new List<BlockchainChannel>();
-      List<BlockchainChannel> ChannelsInbound = new List<BlockchainChannel>();
-
-
 
       public BlockchainController(INetwork network, Blockchain blockchain, IHeaderArchiver archiver)
       {
         Network = network;
         Blockchain = blockchain;
         Archiver = archiver;
-
-        for (int i = 0; i < CHANNELS_COUNT_OUTBOUND; i++)
-        {
-          ChannelsOutbound.Add(new BlockchainChannel(Blockchain, Network, Archiver));
-        }
-
       }
 
       public async Task StartAsync()
       {
-        Task<BlockchainChannel>[] connectChannelsTasks = ConnectChannelsAsync();
-
         LoadHeadersFromArchive();
-        
-        BlockchainChannel channelConnectedFirst = await await Task.WhenAny(connectChannelsTasks);
-        await channelConnectedFirst.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain, Archiver));
 
-        StartMessageListeners(connectChannelsTasks);
+        await Network.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain, Archiver));
 
-        //Task inboundChannelListenerTask = StartInboundChannelListenerAsync();
-      }
-      async Task StartInboundChannelListenerAsync()
-      {
-        //while(ChannelsInbound.Count <= Network.PEERS_COUNT_INBOUND)
-        //{
-        //  var channelInbound = new BlockchainChannel(Blockchain, Network, Archiver);
-        //  await channelInbound.ConnectInboundAsync();
-        //  ChannelsInbound.Add(channelInbound);
-        //}
-      }
-      Task<BlockchainChannel>[] ConnectChannelsAsync()
-      {
-        return ChannelsOutbound.Select(async channel =>
-        {
-          await channel.ConnectAsync();
-          return channel;
-        }).ToArray();
-      }
-      void StartMessageListeners(Task<BlockchainChannel>[] createChannelsTasks)
-      {
-        createChannelsTasks.Select(async createChannelsTask =>
-        {
-          BlockchainChannel channel = await createChannelsTask;
-          Task listenerTask = channel.StartMessageListenerAsync();
-        }).ToArray();
-      }
+        Task startMessageListenerTask = StartMessageListenerAsync();
 
+      }
       void LoadHeadersFromArchive()
       {
         try
@@ -100,16 +59,61 @@ namespace BToken.Chaining
           Debug.WriteLine(ex.Message);
         }
       }
-      
-      //async Task DownloadBlocksAsync(BlockchainChannel[] channels)
-      //{
-      //  Task[] downloadBlocksTask = channels.Select(async channel =>
-      //  {
-      //    await channel.ExecuteSessionAsync(new SessionBlockDownload(this));
-      //  }).ToArray();
+      async Task StartMessageListenerAsync()
+      {
+        while (true)
+        {
+          NetworkMessage networkMessage = await Network.GetMessageBlockchainAsync();
 
-      //  await Task.WhenAll(downloadBlocksTask);
-      //}
+          switch (networkMessage)
+          {
+            case InvMessage invMessage:
+              //await ProcessInventoryMessageAsync(invMessage);
+              break;
+
+            case Network.HeadersMessage headersMessage:
+              ProcessHeadersMessage(headersMessage);
+              break;
+
+            case Network.BlockMessage blockMessage:
+              break;
+
+            default:
+              break;
+          }
+        }
+      }
+      void ProcessHeadersMessage(Network.HeadersMessage headersMessage)
+      {
+        foreach (NetworkHeader header in headersMessage.Headers)
+        {
+          try
+          {
+            Blockchain.InsertHeader(header);
+          }
+          catch (BlockchainException ex)
+          {
+            switch (ex.ErrorCode)
+            {
+              case BlockCode.ORPHAN:
+                //await ProcessOrphanSessionAsync(headerHash);
+                return;
+
+              case BlockCode.DUPLICATE:
+                return;
+
+              default:
+                throw ex;
+            }
+          }
+
+          using (var archiveWriter = Archiver.GetWriter())
+          {
+            archiveWriter.StoreHeader(header);
+          }
+        }
+      }
+                
 
     }
   }
