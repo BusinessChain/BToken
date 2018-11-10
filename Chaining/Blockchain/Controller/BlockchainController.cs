@@ -29,12 +29,12 @@ namespace BToken.Chaining
         Archiver = archiver;
       }
 
-      public async Task StartAsync()
+      public void Start()
       {
         LoadHeadersFromArchive();
         Debug.WriteLine("blockchain height after archive load: '{0}'", Blockchain.MainChain.Height);
 
-        await Network.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain, Archiver));
+        Network.QueueSession(new SessionHeaderDownload(Blockchain, Archiver));
 
         Task startMessageListenerTask = StartMessageListenerAsync();
 
@@ -114,8 +114,7 @@ namespace BToken.Chaining
           }
         }
       }
-                
-
+          
     }
   }
 }

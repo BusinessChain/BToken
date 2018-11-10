@@ -10,7 +10,7 @@ namespace BToken.Chaining
 {
   public interface INetwork
   {
-    Task ExecuteSessionAsync(INetworkSession session);
+    void QueueSession(INetworkSession session);
     Task<NetworkMessage> GetMessageBlockchainAsync();
   }
 }

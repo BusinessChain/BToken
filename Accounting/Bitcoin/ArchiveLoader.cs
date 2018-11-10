@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
-namespace BToken.Chaining
+namespace BToken.Accounting
 {
   partial class BlockArchiver
   {

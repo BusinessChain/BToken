@@ -67,10 +67,10 @@ namespace BToken.Networking
 
     public void Start()
     {
-      StartPeersAsync();
+      StartPeers();
       Task inboundPeerListenerTask = StartInboundPeerListenerAsync();
     }
-    void StartPeersAsync()
+    void StartPeers()
     {
       PeersOutbound.Select(async peer =>
       {
@@ -105,11 +105,11 @@ namespace BToken.Networking
       return await NetworkMessageBufferBlockchain.ReceiveAsync();
     }
 
-    public async Task ExecuteSessionAsync(INetworkSession session)
+    public void QueueSession(INetworkSession session)
     {
       // allenfalls könnte jeder Peer einen eigenen Queue haben, damit könnten 
       // Broadcast versendet werden und einzelne Peers angesprochen werden.
-      await NetworkSessionQueue.SendAsync(session);
+      NetworkSessionQueue.Post(session);
     }
 
     static long getUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();

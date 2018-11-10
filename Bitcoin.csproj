@@ -75,23 +75,24 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Bitcoin\BitcoinBlockPayload.cs" />
-    <Compile Include="Bitcoin\BitcoinPayloadParser.cs" />
-    <Compile Include="Bitcoin\BitcoinGenesisBlock.cs" />
-    <Compile Include="Bitcoin\BitcoinTX.cs" />
+    <Compile Include="Accounting\Bitcoin\Bitcoin.cs" />
+    <Compile Include="Accounting\Bitcoin\BitcoinBlockPayload.cs" />
+    <Compile Include="Accounting\Bitcoin\BitcoinPayloadParser.cs" />
+    <Compile Include="Accounting\Bitcoin\BitcoinGenesisBlock.cs" />
+    <Compile Include="Accounting\Bitcoin\BitcoinTX.cs" />
     <Compile Include="Chaining\Blockchain\BlockValidator.cs" />
     <Compile Include="Chaining\Blockchain\Chain\BlockLocator.cs" />
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
     <Compile Include="Chaining\Blockchain\Chain\ChainProbe.cs" />
     <Compile Include="Chaining\Blockchain\HeaderArchiver.cs" />
-    <Compile Include="Bitcoin\Archiver\ArchiveLoader.cs" />
-    <Compile Include="Bitcoin\Archiver\ArchiveShardLoader.cs" />
-    <Compile Include="Bitcoin\Archiver\BlockArchiver.cs" />
-    <Compile Include="Bitcoin\Archiver\FileWriter.cs" />
+    <Compile Include="Accounting\Bitcoin\ArchiveLoader.cs" />
+    <Compile Include="Accounting\Bitcoin\ArchiveShardLoader.cs" />
+    <Compile Include="Accounting\Bitcoin\BlockArchiver.cs" />
+    <Compile Include="Accounting\Bitcoin\FileWriter.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockPayloadLocator.cs" />
-    <Compile Include="Bitcoin\Archiver\BlockStore.cs" />
-    <Compile Include="Chaining\Blockchain\Controller\SessionBlockDownload.cs" />
+    <Compile Include="Accounting\Bitcoin\BlockStore.cs" />
+    <Compile Include="Accounting\Bitcoin\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Blockchain\Controller\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\Blockchain\IBlockPayload.cs" />
     <Compile Include="Chaining\Blockchain\IPayloadParser.cs" />
@@ -141,11 +142,10 @@
     <Compile Include="Networking\PeerHandshakeManager.cs" />
     <Compile Include="Networking\Peer.cs" />
     <Compile Include="Networking\ProtocolVersion.cs" />
-    <Compile Include="Bitcoin\BitcoinNode.cs" />
+    <Compile Include="Accounting\Bitcoin\BitcoinNode.cs" />
     <Compile Include="Networking\ServiceFlags.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="UTXO\UTXO.cs" />
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>
