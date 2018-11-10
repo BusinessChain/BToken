@@ -28,7 +28,7 @@ namespace BToken.Bitcoin
 
     public BitcoinNode()
     {
-      Network = new Network();
+      Network = new Network(Blockchain);
       Blockchain = new Blockchain(BitcoinGenesisBlock, Network, Checkpoints, HeaderArchiver);
       UTXO = new UnspentTXOutputs(Blockchain, Network);
     }

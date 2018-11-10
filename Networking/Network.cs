@@ -1,17 +1,20 @@
 ﻿using System.Diagnostics;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
+using BToken.Chaining;
 
 namespace BToken.Networking
 {
-  public partial class Network
+  public partial class Network : INetwork
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
@@ -19,9 +22,7 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-
-    List<Peer> PeersOutbound = new List<Peer>();
-
+    
     static UInt64 Nonce;
     NetworkAddressPool AddressPool;
 
@@ -29,12 +30,24 @@ namespace BToken.Networking
     public const int PEERS_COUNT_INBOUND = 8;
     List<Peer> PeersInbound = new List<Peer>();
 
-    public Network()
+    public const int PEERS_COUNT_OUTBOUND = 8;
+    List<Peer> PeersOutbound = new List<Peer>();
+
+    BufferBlock<INetworkSession> NetworkSessionQueue = new BufferBlock<INetworkSession>();
+
+    IBlockchain Blockchain;
+    public BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
+    public BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
+
+    public Network(IBlockchain blockchain)
     {
+      Blockchain = blockchain;
       Nonce = createNonce();
       AddressPool = new NetworkAddressPool();
+      
+      TcpListener = new TcpListener(IPAddress.Any, Port);
 
-      TcpListener = CreateTcpListener();
+      CreatePeersOutbound();
     }
     static ulong createNonce()
     {
@@ -44,26 +57,31 @@ namespace BToken.Networking
       number = number << 32;
       return number |= (uint)rnd.Next();
     }
-    static TcpListener CreateTcpListener()
+    void CreatePeersOutbound()
     {
-      try
+      for (int i = 0; i < PEERS_COUNT_OUTBOUND; i++)
       {
-        return new TcpListener(IPAddress.Any, Port);
-      }
-      catch (Exception ex)
-      {
-        Debug.WriteLine(ex.ToString());
-        return null;
+        PeersOutbound.Add(new Peer(this));
       }
     }
 
     public void Start()
     {
-      TcpListener.Start(PEERS_COUNT_INBOUND);
+      StartPeersAsync();
+      Task inboundPeerListenerTask = StartInboundPeerListenerAsync();
+    }
+    void StartPeersAsync()
+    {
+      PeersOutbound.Select(async peer =>
+      {
+        await peer.ConnectAsync();
+      }).ToArray();
     }
 
-    public async Task<BufferBlock<NetworkMessage>> AcceptInboundBlockchainChannelAsync(uint blockheightLocal)
+    public async Task StartInboundPeerListenerAsync()
     {
+      TcpListener.Start(PEERS_COUNT_INBOUND);
+
       while (true)
       {
         try
@@ -71,14 +89,9 @@ namespace BToken.Networking
           TcpClient client = await TcpListener.AcceptTcpClientAsync();
           Debug.WriteLine("received inbound request from " + client.Client.RemoteEndPoint.ToString());
           Peer peer = new Peer(client, this);
-
-          await peer.HandshakeAsync(blockheightLocal).ConfigureAwait(false);
-
           PeersInbound.Add(peer);
 
-          Task peerStartTask = peer.StartAsync();
-
-          return peer.NetworkMessageBufferBlockchain;
+          await peer.ConnectAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -87,128 +100,31 @@ namespace BToken.Networking
       }
     }
 
-    public async Task<BufferBlock<NetworkMessage>> CreateBlockchainChannelAsync(uint blockheightLocal)
+    public async Task<NetworkMessage> GetMessageBlockchainAsync()
     {
-      int connectionTries = 0;
-      while (true)
-      {
-        try
-        {
-          IPAddress iPAddress = AddressPool.GetRandomNodeAddress();
-          Peer peer = new Peer(new IPEndPoint(iPAddress, Port), this);
-
-          await peer.ConnectTCPAsync().ConfigureAwait(false);
-          await peer.HandshakeAsync(blockheightLocal).ConfigureAwait(false);
-
-          PeersOutbound.Add(peer);
-
-          Task peerStartTask = peer.StartAsync();
-
-          return peer.NetworkMessageBufferBlockchain;
-        }
-        catch (Exception ex)
-        {
-          Debug.WriteLine("Network::CreateBlockchainChannel: " + ex.Message
-            + "\nConnection tries: '{0}'", ++connectionTries);
-        }
-      }
+      return await NetworkMessageBufferBlockchain.ReceiveAsync();
     }
 
-    public void CloseChannel(BufferBlock<NetworkMessage> buffer)
+    public async Task ExecuteSessionAsync(INetworkSession session)
     {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-
-      if(peer != null)
-      {
-        peer.Dispose();
-      }
+      // allenfalls könnte jeder Peer einen eigenen Queue haben, damit könnten 
+      // Broadcast versendet werden und einzelne Peers angesprochen werden.
+      await NetworkSessionQueue.SendAsync(session);
     }
 
-    public async Task GetHeadersAsync(List<UInt256> headerLocator) => PeersOutbound.ForEach(p => p.GetHeadersAsync(headerLocator));
-    public async Task GetHeadersAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> headerLocator)
-    {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-
-      if (peer == null)
-      {
-        throw new NetworkException("No peer owning this buffer exists.");
-      }
-
-      try
-      {
-        await peer.GetHeadersAsync(headerLocator).ConfigureAwait(false);
-      }
-      catch
-      {
-        peer.Dispose();
-        throw new NetworkException("Peer has been disposed.");
-      }
-    }
-    Peer GetPeerOwnerOfBuffer(BufferBlock<NetworkMessage> buffer) => PeersOutbound.Find(p => p.IsOwnerOfBuffer(buffer));
-
-    public void BlameProtocolError(BufferBlock<NetworkMessage> buffer)
-    {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-      if (peer == null)
-      {
-        throw new NetworkException("No peer owning this buffer exists.");
-      }
-      peer.Blame(20);
-    }
-    public void BlameConsensusError(BufferBlock<NetworkMessage> buffer)
-    {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-      if (peer == null)
-      {
-        throw new NetworkException("No peer owning this buffer exists.");
-      }
-      peer.Blame(100);
-    }
-    
     static long getUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     public async Task PingAsync()
     {
-      var faultedPeers = new List<Peer>();
-
       foreach (Peer peer in PeersOutbound)
       {
-        try
-        {
-          await peer.PingAsync().ConfigureAwait(false);
-        }
-        catch
-        {
-          faultedPeers.Add(peer);
-        }
+        await peer.PingAsync().ConfigureAwait(false);
       }
-
-      faultedPeers.ForEach(p => p.Dispose());
     }
 
     public async Task GetBlocksAsync(List<UInt256> blockHashes)
     {
       await PeersOutbound.First().GetBlocksAsync(blockHashes).ConfigureAwait(false);
-    }
-    public async Task GetBlockAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> blockHashes)
-    {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-
-      if (peer == null)
-      {
-        throw new NetworkException("No peer owning this buffer exists.");
-      }
-
-      try
-      {
-        await peer.GetBlocksAsync(blockHashes).ConfigureAwait(false);
-      }
-      catch(Exception ex)
-      {
-        peer.Dispose();
-        Debug.WriteLine(ex.Message);
-        throw new NetworkException("Peer discarded due to connection error.");
-      }
     }
 
   }
