@@ -32,6 +32,7 @@ namespace BToken.Chaining
       public async Task StartAsync()
       {
         LoadHeadersFromArchive();
+        Debug.WriteLine("blockchain height after archive load: '{0}'", Blockchain.MainChain.Height);
 
         await Network.ExecuteSessionAsync(new SessionHeaderDownload(Blockchain, Archiver));
 

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
@@ -111,90 +112,19 @@ namespace BToken.Networking
       await NetworkSessionQueue.SendAsync(session);
     }
 
-    public async Task GetHeadersAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> headerLocator)
-    {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-
-      if (peer == null)
-      {
-        throw new NetworkException("No peer owning this buffer exists.");
-      }
-
-      try
-      {
-        await peer.GetHeadersAsync(headerLocator).ConfigureAwait(false);
-      }
-      catch
-      {
-        peer.Dispose();
-        throw new NetworkException("Peer has been disposed.");
-      }
-    }
-    Peer GetPeerOwnerOfBuffer(BufferBlock<NetworkMessage> buffer) => PeersOutbound.Find(p => p.IsOwnerOfBuffer(buffer));
-
-    public void BlameProtocolError(BufferBlock<NetworkMessage> buffer)
-    {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-      if (peer == null)
-      {
-        throw new NetworkException("No peer owning this buffer exists.");
-      }
-      peer.Blame(20);
-    }
-    public void BlameConsensusError(BufferBlock<NetworkMessage> buffer)
-    {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-      if (peer == null)
-      {
-        throw new NetworkException("No peer owning this buffer exists.");
-      }
-      peer.Blame(100);
-    }
-    
     static long getUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     public async Task PingAsync()
     {
-      var faultedPeers = new List<Peer>();
-
       foreach (Peer peer in PeersOutbound)
       {
-        try
-        {
-          await peer.PingAsync().ConfigureAwait(false);
-        }
-        catch
-        {
-          faultedPeers.Add(peer);
-        }
+        await peer.PingAsync().ConfigureAwait(false);
       }
-
-      faultedPeers.ForEach(p => p.Dispose());
     }
 
     public async Task GetBlocksAsync(List<UInt256> blockHashes)
     {
       await PeersOutbound.First().GetBlocksAsync(blockHashes).ConfigureAwait(false);
-    }
-    public async Task GetBlockAsync(BufferBlock<NetworkMessage> buffer, List<UInt256> blockHashes)
-    {
-      Peer peer = GetPeerOwnerOfBuffer(buffer);
-
-      if (peer == null)
-      {
-        throw new NetworkException("No peer owning this buffer exists.");
-      }
-
-      try
-      {
-        await peer.GetBlocksAsync(blockHashes).ConfigureAwait(false);
-      }
-      catch(Exception ex)
-      {
-        peer.Dispose();
-        Debug.WriteLine(ex.Message);
-        throw new NetworkException("Peer discarded due to connection error.");
-      }
     }
 
   }

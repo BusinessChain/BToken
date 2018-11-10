@@ -23,7 +23,11 @@ namespace BToken.Networking
 
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
-            
+
+      bool IsSessionExecuting = false;
+      BufferBlock<NetworkMessage> SessionMessageBuffer = new BufferBlock<NetworkMessage>();
+
+
       public uint PenaltyScore { get; private set; }
 
 
@@ -107,6 +111,9 @@ namespace BToken.Networking
               case "headers":
                 await ProcessHeadersMessageAsync(networkMessage).ConfigureAwait(false);
                 break;
+              case "getheaders":
+                await ProcessGetHeadersMessageAsync(networkMessage).ConfigureAwait(false);
+                break;
               case "block":
                 await ProcessBlockMessageAsync(networkMessage).ConfigureAwait(false);
                 break;
@@ -144,9 +151,25 @@ namespace BToken.Networking
           await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
         };
       }
-      async Task ProcessHeadersMessageAsync(NetworkMessage networkMessage) => await Network.NetworkMessageBufferBlockchain.SendAsync(new HeadersMessage(networkMessage)).ConfigureAwait(false);
+      async Task ProcessHeadersMessageAsync(NetworkMessage networkMessage)
+      {
+        var headersMessage = new HeadersMessage(networkMessage);
+
+        if (IsSessionExecuting)
+        {
+          await SessionMessageBuffer.SendAsync(headersMessage);
+        }
+        else
+        {
+          await Network.NetworkMessageBufferBlockchain.SendAsync(headersMessage);
+        }
+      }
+
       async Task ProcessBlockMessageAsync(NetworkMessage networkMessage) => await Network.NetworkMessageBufferBlockchain.SendAsync(new BlockMessage(networkMessage)).ConfigureAwait(false);
-      public bool IsOwnerOfBuffer(BufferBlock<NetworkMessage> buffer) => buffer == Network.NetworkMessageBufferBlockchain || buffer == Network.NetworkMessageBufferUTXO;
+      async Task ProcessGetHeadersMessageAsync(NetworkMessage networkMessage)
+      {
+        GetHeadersMessage getHeadersMessage = new GetHeadersMessage(networkMessage);
+      }
 
       public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage).ConfigureAwait(false);
 
@@ -175,11 +198,16 @@ namespace BToken.Networking
         {
           try
           {
+            IsSessionExecuting = true;
             await session.StartAsync(this);
+            IsSessionExecuting = false;
+
             return;
           }
           catch (Exception ex)
           {
+            IsSessionExecuting = false;
+
             Debug.WriteLine("Peer::ExecuteSessionAsync:" + ex.Message +
             ", Session excecution tries: '{0}'", ++sessionExcecutionTries);
 
@@ -202,15 +230,15 @@ namespace BToken.Networking
         await NetworkMessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator)).ConfigureAwait(false);
 
         CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-        Network.HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
+        HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
         return headersMessage.Headers;
       }
       async Task<HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
       {
         while (true)
         {
-          NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
-          Network.HeadersMessage headersMessage = networkMessage as Network.HeadersMessage;
+          NetworkMessage networkMessage = await SessionMessageBuffer.ReceiveAsync(cancellationToken).ConfigureAwait(false);
+          HeadersMessage headersMessage = networkMessage as HeadersMessage;
 
           if (headersMessage != null)
           {
