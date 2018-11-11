@@ -80,6 +80,8 @@
     <Compile Include="Accounting\Bitcoin\BitcoinPayloadParser.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinGenesisBlock.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinTX.cs" />
+    <Compile Include="Accounting\Bitcoin\IBlockArchiver.cs" />
+    <Compile Include="Accounting\INetwork.cs" />
     <Compile Include="Chaining\Blockchain\BlockValidator.cs" />
     <Compile Include="Chaining\Blockchain\Chain\BlockLocator.cs" />
     <Compile Include="Chaining\Blockchain\BlockLocation.cs" />

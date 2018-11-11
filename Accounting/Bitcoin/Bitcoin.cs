@@ -12,7 +12,7 @@ namespace BToken.Accounting
   {
     INetwork Network;
     Blockchain Blockchain;
-    BlockArchiver Archiver = new BlockArchiver();
+    BlockArchiver Archiver;
 
 
     // API
@@ -20,12 +20,14 @@ namespace BToken.Accounting
     {
       Network = network;
       Blockchain = blockchain;
+      Archiver = new BlockArchiver(blockchain, network);
     }
 
 
     public void Start()
     {
-      Network.QueueSession(new SessionBlockDownload(this, Archiver));
+      Archiver.InitialBlockDownload();
+      // listen to Bitcoin messages
     }
 
   }

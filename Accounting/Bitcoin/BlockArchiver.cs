@@ -9,13 +9,17 @@ using System.IO;
 using System.Text.RegularExpressions;
 
 using BToken.Networking;
+using BToken.Chaining;
 
 namespace BToken.Accounting
 {
   public partial class Bitcoin
   {
-    partial class BlockArchiver
+    partial class BlockArchiver : IBlockArchiver
     {
+      INetwork Network;
+      Blockchain Blockchain;
+
       readonly static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
 
@@ -29,13 +33,15 @@ namespace BToken.Accounting
       static string FileHandle = "BlockRegister";
 
 
-      public BlockArchiver()
+      public BlockArchiver(Blockchain blockchain, INetwork network)
       {
+        Blockchain = blockchain;
+        Network = network;
       }
 
       public void LoadBlockchain()
       {
-        using (ArchiveLoader loader = new ArchiveLoader(Blockchain))
+        using (ArchiveLoader loader = new ArchiveLoader())
         {
           loader.Load();
         }
@@ -97,6 +103,15 @@ namespace BToken.Accounting
           Debug.WriteLine("BlockArchiver::GetWriter: " + ex.Message);
           throw ex;
         }
+      }
+
+      public void InitialBlockDownload()
+      {
+        Network.QueueSession(new SessionBlockDownload(this, headerStart, headerStop));
+      }
+      void ReportSessionBlockckDownloadCompleted(SessionBlockDownload session)
+      {
+        Network.QueueSession(new SessionBlockDownload(this, session.Archiver, headerStart, headerStop));
       }
     }
   }

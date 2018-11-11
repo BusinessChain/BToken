@@ -14,7 +14,7 @@ namespace BToken.Accounting
 {
   public partial class Bitcoin
   {
-    class SessionBlockDownload
+    class SessionBlockDownload : INetworkSession
     {
       INetworkChannel Channel;
 
@@ -24,14 +24,15 @@ namespace BToken.Accounting
 
       Bitcoin Bitcoin;
       BlockArchiver.FileWriter FileWriter;
-      IBlockArchiver Archiver;
+      public IBlockArchiver Archiver;
 
       int BlocksDispachedCountTotal;
 
 
-      public SessionBlockDownload(Bitcoin bitcoin)
+      public SessionBlockDownload(Bitcoin bitcoin, IBlockArchiver archiver)
       {
         Bitcoin = bitcoin;
+        Archiver = archiver;
         FileWriter = BlockArchiver.GetWriter();
       }
 
@@ -79,7 +80,6 @@ namespace BToken.Accounting
           Blockchain.ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
 
           BlockStore payloadStoreID = FileWriter.PeekPayloadID(networkBlock.Payload.Length);
-          Blockchain.InsertPayload(blockQueued, networkBlock.Payload, payloadStoreID);
           FileWriter.ArchiveBlock(networkBlock);
 
           BlocksDownloaded.Add(blockQueued);

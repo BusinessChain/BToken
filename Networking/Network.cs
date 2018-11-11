@@ -11,10 +11,11 @@ using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
 using BToken.Chaining;
+using BToken.Accounting;
 
 namespace BToken.Networking
 {
-  public partial class Network : INetwork
+  public partial class Network : Chaining.INetwork, Accounting.INetwork
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
@@ -103,6 +104,10 @@ namespace BToken.Networking
     public async Task<NetworkMessage> GetMessageBlockchainAsync()
     {
       return await NetworkMessageBufferBlockchain.ReceiveAsync();
+    }
+    public async Task<NetworkMessage> GetMessageBitcoinAsync()
+    {
+      return await NetworkMessageBufferUTXO.ReceiveAsync();
     }
 
     public void QueueSession(INetworkSession session)

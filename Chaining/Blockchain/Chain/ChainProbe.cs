@@ -78,7 +78,6 @@ namespace BToken.Chaining
       public void ForkChain(UInt256 headerHash)
       {
         ChainBlock block = Block.BlocksNext.Last();
-        ChainBlock blockHighestAssigned = block.BlockStore != null ? block : null;
         uint blockTipHeight = GetHeight() + 1;
 
         Chain = new Chain(
@@ -86,7 +85,6 @@ namespace BToken.Chaining
           blockTipHash: headerHash,
           blockTipHeight: blockTipHeight,
           blockRoot: block,
-          blockHighestAssigned: blockHighestAssigned,
           accumulatedDifficultyPrevious: AccumulatedDifficulty);
 
       }

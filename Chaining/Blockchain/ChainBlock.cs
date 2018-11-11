@@ -13,9 +13,7 @@ namespace BToken.Chaining
 
       public ChainBlock BlockPrevious;
       public List<ChainBlock> BlocksNext = new List<ChainBlock>();
-
-      public BlockStore BlockStore;
-
+      
       public ChainBlock(
         UInt32 version,
         UInt256 hashPrevious,

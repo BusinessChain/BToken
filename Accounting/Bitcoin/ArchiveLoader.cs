@@ -10,84 +10,47 @@ using BToken.Networking;
 
 namespace BToken.Accounting
 {
-  partial class BlockArchiver
+  public partial class Bitcoin
   {
-    class ArchiveLoader : IDisposable
+    partial class BlockArchiver
     {
-      Blockchain Blockchain;
-      List<ArchiveShardLoader> ShardLoaders = new List<ArchiveShardLoader>();
-
-      public ArchiveLoader(Blockchain blockchain)
+      class ArchiveLoader : IDisposable
       {
-        Blockchain = blockchain;
-      }
+        List<ArchiveShardLoader> ShardLoaders = new List<ArchiveShardLoader>();
 
-
-      void InsertShardBlocks(ArchiveShardLoader shardLoader)
-      {
-        BlockStore blockStore;
-        NetworkBlock block = shardLoader.PeekBlockNext(out blockStore);
-
-
-        while (block != null)
+        public ArchiveLoader()
         {
-          try
+        }
+
+
+        public void Load()
+        {
+          ShardLoaders = GetArchiveShardLoaders();
+
+          int i = 0;
+          while (ShardLoaders.Count > 0)
           {
-            //Debug.WriteLine("insert block: " + Blockchain.MainChain.Height);
-            //Blockchain.InsertHeader(block.Header);
-            shardLoader.DispatchBlockNext();
-          }
-          catch (BlockchainException ex)
-          {
-            //Debug.WriteLine("BlockchainException: " + ex.ErrorCode + ", Block height: " + Blockchain.MainChain.Height);
-            switch (ex.ErrorCode)
+            //InsertShardBlocks(ShardLoaders[i]);
+
+            i++;
+            if (i == ShardLoaders.Count)
             {
-              case BlockCode.ORPHAN:
-                return;
-
-              case BlockCode.DUPLICATE:
-                shardLoader.DispatchBlockNext();
-                break;
-
-              default:
-                throw ex;
+              i = 0;
             }
-          }
 
-          block = shardLoader.PeekBlockNext(out blockStore);
+          }
         }
 
-        shardLoader.Dispose();
-        ShardLoaders.Remove(shardLoader);
-      }
-
-      public void Load()
-      {
-        ShardLoaders = GetArchiveShardLoaders();
-
-        int i = 0;
-        while (ShardLoaders.Count > 0)
+        static List<ArchiveShardLoader> GetArchiveShardLoaders()
         {
-          InsertShardBlocks(ShardLoaders[i]);
-
-          i++;
-          if (i == ShardLoaders.Count)
-          {
-            i = 0;
-          }
-
+          string[] shardDirectories = Directory.GetDirectories(ArchiveRootPath, "Shard?");
+          return shardDirectories.Select(s => new ArchiveShardLoader(s)).ToList();
         }
-      }
 
-      static List<ArchiveShardLoader> GetArchiveShardLoaders()
-      {
-        string[] shardDirectories = Directory.GetDirectories(ArchiveRootPath, "Shard?");
-        return shardDirectories.Select(s => new ArchiveShardLoader(s)).ToList();
-      }
-
-      public void Dispose()
-      {
-        ShardLoaders.ForEach(s => s.Dispose());
+        public void Dispose()
+        {
+          ShardLoaders.ForEach(s => s.Dispose());
+        }
       }
     }
   }

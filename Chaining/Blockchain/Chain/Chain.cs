@@ -17,7 +17,6 @@ namespace BToken.Chaining
       public double AccumulatedDifficulty { get; private set; }
 
       public ChainBlock BlockRoot { get; private set; }
-      public ChainBlock BlockHighestAssigned { get; private set; }
 
 
 
@@ -35,14 +34,12 @@ namespace BToken.Chaining
         UInt256 blockTipHash,
         uint blockTipHeight,
         ChainBlock blockRoot,
-        ChainBlock blockHighestAssigned,
         double accumulatedDifficultyPrevious)
       {
         BlockTip = blockTip;
         BlockTipHash = blockTipHash;
         Height = blockTipHeight;
         BlockRoot = blockRoot;
-        BlockHighestAssigned = blockHighestAssigned;
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockTip.Header.NBits);
       }            
       
