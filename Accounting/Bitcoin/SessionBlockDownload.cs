@@ -22,16 +22,14 @@ namespace BToken.Accounting
       List<Blockchain.ChainBlock> BlocksQueued = new List<Blockchain.ChainBlock>();
       List<Blockchain.ChainBlock> BlocksDownloaded = new List<Blockchain.ChainBlock>();
 
-      Bitcoin Bitcoin;
       BlockArchiver.FileWriter FileWriter;
       public IBlockArchiver Archiver;
 
       int BlocksDispachedCountTotal;
 
 
-      public SessionBlockDownload(Bitcoin bitcoin, IBlockArchiver archiver)
+      public SessionBlockDownload(IBlockArchiver archiver, Blockchain.ChainBlock startBlock, int batchSize)
       {
-        Bitcoin = bitcoin;
         Archiver = archiver;
         FileWriter = BlockArchiver.GetWriter();
       }

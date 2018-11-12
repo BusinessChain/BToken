@@ -15,9 +15,13 @@ namespace BToken.Chaining
       uint HighestCheckpointHight;
       List<BlockLocation> Checkpoints;
 
-      public BlockValidator(List<BlockLocation> checkpoints)
+      IPayloadValidator PayloadValidator;
+
+      public BlockValidator(List<BlockLocation> checkpoints, IPayloadValidator payloadValidator)
       {
         Checkpoints = checkpoints;
+        PayloadValidator = payloadValidator;
+
         HighestCheckpointHight = checkpoints.Max(x => x.Height);
       }
 

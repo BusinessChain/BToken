@@ -12,6 +12,7 @@ namespace BToken.Chaining
     {
       IBlockPayload Parse(byte[] stream);
       UInt256 GetPayloadHash(byte[] payload);
+      void ValidatePayload();
     }
   }
 }

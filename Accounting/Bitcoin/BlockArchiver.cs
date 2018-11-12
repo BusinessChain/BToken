@@ -107,8 +107,19 @@ namespace BToken.Accounting
 
       public void InitialBlockDownload()
       {
-        Network.QueueSession(new SessionBlockDownload(this, headerStart, headerStop));
+        int batchSize = 2000;
+        List<Blockchain.ChainBlock> startBlocks = CreateStartBlockList(batchSize);
+        foreach(Blockchain.ChainBlock startBlock in startBlocks)
+        {
+          Network.QueueSession(new SessionBlockDownload(this, startBlock, batchSize));
+        }
       }
+
+      new List<Blockchain.ChainBlock> CreateStartBlockList(int batchSize)
+      {
+        var startBlock = new List<Blockchain.ChainBlock>();
+      }
+
       void ReportSessionBlockckDownloadCompleted(SessionBlockDownload session)
       {
         Network.QueueSession(new SessionBlockDownload(this, session.Archiver, headerStart, headerStop));

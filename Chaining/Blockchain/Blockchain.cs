@@ -18,7 +18,7 @@ namespace BToken.Chaining
   {
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
-    
+
     BlockValidator Validator;
     BlockLocator Locator;
 
@@ -42,13 +42,16 @@ namespace BToken.Chaining
     {
       Controller.Start();
     }
-    
     void InsertHeader(NetworkHeader header)
+    {
+      InsertBlock(header, null);
+    }
+    public void InsertBlock(NetworkHeader header, IPayloadParser payloadParser)
     {
       ChainProbe probe = GetChainProbe(header.HashPrevious);
 
-      Validator.ValidateHeader(probe, header, out UInt256 headerHash);
-
+      ValidateBlock(probe, header, out UInt256 headerHash, payloadParser);
+      
       probe.ConnectHeader(header);
 
       if (probe.IsTip())
@@ -70,6 +73,15 @@ namespace BToken.Chaining
       if (probe.Chain.IsStrongerThan(MainChain))
       {
         ReorganizeChain(probe.Chain);
+      }
+    }
+    void ValidateBlock(ChainProbe probe, NetworkHeader header, out UInt256 headerHash, IPayloadParser payloadParser)
+    {
+      Validator.ValidateHeader(probe, header, out headerHash);
+
+      if (payloadParser != null)
+      {
+        payloadParser.ValidatePayload();
       }
     }
     ChainProbe GetChainProbe(UInt256 hash)
@@ -101,5 +113,6 @@ namespace BToken.Chaining
 
       Locator.Reorganize();
     }
+
   }
 }
