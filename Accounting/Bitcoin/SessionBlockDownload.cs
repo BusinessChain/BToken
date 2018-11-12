@@ -90,7 +90,7 @@ namespace BToken.Accounting
         int blockIndex = headerHashesQueued.FindIndex(h => h.IsEqual(networkBlockHash));
         if (blockIndex < 0)
         {
-          throw new BlockchainException(BlockCode.ORPHAN);
+          throw new HeaderchainException(BlockCode.ORPHAN);
         }
         headerHashesQueued.RemoveAt(0);
 

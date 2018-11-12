@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public partial class Headerchain
+  public interface IPayloadParser
   {
-    public interface IBlockchainNetwork
-    {
-    }
+    IBlockPayload Parse(byte[] stream);
+    UInt256 GetPayloadHash(byte[] payload);
+    void ValidatePayload();
   }
 }

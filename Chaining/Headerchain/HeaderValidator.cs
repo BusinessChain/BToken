@@ -8,7 +8,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Headerchain
+  partial class Headerchain
   {
     class HeaderValidator
     {
@@ -27,7 +27,7 @@ namespace BToken.Chaining
       {
         if (probe == null)
         {
-          throw new BlockchainException(BlockCode.ORPHAN);
+          throw new HeaderchainException(BlockCode.ORPHAN);
         }
 
         ValidateTimeStamp(probe, header.UnixTimeSeconds);
@@ -47,12 +47,12 @@ namespace BToken.Chaining
 
         if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
         {
-          throw new BlockchainException(BlockCode.INVALID);
+          throw new HeaderchainException(BlockCode.INVALID);
         }
 
         if (!ValidateBlockLocation(nextBlockHeight, headerHash))
         {
-          throw new BlockchainException(BlockCode.INVALID);
+          throw new HeaderchainException(BlockCode.INVALID);
         }
       }
       bool ValidateBlockLocation(uint height, UInt256 hash)
@@ -69,12 +69,12 @@ namespace BToken.Chaining
       {
         if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(nBits)))
         {
-          throw new BlockchainException(BlockCode.INVALID);
+          throw new HeaderchainException(BlockCode.INVALID);
         }
 
         if (nBits != TargetManager.GetNextTargetBits(probe))
         {
-          throw new BlockchainException(BlockCode.INVALID);
+          throw new HeaderchainException(BlockCode.INVALID);
         }
       }
       void ValidateTimeStamp(ChainProbe probe, uint unixTimeSeconds)
@@ -83,19 +83,19 @@ namespace BToken.Chaining
         bool IsTimestampPremature = (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
         if (IsTimestampPremature)
         {
-          throw new BlockchainException(BlockCode.PREMATURE);
+          throw new HeaderchainException(BlockCode.PREMATURE);
         }
 
         if (unixTimeSeconds <= GetMedianTimePast(probe))
         {
-          throw new BlockchainException(BlockCode.INVALID);
+          throw new HeaderchainException(BlockCode.INVALID);
         }
       }
       void ValidateUniqueness(ChainProbe probe, UInt256 hash)
       {
         if (probe.Header.HeadersNext.Any(b => probe.Chain.GetHeaderHash(b).IsEqual(hash)))
         {
-          throw new BlockchainException(BlockCode.DUPLICATE);
+          throw new HeaderchainException(BlockCode.DUPLICATE);
         }
       }
       uint GetMedianTimePast(ChainProbe probe)

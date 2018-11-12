@@ -11,16 +11,17 @@ namespace BToken.Accounting
   public partial class Bitcoin
   {
     INetwork Network;
-    Headerchain Blockchain;
+    Headerchain Headerchain;
     BlockArchiver Archiver;
 
 
     // API
-    public Bitcoin(Headerchain blockchain, INetwork network)
+    public Bitcoin(Headerchain headerchain, INetwork network)
     {
       Network = network;
-      Blockchain = blockchain;
-      Archiver = new BlockArchiver(blockchain, network);
+      Headerchain = headerchain;
+      Archiver = new BlockArchiver(headerchain, network);
+
     }
 
 

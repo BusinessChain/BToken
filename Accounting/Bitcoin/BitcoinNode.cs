@@ -13,7 +13,7 @@ namespace BToken.Bitcoin
   public class BitcoinNode
   {
     public Network Network { get; private set; }
-    public Headerchain Blockchain { get; private set; }
+    public Blockchain BitcoinChain { get; private set; }
     public Accounting.Bitcoin Bitcoin { get; private set; }
 
     BitcoinPayloadParser BitcoinPayloadParser = new BitcoinPayloadParser();
@@ -28,14 +28,14 @@ namespace BToken.Bitcoin
     public BitcoinNode()
     {
       Network = new Network();
-      Blockchain = new Headerchain(BitcoinGenesisBlock, Network, Checkpoints);
-      Bitcoin = new Accounting.Bitcoin(Blockchain, Network);
+      BitcoinChain = new Blockchain(BitcoinGenesisBlock, Network, Checkpoints, BitcoinPayloadParser);
+      Bitcoin = new Accounting.Bitcoin(BitcoinChain, Network);
     }
 
     public void Start()
     {
       Network.Start();
-      Blockchain.Start();
+      BitcoinChain.Start();
       Bitcoin.Start();
     }
   }

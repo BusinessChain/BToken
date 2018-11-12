@@ -14,7 +14,7 @@ namespace BToken.Chaining
   public enum BlockCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
 
 
-  public partial class Headerchain
+  partial class Headerchain
   {
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();

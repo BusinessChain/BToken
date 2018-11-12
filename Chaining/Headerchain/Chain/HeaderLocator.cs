@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public partial class Headerchain
+  partial class Headerchain
   {
     class HeaderLocator
     {

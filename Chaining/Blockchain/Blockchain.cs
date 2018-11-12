@@ -4,12 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Accounting
+namespace BToken.Chaining
 {
-  public partial class Bitcoin
+  public class Blockchain
   {
-    //class Blockchain
-    //{
-    //}
   }
 }

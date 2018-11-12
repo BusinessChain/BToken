@@ -13,7 +13,7 @@ using BToken.Networking;
 namespace BToken.Chaining
 {
 
-  public partial class Headerchain
+  partial class Headerchain
   {
     partial class HeaderchainController
     {
@@ -92,7 +92,7 @@ namespace BToken.Chaining
           {
             Blockchain.InsertHeader(header);
           }
-          catch (BlockchainException ex)
+          catch (HeaderchainException ex)
           {
             switch (ex.ErrorCode)
             {
