@@ -8,7 +8,7 @@ using BToken.Chaining;
 
 namespace BToken.Bitcoin
 {
-  class BitcoinBlock : Blockchain.ChainBlock
+  class BitcoinBlock : Headerchain.ChainHeader
   {
     public BitcoinBlock(
       UInt32 version,

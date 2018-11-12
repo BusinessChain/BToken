@@ -8,13 +8,13 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
     class ChainProbe
     {
       public Chain Chain;
 
-      public ChainBlock Block;
+      public ChainHeader Header;
       public UInt256 Hash;
       public double AccumulatedDifficulty;
       public uint Depth;
@@ -29,13 +29,13 @@ namespace BToken.Chaining
 
       void Initialize()
       {
-        Block = Chain.BlockTip;
-        Hash = Chain.BlockTipHash;
+        Header = Chain.HeaderTip;
+        Hash = Chain.HeaderTipHash;
         AccumulatedDifficulty = Chain.AccumulatedDifficulty;
         Depth = 0;
       }
 
-      public bool GotoBlock(UInt256 hash)
+      public bool GoTo(UInt256 hash)
       {
         Initialize();
 
@@ -46,7 +46,7 @@ namespace BToken.Chaining
             return true;
           }
 
-          if (Block == Chain.BlockRoot)
+          if (Header == Chain.HeaderRoot)
           {
             return false;
           }
@@ -56,40 +56,40 @@ namespace BToken.Chaining
       }
       void Push()
       {
-        Hash = Block.Header.HashPrevious;
-        Block = Block.BlockPrevious;
-        AccumulatedDifficulty -= TargetManager.GetDifficulty(Block.Header.NBits);
+        Hash = Header.Header.HashPrevious;
+        Header = Header.HeaderPrevious;
+        AccumulatedDifficulty -= TargetManager.GetDifficulty(Header.Header.NBits);
 
         Depth++;
       }
 
       public void ConnectHeader(NetworkHeader header)
       {
-        var block = new ChainBlock(header);
+        var chainHeader = new ChainHeader(header);
 
-        block.BlockPrevious = Block;
-        Block.BlocksNext.Add(block);
+        chainHeader.HeaderPrevious = Header;
+        Header.HeadersNext.Add(chainHeader);
       }
       public void ExtendChain(UInt256 headerHash)
       {
-        ChainBlock block = Block.BlocksNext.Last();
+        ChainHeader block = Header.HeadersNext.Last();
         Chain.ExtendChain(block, headerHash);
       }
       public void ForkChain(UInt256 headerHash)
       {
-        ChainBlock block = Block.BlocksNext.Last();
-        uint blockTipHeight = GetHeight() + 1;
+        ChainHeader header = Header.HeadersNext.Last();
+        uint headerTipHeight = GetHeight() + 1;
 
         Chain = new Chain(
-          blockTip: block,
-          blockTipHash: headerHash,
-          blockTipHeight: blockTipHeight,
-          blockRoot: block,
+          headerTip: header,
+          headerTipHash: headerHash,
+          headerTipHeight: headerTipHeight,
+          headerRoot: header,
           accumulatedDifficultyPrevious: AccumulatedDifficulty);
 
       }
       
-      public bool IsTip() => Block == Chain.BlockTip;
+      public bool IsTip() => Header == Chain.HeaderTip;
       public uint GetHeight() => Chain.Height - Depth;
 
     }

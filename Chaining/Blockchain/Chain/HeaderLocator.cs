@@ -6,17 +6,17 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    class BlockLocator
+    class HeaderLocator
     {
-      Blockchain Blockchain;
-      public List<BlockLocation> BlockLocations { get; private set; } = new List<BlockLocation>();
+      Headerchain Headerchain;
+      public List<ChainLocation> BlockLocations { get; private set; } = new List<ChainLocation>();
 
 
-      public BlockLocator(Blockchain blockchain)
+      public HeaderLocator(Headerchain headerchain)
       {
-        Blockchain = blockchain;
+        Headerchain = headerchain;
 
         Update();
       }
@@ -24,13 +24,13 @@ namespace BToken.Chaining
       public void Reorganize()
       {
         
-        UInt256 hash = Blockchain.MainChain.BlockTipHash;
-        uint height = Blockchain.MainChain.Height;
+        UInt256 hash = Headerchain.MainChain.HeaderTipHash;
+        uint height = Headerchain.MainChain.Height;
 
-        BlockLocations = new List<BlockLocation>() { new BlockLocation(height, hash) };
+        BlockLocations = new List<ChainLocation>() { new ChainLocation(height, hash) };
 
 
-        ChainBlock block = Blockchain.MainChain.BlockTip;
+        ChainHeader block = Headerchain.MainChain.HeaderTip;
         uint depth = 0;
         uint nextLocationDepth = 1;
 
@@ -38,7 +38,7 @@ namespace BToken.Chaining
         {
           if (depth == nextLocationDepth)
           {
-            BlockLocations.Add(new BlockLocation(height, hash));
+            BlockLocations.Add(new ChainLocation(height, hash));
             nextLocationDepth *= 2;
           }
 
@@ -46,17 +46,17 @@ namespace BToken.Chaining
           height--;
           hash = block.Header.HashPrevious;
 
-          block = block.BlockPrevious;
+          block = block.HeaderPrevious;
         } while (height > 0);
 
-        BlockLocations.Add(new BlockLocation(height, hash)); // must be Genesis Location
+        BlockLocations.Add(new ChainLocation(height, hash)); // must be Genesis Location
 
       }
 
       public void Update()
       {
-        uint height = Blockchain.MainChain.Height;
-        UInt256 hash = Blockchain.MainChain.BlockTipHash;
+        uint height = Headerchain.MainChain.Height;
+        UInt256 hash = Headerchain.MainChain.HeaderTipHash;
 
         AddLocation(height, hash);
       }
@@ -67,7 +67,7 @@ namespace BToken.Chaining
 
       void AddLocation(uint height, UInt256 hash)
       {
-        BlockLocations.Insert(0, new BlockLocation(height, hash));
+        BlockLocations.Insert(0, new ChainLocation(height, hash));
 
         SortLocator();
       }

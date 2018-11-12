@@ -8,19 +8,17 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    class BlockValidator
+    class HeaderValidator
     {
       uint HighestCheckpointHight;
-      List<BlockLocation> Checkpoints;
+      List<ChainLocation> Checkpoints;
+      
 
-      IPayloadValidator PayloadValidator;
-
-      public BlockValidator(List<BlockLocation> checkpoints, IPayloadValidator payloadValidator)
+      public HeaderValidator(List<ChainLocation> checkpoints)
       {
         Checkpoints = checkpoints;
-        PayloadValidator = payloadValidator;
 
         HighestCheckpointHight = checkpoints.Max(x => x.Height);
       }
@@ -59,7 +57,7 @@ namespace BToken.Chaining
       }
       bool ValidateBlockLocation(uint height, UInt256 hash)
       {
-        BlockLocation checkpoint = Checkpoints.Find(c => c.Height == height);
+        ChainLocation checkpoint = Checkpoints.Find(c => c.Height == height);
         if (checkpoint != null)
         {
           return checkpoint.Hash.IsEqual(hash);
@@ -95,7 +93,7 @@ namespace BToken.Chaining
       }
       void ValidateUniqueness(ChainProbe probe, UInt256 hash)
       {
-        if (probe.Block.BlocksNext.Any(b => probe.Chain.GetHeaderHash(b).IsEqual(hash)))
+        if (probe.Header.HeadersNext.Any(b => probe.Chain.GetHeaderHash(b).IsEqual(hash)))
         {
           throw new BlockchainException(BlockCode.DUPLICATE);
         }
@@ -105,17 +103,17 @@ namespace BToken.Chaining
         const int MEDIAN_TIME_PAST = 11;
 
         List<uint> timestampsPast = new List<uint>();
-        ChainBlock block = probe.Block;
+        ChainHeader block = probe.Header;
 
         int depth = 0;
         while (depth < MEDIAN_TIME_PAST)
         {
           timestampsPast.Add(block.Header.UnixTimeSeconds);
 
-          if (block.BlockPrevious == null)
+          if (block.HeaderPrevious == null)
           { break; }
 
-          block = block.BlockPrevious;
+          block = block.HeaderPrevious;
           depth++;
         }
 

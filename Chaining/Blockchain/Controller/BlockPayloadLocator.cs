@@ -10,34 +10,34 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
     class BlockPayloadLocator
     {
-      Blockchain Blockchain;
+      Headerchain Blockchain;
 
       int BatchSizeQueue;
-      List<ChainBlock> BlocksQueued = new List<ChainBlock>();
+      List<ChainHeader> BlocksQueued = new List<ChainHeader>();
 
       const int BatchSizeDispatch = 50;
 
-      BlockingCollection<ChainBlock> BlocksDispatched;
+      BlockingCollection<ChainHeader> BlocksDispatched;
 
 
-      public BlockPayloadLocator(Blockchain blockchain)
+      public BlockPayloadLocator(Headerchain blockchain)
       {
         Blockchain = blockchain;
       }
 
-      public List<ChainBlock> DispatchBlocks()
+      public List<ChainHeader> DispatchBlocks()
       {
-        var blocksDispatched = new List<ChainBlock>();
+        var blocksDispatched = new List<ChainHeader>();
 
         do
         {
           while (BlocksQueued.Count > 0)
           {
-            ChainBlock blockQueued = PopBlockQueued();
+            ChainHeader blockQueued = PopBlockQueued();
 
             blocksDispatched.Add(blockQueued);
             BlocksDispatched.Add(blockQueued);
@@ -48,8 +48,8 @@ namespace BToken.Chaining
             }
           }
 
-          List<ChainBlock> blocksQueued = new List<ChainBlock>();//Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue);
-          IEnumerable<ChainBlock> blocksQueuedNotYetDispatched = blocksQueued.Except(BlocksDispatched);
+          List<ChainHeader> blocksQueued = new List<ChainHeader>();//Blockchain.GetBlocksUnassignedPayload(BatchSizeQueue);
+          IEnumerable<ChainHeader> blocksQueuedNotYetDispatched = blocksQueued.Except(BlocksDispatched);
           BlocksQueued = blocksQueuedNotYetDispatched.ToList();
 
         } while (BlocksQueued.Count > 0);
@@ -65,9 +65,9 @@ namespace BToken.Chaining
 
       }
 
-      ChainBlock PopBlockQueued()
+      ChainHeader PopBlockQueued()
       {
-        ChainBlock blockQueued = BlocksQueued[0];
+        ChainHeader blockQueued = BlocksQueued[0];
 
         BlocksQueued.RemoveAt(0);
 

@@ -12,19 +12,19 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    partial class BlockchainController
+    partial class HeaderchainController
     {
       class SessionHeaderDownload : INetworkSession
       {
-        Blockchain Blockchain;
+        Headerchain Blockchain;
         IHeaderArchiver Archiver;
 
         INetworkChannel Channel;
 
 
-        public SessionHeaderDownload(Blockchain blockchain, IHeaderArchiver archiver)
+        public SessionHeaderDownload(Headerchain blockchain, IHeaderArchiver archiver)
         {
           Blockchain = blockchain;
           Archiver = archiver;

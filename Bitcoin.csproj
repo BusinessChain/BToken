@@ -80,18 +80,19 @@
     <Compile Include="Accounting\Bitcoin\BitcoinPayloadParser.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinGenesisBlock.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinTX.cs" />
+    <Compile Include="Accounting\Bitcoin\Blockchain.cs" />
     <Compile Include="Accounting\Bitcoin\IBlockArchiver.cs" />
     <Compile Include="Accounting\INetwork.cs" />
-    <Compile Include="Chaining\Blockchain\BlockValidator.cs" />
-    <Compile Include="Chaining\Blockchain\Chain\BlockLocator.cs" />
-    <Compile Include="Chaining\Blockchain\BlockLocation.cs" />
+    <Compile Include="Chaining\Blockchain\HeaderValidator.cs" />
+    <Compile Include="Chaining\Blockchain\Chain\HeaderLocator.cs" />
+    <Compile Include="Chaining\Blockchain\ChainLocation.cs" />
     <Compile Include="Chaining\Blockchain\Chain\ChainProbe.cs" />
     <Compile Include="Chaining\Blockchain\HeaderArchiver.cs" />
     <Compile Include="Accounting\Bitcoin\ArchiveLoader.cs" />
     <Compile Include="Accounting\Bitcoin\ArchiveShardLoader.cs" />
     <Compile Include="Accounting\Bitcoin\BlockArchiver.cs" />
     <Compile Include="Accounting\Bitcoin\FileWriter.cs" />
-    <Compile Include="Chaining\Blockchain\Controller\BlockchainController.cs" />
+    <Compile Include="Chaining\Blockchain\Controller\HeaderchainController.cs" />
     <Compile Include="Chaining\Blockchain\Controller\BlockPayloadLocator.cs" />
     <Compile Include="Accounting\Bitcoin\BlockStore.cs" />
     <Compile Include="Accounting\Bitcoin\SessionBlockDownload.cs" />
@@ -105,10 +106,9 @@
     <Compile Include="Chaining\INetwork.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\Hashing.cs" />
-    <Compile Include="Chaining\Blockchain\ChainBlock.cs" />
+    <Compile Include="Chaining\Blockchain\ChainHeader.cs" />
     <Compile Include="Chaining\Blockchain\Chain\TargetManager.cs" />
     <Compile Include="Networking\DataTypes\NetworkAddress.cs" />
-    <Compile Include="Networking\IBlockchain.cs" />
     <Compile Include="Networking\INetworkChannel.cs" />
     <Compile Include="Networking\INetworkSession.cs" />
     <Compile Include="Networking\Messages\AddressMessage.cs" />
@@ -124,7 +124,7 @@
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
     <Compile Include="Networking\DataTypes\NetworkBlock.cs" />
-    <Compile Include="Chaining\Blockchain\Blockchain.cs" />
+    <Compile Include="Chaining\Blockchain\Headerchain.cs" />
     <Compile Include="Networking\MessageStreamer.cs" />
     <Compile Include="Networking\Messages\GetHeadersMessage.cs" />
     <Compile Include="Networking\Messages\HeadersMessage.cs" />

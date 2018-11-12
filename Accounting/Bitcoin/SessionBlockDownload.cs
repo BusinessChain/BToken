@@ -19,8 +19,8 @@ namespace BToken.Accounting
       INetworkChannel Channel;
 
       const int BatchSize = 50;
-      List<Blockchain.ChainBlock> BlocksQueued = new List<Blockchain.ChainBlock>();
-      List<Blockchain.ChainBlock> BlocksDownloaded = new List<Blockchain.ChainBlock>();
+      List<Headerchain.ChainHeader> BlocksQueued = new List<Headerchain.ChainHeader>();
+      List<Headerchain.ChainHeader> BlocksDownloaded = new List<Headerchain.ChainHeader>();
 
       BlockArchiver.FileWriter FileWriter;
       public IBlockArchiver Archiver;
@@ -28,7 +28,7 @@ namespace BToken.Accounting
       int BlocksDispachedCountTotal;
 
 
-      public SessionBlockDownload(IBlockArchiver archiver, Blockchain.ChainBlock startBlock, int batchSize)
+      public SessionBlockDownload(IBlockArchiver archiver, Headerchain.ChainHeader startBlock, int batchSize)
       {
         Archiver = archiver;
         FileWriter = BlockArchiver.GetWriter();
@@ -53,7 +53,7 @@ namespace BToken.Accounting
             Debug.WriteLine("Channel '{0}' downloaded '{1}' blocks, Total blocks '{2}'",
               Channel.GetHashCode(), BlocksDownloaded.Count, BlocksDispachedCountTotal += BlocksDownloaded.Count);
 
-            BlocksDownloaded = new List<Blockchain.ChainBlock>();
+            BlocksDownloaded = new List<Headerchain.ChainHeader>();
           }
 
           //BlocksQueued = Controller.Blockchain.GetBlocksUnassignedPayload(BatchSize);
@@ -75,7 +75,7 @@ namespace BToken.Accounting
           NetworkBlock networkBlock = await GetNetworkBlockAsync(cancellationToken);
 
           UInt256 networkBlockHeaderHash = GetHeaderHash(networkBlock);
-          Blockchain.ChainBlock blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
+          Headerchain.ChainHeader blockQueued = PopBlockQueued(networkBlock, headerHashesQueued, networkBlockHeaderHash);
 
           BlockStore payloadStoreID = FileWriter.PeekPayloadID(networkBlock.Payload.Length);
           FileWriter.ArchiveBlock(networkBlock);
@@ -85,7 +85,7 @@ namespace BToken.Accounting
         }
       }
 
-      Blockchain.ChainBlock PopBlockQueued(NetworkBlock networkBlock, List<UInt256> headerHashesQueued, UInt256 networkBlockHash)
+      Headerchain.ChainHeader PopBlockQueued(NetworkBlock networkBlock, List<UInt256> headerHashesQueued, UInt256 networkBlockHash)
       {
         int blockIndex = headerHashesQueued.FindIndex(h => h.IsEqual(networkBlockHash));
         if (blockIndex < 0)
@@ -97,16 +97,16 @@ namespace BToken.Accounting
         return BlocksQueued[blockIndex];
       }
 
-      UInt256 GetHeaderHash(Blockchain.ChainBlock chainBlock)
+      UInt256 GetHeaderHash(Headerchain.ChainHeader chainBlock)
       {
         if (chainBlock == null)
         {
           Console.WriteLine("DispatchBlocks :: BlocksQueued contains null");
         }
 
-        if (chainBlock.BlocksNext.Any())
+        if (chainBlock.HeadersNext.Any())
         {
-          return chainBlock.BlocksNext[0].Header.HashPrevious;
+          return chainBlock.HeadersNext[0].Header.HashPrevious;
         }
 
         return new UInt256(Hashing.SHA256d(chainBlock.Header.GetBytes()));

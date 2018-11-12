@@ -4,10 +4,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+namespace BToken.Accounting
 {
-  public interface IBlockchain
+  public partial class Bitcoin
   {
-    // Serve unolicited request from the network, like getheaders.
+    //class Blockchain
+    //{
+    //}
   }
 }

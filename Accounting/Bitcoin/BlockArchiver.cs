@@ -18,7 +18,7 @@ namespace BToken.Accounting
     partial class BlockArchiver : IBlockArchiver
     {
       INetwork Network;
-      Blockchain Blockchain;
+      Headerchain Blockchain;
 
       readonly static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
@@ -33,7 +33,7 @@ namespace BToken.Accounting
       static string FileHandle = "BlockRegister";
 
 
-      public BlockArchiver(Blockchain blockchain, INetwork network)
+      public BlockArchiver(Headerchain blockchain, INetwork network)
       {
         Blockchain = blockchain;
         Network = network;
@@ -96,7 +96,8 @@ namespace BToken.Accounting
       {
         try
         {
-          return new FileWriter(ShardEnumerator++);
+          throw new NotImplementedException();
+          //return new FileWriter(ShardEnumerator++);
         }
         catch (Exception ex)
         {
@@ -108,21 +109,22 @@ namespace BToken.Accounting
       public void InitialBlockDownload()
       {
         int batchSize = 2000;
-        List<Blockchain.ChainBlock> startBlocks = CreateStartBlockList(batchSize);
-        foreach(Blockchain.ChainBlock startBlock in startBlocks)
+        List<Headerchain.ChainHeader> startBlocks = CreateStartBlockList(batchSize);
+        foreach(Headerchain.ChainHeader startBlock in startBlocks)
         {
           Network.QueueSession(new SessionBlockDownload(this, startBlock, batchSize));
         }
       }
 
-      new List<Blockchain.ChainBlock> CreateStartBlockList(int batchSize)
+      List<Headerchain.ChainHeader> CreateStartBlockList(int batchSize)
       {
-        var startBlock = new List<Blockchain.ChainBlock>();
+        var startBlocks = new List<Headerchain.ChainHeader>();
+        return startBlocks;
       }
 
       void ReportSessionBlockckDownloadCompleted(SessionBlockDownload session)
       {
-        Network.QueueSession(new SessionBlockDownload(this, session.Archiver, headerStart, headerStop));
+        //Network.QueueSession(new SessionBlockDownload(this, session.Archiver, headerStart, headerStop));
       }
     }
   }

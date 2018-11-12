@@ -7,58 +7,58 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain
+  partial class Headerchain
   {
     class Chain
     {
-      public ChainBlock BlockTip { get; private set; }
-      public UInt256 BlockTipHash { get; private set; }
+      public ChainHeader HeaderTip { get; private set; }
+      public UInt256 HeaderTipHash { get; private set; }
       public uint Height { get; private set; }
       public double AccumulatedDifficulty { get; private set; }
 
-      public ChainBlock BlockRoot { get; private set; }
+      public ChainHeader HeaderRoot { get; private set; }
 
 
 
-      public Chain(ChainBlock blockRoot)
+      public Chain(ChainHeader headerRoot)
       {
-        BlockTip = blockRoot;
-        BlockTipHash = new UInt256(Hashing.SHA256d(blockRoot.Header.GetBytes()));
+        HeaderTip = headerRoot;
+        HeaderTipHash = new UInt256(Hashing.SHA256d(headerRoot.Header.GetBytes()));
         Height = 0;
-        BlockRoot = blockRoot;
-        AccumulatedDifficulty = TargetManager.GetDifficulty(blockRoot.Header.NBits);
+        HeaderRoot = headerRoot;
+        AccumulatedDifficulty = TargetManager.GetDifficulty(headerRoot.Header.NBits);
       }
 
       public Chain(
-        ChainBlock blockTip,
-        UInt256 blockTipHash,
-        uint blockTipHeight,
-        ChainBlock blockRoot,
+        ChainHeader headerTip,
+        UInt256 headerTipHash,
+        uint headerTipHeight,
+        ChainHeader headerRoot,
         double accumulatedDifficultyPrevious)
       {
-        BlockTip = blockTip;
-        BlockTipHash = blockTipHash;
-        Height = blockTipHeight;
-        BlockRoot = blockRoot;
-        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(blockTip.Header.NBits);
+        HeaderTip = headerTip;
+        HeaderTipHash = headerTipHash;
+        Height = headerTipHeight;
+        HeaderRoot = headerRoot;
+        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerTip.Header.NBits);
       }            
       
-      public UInt256 GetHeaderHash(ChainBlock block)
+      public UInt256 GetHeaderHash(ChainHeader header)
       {
-        if (block == BlockTip)
+        if (header == HeaderTip)
         {
-          return BlockTipHash;
+          return HeaderTipHash;
         }
 
-        return block.BlocksNext[0].Header.HashPrevious;
+        return header.HeadersNext[0].Header.HashPrevious;
       }
 
-      public void ExtendChain(ChainBlock block, UInt256 headerHash)
+      public void ExtendChain(ChainHeader header, UInt256 headerHash)
       {
-        BlockTip = block;
-        BlockTipHash = headerHash;
+        HeaderTip = header;
+        HeaderTipHash = headerHash;
         Height++;
-        AccumulatedDifficulty += TargetManager.GetDifficulty(block.Header.NBits);
+        AccumulatedDifficulty += TargetManager.GetDifficulty(header.Header.NBits);
       }
 
       //public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)

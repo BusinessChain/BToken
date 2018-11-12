@@ -35,14 +35,12 @@ namespace BToken.Networking
     List<Peer> PeersOutbound = new List<Peer>();
 
     BufferBlock<INetworkSession> NetworkSessionQueue = new BufferBlock<INetworkSession>();
-
-    IBlockchain Blockchain;
+    
     public BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
     public BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
 
-    public Network(IBlockchain blockchain)
+    public Network()
     {
-      Blockchain = blockchain;
       Nonce = createNonce();
       AddressPool = new NetworkAddressPool();
       

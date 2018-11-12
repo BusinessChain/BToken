@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
     public interface IBlockchainNetwork
     {

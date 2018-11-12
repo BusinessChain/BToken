@@ -13,16 +13,16 @@ using BToken.Networking;
 namespace BToken.Chaining
 {
 
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    partial class BlockchainController
+    partial class HeaderchainController
     {
       INetwork Network;
-      Blockchain Blockchain;
+      Headerchain Blockchain;
       IHeaderArchiver Archiver;
 
 
-      public BlockchainController(INetwork network, Blockchain blockchain, IHeaderArchiver archiver)
+      public HeaderchainController(INetwork network, Headerchain blockchain, IHeaderArchiver archiver)
       {
         Network = network;
         Blockchain = blockchain;

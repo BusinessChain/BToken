@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace BToken.Chaining
 {
-  partial class Blockchain
+  partial class Headerchain
   {
     static class TargetManager
     {
@@ -25,7 +25,7 @@ namespace BToken.Chaining
         }
         else
         {
-          nextTargetBits = probe.Block.Header.NBits;
+          nextTargetBits = probe.Header.Header.NBits;
         }
 
         return nextTargetBits;
@@ -33,22 +33,22 @@ namespace BToken.Chaining
       }
       static UInt256 GetNextTarget(ChainProbe probe)
       {
-        ChainBlock headerIntervalStart = GetBlockPrevious(probe.Block, RETARGETING_BLOCK_INTERVAL - 1);
-        ulong actualTimespan = Limit(probe.Block.Header.UnixTimeSeconds - headerIntervalStart.Header.UnixTimeSeconds);
-        UInt256 targetOld = UInt256.ParseFromCompact(probe.Block.Header.NBits);
+        ChainHeader headerIntervalStart = GetBlockPrevious(probe.Header, RETARGETING_BLOCK_INTERVAL - 1);
+        ulong actualTimespan = Limit(probe.Header.Header.UnixTimeSeconds - headerIntervalStart.Header.UnixTimeSeconds);
+        UInt256 targetOld = UInt256.ParseFromCompact(probe.Header.Header.NBits);
 
         UInt256 targetNew = targetOld.MultiplyBy(actualTimespan).DivideBy(RETARGETING_TIMESPAN_INTERVAL);
 
         return UInt256.Min(DIFFICULTY_1_TARGET, targetNew);
       }
-      static ChainBlock GetBlockPrevious(ChainBlock block, uint depth)
+      static ChainHeader GetBlockPrevious(ChainHeader block, uint depth)
       {
-        if (depth == 0 || block.BlockPrevious == null)
+        if (depth == 0 || block.HeaderPrevious == null)
         {
           return block;
         }
 
-        return GetBlockPrevious(block.BlockPrevious, --depth);
+        return GetBlockPrevious(block.HeaderPrevious, --depth);
       }
       static ulong Limit(ulong actualTimespan)
       {

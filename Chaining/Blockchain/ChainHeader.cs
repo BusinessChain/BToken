@@ -5,16 +5,16 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    public class ChainBlock
+    public class ChainHeader
     {
       public NetworkHeader Header;
 
-      public ChainBlock BlockPrevious;
-      public List<ChainBlock> BlocksNext = new List<ChainBlock>();
+      public ChainHeader HeaderPrevious;
+      public List<ChainHeader> HeadersNext = new List<ChainHeader>();
       
-      public ChainBlock(
+      public ChainHeader(
         UInt32 version,
         UInt256 hashPrevious,
         UInt256 payloadHash,
@@ -31,7 +31,7 @@ namespace BToken.Chaining
           nonce);
       }
       
-      public ChainBlock(NetworkHeader header)
+      public ChainHeader(NetworkHeader header)
       {
         Header = header;
       }
