@@ -10,7 +10,7 @@ using BToken.Networking;
 
 namespace BToken.Accounting
 {
-  public partial class Bitcoin
+  public partial class UTXO
   {
     partial class BlockArchiver
     {

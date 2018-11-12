@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken
+namespace BToken.Networking
 {
   public static class VarString
   {

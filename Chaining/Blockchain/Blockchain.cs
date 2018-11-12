@@ -8,5 +8,22 @@ namespace BToken.Chaining
 {
   public class Blockchain
   {
+    Headerchain Headerchain;
+
+
+    public Blockchain(
+      Headerchain.ChainHeader genesisBlock,
+      INetwork network,
+      List<ChainLocation> checkpoints,
+      IPayloadParser payloadParser)
+    {
+      Headerchain = new Headerchain(genesisBlock, network, checkpoints);
+    }
+
+    public void Start()
+    {
+      Headerchain.Start();
+    }
+
   }
 }

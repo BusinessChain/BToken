@@ -220,6 +220,7 @@ namespace BToken.Networking
 
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
+      // implement as static functions of Network class
       public async Task GetBlocksAsync(List<UInt256> hashes)
       {
         List<Inventory> inventories = hashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h)).ToList();

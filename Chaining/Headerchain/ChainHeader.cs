@@ -5,7 +5,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain
+  public partial class Headerchain
   {
     public class ChainHeader
     {

@@ -75,7 +75,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Accounting\Bitcoin\Bitcoin.cs" />
+    <Compile Include="Accounting\Bitcoin\UTXO.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinBlockPayload.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinPayloadParser.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinGenesisBlock.cs" />
@@ -114,8 +114,8 @@
     <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\DataTypes\Inventory.cs" />
     <Compile Include="Networking\DataTypes\NetworkHeader.cs" />
-    <Compile Include="DataTypes\VarString.cs" />
-    <Compile Include="DataTypes\VarInt.cs" />
+    <Compile Include="Networking\DataTypes\VarString.cs" />
+    <Compile Include="Networking\DataTypes\VarInt.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>

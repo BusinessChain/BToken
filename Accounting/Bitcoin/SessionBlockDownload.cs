@@ -12,7 +12,7 @@ using BToken.Chaining;
 
 namespace BToken.Accounting
 {
-  public partial class Bitcoin
+  public partial class UTXO
   {
     class SessionBlockDownload : INetworkSession
     {

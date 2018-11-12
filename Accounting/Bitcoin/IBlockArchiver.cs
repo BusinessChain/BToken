@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Accounting
 {
-  public partial class Bitcoin
+  public partial class UTXO
   {
     interface IBlockArchiver
     {

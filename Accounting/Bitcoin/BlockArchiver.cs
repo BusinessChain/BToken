@@ -13,12 +13,12 @@ using BToken.Chaining;
 
 namespace BToken.Accounting
 {
-  public partial class Bitcoin
+  public partial class UTXO
   {
     partial class BlockArchiver : IBlockArchiver
     {
       INetwork Network;
-      Headerchain Blockchain;
+      Blockchain Blockchain;
 
       readonly static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
@@ -33,7 +33,7 @@ namespace BToken.Accounting
       static string FileHandle = "BlockRegister";
 
 
-      public BlockArchiver(Headerchain blockchain, INetwork network)
+      public BlockArchiver(Blockchain blockchain, INetwork network)
       {
         Blockchain = blockchain;
         Network = network;

@@ -8,19 +8,19 @@ using BToken.Chaining;
 
 namespace BToken.Accounting
 {
-  public partial class Bitcoin
+  public partial class UTXO
   {
     INetwork Network;
-    Headerchain Headerchain;
+    Blockchain Blockchain;
     BlockArchiver Archiver;
 
 
     // API
-    public Bitcoin(Headerchain headerchain, INetwork network)
+    public UTXO(Blockchain blockchain, INetwork network)
     {
       Network = network;
-      Headerchain = headerchain;
-      Archiver = new BlockArchiver(headerchain, network);
+      Blockchain = blockchain;
+      Archiver = new BlockArchiver(blockchain, network);
 
     }
 
