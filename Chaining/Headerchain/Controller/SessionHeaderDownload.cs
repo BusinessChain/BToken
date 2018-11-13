@@ -23,6 +23,8 @@ namespace BToken.Chaining
 
         INetworkChannel Channel;
 
+        Task DownloadHeadersTask;
+
 
         public SessionHeaderDownload(Headerchain blockchain, IHeaderArchiver archiver)
         {
@@ -34,7 +36,12 @@ namespace BToken.Chaining
         {
           Channel = channel;
 
-          await DownloadHeadersAsync().ConfigureAwait(false);
+          DownloadHeadersTask = DownloadHeadersAsync();
+        }
+
+        public async Task AwaitCompletedAsync()
+        {
+          await DownloadHeadersTask;
         }
 
         async Task DownloadHeadersAsync()

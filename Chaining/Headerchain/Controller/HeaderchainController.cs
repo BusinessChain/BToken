@@ -18,23 +18,27 @@ namespace BToken.Chaining
     partial class HeaderchainController
     {
       INetwork Network;
-      Headerchain Blockchain;
+      Headerchain Headerchain;
       IHeaderArchiver Archiver;
 
 
-      public HeaderchainController(INetwork network, Headerchain blockchain, IHeaderArchiver archiver)
+      public HeaderchainController(INetwork network, Headerchain headerchain, IHeaderArchiver archiver)
       {
         Network = network;
-        Blockchain = blockchain;
+        Headerchain = headerchain;
         Archiver = archiver;
       }
 
-      public void Start()
+      public async Task StartAsync()
       {
         LoadHeadersFromArchive();
-        Debug.WriteLine("blockchain height after archive load: '{0}'", Blockchain.MainChain.Height);
 
-        Network.QueueSession(new SessionHeaderDownload(Blockchain, Archiver));
+        var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
+        await Network.PostSessionAsync(sessionHeaderDownload);
+        await sessionHeaderDownload.AwaitCompletedAsync();
+
+        await Headerchain.Blockchain.InitialBlockDownloadAsync();
+
 
         Task startMessageListenerTask = StartMessageListenerAsync();
 
@@ -49,7 +53,7 @@ namespace BToken.Chaining
 
             while (header != null)
             {
-              Blockchain.InsertHeader(header);
+              Headerchain.InsertHeader(header);
 
               header = archiveReader.GetNextHeader();
             }
@@ -90,7 +94,7 @@ namespace BToken.Chaining
         {
           try
           {
-            Blockchain.InsertHeader(header);
+            Headerchain.InsertHeader(header);
           }
           catch (HeaderchainException ex)
           {
@@ -108,10 +112,7 @@ namespace BToken.Chaining
             }
           }
 
-          using (var archiveWriter = Archiver.GetWriter())
-          {
-            archiveWriter.StoreHeader(header);
-          }
+          Headerchain.Blockchain.DownloadBlockAsync();
         }
       }
           

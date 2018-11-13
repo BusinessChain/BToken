@@ -112,7 +112,7 @@ namespace BToken.Accounting
         List<Headerchain.ChainHeader> startBlocks = CreateStartBlockList(batchSize);
         foreach(Headerchain.ChainHeader startBlock in startBlocks)
         {
-          Network.QueueSession(new SessionBlockDownload(this, startBlock, batchSize));
+          Network.PostSession(new SessionBlockDownload(this, startBlock, batchSize));
         }
       }
 

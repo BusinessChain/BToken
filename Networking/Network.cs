@@ -108,11 +108,15 @@ namespace BToken.Networking
       return await NetworkMessageBufferUTXO.ReceiveAsync();
     }
 
-    public void QueueSession(INetworkSession session)
+    public void PostSession(INetworkSession session)
     {
       // allenfalls könnte jeder Peer einen eigenen Queue haben, damit könnten 
       // Broadcast versendet werden und einzelne Peers angesprochen werden.
       NetworkSessionQueue.Post(session);
+    }
+    public async Task PostSessionAsync(INetworkSession session)
+    {
+
     }
 
     static long getUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();

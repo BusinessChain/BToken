@@ -10,7 +10,7 @@ namespace BToken.Accounting
 {
   public interface INetwork
   {
-    void QueueSession(INetworkSession session);
+    void PostSession(INetworkSession session);
     Task<NetworkMessage> GetMessageBitcoinAsync();
   }
 }

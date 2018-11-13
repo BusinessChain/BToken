@@ -6,9 +6,11 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public class Blockchain
+  public class Blockchain : IBlockchain
   {
     Headerchain Headerchain;
+    IPayloadParser PayloadParser;
+    INetwork Network;
 
 
     public Blockchain(
@@ -17,12 +19,19 @@ namespace BToken.Chaining
       List<ChainLocation> checkpoints,
       IPayloadParser payloadParser)
     {
-      Headerchain = new Headerchain(genesisBlock, network, checkpoints);
+      Network = network;
+      Headerchain = new Headerchain(genesisBlock, network, checkpoints, this);
+      PayloadParser = payloadParser;
     }
 
-    public void Start()
+    public async Task StartAsync()
     {
-      Headerchain.Start();
+      await Headerchain.StartAsync();
+    }
+
+    public async Task InitialBlockDownloadAsync()
+    {
+
     }
 
   }

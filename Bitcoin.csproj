@@ -97,6 +97,7 @@
     <Compile Include="Accounting\Bitcoin\BlockStore.cs" />
     <Compile Include="Accounting\Bitcoin\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Headerchain\Controller\SessionHeaderDownload.cs" />
+    <Compile Include="Chaining\Headerchain\IBlockchain.cs" />
     <Compile Include="Chaining\Headerchain\IBlockPayload.cs" />
     <Compile Include="Chaining\IPayloadParser.cs" />
     <Compile Include="Chaining\Headerchain\HeaderchainException.cs" />

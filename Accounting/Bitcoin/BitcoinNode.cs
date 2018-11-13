@@ -14,7 +14,7 @@ namespace BToken.Bitcoin
   {
     public Network Network { get; private set; }
     public Blockchain BitcoinChain { get; private set; }
-    public Accounting.UTXO Bitcoin { get; private set; }
+    public UTXO UTXO { get; private set; }
 
     BitcoinPayloadParser BitcoinPayloadParser = new BitcoinPayloadParser();
     BitcoinGenesisBlock BitcoinGenesisBlock = new BitcoinGenesisBlock();
@@ -29,14 +29,14 @@ namespace BToken.Bitcoin
     {
       Network = new Network();
       BitcoinChain = new Blockchain(BitcoinGenesisBlock, Network, Checkpoints, BitcoinPayloadParser);
-      Bitcoin = new UTXO(BitcoinChain, Network);
+      UTXO = new UTXO(BitcoinChain, Network);
     }
 
-    public void Start()
+    public async Task StartAsync()
     {
       Network.Start();
-      BitcoinChain.Start();
-      Bitcoin.Start();
+      await BitcoinChain.StartAsync();
+      UTXO.Start();
     }
   }
 }

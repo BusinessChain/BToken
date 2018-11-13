@@ -21,7 +21,7 @@ namespace BToken
       try
       {
         Node = new BitcoinNode();
-        Node.Start();
+        Task startNodeTask = Node.StartAsync();
       }
       catch (Exception ex)
       {
