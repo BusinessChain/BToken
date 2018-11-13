@@ -34,12 +34,11 @@ namespace BToken.Chaining
         LoadHeadersFromArchive();
 
         var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
-        await Network.PostSessionAsync(sessionHeaderDownload);
-        await sessionHeaderDownload.AwaitCompletedAsync();
+        Network.PostSession(sessionHeaderDownload);
+        await sessionHeaderDownload.AwaitSignalCompletedAsync();
 
         await Headerchain.Blockchain.InitialBlockDownloadAsync();
-
-
+        
         Task startMessageListenerTask = StartMessageListenerAsync();
 
       }
@@ -111,8 +110,13 @@ namespace BToken.Chaining
                 throw ex;
             }
           }
+          
+          using (var archiveWriter = Archiver.GetWriter())
+          {
+            archiveWriter.StoreHeader(header);
+          }
 
-          Headerchain.Blockchain.DownloadBlockAsync();
+          Headerchain.Blockchain.DownloadBlock();
         }
       }
           

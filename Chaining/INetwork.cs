@@ -11,7 +11,6 @@ namespace BToken.Chaining
   public interface INetwork
   {
     void PostSession(INetworkSession session);
-    Task PostSessionAsync(INetworkSession session);
     Task<NetworkMessage> GetMessageBlockchainAsync();
   }
 }

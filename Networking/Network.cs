@@ -31,7 +31,7 @@ namespace BToken.Networking
     public const int PEERS_COUNT_INBOUND = 8;
     List<Peer> PeersInbound = new List<Peer>();
 
-    public const int PEERS_COUNT_OUTBOUND = 8;
+    public const int PEERS_COUNT_OUTBOUND = 1;
     List<Peer> PeersOutbound = new List<Peer>();
 
     BufferBlock<INetworkSession> NetworkSessionQueue = new BufferBlock<INetworkSession>();
@@ -67,7 +67,7 @@ namespace BToken.Networking
     public void Start()
     {
       StartPeers();
-      Task inboundPeerListenerTask = StartInboundPeerListenerAsync();
+      Task peerInboundListenerTask = StartPeerInboundListenerAsync();
     }
     void StartPeers()
     {
@@ -77,7 +77,7 @@ namespace BToken.Networking
       }).ToArray();
     }
 
-    public async Task StartInboundPeerListenerAsync()
+    public async Task StartPeerInboundListenerAsync()
     {
       TcpListener.Start(PEERS_COUNT_INBOUND);
 
@@ -113,10 +113,6 @@ namespace BToken.Networking
       // allenfalls könnte jeder Peer einen eigenen Queue haben, damit könnten 
       // Broadcast versendet werden und einzelne Peers angesprochen werden.
       NetworkSessionQueue.Post(session);
-    }
-    public async Task PostSessionAsync(INetworkSession session)
-    {
-
     }
 
     static long getUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();

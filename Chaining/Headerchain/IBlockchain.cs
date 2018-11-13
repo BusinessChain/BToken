@@ -9,5 +9,6 @@ namespace BToken.Chaining
   public interface IBlockchain
   {
     Task InitialBlockDownloadAsync();
+    void DownloadBlock();
   }
 }

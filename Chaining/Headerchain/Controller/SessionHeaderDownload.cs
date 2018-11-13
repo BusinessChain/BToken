@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
+using System.Threading.Tasks.Dataflow;
 using System.Threading.Tasks;
 
 using BToken.Networking;
@@ -23,7 +23,7 @@ namespace BToken.Chaining
 
         INetworkChannel Channel;
 
-        Task DownloadHeadersTask;
+        BufferBlock<bool> SignalSessionCompletion = new BufferBlock<bool>();
 
 
         public SessionHeaderDownload(Headerchain blockchain, IHeaderArchiver archiver)
@@ -36,12 +36,19 @@ namespace BToken.Chaining
         {
           Channel = channel;
 
-          DownloadHeadersTask = DownloadHeadersAsync();
+          await DownloadHeadersAsync();
+
+          SignalSessionCompletion.Post(true);
         }
 
-        public async Task AwaitCompletedAsync()
+        public async Task AwaitSignalCompletedAsync()
         {
-          await DownloadHeadersTask;
+          while(true)
+          {
+            bool signalCompleted = await SignalSessionCompletion.ReceiveAsync();
+
+            if (signalCompleted) { return; }
+          }
         }
 
         async Task DownloadHeadersAsync()

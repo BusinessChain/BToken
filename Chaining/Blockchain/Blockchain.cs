@@ -34,5 +34,10 @@ namespace BToken.Chaining
 
     }
 
+    public void DownloadBlock()
+    {
+
+    }
+
   }
 }
