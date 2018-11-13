@@ -19,14 +19,12 @@ namespace BToken.Networking
     {
       Network Network;
       IPEndPoint IPEndPoint;
-      PeerHandshakeManager HandshakeManager;
-
-      TcpClient TcpClient;
-      MessageStreamer NetworkMessageStreamer;
 
       bool IsSessionExecuting = false;
       BufferBlock<NetworkMessage> SessionMessageBuffer = new BufferBlock<NetworkMessage>();
 
+      TcpClient TcpClient;
+      MessageStreamer NetworkMessageStreamer;
 
       public uint PenaltyScore { get; private set; }
 
@@ -35,8 +33,6 @@ namespace BToken.Networking
       public Peer(Network network)
       {
         Network = network;
-
-        HandshakeManager = new PeerHandshakeManager(this);
       }
       public Peer(TcpClient tcpClient, Network network)
       {
@@ -45,19 +41,38 @@ namespace BToken.Networking
         TcpClient = tcpClient;
         NetworkMessageStreamer = new MessageStreamer(TcpClient.GetStream());
 
-        HandshakeManager = new PeerHandshakeManager(this);
         IPEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
       }
 
-
-      public async Task ConnectAsync()
+      public async Task StartAsync()
       {
-        IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
-        IPEndPoint = new IPEndPoint(iPAddress, Port);
-        await ConnectTCPAsync().ConfigureAwait(false);
-        await HandshakeAsync().ConfigureAwait(false);
+        await ConnectAsync();
+
         Task peerStartTask = ProcessNetworkMessageAsync();
         Task sessionListenerTask = StartSessionListenerAsync();
+      }
+
+      async Task ConnectAsync()
+      {
+        int connectionTries = 0;
+
+        while(true)
+        {
+          try
+          {
+            IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
+            IPEndPoint = new IPEndPoint(iPAddress, Port);
+            await ConnectTCPAsync().ConfigureAwait(false);
+            await HandshakeAsync().ConfigureAwait(false);
+
+            return;
+          }
+          catch (Exception ex)
+          {
+            Debug.WriteLine("Network::CreateBlockchainChannel: " + ex.Message
+              + "\nConnection tries: '{0}'", ++connectionTries);
+          }
+        }
       }
       async Task StartSessionListenerAsync()
       {
@@ -80,10 +95,11 @@ namespace BToken.Networking
         
         CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
 
-        while (!HandshakeManager.isHandshakeCompleted())
+        var handshakeManager = new PeerHandshakeManager(this);
+        while (!handshakeManager.isHandshakeCompleted())
         {
           NetworkMessage messageRemote = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
-          await HandshakeManager.ProcessResponseToVersionMessageAsync(messageRemote).ConfigureAwait(false);
+          await handshakeManager.ProcessResponseToVersionMessageAsync(messageRemote).ConfigureAwait(false);
         }
       }
       public async Task ProcessNetworkMessageAsync(CancellationToken cancellationToken = default(CancellationToken))

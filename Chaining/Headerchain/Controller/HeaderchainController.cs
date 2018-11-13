@@ -116,7 +116,7 @@ namespace BToken.Chaining
             archiveWriter.StoreHeader(header);
           }
 
-          Headerchain.Blockchain.DownloadBlock();
+          Headerchain.Blockchain.DownloadBlock(header);
         }
       }
           

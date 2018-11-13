@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using BToken.Networking;
+
 namespace BToken.Chaining
 {
   public class Blockchain : IBlockchain
@@ -34,7 +36,7 @@ namespace BToken.Chaining
 
     }
 
-    public void DownloadBlock()
+    public void DownloadBlock(NetworkHeader header)
     {
 
     }

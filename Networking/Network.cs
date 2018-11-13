@@ -73,7 +73,7 @@ namespace BToken.Networking
     {
       PeersOutbound.Select(async peer =>
       {
-        await peer.ConnectAsync();
+        await peer.StartAsync();
       }).ToArray();
     }
 
@@ -90,7 +90,7 @@ namespace BToken.Networking
           Peer peer = new Peer(client, this);
           PeersInbound.Add(peer);
 
-          await peer.ConnectAsync().ConfigureAwait(false);
+          await peer.StartAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
