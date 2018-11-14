@@ -11,7 +11,7 @@ namespace BToken.Chaining
     class HeaderLocator
     {
       Headerchain Headerchain;
-      public List<ChainLocation> BlockLocations { get; private set; } = new List<ChainLocation>();
+      List<ChainLocation> BlockLocations = new List<ChainLocation>();
 
 
       public HeaderLocator(Headerchain headerchain)

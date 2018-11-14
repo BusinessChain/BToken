@@ -7,12 +7,12 @@ namespace BToken.Chaining
 {
   public partial class Headerchain
   {
-    public class ChainHeader
+    class ChainHeader
     {
-      public NetworkHeader Header;
+      public NetworkHeader Header { get; private set; }
 
-      public ChainHeader HeaderPrevious;
-      public List<ChainHeader> HeadersNext = new List<ChainHeader>();
+      public ChainHeader HeaderPrevious { get; private set; }
+      public List<ChainHeader> HeadersNext { get; private set; } = new List<ChainHeader>();
       
       public ChainHeader(
         UInt32 version,
@@ -31,9 +31,10 @@ namespace BToken.Chaining
           nonce);
       }
       
-      public ChainHeader(NetworkHeader header)
+      public ChainHeader(NetworkHeader header, ChainHeader headerPrevious)
       {
         Header = header;
+        HeaderPrevious = headerPrevious;
       }
 
     }

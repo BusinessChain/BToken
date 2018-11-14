@@ -62,32 +62,6 @@ namespace BToken.Chaining
 
         Depth++;
       }
-
-      public void ConnectHeader(NetworkHeader header)
-      {
-        var chainHeader = new ChainHeader(header);
-
-        chainHeader.HeaderPrevious = Header;
-        Header.HeadersNext.Add(chainHeader);
-      }
-      public void ExtendChain(UInt256 headerHash)
-      {
-        ChainHeader block = Header.HeadersNext.Last();
-        Chain.ExtendChain(block, headerHash);
-      }
-      public void ForkChain(UInt256 headerHash)
-      {
-        ChainHeader header = Header.HeadersNext.Last();
-        uint headerTipHeight = GetHeight() + 1;
-
-        Chain = new Chain(
-          headerTip: header,
-          headerTipHash: headerHash,
-          headerTipHeight: headerTipHeight,
-          headerRoot: header,
-          accumulatedDifficultyPrevious: AccumulatedDifficulty);
-
-      }
       
       public bool IsTip() => Header == Chain.HeaderTip;
       public uint GetHeight() => Chain.Height - Depth;

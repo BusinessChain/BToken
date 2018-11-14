@@ -31,7 +31,7 @@ namespace BToken.Networking
     public const int PEERS_COUNT_INBOUND = 8;
     List<Peer> PeersInbound = new List<Peer>();
 
-    public const int PEERS_COUNT_OUTBOUND = 1;
+    public const int PEERS_COUNT_OUTBOUND = 8;
     List<Peer> PeersOutbound = new List<Peer>();
 
     BufferBlock<INetworkSession> NetworkSessionQueue = new BufferBlock<INetworkSession>();

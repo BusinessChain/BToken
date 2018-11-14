@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
-namespace BToken.Accounting
+namespace BToken.Chaining
 {
-  public partial class UTXO
+  public partial class Blockchain : IBlockchain
   {
     partial class BlockArchiver
     {

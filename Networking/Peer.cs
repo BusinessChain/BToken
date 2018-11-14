@@ -69,7 +69,7 @@ namespace BToken.Networking
           }
           catch (Exception ex)
           {
-            Debug.WriteLine("Network::CreateBlockchainChannel: " + ex.Message
+            Debug.WriteLine("Network::ConnectAsync: " + ex.Message
               + "\nConnection tries: '{0}'", ++connectionTries);
           }
         }
@@ -208,17 +208,14 @@ namespace BToken.Networking
 
       public async Task ExecuteSessionAsync(INetworkSession session)
       {
+        IsSessionExecuting = true;
         int sessionExcecutionTries = 0;
 
         while (true)
         {
           try
           {
-            IsSessionExecuting = true;
             await session.StartAsync(this);
-            IsSessionExecuting = false;
-
-            return;
           }
           catch (Exception ex)
           {
@@ -231,6 +228,9 @@ namespace BToken.Networking
 
             await ConnectAsync().ConfigureAwait(false);
           }
+
+          IsSessionExecuting = false;
+          return;
         }
       }
 

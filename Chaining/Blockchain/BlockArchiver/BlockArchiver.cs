@@ -4,18 +4,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
+using System.Threading.Tasks;
 using System.IO;
 using System.Text.RegularExpressions;
 
 using BToken.Networking;
 using BToken.Chaining;
 
-namespace BToken.Accounting
+namespace BToken.Chaining
 {
-  public partial class UTXO
+  public partial class Blockchain : IBlockchain
   {
-    partial class BlockArchiver : IBlockArchiver
+    partial class BlockArchiver
     {
       INetwork Network;
       Blockchain Blockchain;
@@ -24,7 +24,7 @@ namespace BToken.Accounting
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
 
       static string ShardHandle = "Shard";
-      uint ShardEnumerator;
+      uint ShardCountMax = 8;
 
       const int ITEM_COUNT_PER_DIRECTORY = 0x4;
       static string DirectoryHandle = "Shelf";
@@ -39,13 +39,6 @@ namespace BToken.Accounting
         Network = network;
       }
 
-      public void LoadBlockchain()
-      {
-        using (ArchiveLoader loader = new ArchiveLoader())
-        {
-          loader.Load();
-        }
-      }
 
       static NetworkBlock ParseNetworkBlock(FileStream blockRegisterStream)
       {
@@ -106,19 +99,28 @@ namespace BToken.Accounting
         }
       }
 
-      public void InitialBlockDownload()
+      public async Task InitialBlockDownloadAsync()
       {
+        var sessionBlockDownloadTasks = new List<Task>();
+        var ShardWriters = new List<FileWriter>();
+
         int batchSize = 2000;
-        List<Headerchain.ChainHeader> startBlocks = CreateStartBlockList(batchSize);
-        foreach(Headerchain.ChainHeader startBlock in startBlocks)
+        var blockstreamer = new Blockstreamer();
+        List<NetworkHeader> headers = CreateHeaderBatch(batchSize);
+        foreach(NetworkHeader startHeader in startHeaders)
         {
-          Network.PostSession(new SessionBlockDownload(this, startBlock, batchSize));
+          var sessionBlockDownload = new SessionBlockDownload(this, startHeader, batchSize);
+          Network.PostSession(sessionBlockDownload);
+          sessionBlockDownloadTasks.Add(sessionBlockDownload.AwaitSignalCompletedAsync());
         }
+
+        await Task.WhenAll(sessionBlockDownloadTasks);
       }
 
-      List<Headerchain.ChainHeader> CreateStartBlockList(int batchSize)
+      List<NetworkHeader> CreateHeaderBatch(int batchSize)
       {
-        var startBlocks = new List<Headerchain.ChainHeader>();
+        Headerchain.ChainHeader header = Blockchain.Headerchain.GetHeader(new UInt256("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"));
+        var startBlocks = new List<Headerchain.ChainHeader>() { header };
         return startBlocks;
       }
 

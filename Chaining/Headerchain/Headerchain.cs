@@ -45,21 +45,20 @@ namespace BToken.Chaining
     {
       await Controller.StartAsync();
     }
-    void InsertHeader(NetworkHeader header)
-    {
-      InsertBlock(header, null);
-    }
+
     public void InsertBlock(NetworkHeader header, IPayloadParser payloadParser)
     {
       ChainProbe probe = GetChainProbe(header.HashPrevious);
 
       ValidateBlock(probe, header, out UInt256 headerHash, payloadParser);
-      
-      probe.ConnectHeader(header);
+
+      var inserter = new ChainInserter(probe);
+
+      inserter.ConnectHeader(header);
 
       if (probe.IsTip())
       {
-        probe.ExtendChain(headerHash);
+        inserter.ExtendChain(headerHash);
 
         if (probe.Chain == MainChain)
         {
@@ -69,7 +68,7 @@ namespace BToken.Chaining
       }
       else
       {
-        probe.ForkChain(headerHash);
+        inserter.ForkChain(headerHash);
         SecondaryChains.Add(probe.Chain);
       }
 
@@ -77,6 +76,10 @@ namespace BToken.Chaining
       {
         ReorganizeChain(probe.Chain);
       }
+    }
+    void InsertHeader(NetworkHeader header)
+    {
+      InsertBlock(header, null);
     }
     void ValidateBlock(ChainProbe probe, NetworkHeader header, out UInt256 headerHash, IPayloadParser payloadParser)
     {
@@ -108,6 +111,7 @@ namespace BToken.Chaining
 
       return null;
     }
+
     void ReorganizeChain(Chain chain)
     {
       SecondaryChains.Remove(chain);
@@ -115,6 +119,18 @@ namespace BToken.Chaining
       MainChain = chain;
 
       Locator.Reorganize();
+    }
+
+    public ChainHeader GetHeader(UInt256 hash)
+    {
+      ChainProbe probe = GetChainProbe(hash);
+
+      if (probe == null)
+      {
+        throw new HeaderchainException(BlockCode.ORPHAN);
+      }
+
+      return probe.Header;
     }
 
   }

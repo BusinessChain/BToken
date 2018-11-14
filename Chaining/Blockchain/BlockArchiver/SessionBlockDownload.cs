@@ -6,13 +6,14 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 
 using BToken.Networking;
 using BToken.Chaining;
 
-namespace BToken.Accounting
+namespace BToken.Chaining
 {
-  public partial class UTXO
+  public partial class Blockchain : IBlockchain
   {
     class SessionBlockDownload : INetworkSession
     {
@@ -23,12 +24,14 @@ namespace BToken.Accounting
       List<Headerchain.ChainHeader> BlocksDownloaded = new List<Headerchain.ChainHeader>();
 
       BlockArchiver.FileWriter FileWriter;
-      public IBlockArchiver Archiver;
+      public BlockArchiver Archiver;
 
       int BlocksDispachedCountTotal;
 
+      BufferBlock<bool> SignalSessionCompletion = new BufferBlock<bool>();
 
-      public SessionBlockDownload(IBlockArchiver archiver, Headerchain.ChainHeader startBlock, int batchSize)
+
+      public SessionBlockDownload(BlockArchiver archiver, Headerchain.ChainHeader startHeader, int batchSize)
       {
         Archiver = archiver;
         FileWriter = BlockArchiver.GetWriter();
@@ -41,6 +44,8 @@ namespace BToken.Accounting
         await DownloadBlocksAsync();
 
         FileWriter.Dispose();
+
+        SignalSessionCompletion.Post(true);
       }
       async Task DownloadBlocksAsync()
       {
@@ -55,12 +60,19 @@ namespace BToken.Accounting
 
             BlocksDownloaded = new List<Headerchain.ChainHeader>();
           }
-
-          //BlocksQueued = Controller.Blockchain.GetBlocksUnassignedPayload(BatchSize);
-
         } while (BlocksQueued.Count > 0);
       }
+      
 
+      public async Task AwaitSignalCompletedAsync()
+      {
+        while (true)
+        {
+          bool signalCompleted = await SignalSessionCompletion.ReceiveAsync();
+
+          if (signalCompleted) { return; }
+        }
+      }
 
       async Task DownloadBlocksQueuedAsync()
       {

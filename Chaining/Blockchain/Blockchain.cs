@@ -8,11 +8,12 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public class Blockchain : IBlockchain
+  public partial class Blockchain : IBlockchain
   {
     Headerchain Headerchain;
     IPayloadParser PayloadParser;
     INetwork Network;
+    BlockArchiver Archiver;
 
 
     public Blockchain(
@@ -24,6 +25,8 @@ namespace BToken.Chaining
       Network = network;
       Headerchain = new Headerchain(genesisBlock, network, checkpoints, this);
       PayloadParser = payloadParser;
+
+      Archiver = new BlockArchiver(this, network);
     }
 
     public async Task StartAsync()
@@ -33,7 +36,7 @@ namespace BToken.Chaining
 
     public async Task InitialBlockDownloadAsync()
     {
-
+      await Archiver.InitialBlockDownloadAsync();
     }
 
     public void DownloadBlock(NetworkHeader header)
