@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -19,15 +19,15 @@ namespace BToken.Chaining
     {
       INetworkChannel Channel;
       
-      public BlockArchiver.FileWriter ShardWriter;
+      public BlockArchiver Archiver;
       ChainLocation HeaderLocation;
       
       BufferBlock<bool> SignalSessionCompletion = new BufferBlock<bool>();
 
 
-      public SessionBlockDownload(BlockArchiver.FileWriter shardWriter, ChainLocation headerLocation)
+      public SessionBlockDownload(BlockArchiver archiver, ChainLocation headerLocation)
       {
-        ShardWriter = shardWriter;
+        Archiver = archiver;
         HeaderLocation = headerLocation;
       }
 
@@ -35,29 +35,19 @@ namespace BToken.Chaining
       {
         Channel = channel;
 
-        if (!TryValidateBlockExisting())
+        if (!await TryValidateBlockExistingAsync())
         {
           await DownloadBlockAsync();
         }
         
         SignalSessionCompletion.Post(true);
       }
-
-      async Task DownloadBlockAsync()
-      {
-        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token;
-        NetworkBlock block = await Channel.GetBlockAsync(HeaderLocation.Hash, cancellationToken);
-
-        ValidateBlock(block);
-
-        ShardWriter.ArchiveBlock(block);
-      }
-
-      bool TryValidateBlockExisting()
+      
+      async Task<bool> TryValidateBlockExistingAsync()
       {
         try
         {
-          NetworkBlock block = ShardWriter.ReadBlock(HeaderLocation.Hash);
+          NetworkBlock block = await BlockArchiver.ReadBlockAsync(HeaderLocation.Hash);
           if (block == null)
           {
             return false;
@@ -66,13 +56,13 @@ namespace BToken.Chaining
           return TryValidate(block);
 
         }
-        catch
+        catch(IOException)
         {
           return false;
         }
 
       }
-
+      
       bool TryValidate(NetworkBlock block)
       {
         try
@@ -87,6 +77,12 @@ namespace BToken.Chaining
       }
       void ValidateBlock(NetworkBlock block)
       {
+        const int PAYLOAD_LENGTH_MAX = 0x400000;
+        if (block.Payload.Length > PAYLOAD_LENGTH_MAX)
+        {
+          throw new ChainException(BlockCode.INVALID);
+        }
+
         if (!HeaderLocation.Hash.IsEqual(block.GetHeaderHash()))
         {
           throw new ChainException(BlockCode.INVALID);
@@ -98,14 +94,31 @@ namespace BToken.Chaining
           throw new ChainException(BlockCode.INVALID);
         }
       }
-      
-      public async Task<SessionBlockDownload> AwaitSessionCompletedAsync()
+
+      async Task DownloadBlockAsync()
+      {
+        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token;
+        NetworkBlock block = await Channel.GetBlockAsync(HeaderLocation.Hash, cancellationToken);
+
+        ValidateBlock(block);
+
+        try
+        {
+          await Archiver.ArchiveBlockAsync(block, HeaderLocation.Hash);
+        }
+        catch(Exception ex)
+        {
+          Debug.WriteLine(ex.Message);
+        }
+      }
+
+      public async Task AwaitSessionCompletedAsync()
       {
         while (true)
         {
-          bool signalCompleted = await SignalSessionCompletion.ReceiveAsync();
+          bool signalCompleted = await SignalSessionCompletion.ReceiveAsync().ConfigureAwait(false);
 
-          if (signalCompleted) { return this; }
+          if (signalCompleted) { return; }
         }
       }
     }

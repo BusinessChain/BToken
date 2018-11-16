@@ -25,7 +25,7 @@ namespace BToken.Chaining
         }
         else
         {
-          nextTargetBits = probe.Header.Header.NBits;
+          nextTargetBits = probe.Header.NetworkHeader.NBits;
         }
 
         return nextTargetBits;
@@ -34,8 +34,8 @@ namespace BToken.Chaining
       static UInt256 GetNextTarget(ChainProbe probe)
       {
         ChainHeader headerIntervalStart = GetBlockPrevious(probe.Header, RETARGETING_BLOCK_INTERVAL - 1);
-        ulong actualTimespan = Limit(probe.Header.Header.UnixTimeSeconds - headerIntervalStart.Header.UnixTimeSeconds);
-        UInt256 targetOld = UInt256.ParseFromCompact(probe.Header.Header.NBits);
+        ulong actualTimespan = Limit(probe.Header.NetworkHeader.UnixTimeSeconds - headerIntervalStart.NetworkHeader.UnixTimeSeconds);
+        UInt256 targetOld = UInt256.ParseFromCompact(probe.Header.NetworkHeader.NBits);
 
         UInt256 targetNew = targetOld.MultiplyBy(actualTimespan).DivideBy(RETARGETING_TIMESPAN_INTERVAL);
 

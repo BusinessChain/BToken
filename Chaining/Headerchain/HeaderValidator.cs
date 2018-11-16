@@ -108,7 +108,7 @@ namespace BToken.Chaining
         int depth = 0;
         while (depth < MEDIAN_TIME_PAST)
         {
-          timestampsPast.Add(block.Header.UnixTimeSeconds);
+          timestampsPast.Add(block.NetworkHeader.UnixTimeSeconds);
 
           if (block.HeaderPrevious == null)
           { break; }

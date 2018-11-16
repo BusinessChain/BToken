@@ -44,7 +44,7 @@ namespace BToken.Chaining
 
           depth++;
           height--;
-          hash = block.Header.HashPrevious;
+          hash = block.NetworkHeader.HashPrevious;
 
           block = block.HeaderPrevious;
         } while (height > 0);

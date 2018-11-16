@@ -20,20 +20,11 @@ namespace BToken.Chaining
       INetwork Network;
       Blockchain Blockchain;
 
-      readonly static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
+      static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
-
-      static string ShardHandle = "Shard";
-      uint ShardCountMax = 8;
-
-      const int ITEM_COUNT_PER_DIRECTORY = 0x4;
-      static string DirectoryHandle = "Shelf";
-
-      const int BLOCK_REGISTER_BYTESIZE_MAX = 0x40000;
-      static string FileHandle = "BlockRegister";
-
-      List<Task<SessionBlockDownload>> BlockDownloadTasks;
-      const uint SHARD_WRITERS_COUNT_MAX = 8;
+      
+      List<Task> BlockDownloadTasks;
+      const uint DOWNLOAD_TASK_COUNT_MAX = 8;
 
 
       public BlockArchiver(Blockchain blockchain, INetwork network)
@@ -41,111 +32,118 @@ namespace BToken.Chaining
         Blockchain = blockchain;
         Network = network;
 
-        BlockDownloadTasks = new List<Task<SessionBlockDownload>>();
+        BlockDownloadTasks = new List<Task>();
       }
 
-
-      static NetworkBlock ParseNetworkBlock(FileStream blockRegisterStream)
+      FileStream CreateFile(UInt256 hash)
       {
-        int prefixInt = blockRegisterStream.ReadByte();
+        string filename = hash.ToString();
+        string fileRootPath = ConvertToRootPath(filename);
 
-        if (prefixInt == -1)
+        DirectoryInfo dir = Directory.CreateDirectory(fileRootPath);
+
+        string filePath = Path.Combine(fileRootPath, filename);
+
+        return new FileStream(
+          filePath,
+          FileMode.Create,
+          FileAccess.Write,
+          FileShare.None);
+      }
+
+      public async Task ArchiveBlockAsync(NetworkBlock block, UInt256 hash)
+      {
+        using (FileStream fileStream = CreateFile(hash))
         {
-          return null;
+          byte[] headerBytes = block.Header.GetBytes();
+          byte[] txCount = VarInt.GetBytes(block.TXCount).ToArray();
+
+          await fileStream.WriteAsync(headerBytes, 0, headerBytes.Length);
+          await fileStream.WriteAsync(txCount, 0, txCount.Length);
+          await fileStream.WriteAsync(block.Payload, 0, block.Payload.Length);
         }
-
-        int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
-        byte[] blockBytes = new byte[blockLength];
-        int i = blockRegisterStream.Read(blockBytes, 0, blockLength);
-
-        return NetworkBlock.ParseBlock(blockBytes);
       }
 
-      static FileStream OpenFile(UInt256 fileHash)
+      public static async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
       {
-        string filename = fileHash.ToString();
+        using (FileStream blockRegisterStream = OpenFile(hash.ToString()))
+        {
+          int prefixInt = blockRegisterStream.ReadByte();
 
-        string firstHexByte = filename.Substring(0, 2);
-        string secondHexByte = filename.Substring(2, 2);
-        string thirdHexByte = filename.Substring(4, 2);
+          if (prefixInt == -1)
+          {
+            return null;
+          }
 
-        string filePath = Path.Combine(
-          RootDirectory.Name,
-          firstHexByte,
-          secondHexByte,
-          thirdHexByte,
-          filename);
+          int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
+          byte[] blockBytes = new byte[blockLength];
+          int i = await blockRegisterStream.ReadAsync(blockBytes, 0, blockLength);
+
+          return NetworkBlock.ParseBlock(blockBytes);
+        }
+      }
+
+      static FileStream OpenFile(string filename)
+      {
+        string fileRootPath = ConvertToRootPath(filename);
+        string filePath = Path.Combine(fileRootPath, filename);
 
         return new FileStream(
           filePath,
           FileMode.Open,
           FileAccess.Read,
-          FileShare.Read,
-          BLOCK_REGISTER_BYTESIZE_MAX);
+          FileShare.Read);
       }
 
-      static void IncrementFileID(ref FileID fileID)
+      static string ConvertToRootPath(string filename)
       {
-        if (fileID.FileIndex == ITEM_COUNT_PER_DIRECTORY - 1)
-        {
-          fileID.DirectoryIndex++;
-          fileID.FileIndex = 0;
-        }
-        else
-        {
-          fileID.FileIndex++;
-        }
-      }
+        string firstHexByte = filename.Substring(62, 2);
+        string secondHexByte = filename.Substring(60, 2);
+        string thirdHexByte = filename.Substring(58, 2);
 
-      public static FileWriter GetWriter()
-      {
-        try
-        {
-          throw new NotImplementedException();
-          //return new FileWriter(ShardEnumerator++);
-        }
-        catch (Exception ex)
-        {
-          Debug.WriteLine("BlockArchiver::GetWriter: " + ex.Message);
-          throw ex;
-        }
+        return Path.Combine(
+          RootDirectory.Name,
+          firstHexByte,
+          secondHexByte,
+          thirdHexByte);
       }
-
+      
+     
       public async Task InitialBlockDownloadAsync()
       {
-        int batchSize = 50;
-        var blockstreamer = new Blockstreamer();
+        var headerStreamer = new Headerchain.HeaderStreamer(Blockchain.Headerchain);
 
-        List<ChainLocation> headerLocations = blockstreamer.ReadHeaderLocations(batchSize);
-        while(headerLocations.Any())
+        ChainLocation headerLocation = headerStreamer.ReadNextHeaderLocation();
+        int i = 100;
+        while (headerLocation != null)
         {
-          FileWriter shardWriter = await GetShardWriterAsync();
-          PostBlockDownloadSession(shardWriter, headerLocations);
+          await AwaitNextDownloadTask();
+          PostBlockDownloadSession(headerLocation);
 
-          headerLocations = blockstreamer.ReadHeaderLocations(batchSize);
+          headerLocation = headerStreamer.ReadNextHeaderLocation();
+          i++;
         }
-      }
-      async Task<FileWriter> GetShardWriterAsync()
+    }
+      async Task AwaitNextDownloadTask()
       {
-        if (BlockDownloadTasks.Count < SHARD_WRITERS_COUNT_MAX)
+        if (BlockDownloadTasks.Count < DOWNLOAD_TASK_COUNT_MAX)
         {
-          return new FileWriter((uint)BlockDownloadTasks.Count + 1);
+          return;
         }
         else
         {
-          Task<SessionBlockDownload> blockDownloadTaskCompleted = await Task.WhenAny(BlockDownloadTasks);
+          Task blockDownloadTaskCompleted = await Task.WhenAny(BlockDownloadTasks);
           BlockDownloadTasks.Remove(blockDownloadTaskCompleted);
-          SessionBlockDownload sessionBlockDownload = await blockDownloadTaskCompleted;
-
-          return sessionBlockDownload.ShardWriter;
         }
       }
-      void PostBlockDownloadSession(FileWriter fileWriter, List<ChainLocation> headerLocations)
+      void PostBlockDownloadSession(ChainLocation headerLocation)
       {
-        var sessionBlockDownload = new SessionBlockDownload(fileWriter, headerLocations);
+        var sessionBlockDownload = new SessionBlockDownload(this, headerLocation);
         Network.PostSession(sessionBlockDownload);
         BlockDownloadTasks.Add(sessionBlockDownload.AwaitSessionCompletedAsync());
       }
+
+
     }
   }
 }

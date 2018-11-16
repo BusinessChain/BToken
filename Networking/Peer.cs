@@ -170,26 +170,34 @@ namespace BToken.Networking
       async Task ProcessHeadersMessageAsync(NetworkMessage networkMessage)
       {
         var headersMessage = new HeadersMessage(networkMessage);
+        await BufferMessageAsync(headersMessage);
+      }
 
+      async Task ProcessBlockMessageAsync(NetworkMessage networkMessage)
+      {
+        var blockMessage = new BlockMessage(networkMessage);
+        await BufferMessageAsync(blockMessage);
+      } 
+
+      async Task BufferMessageAsync(NetworkMessage networkMessage)
+      {
         if (IsSessionExecuting)
         {
-          await SessionMessageBuffer.SendAsync(headersMessage);
+          await SessionMessageBuffer.SendAsync(networkMessage).ConfigureAwait(false);
         }
         else
         {
-          await Network.NetworkMessageBufferBlockchain.SendAsync(headersMessage);
+          await Network.NetworkMessageBufferBlockchain.SendAsync(networkMessage).ConfigureAwait(false);
         }
       }
 
-      async Task ProcessBlockMessageAsync(NetworkMessage networkMessage) => await Network.NetworkMessageBufferBlockchain.SendAsync(new BlockMessage(networkMessage)).ConfigureAwait(false);
       async Task ProcessGetHeadersMessageAsync(NetworkMessage networkMessage)
       {
         GetHeadersMessage getHeadersMessage = new GetHeadersMessage(networkMessage);
       }
 
       public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage).ConfigureAwait(false);
-
-     
+           
       public void Blame(uint penaltyScore)
       {
         PenaltyScore += penaltyScore;

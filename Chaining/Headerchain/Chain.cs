@@ -21,10 +21,10 @@ namespace BToken.Chaining
       public Chain(ChainHeader headerRoot)
       {
         HeaderTip = headerRoot;
-        HeaderTipHash = new UInt256(Hashing.SHA256d(headerRoot.Header.GetBytes()));
+        HeaderTipHash = new UInt256(Hashing.SHA256d(headerRoot.NetworkHeader.GetBytes()));
         Height = 0;
         HeaderRoot = headerRoot;
-        AccumulatedDifficulty = TargetManager.GetDifficulty(headerRoot.Header.NBits);
+        AccumulatedDifficulty = TargetManager.GetDifficulty(headerRoot.NetworkHeader.NBits);
       }
 
       public Chain(
@@ -38,7 +38,7 @@ namespace BToken.Chaining
         HeaderTipHash = headerTipHash;
         Height = headerTipHeight;
         HeaderRoot = headerRoot;
-        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerTip.Header.NBits);
+        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerTip.NetworkHeader.NBits);
       }            
       
       public UInt256 GetHeaderHash(ChainHeader header)
@@ -48,7 +48,7 @@ namespace BToken.Chaining
           return HeaderTipHash;
         }
 
-        return header.HeadersNext[0].Header.HashPrevious;
+        return header.HeadersNext[0].NetworkHeader.HashPrevious;
       }
 
       public void ExtendChain(ChainHeader header, UInt256 headerHash)
@@ -56,7 +56,7 @@ namespace BToken.Chaining
         HeaderTip = header;
         HeaderTipHash = headerHash;
         Height++;
-        AccumulatedDifficulty += TargetManager.GetDifficulty(header.Header.NBits);
+        AccumulatedDifficulty += TargetManager.GetDifficulty(header.NetworkHeader.NBits);
       }
 
       //public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)

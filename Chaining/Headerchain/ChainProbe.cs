@@ -27,7 +27,7 @@ namespace BToken.Chaining
         Initialize();
       }
 
-      void Initialize()
+      public void Initialize()
       {
         Header = Chain.HeaderTip;
         Hash = Chain.HeaderTipHash;
@@ -54,11 +54,11 @@ namespace BToken.Chaining
           Push();
         }
       }
-      void Push()
+      public void Push()
       {
-        Hash = Header.Header.HashPrevious;
+        Hash = Header.NetworkHeader.HashPrevious;
         Header = Header.HeaderPrevious;
-        AccumulatedDifficulty -= TargetManager.GetDifficulty(Header.Header.NBits);
+        AccumulatedDifficulty -= TargetManager.GetDifficulty(Header.NetworkHeader.NBits);
 
         Depth++;
       }

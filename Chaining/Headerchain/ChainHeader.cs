@@ -9,7 +9,7 @@ namespace BToken.Chaining
   {
     class ChainHeader
     {
-      public NetworkHeader Header;
+      public NetworkHeader NetworkHeader;
 
       public ChainHeader HeaderPrevious;
       public List<ChainHeader> HeadersNext = new List<ChainHeader>();
@@ -22,7 +22,7 @@ namespace BToken.Chaining
         UInt32 nBits,
         UInt32 nonce)
       {
-        Header = new NetworkHeader(
+        NetworkHeader = new NetworkHeader(
           version,
           hashPrevious,
           payloadHash,
@@ -33,7 +33,7 @@ namespace BToken.Chaining
       
       public ChainHeader(NetworkHeader header, ChainHeader headerPrevious)
       {
-        Header = header;
+        NetworkHeader = header;
         HeaderPrevious = headerPrevious;
       }
 

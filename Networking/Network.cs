@@ -125,9 +125,10 @@ namespace BToken.Networking
       }
     }
 
-    public async Task GetBlocksAsync(List<UInt256> blockHashes)
+    public async Task<NetworkBlock> GetBlockAsync(UInt256 blockHash)
     {
-      await PeersOutbound.First().RequestBlocksAsync(blockHashes).ConfigureAwait(false);
+      CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(10)).Token;
+      return await PeersOutbound.First().GetBlockAsync(blockHash, cancellationToken).ConfigureAwait(false);
     }
 
   }
