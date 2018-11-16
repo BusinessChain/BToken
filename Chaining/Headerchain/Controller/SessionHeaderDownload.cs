@@ -74,7 +74,7 @@ namespace BToken.Chaining
             {
               Blockchain.InsertHeader(header);
             }
-            catch (HeaderchainException ex)
+            catch (ChainException ex)
             {
               switch (ex.ErrorCode)
               {

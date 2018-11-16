@@ -8,7 +8,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public interface IBlockPayload
+  public interface IPayload
   {
     UInt256 GetPayloadHash();
   }

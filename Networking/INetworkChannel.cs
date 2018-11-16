@@ -12,7 +12,7 @@ namespace BToken.Networking
   public interface INetworkChannel
   {
     Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator);
-    Task RequestBlocksAsync(List<UInt256> headerHashes);
-    Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken token);
+    Task<NetworkBlock> GetBlockAsync(UInt256 hash, CancellationToken token);
+
   }
 }

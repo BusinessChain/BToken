@@ -127,7 +127,7 @@ namespace BToken.Networking
 
     public async Task GetBlocksAsync(List<UInt256> blockHashes)
     {
-      await PeersOutbound.First().GetBlocksAsync(blockHashes).ConfigureAwait(false);
+      await PeersOutbound.First().RequestBlocksAsync(blockHashes).ConfigureAwait(false);
     }
 
   }

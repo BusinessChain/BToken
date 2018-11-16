@@ -9,10 +9,10 @@ namespace BToken.Chaining
   {
     class ChainHeader
     {
-      public NetworkHeader Header { get; private set; }
+      public NetworkHeader Header;
 
-      public ChainHeader HeaderPrevious { get; private set; }
-      public List<ChainHeader> HeadersNext { get; private set; } = new List<ChainHeader>();
+      public ChainHeader HeaderPrevious;
+      public List<ChainHeader> HeadersNext = new List<ChainHeader>();
       
       public ChainHeader(
         UInt32 version,

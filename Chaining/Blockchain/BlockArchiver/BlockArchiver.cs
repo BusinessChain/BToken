@@ -32,11 +32,16 @@ namespace BToken.Chaining
       const int BLOCK_REGISTER_BYTESIZE_MAX = 0x40000;
       static string FileHandle = "BlockRegister";
 
+      List<Task<SessionBlockDownload>> BlockDownloadTasks;
+      const uint SHARD_WRITERS_COUNT_MAX = 8;
+
 
       public BlockArchiver(Blockchain blockchain, INetwork network)
       {
         Blockchain = blockchain;
         Network = network;
+
+        BlockDownloadTasks = new List<Task<SessionBlockDownload>>();
       }
 
 
@@ -56,13 +61,20 @@ namespace BToken.Chaining
         return NetworkBlock.ParseBlock(blockBytes);
       }
 
-      static FileStream OpenFile(FileID fileID)
+      static FileStream OpenFile(UInt256 fileHash)
       {
+        string filename = fileHash.ToString();
+
+        string firstHexByte = filename.Substring(0, 2);
+        string secondHexByte = filename.Substring(2, 2);
+        string thirdHexByte = filename.Substring(4, 2);
+
         string filePath = Path.Combine(
           RootDirectory.Name,
-          ShardHandle + fileID.ShardIndex,
-          DirectoryHandle + fileID.DirectoryIndex,
-          FileHandle + fileID.FileIndex);
+          firstHexByte,
+          secondHexByte,
+          thirdHexByte,
+          filename);
 
         return new FileStream(
           filePath,
@@ -101,32 +113,38 @@ namespace BToken.Chaining
 
       public async Task InitialBlockDownloadAsync()
       {
-        var sessionBlockDownloadTasks = new List<Task>();
-        var ShardWriters = new List<FileWriter>();
-
-        int batchSize = 2000;
+        int batchSize = 50;
         var blockstreamer = new Blockstreamer();
-        List<NetworkHeader> headers = CreateHeaderBatch(batchSize);
-        foreach(NetworkHeader startHeader in startHeaders)
+
+        List<ChainLocation> headerLocations = blockstreamer.ReadHeaderLocations(batchSize);
+        while(headerLocations.Any())
         {
-          var sessionBlockDownload = new SessionBlockDownload(this, startHeader, batchSize);
-          Network.PostSession(sessionBlockDownload);
-          sessionBlockDownloadTasks.Add(sessionBlockDownload.AwaitSignalCompletedAsync());
+          FileWriter shardWriter = await GetShardWriterAsync();
+          PostBlockDownloadSession(shardWriter, headerLocations);
+
+          headerLocations = blockstreamer.ReadHeaderLocations(batchSize);
         }
-
-        await Task.WhenAll(sessionBlockDownloadTasks);
       }
-
-      List<NetworkHeader> CreateHeaderBatch(int batchSize)
+      async Task<FileWriter> GetShardWriterAsync()
       {
-        Headerchain.ChainHeader header = Blockchain.Headerchain.GetHeader(new UInt256("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"));
-        var startBlocks = new List<Headerchain.ChainHeader>() { header };
-        return startBlocks;
+        if (BlockDownloadTasks.Count < SHARD_WRITERS_COUNT_MAX)
+        {
+          return new FileWriter((uint)BlockDownloadTasks.Count + 1);
+        }
+        else
+        {
+          Task<SessionBlockDownload> blockDownloadTaskCompleted = await Task.WhenAny(BlockDownloadTasks);
+          BlockDownloadTasks.Remove(blockDownloadTaskCompleted);
+          SessionBlockDownload sessionBlockDownload = await blockDownloadTaskCompleted;
+
+          return sessionBlockDownload.ShardWriter;
+        }
       }
-
-      void ReportSessionBlockckDownloadCompleted(SessionBlockDownload session)
+      void PostBlockDownloadSession(FileWriter fileWriter, List<ChainLocation> headerLocations)
       {
-        //Network.QueueSession(new SessionBlockDownload(this, session.Archiver, headerStart, headerStop));
+        var sessionBlockDownload = new SessionBlockDownload(fileWriter, headerLocations);
+        Network.PostSession(sessionBlockDownload);
+        BlockDownloadTasks.Add(sessionBlockDownload.AwaitSessionCompletedAsync());
       }
     }
   }

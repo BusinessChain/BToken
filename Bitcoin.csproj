@@ -100,9 +100,9 @@
     <Compile Include="Chaining\Blockchain\BlockArchiver\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Headerchain\Controller\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\Headerchain\IBlockchain.cs" />
-    <Compile Include="Chaining\Headerchain\IBlockPayload.cs" />
+    <Compile Include="Chaining\Headerchain\IPayload.cs" />
     <Compile Include="Chaining\IPayloadParser.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderchainException.cs" />
+    <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Chaining\Headerchain\Chain\Chain.cs" />
     <Compile Include="Chaining\Headerchain\IHeaderArchiver.cs" />
     <Compile Include="Chaining\INetwork.cs" />

@@ -13,7 +13,7 @@ namespace BToken.Networking
     public byte[] Payload { get; private set; }
 
 
-    NetworkBlock(NetworkHeader networkHeader, int txCount, byte[] payload)
+    public NetworkBlock(NetworkHeader networkHeader, int txCount, byte[] payload)
     {
       Header = networkHeader;
       TXCount = txCount;
@@ -28,6 +28,15 @@ namespace BToken.Networking
       byte[] payload = blockBytes.Skip(startIndex).ToArray();
 
       return new NetworkBlock(header, txCount, payload);
+    }
+
+  }
+
+  public static class NetworkBlockExtensionMethods
+  {
+    public static UInt256 GetHeaderHash(this NetworkBlock block)
+    {
+      return new UInt256(Hashing.SHA256d(block.Header.GetBytes()));
     }
   }
 }

@@ -28,13 +28,13 @@ namespace BToken.Chaining
 
 
     public Headerchain(
-      ChainHeader genesisBlock,
+      NetworkHeader genesisHeader,
       INetwork network,
       List<ChainLocation> checkpoints,
       IBlockchain blockchain)
     {
       Controller = new HeaderchainController(network, this, Archiver);
-      MainChain = new Chain(genesisBlock);
+      MainChain = new Chain(new ChainHeader(genesisHeader, null));
 
       Validator = new HeaderValidator(checkpoints);
       Locator = new HeaderLocator(this);
@@ -119,18 +119,6 @@ namespace BToken.Chaining
       MainChain = chain;
 
       Locator.Reorganize();
-    }
-
-    public ChainHeader GetHeader(UInt256 hash)
-    {
-      ChainProbe probe = GetChainProbe(hash);
-
-      if (probe == null)
-      {
-        throw new HeaderchainException(BlockCode.ORPHAN);
-      }
-
-      return probe.Header;
     }
 
   }

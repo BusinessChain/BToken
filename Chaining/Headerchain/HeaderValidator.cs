@@ -27,7 +27,7 @@ namespace BToken.Chaining
       {
         if (probe == null)
         {
-          throw new HeaderchainException(BlockCode.ORPHAN);
+          throw new ChainException(BlockCode.ORPHAN);
         }
 
         ValidateTimeStamp(probe, header.UnixTimeSeconds);
@@ -47,12 +47,12 @@ namespace BToken.Chaining
 
         if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
         {
-          throw new HeaderchainException(BlockCode.INVALID);
+          throw new ChainException(BlockCode.INVALID);
         }
 
         if (!ValidateBlockLocation(nextBlockHeight, headerHash))
         {
-          throw new HeaderchainException(BlockCode.INVALID);
+          throw new ChainException(BlockCode.INVALID);
         }
       }
       bool ValidateBlockLocation(uint height, UInt256 hash)
@@ -69,12 +69,12 @@ namespace BToken.Chaining
       {
         if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(nBits)))
         {
-          throw new HeaderchainException(BlockCode.INVALID);
+          throw new ChainException(BlockCode.INVALID);
         }
 
         if (nBits != TargetManager.GetNextTargetBits(probe))
         {
-          throw new HeaderchainException(BlockCode.INVALID);
+          throw new ChainException(BlockCode.INVALID);
         }
       }
       void ValidateTimeStamp(ChainProbe probe, uint unixTimeSeconds)
@@ -83,19 +83,19 @@ namespace BToken.Chaining
         bool IsTimestampPremature = (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
         if (IsTimestampPremature)
         {
-          throw new HeaderchainException(BlockCode.PREMATURE);
+          throw new ChainException(BlockCode.PREMATURE);
         }
 
         if (unixTimeSeconds <= GetMedianTimePast(probe))
         {
-          throw new HeaderchainException(BlockCode.INVALID);
+          throw new ChainException(BlockCode.INVALID);
         }
       }
       void ValidateUniqueness(ChainProbe probe, UInt256 hash)
       {
         if (probe.Header.HeadersNext.Any(b => probe.Chain.GetHeaderHash(b).IsEqual(hash)))
         {
-          throw new HeaderchainException(BlockCode.DUPLICATE);
+          throw new ChainException(BlockCode.DUPLICATE);
         }
       }
       uint GetMedianTimePast(ChainProbe probe)

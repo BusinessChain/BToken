@@ -236,21 +236,31 @@ namespace BToken.Networking
 
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      // implement as static functions of Network class
-      public async Task GetBlocksAsync(List<UInt256> hashes)
+      public async Task<NetworkBlock> GetBlockAsync(UInt256 hash, CancellationToken cancellationToken)
       {
-        List<Inventory> inventories = hashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h)).ToList();
-        await NetworkMessageStreamer.WriteAsync(new GetDataMessage(inventories)).ConfigureAwait(false);
+        var inventory = new Inventory(InventoryType.MSG_BLOCK, hash);
+        await NetworkMessageStreamer.WriteAsync(new GetDataMessage(new List<Inventory>() { inventory })).ConfigureAwait(false);
+
+        while (true)
+        {
+          NetworkMessage networkMessage = await SessionMessageBuffer.ReceiveAsync(cancellationToken).ConfigureAwait(false);
+          var blockMessage = networkMessage as BlockMessage;
+
+          if (blockMessage != null)
+          {
+            return blockMessage.NetworkBlock;
+          }
+        }
       }
       public async Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator)
       {
         await NetworkMessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator)).ConfigureAwait(false);
 
         CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-        HeadersMessage headersMessage = await GetHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
+        HeadersMessage headersMessage = await ReceiveHeadersMessageAsync(cancellationToken).ConfigureAwait(false);
         return headersMessage.Headers;
       }
-      async Task<HeadersMessage> GetHeadersMessageAsync(CancellationToken cancellationToken)
+      async Task<HeadersMessage> ReceiveHeadersMessageAsync(CancellationToken cancellationToken)
       {
         while (true)
         {
@@ -262,16 +272,6 @@ namespace BToken.Networking
             return headersMessage;
           }
         }
-      }
-
-
-      public async Task RequestBlocksAsync(List<UInt256> headerHashes)
-      {
-        throw new NotImplementedException();
-      }
-      public async Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken token)
-      {
-        throw new NotImplementedException();
       }
 
     }

@@ -6,26 +6,26 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  class HeaderchainException : Exception
+  class ChainException : Exception
   {
     public BlockCode ErrorCode { get; private set; }
 
 
-    public HeaderchainException()
+    public ChainException()
     {
     }
 
-    public HeaderchainException(string message)
+    public ChainException(string message)
         : base(message)
     {
     }
 
-    public HeaderchainException(string message, Exception inner)
+    public ChainException(string message, Exception inner)
         : base(message, inner)
     {
     }
 
-    public HeaderchainException(BlockCode errorCode)
+    public ChainException(BlockCode errorCode)
     {
       ErrorCode = errorCode;
     }

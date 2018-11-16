@@ -10,6 +10,10 @@ namespace BToken.Chaining
   {
     class Blockstreamer
     {
+      public List<ChainLocation> ReadHeaderLocations(int batchSize)
+      {
+        throw new NotImplementedException();
+      }
     }
   }
 }

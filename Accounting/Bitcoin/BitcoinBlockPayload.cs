@@ -12,7 +12,7 @@ using BToken.Networking;
 
 namespace BToken.Bitcoin
 {
-  public class BitcoinBlockPayload : IBlockPayload
+  public class BitcoinBlockPayload : IPayload
   {
     List<BitcoinTX> BitcoinTXs = new List<BitcoinTX>();
     UInt256 MerkleRootHash; // Get rid of this, it is only needed for fake GenesisBlock

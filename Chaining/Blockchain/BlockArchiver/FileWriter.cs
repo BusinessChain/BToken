@@ -95,6 +95,12 @@ namespace BToken.Chaining
           }
         }
 
+        public NetworkBlock ReadBlock(UInt256 hash)
+        {
+          FileStream = OpenFile(hash);
+          return ParseNetworkBlock(FileStream);
+        }
+        
         bool IsPayloadFitInCurrentFile(int blockByteSize) => FileStream.Length + blockByteSize <= BLOCK_REGISTER_BYTESIZE_MAX;
 
         void CreateNewFileStream()

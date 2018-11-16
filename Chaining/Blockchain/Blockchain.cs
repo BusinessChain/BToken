@@ -11,19 +11,19 @@ namespace BToken.Chaining
   public partial class Blockchain : IBlockchain
   {
     Headerchain Headerchain;
-    IPayloadParser PayloadParser;
+    static IPayloadParser PayloadParser;
     INetwork Network;
     BlockArchiver Archiver;
 
 
     public Blockchain(
-      Headerchain.ChainHeader genesisBlock,
+      NetworkBlock genesisBlock,
       INetwork network,
       List<ChainLocation> checkpoints,
       IPayloadParser payloadParser)
     {
       Network = network;
-      Headerchain = new Headerchain(genesisBlock, network, checkpoints, this);
+      Headerchain = new Headerchain(genesisBlock.Header, network, checkpoints, this);
       PayloadParser = payloadParser;
 
       Archiver = new BlockArchiver(this, network);

@@ -10,7 +10,7 @@ namespace BToken.Bitcoin
 {
   public class BitcoinPayloadParser : IPayloadParser
   {
-    public IBlockPayload Parse(byte[] payloadStream)
+    public IPayload Parse(byte[] payloadStream)
     {
       var bitcoinTXs = new List<BitcoinTX>();
 
@@ -25,7 +25,7 @@ namespace BToken.Bitcoin
 
     public UInt256 GetPayloadHash(byte[] payload)
     {
-      IBlockPayload blockPayload = Parse(payload);
+      IPayload blockPayload = Parse(payload);
       return blockPayload.GetPayloadHash();
     }
 
