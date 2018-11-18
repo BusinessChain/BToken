@@ -31,12 +31,4 @@ namespace BToken.Networking
     }
 
   }
-
-  public static class NetworkBlockExtensionMethods
-  {
-    public static UInt256 GetHeaderHash(this NetworkBlock block)
-    {
-      return new UInt256(Hashing.SHA256d(block.Header.GetBytes()));
-    }
-  }
 }

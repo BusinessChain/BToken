@@ -20,7 +20,7 @@ namespace BToken.Networking
       Network Network;
       IPEndPoint IPEndPoint;
 
-      bool IsSessionExecuting = false;
+      bool IsSessionExecutingFlag = false;
       BufferBlock<NetworkMessage> SessionMessageBuffer = new BufferBlock<NetworkMessage>();
 
       TcpClient TcpClient;
@@ -48,7 +48,7 @@ namespace BToken.Networking
       {
         await ConnectAsync();
 
-        Task peerStartTask = ProcessNetworkMessageAsync();
+        Task processNetworkMessageTask = ProcessNetworkMessageAsync();
         Task sessionListenerTask = StartSessionListenerAsync();
       }
 
@@ -82,6 +82,28 @@ namespace BToken.Networking
           await ExecuteSessionAsync(session);
         }
       }
+      async Task ExecuteSessionAsync(INetworkSession session)
+      {
+        IsSessionExecutingFlag = true;
+
+        while (IsSessionExecutingFlag)
+        {
+          try
+          {
+            await session.StartAsync(this).ConfigureAwait(false);
+
+            IsSessionExecutingFlag = false;
+          }
+          catch (Exception ex)
+          {
+            Debug.WriteLine("Peer::ExecuteSessionAsync:" + ex.Message);
+
+            Dispose();
+
+            await ConnectAsync().ConfigureAwait(false);
+          }
+        }
+      }
 
       public async Task ConnectTCPAsync()
       {
@@ -104,14 +126,17 @@ namespace BToken.Networking
       }
       public async Task ProcessNetworkMessageAsync(CancellationToken cancellationToken = default(CancellationToken))
       {
-        try
+        while (true)
         {
-          while (true)
+          try
           {
             NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
 
             switch (networkMessage.Command)
             {
+              case "version":
+                await ProcessVersionMessageAsync(networkMessage).ConfigureAwait(false);
+                break;
               case "ping":
                 await ProcessPingMessageAsync(networkMessage).ConfigureAwait(false);
                 break;
@@ -137,21 +162,27 @@ namespace BToken.Networking
                 break;
             }
           }
-        }
-        catch (Exception ex)
-        {
-          Debug.WriteLine("Peer::ProcessMessagesAsync: " + ex.Message);
-          Dispose();
+          catch (Exception ex)
+          {
+            Debug.WriteLine("Peer::ProcessMessagesAsync: " + ex.Message);
+
+            Dispose();
+
+            await ConnectAsync().ConfigureAwait(false);
+          }
         }
       }
-      void ProcessAddressMessage(NetworkMessage networkMessage)
+      async Task ProcessVersionMessageAsync(NetworkMessage networkMessage)
       {
-        AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
       {
         PingMessage pingMessage = new PingMessage(networkMessage);
         await NetworkMessageStreamer.WriteAsync(new PongMessage(pingMessage.Nonce)).ConfigureAwait(false);
+      }
+      void ProcessAddressMessage(NetworkMessage networkMessage)
+      {
+        AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
       async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage()).ConfigureAwait(false);
       async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
@@ -181,7 +212,7 @@ namespace BToken.Networking
 
       async Task BufferMessageAsync(NetworkMessage networkMessage)
       {
-        if (IsSessionExecuting)
+        if (IsSessionExecutingFlag)
         {
           await SessionMessageBuffer.SendAsync(networkMessage).ConfigureAwait(false);
         }
@@ -212,35 +243,9 @@ namespace BToken.Networking
       public void Dispose()
       {
         TcpClient.Close();
+        SessionMessageBuffer = new BufferBlock<NetworkMessage>();
       }
 
-      public async Task ExecuteSessionAsync(INetworkSession session)
-      {
-        IsSessionExecuting = true;
-        int sessionExcecutionTries = 0;
-
-        while (true)
-        {
-          try
-          {
-            await session.StartAsync(this);
-          }
-          catch (Exception ex)
-          {
-            IsSessionExecuting = false;
-
-            Debug.WriteLine("Peer::ExecuteSessionAsync:" + ex.Message +
-            ", Session excecution tries: '{0}'", ++sessionExcecutionTries);
-
-            Dispose();
-
-            await ConnectAsync().ConfigureAwait(false);
-          }
-
-          IsSessionExecuting = false;
-          return;
-        }
-      }
 
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 

@@ -66,18 +66,10 @@ namespace BToken.Chaining
 
       public static async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
       {
-        using (FileStream blockRegisterStream = OpenFile(hash.ToString()))
+        using (FileStream blockFileStream = OpenFile(hash.ToString()))
         {
-          int prefixInt = blockRegisterStream.ReadByte();
-
-          if (prefixInt == -1)
-          {
-            return null;
-          }
-
-          int blockLength = (int)VarInt.ParseVarInt((ulong)prefixInt, blockRegisterStream);
-          byte[] blockBytes = new byte[blockLength];
-          int i = await blockRegisterStream.ReadAsync(blockBytes, 0, blockLength);
+          byte[] blockBytes = new byte[blockFileStream.Length];
+          int i = await blockFileStream.ReadAsync(blockBytes, 0, (int)blockFileStream.Length);
 
           return NetworkBlock.ParseBlock(blockBytes);
         }
@@ -99,13 +91,11 @@ namespace BToken.Chaining
       {
         string firstHexByte = filename.Substring(62, 2);
         string secondHexByte = filename.Substring(60, 2);
-        string thirdHexByte = filename.Substring(58, 2);
 
         return Path.Combine(
           RootDirectory.Name,
           firstHexByte,
-          secondHexByte,
-          thirdHexByte);
+          secondHexByte);
       }
       
      
@@ -114,14 +104,13 @@ namespace BToken.Chaining
         var headerStreamer = new Headerchain.HeaderStreamer(Blockchain.Headerchain);
 
         ChainLocation headerLocation = headerStreamer.ReadNextHeaderLocation();
-        int i = 100;
         while (headerLocation != null)
         {
           await AwaitNextDownloadTask();
+          Debug.WriteLine("queue next block download height: '{0}'",headerLocation.Height);
           PostBlockDownloadSession(headerLocation);
 
           headerLocation = headerStreamer.ReadNextHeaderLocation();
-          i++;
         }
     }
       async Task AwaitNextDownloadTask()
@@ -142,8 +131,7 @@ namespace BToken.Chaining
         Network.PostSession(sessionBlockDownload);
         BlockDownloadTasks.Add(sessionBlockDownload.AwaitSessionCompletedAsync());
       }
-
-
+      
     }
   }
 }

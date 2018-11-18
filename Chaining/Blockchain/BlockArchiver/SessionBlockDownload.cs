@@ -38,6 +38,8 @@ namespace BToken.Chaining
         if (!await TryValidateBlockExistingAsync())
         {
           await DownloadBlockAsync();
+
+          Debug.WriteLine("downloaded block download height: '{0}'", HeaderLocation.Height);
         }
         
         SignalSessionCompletion.Post(true);
@@ -83,7 +85,8 @@ namespace BToken.Chaining
           throw new ChainException(BlockCode.INVALID);
         }
 
-        if (!HeaderLocation.Hash.IsEqual(block.GetHeaderHash()))
+        var headerHash = new UInt256(Hashing.SHA256d(block.Header.GetBytes()));
+        if (!HeaderLocation.Hash.IsEqual(headerHash))
         {
           throw new ChainException(BlockCode.INVALID);
         }
