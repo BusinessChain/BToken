@@ -18,21 +18,26 @@ namespace BToken.Networking
     partial class Peer : IDisposable, INetworkChannel
     {
       Network Network;
+      INetworkMessageReceiver NetworkMessageListener;
+
       IPEndPoint IPEndPoint;
 
       bool IsSessionExecutingFlag = false;
       BufferBlock<NetworkMessage> SessionMessageBuffer = new BufferBlock<NetworkMessage>();
 
+      CancellationTokenSource CancellationTokenSourceRequestSession = new CancellationTokenSource();
+      Task<INetworkSession> RequestSessionTask;
+      
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
-
-      public uint PenaltyScore { get; private set; }
-
+      public NetworkMessage NetworkMessageReceived { get; private set; }
+      
 
 
       public Peer(Network network)
       {
         Network = network;
+        NetworkMessageListener = network;
       }
       public Peer(TcpClient tcpClient, Network network)
       {
@@ -78,7 +83,7 @@ namespace BToken.Networking
       {
         while (true)
         {
-          INetworkSession session = await Network.NetworkSessionQueue.ReceiveAsync().ConfigureAwait(false);
+          INetworkSession session = await Network.NetworkSessionQueue.ReceiveAsync();
           await ExecuteSessionAsync(session);
         }
       }
@@ -103,6 +108,11 @@ namespace BToken.Networking
             await ConnectAsync().ConfigureAwait(false);
           }
         }
+      }
+
+      public void ConnectListener(INetworkMessageReceiver listener)
+      {
+        NetworkMessageListener = listener;
       }
 
       public async Task ConnectTCPAsync()
@@ -130,35 +140,24 @@ namespace BToken.Networking
         {
           try
           {
-            NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
+            NetworkMessageReceived = await NetworkMessageStreamer.ReadAsync(cancellationToken).ConfigureAwait(false);
 
-            switch (networkMessage.Command)
+            switch (NetworkMessageReceived.Command)
             {
               case "version":
-                await ProcessVersionMessageAsync(networkMessage).ConfigureAwait(false);
+                await ProcessVersionMessageAsync(NetworkMessageReceived).ConfigureAwait(false);
                 break;
               case "ping":
-                await ProcessPingMessageAsync(networkMessage).ConfigureAwait(false);
+                await ProcessPingMessageAsync(NetworkMessageReceived).ConfigureAwait(false);
                 break;
               case "addr":
-                ProcessAddressMessage(networkMessage);
+                ProcessAddressMessage(NetworkMessageReceived);
                 break;
               case "sendheaders":
-                await ProcessSendHeadersMessageAsync(networkMessage).ConfigureAwait(false);
-                break;
-              case "inv":
-                await ProcessInventoryMessageAsync(networkMessage).ConfigureAwait(false);
-                break;
-              case "headers":
-                await ProcessHeadersMessageAsync(networkMessage).ConfigureAwait(false);
-                break;
-              case "getheaders":
-                await ProcessGetHeadersMessageAsync(networkMessage).ConfigureAwait(false);
-                break;
-              case "block":
-                await ProcessBlockMessageAsync(networkMessage).ConfigureAwait(false);
+                await ProcessSendHeadersMessageAsync(NetworkMessageReceived).ConfigureAwait(false);
                 break;
               default:
+                NetworkMessageListener.ProcessNetworkMessageAsync(this);
                 break;
             }
           }
@@ -185,61 +184,25 @@ namespace BToken.Networking
         AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
       async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage()).ConfigureAwait(false);
-      async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
-      {
-        InvMessage invMessage = new InvMessage(networkMessage);
+      //async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
+      //{
+      //  InvMessage invMessage = new InvMessage(networkMessage);
 
-        if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
-        {
-          await Network.NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
-        }
-        if (invMessage.GetTXInventories().Any())
-        {
-          await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
-        };
-      }
-      async Task ProcessHeadersMessageAsync(NetworkMessage networkMessage)
-      {
-        var headersMessage = new HeadersMessage(networkMessage);
-        await BufferMessageAsync(headersMessage);
-      }
+      //  if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
+      //  {
+      //    await Network.NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
+      //  }
+      //  if (invMessage.GetTXInventories().Any())
+      //  {
+      //    await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
+      //  };
+      //}
 
-      async Task ProcessBlockMessageAsync(NetworkMessage networkMessage)
-      {
-        var blockMessage = new BlockMessage(networkMessage);
-        await BufferMessageAsync(blockMessage);
-      } 
-
-      async Task BufferMessageAsync(NetworkMessage networkMessage)
-      {
-        if (IsSessionExecutingFlag)
-        {
-          await SessionMessageBuffer.SendAsync(networkMessage).ConfigureAwait(false);
-        }
-        else
-        {
-          await Network.NetworkMessageBufferBlockchain.SendAsync(networkMessage).ConfigureAwait(false);
-        }
-      }
-
-      async Task ProcessGetHeadersMessageAsync(NetworkMessage networkMessage)
-      {
-        GetHeadersMessage getHeadersMessage = new GetHeadersMessage(networkMessage);
-      }
 
       public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage).ConfigureAwait(false);
-           
-      public void Blame(uint penaltyScore)
-      {
-        PenaltyScore += penaltyScore;
 
-        if (PenaltyScore >= 100)
-        {
-          Network.AddressPool.Blame(IPEndPoint.Address);
-          Dispose();
-        }
-      }
-          
+
+
       public void Dispose()
       {
         TcpClient.Close();

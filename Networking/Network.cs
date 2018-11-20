@@ -15,7 +15,7 @@ using BToken.Accounting;
 
 namespace BToken.Networking
 {
-  public partial class Network : Chaining.INetwork, Accounting.INetwork
+  public partial class Network : Chaining.INetwork, Accounting.INetwork, INetworkMessageReceiver
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
@@ -36,8 +36,10 @@ namespace BToken.Networking
 
     BufferBlock<INetworkSession> NetworkSessionQueue = new BufferBlock<INetworkSession>();
     
-    public BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
-    public BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
+    BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
+    BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
+
+    IBlockchain Blockchain;
 
     public Network()
     {
@@ -110,9 +112,31 @@ namespace BToken.Networking
 
     public void PostSession(INetworkSession session)
     {
-      // allenfalls könnte jeder Peer einen eigenen Queue haben, damit könnten 
-      // Broadcast versendet werden und einzelne Peers angesprochen werden.
       NetworkSessionQueue.Post(session);
+    }
+
+    public async Task ProcessNetworkMessageAsync(INetworkChannel channel)
+    {
+      Peer peer = (Peer)channel;
+
+      if(Blockchain == null)
+      {
+        return;
+      }
+
+      NetworkMessage message = peer.NetworkMessageReceived;
+      INetworkSession session = await Blockchain.RequestSessionAsync(message, default(CancellationToken));
+
+      peer.ConnectListener(session);
+
+      try
+      {
+        await session.StartAsync(channel);
+      }
+      finally
+      {
+        peer.ConnectListener(this);
+      }
     }
 
     static long getUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();

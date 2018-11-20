@@ -13,6 +13,5 @@ namespace BToken.Networking
   {
     Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator);
     Task<NetworkBlock> GetBlockAsync(UInt256 hash, CancellationToken token);
-
   }
 }

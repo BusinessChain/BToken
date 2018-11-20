@@ -6,9 +6,8 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  public interface INetworkSession : INetworkMessageReceiver
+  public interface INetworkMessageReceiver
   {
-    Task StartAsync(INetworkChannel channel);
-    
+    Task ProcessNetworkMessageAsync(INetworkChannel channel);
   }
 }
