@@ -109,7 +109,6 @@
     <Compile Include="Chaining\Headerchain\TargetManager.cs" />
     <Compile Include="Networking\DataTypes\NetworkAddress.cs" />
     <Compile Include="Networking\INetworkChannel.cs" />
-    <Compile Include="Networking\INetworkMessageReceiver.cs" />
     <Compile Include="Networking\INetworkSession.cs" />
     <Compile Include="Networking\Messages\AddressMessage.cs" />
     <Compile Include="Networking\NetworkAddressPool.cs" />

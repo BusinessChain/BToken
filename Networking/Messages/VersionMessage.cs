@@ -83,7 +83,7 @@ namespace BToken.Networking
       {
         ProtocolVersion = Network.ProtocolVersion;
         NetworkServicesLocal = (UInt64)NetworkServicesLocalProvided;
-        UnixTimeSeconds = getUnixTimeSeconds();
+        UnixTimeSeconds = GetUnixTimeSeconds();
         NetworkServicesRemote = (UInt64)NetworkServicesRemoteRequired;
         IPAddressRemote = IPAddress.Loopback.MapToIPv6();
         PortRemote = Network.Port;

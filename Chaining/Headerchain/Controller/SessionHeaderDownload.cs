@@ -32,7 +32,7 @@ namespace BToken.Chaining
           Archiver = archiver;
         }
 
-        public async Task StartAsync(INetworkChannel channel)
+        public async Task RunAsync(INetworkChannel channel)
         {
           Channel = channel;
 

@@ -31,7 +31,7 @@ namespace BToken.Chaining
         HeaderLocation = headerLocation;
       }
 
-      public async Task StartAsync(INetworkChannel channel)
+      public async Task RunAsync(INetworkChannel channel)
       {
         Channel = channel;
 
@@ -119,9 +119,9 @@ namespace BToken.Chaining
       {
         while (true)
         {
-          bool signalCompleted = await SignalSessionCompletion.ReceiveAsync().ConfigureAwait(false);
+          bool signalSessionCompleted = await SignalSessionCompletion.ReceiveAsync().ConfigureAwait(false);
 
-          if (signalCompleted) { return; }
+          if (signalSessionCompleted) { return; }
         }
       }
     }

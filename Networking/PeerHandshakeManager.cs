@@ -65,7 +65,7 @@ namespace BToken.Networking
             rejectionReason = string.Format("Network services '{0}' do not meet requirement '{1}'.", versionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
           }
 
-          if (versionMessageRemote.UnixTimeSeconds - getUnixTimeSeconds() > 2 * 60 * 60)
+          if (versionMessageRemote.UnixTimeSeconds - GetUnixTimeSeconds() > 2 * 60 * 60)
           {
             rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.", versionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
           }

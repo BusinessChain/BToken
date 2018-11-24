@@ -34,8 +34,7 @@ namespace BToken.Chaining
         LoadHeadersFromArchive();
 
         var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
-        Network.PostSession(sessionHeaderDownload);
-        await sessionHeaderDownload.AwaitSignalCompletedAsync();
+        await Network.ExecuteSessionAsync(sessionHeaderDownload);
 
         await Headerchain.Blockchain.InitialBlockDownloadAsync();
         
