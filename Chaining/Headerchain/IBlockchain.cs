@@ -14,6 +14,6 @@ namespace BToken.Chaining
     Task InitialBlockDownloadAsync();
     void DownloadBlock(NetworkHeader header);
 
-    Task<INetworkSession> RequestSessionAsync(NetworkMessage networkMessage, CancellationToken cancellationToken);
+    INetworkSession RequestSession(NetworkMessage networkMessage, CancellationToken cancellationToken);
   }
 }

@@ -45,19 +45,18 @@ namespace BToken.Chaining
 
     }
 
-    public async Task<INetworkSession> RequestSessionAsync(NetworkMessage networkMessage, CancellationToken cancellationToken)
+    public INetworkSession RequestSession(NetworkMessage networkMessage, CancellationToken cancellationToken)
     {
-      switch (networkMessage)
+      switch (networkMessage.Command)
       {
-        //case InvMessage invMessage:
-        //await ProcessInventoryMessageAsync(invMessage);
-        //break;
-
-        case Network.HeadersMessage headersMessage:
+        case "inv":
+          return null;
+        case "headers":
           var location = new ChainLocation(0, null);
           return new SessionBlockDownload(Archiver, location);
-
-        case Network.BlockMessage blockMessage:
+        case "getheaders":
+          return null;
+        case "block":
           location = new ChainLocation(0, null);
           return new SessionBlockDownload(Archiver, location);
 

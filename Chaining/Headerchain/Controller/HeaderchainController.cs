@@ -33,8 +33,7 @@ namespace BToken.Chaining
       {
         LoadHeadersFromArchive();
 
-        var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
-        await Network.ExecuteSessionAsync(sessionHeaderDownload);
+        await DownloadHeaderchainAsync();
 
         await Headerchain.Blockchain.InitialBlockDownloadAsync();
         
@@ -61,6 +60,12 @@ namespace BToken.Chaining
         {
           Debug.WriteLine(ex.Message);
         }
+      }
+      async Task DownloadHeaderchainAsync()
+      {
+        var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
+        Task sendSessionTask = Network.SendSessionAsync(sessionHeaderDownload);
+        await sessionHeaderDownload.AwaitSignalCompletedAsync();
       }
       async Task StartMessageListenerAsync()
       {

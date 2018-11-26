@@ -128,7 +128,7 @@ namespace BToken.Chaining
       void PostBlockDownloadSession(ChainLocation headerLocation)
       {
         var sessionBlockDownload = new SessionBlockDownload(this, headerLocation);
-        Network.PostSession(sessionBlockDownload);
+        Task sendSessionTask = Network.SendSessionAsync(sessionBlockDownload);
         BlockDownloadTasks.Add(sessionBlockDownload.AwaitSessionCompletedAsync());
       }
       

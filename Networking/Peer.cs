@@ -23,11 +23,11 @@ namespace BToken.Networking
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
       BufferBlock<NetworkMessage> NetworkMessageBuffer = new BufferBlock<NetworkMessage>();
-
-      CancellationTokenSource CancellationProcessNetworkMessages;
-      public bool IsSessionRunning = false;
+      BufferBlock<NetworkMessage> SessionMessageBuffer = new BufferBlock<NetworkMessage>();
+      
+      public BufferBlock<NetworkMessage> InboundSessionRequestBuffer { get; private set; } = new BufferBlock<NetworkMessage>();
       public BufferBlock<INetworkSession> PeerSessionQueue { get; private set; } = new BufferBlock<INetworkSession>();
-
+      public bool IsSessionRunning { get; private set; }
 
 
       public Peer(Network network)
@@ -48,22 +48,55 @@ namespace BToken.Networking
       {
         await ConnectAsync();
 
-        Task processPeerMessageTask = ProcessPeerMessagesAsync();
+        Task processPeerMessagesTask = ProcessNetworkMessagesAsync();
+        Task startApplicationSessionListenerTask = StartApplicationSessionListenerAsync();
 
-        StartProcessNetworkMessages();
-      }
-      void StartProcessNetworkMessages()
-      {
-        IsSessionRunning = false;
-        Task processNetworkMessageTask = ProcessNetworkMessagesAsync();
-      }
-      void StopProcessNetworkMessages()
-      {
-        IsSessionRunning = true;
-        CancellationProcessNetworkMessages.Cancel();
       }
 
-      public  async Task ConnectAsync()
+      public void PostSession(INetworkSession session)
+      {
+        PeerSessionQueue.Post(session);
+      }
+      async Task StartApplicationSessionListenerAsync()
+      {
+        while (true)
+        {
+          INetworkSession session = await PeerSessionQueue.ReceiveAsync(); // wie sehen wir, ob session wiederholt wird?
+          while (!await RunSessionAsync(session));
+        }
+      }
+
+      async Task<bool> RunSessionAsync(INetworkSession session)
+      {
+        bool isSessionRunSuccess;
+
+        try
+        {
+          IsSessionRunning = true;
+
+          await session.RunAsync(this);
+
+          IsSessionRunning = false;
+          isSessionRunSuccess = true;
+        }
+        catch (Exception ex)
+        {
+          IsSessionRunning = false;
+          isSessionRunSuccess = false;
+
+          Console.WriteLine("Session '{0}' with peer '{1}' ended with exception: \n'{2}'",
+            session.GetType().ToString(),
+            IPEndPoint.Address.ToString(),
+            ex.Message);
+
+          Dispose();
+
+          await ConnectAsync();
+        }
+
+        return isSessionRunSuccess;
+      }
+      async Task ConnectAsync()
       {
         int connectionTries = 0;
 
@@ -80,44 +113,15 @@ namespace BToken.Networking
           }
           catch (Exception ex)
           {
-            Debug.WriteLine("Network::ConnectAsync: " + ex.Message
+            Debug.WriteLine("Peer::ConnectAsync: " + ex.Message
               + "\nConnection tries: '{0}'", ++connectionTries);
           }
         }
       }
 
-      public void PostSession(INetworkSession session)
-      {
-        PeerSessionQueue.Post(session);
-      }
-      public async Task ExecuteSessionAsync(INetworkSession session)
-      {
-        StopProcessNetworkMessages();
-
-        while (true)
-        {
-          try
-          {
-            await session.RunAsync(this);
-          }
-          catch (Exception ex)
-          {
-            Debug.WriteLine("Peer::ExecuteSessionAsync:" + ex.Message);
-
-            Dispose();
-
-            await ConnectAsync();
-
-            continue;
-          }
-          break;
-        }
-
-        StartProcessNetworkMessages();
-      }
 
 
-      async Task ProcessPeerMessagesAsync()
+      async Task ProcessNetworkMessagesAsync()
       {
         while (true)
         {
@@ -140,13 +144,15 @@ namespace BToken.Networking
                 await ProcessSendHeadersMessageAsync(networkMessage);
                 break;
               default:
-                await NetworkMessageBuffer.SendAsync(networkMessage);
+                await ProcessApplicationMessageAsync(networkMessage);
                 break;
             }
           }
           catch (Exception ex)
           {
-            Debug.WriteLine("Peer::ProcessNetworkMessageAsync: " + ex.Message);
+            Console.WriteLine("Processing of peer messages aborted with peer '{0}' due to exception: \n'{1}'",
+              IPEndPoint.Address.ToString(),
+              ex.Message);
 
             Dispose();
 
@@ -154,58 +160,26 @@ namespace BToken.Networking
           }
         }
       }
-
-      async Task ProcessNetworkMessagesAsync()
+      async Task ProcessApplicationMessageAsync(NetworkMessage networkMessage)
       {
-        try
+        if (IsSessionRunning)
         {
-          CancellationProcessNetworkMessages = new CancellationTokenSource();
-
-          while (true)
-          {
-            NetworkMessage networkMessage = await NetworkMessageBuffer.ReceiveAsync(CancellationProcessNetworkMessages.Token);
-
-            Network.SignalPeerIdle.Receive();
-            IsSessionRunning = true;
-
-            INetworkSession session = await Network.Blockchain.RequestSessionAsync(networkMessage, default(CancellationToken));
-            await StartSessionAsync(session);
-
-            IsSessionRunning = false;
-            Network.SignalPeerIdle.Post(true);
-          }
+          await SessionMessageBuffer.SendAsync(networkMessage);
         }
-        catch(Exception ex)
+        else
         {
-          Console.WriteLine("Process NetworkMessages was '{0}' with peer '{1}' ended with exception: \n'{2}'",
-            session.GetType().ToString(),
-            IPEndPoint.Address.ToString(),
-            ex.Message);
+          await InboundSessionRequestBuffer.SendAsync(networkMessage);          
         }
       }
-      async Task StartSessionAsync(INetworkSession session)
-      {
-        try
-        {
-          await session.RunAsync(this);
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine("Session '{0}' with peer '{1}' ended with exception: \n'{2}'", 
-            session.GetType().ToString(),
-            IPEndPoint.Address.ToString(),
-            ex.Message);
-        }
-      }
-      
 
-      public async Task ConnectTCPAsync()
+
+      async Task ConnectTCPAsync()
       {
         TcpClient = new TcpClient();
         await TcpClient.ConnectAsync(IPEndPoint.Address, IPEndPoint.Port);
         NetworkMessageStreamer = new MessageStreamer(TcpClient.GetStream());
       }
-      public async Task HandshakeAsync()
+      async Task HandshakeAsync()
       {
         await NetworkMessageStreamer.WriteAsync(new VersionMessage());
         
@@ -261,7 +235,7 @@ namespace BToken.Networking
 
         while (true)
         {
-          NetworkMessage networkMessage = await NetworkMessageBuffer.ReceiveAsync(cancellationToken);
+          NetworkMessage networkMessage = await SessionMessageBuffer.ReceiveAsync(cancellationToken);
           var blockMessage = networkMessage as BlockMessage;
 
           if (blockMessage != null)
@@ -282,7 +256,7 @@ namespace BToken.Networking
       {
         while (true)
         {
-          NetworkMessage networkMessage = await NetworkMessageBuffer.ReceiveAsync(cancellationToken);
+          NetworkMessage networkMessage = await SessionMessageBuffer.ReceiveAsync(cancellationToken);
           HeadersMessage headersMessage = networkMessage as HeadersMessage;
 
           if (headersMessage != null)
