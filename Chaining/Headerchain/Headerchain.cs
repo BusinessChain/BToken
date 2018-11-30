@@ -24,14 +24,14 @@ namespace BToken.Chaining
 
     HeaderchainController Controller;
     HeaderArchiver Archiver = new HeaderArchiver();
-    IBlockchain Blockchain;
+    Blockchain Blockchain;
 
 
     public Headerchain(
       NetworkHeader genesisHeader,
       INetwork network,
       List<ChainLocation> checkpoints,
-      IBlockchain blockchain)
+      Blockchain blockchain)
     {
       Controller = new HeaderchainController(network, this, Archiver);
       MainChain = new Chain(new ChainHeader(genesisHeader, null));

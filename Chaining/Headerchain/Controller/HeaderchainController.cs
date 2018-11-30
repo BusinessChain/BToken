@@ -37,7 +37,7 @@ namespace BToken.Chaining
 
         await Headerchain.Blockchain.InitialBlockDownloadAsync();
         
-        Task startMessageListenerTask = StartMessageListenerAsync();
+        Task inboundSessionRequestListenerTask = StartInboundSessionRequestListenerAsync();
 
       }
       void LoadHeadersFromArchive()
@@ -64,30 +64,35 @@ namespace BToken.Chaining
       async Task DownloadHeaderchainAsync()
       {
         var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
-        Task sendSessionTask = Network.SendSessionAsync(sessionHeaderDownload);
-        await sessionHeaderDownload.AwaitSignalCompletedAsync();
+
+        await Network.ExecuteSessionAsync(sessionHeaderDownload, default(CancellationToken));
       }
-      async Task StartMessageListenerAsync()
+
+      async Task StartInboundSessionRequestListenerAsync()
       {
         while (true)
         {
-          NetworkMessage networkMessage = await Network.GetMessageBlockchainAsync();
+          INetworkChannel channel = await Network.AcceptChannelInboundSessionRequestAsync();
+          List<NetworkMessage> sessionRequests = channel.GetRequestMessages();
 
-          switch (networkMessage)
+          foreach(NetworkMessage networkMessage in sessionRequests)
           {
-            case InvMessage invMessage:
-              //await ProcessInventoryMessageAsync(invMessage);
-              break;
+            switch (networkMessage)
+            {
+              case InvMessage invMessage:
+                //await ProcessInventoryMessageAsync(invMessage);
+                break;
 
-            case Network.HeadersMessage headersMessage:
-              ProcessHeadersMessage(headersMessage);
-              break;
+              case Network.HeadersMessage headersMessage:
+                ProcessHeadersMessage(headersMessage);
+                break;
 
-            case Network.BlockMessage blockMessage:
-              break;
+              case Network.BlockMessage blockMessage:
+                break;
 
-            default:
-              break;
+              default:
+                break;
+            }
           }
         }
       }

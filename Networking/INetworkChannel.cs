@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-using BToken.Chaining;
 
 namespace BToken.Networking
 {
@@ -13,5 +12,7 @@ namespace BToken.Networking
   {
     Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator);
     Task<NetworkBlock> GetBlockAsync(UInt256 hash, CancellationToken token);
+
+    List<NetworkMessage> GetRequestMessages();
   }
 }

@@ -10,12 +10,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Chaining;
-using BToken.Accounting;
 
 namespace BToken.Networking
 {
-  public partial class Network : Chaining.INetwork, Accounting.INetwork
+  public partial class Network : Chaining.INetwork
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
@@ -23,20 +21,20 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-    
-    static UInt64 Nonce;
-    NetworkAddressPool AddressPool;
+    const int PEERS_COUNT_OUTBOUND = 1;
+    const int PEERS_COUNT_INBOUND = 8;
 
+    static UInt64 Nonce;
+
+    NetworkAddressPool AddressPool;
     TcpListener TcpListener;
-    public const int PEERS_COUNT_INBOUND = 8;
+
+
+    readonly object ListPeersLOCK = new object();
+    List<Peer> PeersOutbound = new List<Peer>();
     List<Peer> PeersInbound = new List<Peer>();
 
-    public const int PEERS_COUNT_OUTBOUND = 1;
-
-    List<Peer> Peers = new List<Peer>();
-    
-    BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
-    BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
+    BufferBlock<Peer> PeerRequestInboundBuffer = new BufferBlock<Peer>();
 
 
     public Network()
@@ -46,7 +44,7 @@ namespace BToken.Networking
       
       TcpListener = new TcpListener(IPAddress.Any, Port);
 
-      CreatePeersOutbound();
+      CreatePeers();
     }
     static ulong createNonce()
     {
@@ -56,12 +54,12 @@ namespace BToken.Networking
       number = number << 32;
       return number |= (uint)rnd.Next();
     }
-    void CreatePeersOutbound()
+    void CreatePeers()
     {
       for (int i = 0; i < PEERS_COUNT_OUTBOUND; i++)
       {
         var peer = new Peer(this);
-        Peers.Add(peer);
+        PeersOutbound.Add(peer);
       }
     }
 
@@ -69,50 +67,49 @@ namespace BToken.Networking
     {
       StartPeers();
 
-      //Task peerInboundListenerTask = StartPeerInboundListenerAsync();
+      Task peerInboundListenerTask = StartPeerInboundListenerAsync();
     }
     void StartPeers()
     {
-      Peers.Select(async peer =>
+      PeersOutbound.Select(async peer =>
       {
-        Task startPeerTask = peer.StartAsync();
+        Task startPeerTask = StartPeerAsync(peer);
       }).ToArray();
     }
-
-    public async Task SendSessionAsync(INetworkSession session)
+    async Task StartPeerAsync(Peer peer)
     {
-      var peer = GetPeerSmallestSessionQueue();
-
-      while(peer == null)
+      try
       {
-        await Task.Delay(1000).ConfigureAwait(false);
-        peer = GetPeerSmallestSessionQueue();
+        await peer.StartAsync();
+      }
+      catch
+      {
+        RenewPeerWhenOutbound(peer);
+      }
+    }
+    void RenewPeerWhenOutbound(Peer peer)
+    {
+      if (!PeersOutbound.Contains(peer))
+      {
+        return;
       }
 
-      peer.PostSession(session);
-    }
-    Peer GetPeerSmallestSessionQueue()
-    {
-      Peer peerSmallestSessionQueue = null;
+      var peerNew = new Peer(this);
 
-      foreach(Peer peer in Peers)
+      lock(ListPeersLOCK)
       {
-        if(!peer.IsSessionRunning && peer.PeerSessionQueue.Count == 0)
-        {
-          peerSmallestSessionQueue = peer;
-          break;
-        }
-        else 
-        {
-          if(peerSmallestSessionQueue == null || peer.PeerSessionQueue.Count < peerSmallestSessionQueue.PeerSessionQueue.Count)
-          {
-            peerSmallestSessionQueue = peer;
-          }
-        }
+        int indexPeer = PeersOutbound.FindIndex(p => p == peer);
+        PeersOutbound[indexPeer] = peerNew;
       }
 
-      return peerSmallestSessionQueue;
+      Task startPeerTask = StartPeerAsync(peerNew);
     }
+
+    public async Task<INetworkChannel> AcceptChannelInboundSessionRequestAsync()
+    {
+      return await PeerRequestInboundBuffer.ReceiveAsync();
+    }
+
     
     public async Task StartPeerInboundListenerAsync()
     {
@@ -120,36 +117,68 @@ namespace BToken.Networking
 
       while (true)
       {
-        try
-        {
-          TcpClient client = await TcpListener.AcceptTcpClientAsync();
-          Debug.WriteLine("received inbound request from " + client.Client.RemoteEndPoint.ToString());
-          Peer peer = new Peer(client, this);
-          PeersInbound.Add(peer);
+        TcpClient client = await TcpListener.AcceptTcpClientAsync();
+        Console.WriteLine("Received inbound request from " + client.Client.RemoteEndPoint.ToString());
+        Peer peer = new Peer(client, this);
+        PeersInbound.Add(peer);
 
-          await peer.StartAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-          Debug.WriteLine(ex.Message);
-        }
+        Task startPeerTask = StartPeerAsync(peer);
       }
     }
 
-    public async Task<NetworkMessage> GetMessageBlockchainAsync()
+    public async Task ExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken)
     {
-      return await NetworkMessageBufferBlockchain.ReceiveAsync();
+      Peer peer = await GetPeerOutboundAsync(cancellationToken);
+
+      while(!await TryExecuteSessionAsync(session, peer, cancellationToken))
+      {
+        peer = await GetPeerOutboundAsync(cancellationToken);
+      }
     }
-    public async Task<NetworkMessage> GetMessageBitcoinAsync()
+    async Task<Peer> GetPeerOutboundAsync(CancellationToken cancellationToken)
     {
-      return await NetworkMessageBufferUTXO.ReceiveAsync();
+      while (true)
+      {
+        foreach (Peer peer in PeersOutbound)
+        {
+          if (peer.TryDispatch())
+          {
+            return peer;
+          }
+        }
+
+        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+      }
     }
-    
+    public async Task<bool> TryExecuteSessionAsync(INetworkSession session, INetworkChannel channel, CancellationToken cancellationToken)
+    {
+      Peer peer = (Peer)channel;
+
+      try
+      {
+        await session.RunAsync(peer, cancellationToken);
+        peer.ReportSessionSuccess(session);
+
+        return true;
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine("Session '{0}' with peer '{1}' ended with exception: \n'{2}'",
+          session.GetType().ToString(),
+          peer.IPEndPoint.Address.ToString(),
+          ex.Message);
+
+        peer.ReportSessionFail(session);
+
+        return false;
+      }
+    }
+
     static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     public async Task PingAsync()
     {
-      foreach (Peer peer in Peers)
+      foreach (Peer peer in PeersOutbound)
       {
         await peer.PingAsync().ConfigureAwait(false);
       }
@@ -158,7 +187,7 @@ namespace BToken.Networking
     public async Task<NetworkBlock> GetBlockAsync(UInt256 blockHash)
     {
       CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(10)).Token;
-      return await Peers.First().GetBlockAsync(blockHash, cancellationToken).ConfigureAwait(false);
+      return await PeersOutbound.First().GetBlockAsync(blockHash, cancellationToken).ConfigureAwait(false);
     }
 
   }

@@ -9,7 +9,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain : IBlockchain
+  public partial class Blockchain
   {
     Headerchain Headerchain;
     static IPayloadParser PayloadParser;
@@ -45,25 +45,25 @@ namespace BToken.Chaining
 
     }
 
-    public INetworkSession RequestSession(NetworkMessage networkMessage, CancellationToken cancellationToken)
-    {
-      switch (networkMessage.Command)
-      {
-        case "inv":
-          return null;
-        case "headers":
-          var location = new ChainLocation(0, null);
-          return new SessionBlockDownload(Archiver, location);
-        case "getheaders":
-          return null;
-        case "block":
-          location = new ChainLocation(0, null);
-          return new SessionBlockDownload(Archiver, location);
+    //public INetworkSession RequestSession(NetworkMessage networkMessage, CancellationToken cancellationToken)
+    //{
+    //  switch (networkMessage.Command)
+    //  {
+    //    case "inv":
+    //      return null;
+    //    case "headers":
+    //      var location = new ChainLocation(0, null);
+    //      return new SessionBlockDownload(Archiver, location);
+    //    case "getheaders":
+    //      return null;
+    //    case "block":
+    //      location = new ChainLocation(0, null);
+    //      return new SessionBlockDownload(Archiver, location);
 
-        default:
-          return null;
-      }
-    }
+    //    default:
+    //      return null;
+    //  }
+    //}
 
   }
 }

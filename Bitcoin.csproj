@@ -96,7 +96,6 @@
     <Compile Include="Chaining\Blockchain\BlockArchiver\BlockStore.cs" />
     <Compile Include="Chaining\Blockchain\BlockArchiver\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Headerchain\Controller\SessionHeaderDownload.cs" />
-    <Compile Include="Chaining\Headerchain\IBlockchain.cs" />
     <Compile Include="Chaining\Headerchain\IPayload.cs" />
     <Compile Include="Chaining\IPayloadParser.cs" />
     <Compile Include="Chaining\ChainException.cs" />
@@ -111,6 +110,7 @@
     <Compile Include="Networking\INetworkChannel.cs" />
     <Compile Include="Networking\INetworkSession.cs" />
     <Compile Include="Networking\Messages\AddressMessage.cs" />
+    <Compile Include="Networking\Messages\FeeFilterMessage.cs" />
     <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\DataTypes\Inventory.cs" />
     <Compile Include="Networking\DataTypes\NetworkHeader.cs" />
@@ -176,7 +176,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Reviewer Kontakte.txt" />
-    <Content Include="Todo.txt" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.6.1">

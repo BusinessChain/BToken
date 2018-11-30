@@ -13,7 +13,7 @@ using BToken.Chaining;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain : IBlockchain
+  public partial class Blockchain
   {
     partial class BlockArchiver
     {
