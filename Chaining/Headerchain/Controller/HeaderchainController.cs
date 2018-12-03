@@ -64,7 +64,7 @@ namespace BToken.Chaining
       async Task DownloadHeaderchainAsync()
       {
         var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
-        await Network.ExecuteSessionAsync(sessionHeaderDownload, default(CancellationToken));
+        await Network.ExecuteSessionAsync(sessionHeaderDownload);
       }
 
       async Task StartInboundSessionRequestListenerAsync()
@@ -99,7 +99,7 @@ namespace BToken.Chaining
                   break;
               }
               
-              var executeSessionTask = channel.TryExecuteSessionAsync(session, default(CancellationToken));
+              //var executeSessionTask = channel.TryExecuteSessionAsync(session, default(CancellationToken));
             }
           }
         }

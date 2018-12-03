@@ -25,7 +25,7 @@ namespace BToken.Chaining
       
       List<Task> BlockDownloadTasks;
       const uint DOWNLOAD_TASK_COUNT_MAX = 8;
-
+      
 
       public BlockArchiver(Blockchain blockchain, INetwork network)
       {
@@ -97,8 +97,8 @@ namespace BToken.Chaining
           firstHexByte,
           secondHexByte);
       }
-      
-     
+
+
       public async Task InitialBlockDownloadAsync()
       {
         var headerStreamer = new Headerchain.HeaderStreamer(Blockchain.Headerchain);
@@ -107,12 +107,11 @@ namespace BToken.Chaining
         while (headerLocation != null)
         {
           await AwaitNextDownloadTask();
-          Debug.WriteLine("queue next block download height: '{0}'",headerLocation.Height);
           PostBlockDownloadSession(headerLocation);
 
           headerLocation = headerStreamer.ReadNextHeaderLocation();
         }
-    }
+      }
       async Task AwaitNextDownloadTask()
       {
         if (BlockDownloadTasks.Count < DOWNLOAD_TASK_COUNT_MAX)
@@ -129,8 +128,7 @@ namespace BToken.Chaining
       {
         var sessionBlockDownload = new SessionBlockDownload(this, headerLocation);
 
-        var cancellationSesssionExecution = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        Task executeSessionTask = Network.ExecuteSessionAsync(sessionBlockDownload, cancellationSesssionExecution.Token);
+        Task executeSessionTask = Network.ExecuteSessionAsync(sessionBlockDownload);
         BlockDownloadTasks.Add(executeSessionTask);
       }
       

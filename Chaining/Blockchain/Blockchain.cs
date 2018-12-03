@@ -45,25 +45,5 @@ namespace BToken.Chaining
 
     }
 
-    //public INetworkSession RequestSession(NetworkMessage networkMessage, CancellationToken cancellationToken)
-    //{
-    //  switch (networkMessage.Command)
-    //  {
-    //    case "inv":
-    //      return null;
-    //    case "headers":
-    //      var location = new ChainLocation(0, null);
-    //      return new SessionBlockDownload(Archiver, location);
-    //    case "getheaders":
-    //      return null;
-    //    case "block":
-    //      location = new ChainLocation(0, null);
-    //      return new SessionBlockDownload(Archiver, location);
-
-    //    default:
-    //      return null;
-    //  }
-    //}
-
   }
 }

@@ -14,6 +14,6 @@ namespace BToken.Chaining
     uint GetProtocolVersion();
     Task<INetworkChannel> AcceptChannelInboundSessionRequestAsync();
 
-    Task ExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken);
+    Task ExecuteSessionAsync(INetworkSession session);
   }
 }

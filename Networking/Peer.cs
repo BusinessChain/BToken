@@ -52,7 +52,7 @@ namespace BToken.Networking
         {
           await ConnectAsync();
 
-          Release();
+          IsDispatched = false;
 
           await ProcessNetworkMessagesAsync();
         }
@@ -77,7 +77,7 @@ namespace BToken.Networking
         await ConnectTCPAsync();
         await HandshakeAsync();
 
-        Console.WriteLine("Connected with peer '{0}''",
+        Console.WriteLine("Connected with peer '{0}'",
             IPEndPoint.Address.ToString());
       }
 
@@ -133,7 +133,7 @@ namespace BToken.Networking
           return true;
         }
       }
-      public void Release()
+      public void Dispose()
       {
         lock (IsDispatchedLOCK)
         {
@@ -187,12 +187,7 @@ namespace BToken.Networking
             
       public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage).ConfigureAwait(false);
       public async Task<NetworkMessage> ReceiveMessageAsync(CancellationToken cancellationToken) => await ApplicationMessageBuffer.ReceiveAsync(cancellationToken);
-
-      public void Dispose()
-      {
-        Release();
-      }
-
+      
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
       public async Task<bool> TryExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken)

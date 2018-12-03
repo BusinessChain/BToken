@@ -19,7 +19,9 @@ namespace BToken.Chaining
       
       public BlockArchiver Archiver;
       ChainLocation HeaderLocation;
-      
+
+      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
+
 
       public SessionBlockDownload(BlockArchiver archiver, ChainLocation headerLocation)
       {
@@ -33,7 +35,7 @@ namespace BToken.Chaining
 
         if (!await TryValidateBlockExistingAsync())
         {
-          await DownloadBlockAsync(cancellationToken);
+          await DownloadBlockAsync();
 
           Debug.WriteLine("downloaded block download height: '{0}'", HeaderLocation.Height);
         }
@@ -92,9 +94,9 @@ namespace BToken.Chaining
         }
       }
 
-      async Task DownloadBlockAsync(CancellationToken cancellationToken)
+      async Task DownloadBlockAsync()
       {
-        NetworkBlock block = await GetBlockAsync(HeaderLocation.Hash, cancellationToken);
+        NetworkBlock block = await GetBlockAsync(HeaderLocation.Hash);
 
         ValidateBlock(block);
 
@@ -107,19 +109,20 @@ namespace BToken.Chaining
           Debug.WriteLine(ex.Message);
         }
       }
-      public async Task<NetworkBlock> GetBlockAsync(UInt256 hash, CancellationToken cancellationToken)
+      public async Task<NetworkBlock> GetBlockAsync(UInt256 hash)
       {
         var inventory = new Inventory(InventoryType.MSG_BLOCK, hash);
         await Channel.SendMessageAsync(new GetDataMessage(new List<Inventory>() { inventory }));
 
+        var CancellationGetBlock = new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
+
         while (true)
         {
-          NetworkMessage networkMessage = await Channel.ReceiveMessageAsync(cancellationToken);
-          var blockMessage = networkMessage as BlockMessage;
+          NetworkMessage networkMessage = await Channel.ReceiveMessageAsync(CancellationGetBlock.Token);
 
-          if (blockMessage != null)
+          if (networkMessage.Command == "block")
           {
-            return blockMessage.NetworkBlock;
+            return new BlockMessage(networkMessage).NetworkBlock;
           }
         }
       }

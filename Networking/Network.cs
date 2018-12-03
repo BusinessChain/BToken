@@ -20,7 +20,7 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-    const int PEERS_COUNT_OUTBOUND = 1;
+    const int PEERS_COUNT_OUTBOUND = 8;
     const int PEERS_COUNT_INBOUND = 8;
 
     static UInt64 Nonce;
@@ -108,8 +108,7 @@ namespace BToken.Networking
     {
       return await PeerRequestInboundBuffer.ReceiveAsync();
     }
-
-    
+        
     public async Task StartPeerInboundListenerAsync()
     {
       TcpListener.Start(PEERS_COUNT_INBOUND);
@@ -125,16 +124,15 @@ namespace BToken.Networking
       }
     }
 
-    public async Task ExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken)
+    public async Task ExecuteSessionAsync(INetworkSession session)
     {
-      Peer peer = await DispatchPeerOutboundAsync(cancellationToken);
-
-      while(!await peer.TryExecuteSessionAsync(session, cancellationToken))
+      while (true)
       {
-        peer = await DispatchPeerOutboundAsync(cancellationToken);
+        using (Peer peer = await DispatchPeerOutboundAsync(default(CancellationToken)))
+        {
+          if (await peer.TryExecuteSessionAsync(session, default(CancellationToken))) { break; }
+        }
       }
-
-      peer.Release();
     }
     async Task<Peer> DispatchPeerOutboundAsync(CancellationToken cancellationToken)
     {
@@ -147,7 +145,7 @@ namespace BToken.Networking
             return peer;
           }
         }
-
+        
         await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
       }
     }
