@@ -139,7 +139,7 @@ namespace BToken.Networking
 
           if(chunkSize == 0)
           {
-            throw new InvalidOperationException("Stream returns 0 bytes signifying end of stream.");
+            throw new NetworkException("Stream returns 0 bytes signifying end of stream.");
           }
 
           offset += chunkSize;

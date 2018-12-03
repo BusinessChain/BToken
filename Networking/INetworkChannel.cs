@@ -5,14 +5,15 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-using BToken.Chaining;
 
 namespace BToken.Networking
 {
-  public interface INetworkChannel
+  public interface INetworkChannel : IDisposable
   {
-    Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator);
-    Task RequestBlocksAsync(List<UInt256> headerHashes);
-    Task<NetworkMessage> GetNetworkMessageAsync(CancellationToken token);
+    List<NetworkMessage> GetRequestMessages();
+    Task<bool> TryExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken);
+
+    Task SendMessageAsync(NetworkMessage message);
+    Task<NetworkMessage> ReceiveMessageAsync(CancellationToken cancellationToken);
   }
 }

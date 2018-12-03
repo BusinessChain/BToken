@@ -10,7 +10,7 @@ namespace BToken
 {
   static class Program
   {
-    public static BitcoinNode Node = new BitcoinNode();
+    public static BitcoinNode Node;
 
     /// <summary>
     /// The main entry point for the application.
@@ -20,11 +20,12 @@ namespace BToken
     {
       try
       {
+        Node = new BitcoinNode();
         Task startNodeTask = Node.StartAsync();
       }
       catch (Exception ex)
       {
-        MessageBox.Show(string.Format("Ups, something went wrong: '{0}'", ex.Message));
+        MessageBox.Show(ex.Message);
       }
 
       Application.EnableVisualStyles();

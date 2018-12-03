@@ -7,7 +7,7 @@ namespace BToken.Networking
   {
     public UInt32 Version { get; private set; }
     public UInt256 HashPrevious { get; private set; }
-    public UInt256 PayloadHash { get; private set; }
+    public UInt256 MerkleRoot { get; private set; }
     public UInt32 UnixTimeSeconds { get; private set; }
     public UInt32 NBits { get; private set; }
     public UInt32 Nonce { get; private set; }
@@ -23,7 +23,7 @@ namespace BToken.Networking
     {
       Version = version;
       HashPrevious = hashPrevious;
-      PayloadHash = merkleRootHash;
+      MerkleRoot = merkleRootHash;
       UnixTimeSeconds = unixTimeSeconds;
       NBits = nBits;
       Nonce = nonce;
@@ -35,7 +35,7 @@ namespace BToken.Networking
 
       headerSerialized.AddRange(BitConverter.GetBytes(Version));
       headerSerialized.AddRange(HashPrevious.GetBytes());
-      headerSerialized.AddRange(PayloadHash.GetBytes());
+      headerSerialized.AddRange(MerkleRoot.GetBytes());
       headerSerialized.AddRange(BitConverter.GetBytes(UnixTimeSeconds));
       headerSerialized.AddRange(BitConverter.GetBytes(NBits));
       headerSerialized.AddRange(BitConverter.GetBytes(Nonce));

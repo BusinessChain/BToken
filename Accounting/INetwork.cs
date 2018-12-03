@@ -5,10 +5,12 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+using BToken.Networking;
+
+namespace BToken.Accounting
 {
-  public interface INetworkSession
+  public interface INetwork
   {
-    Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken);
+    Task<INetworkChannel> AcceptChannelInboundSessionRequestAsync();
   }
 }

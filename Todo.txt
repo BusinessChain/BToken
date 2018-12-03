@@ -1,3 +1,0 @@
-﻿- In Blockdownload also download stale blocks, not only main chain.
-
-- Network should not have the method consensusError. It should care only about its own network errors like Dos.

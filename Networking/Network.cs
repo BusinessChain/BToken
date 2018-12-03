@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -10,11 +9,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Chaining;
 
 namespace BToken.Networking
 {
-  public partial class Network : INetwork
+  public partial class Network : Chaining.INetwork, Accounting.INetwork
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
@@ -22,32 +20,30 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-    
-    static UInt64 Nonce;
-    NetworkAddressPool AddressPool;
+    const int PEERS_COUNT_OUTBOUND = 8;
+    const int PEERS_COUNT_INBOUND = 8;
 
+    static UInt64 Nonce;
+
+    NetworkAddressPool AddressPool;
     TcpListener TcpListener;
-    public const int PEERS_COUNT_INBOUND = 8;
+
+
+    readonly object ListPeersLOCK = new object();
+    List<Peer> PeersOutbound = new List<Peer>();
     List<Peer> PeersInbound = new List<Peer>();
 
-    public const int PEERS_COUNT_OUTBOUND = 8;
-    List<Peer> PeersOutbound = new List<Peer>();
+    BufferBlock<Peer> PeerRequestInboundBuffer = new BufferBlock<Peer>();
 
-    BufferBlock<INetworkSession> NetworkSessionQueue = new BufferBlock<INetworkSession>();
 
-    IBlockchain Blockchain;
-    public BufferBlock<NetworkMessage> NetworkMessageBufferUTXO = new BufferBlock<NetworkMessage>();
-    public BufferBlock<NetworkMessage> NetworkMessageBufferBlockchain = new BufferBlock<NetworkMessage>();
-
-    public Network(IBlockchain blockchain)
+    public Network()
     {
-      Blockchain = blockchain;
       Nonce = createNonce();
       AddressPool = new NetworkAddressPool();
       
       TcpListener = new TcpListener(IPAddress.Any, Port);
 
-      CreatePeersOutbound();
+      CreatePeers();
     }
     static ulong createNonce()
     {
@@ -57,62 +53,104 @@ namespace BToken.Networking
       number = number << 32;
       return number |= (uint)rnd.Next();
     }
-    void CreatePeersOutbound()
+    void CreatePeers()
     {
       for (int i = 0; i < PEERS_COUNT_OUTBOUND; i++)
       {
-        PeersOutbound.Add(new Peer(this));
+        var peer = new Peer(this);
+        PeersOutbound.Add(peer);
       }
     }
 
     public void Start()
     {
-      StartPeersAsync();
-      Task inboundPeerListenerTask = StartInboundPeerListenerAsync();
+      StartPeers();
+
+      Task peerInboundListenerTask = StartPeerInboundListenerAsync();
     }
-    void StartPeersAsync()
+    void StartPeers()
     {
       PeersOutbound.Select(async peer =>
       {
-        await peer.ConnectAsync();
+        Task startPeerTask = StartPeerAsync(peer);
       }).ToArray();
     }
+    async Task StartPeerAsync(Peer peer)
+    {
+      try
+      {
+        await peer.StartAsync();
+      }
+      catch
+      {
+        RenewPeerWhenOutbound(peer);
+      }
+    }
+    void RenewPeerWhenOutbound(Peer peer)
+    {
+      if (!PeersOutbound.Contains(peer))
+      {
+        return;
+      }
 
-    public async Task StartInboundPeerListenerAsync()
+      var peerNew = new Peer(this);
+
+      lock(ListPeersLOCK)
+      {
+        int indexPeer = PeersOutbound.FindIndex(p => p == peer);
+        PeersOutbound[indexPeer] = peerNew;
+      }
+
+      Task startPeerTask = StartPeerAsync(peerNew);
+    }
+
+    public async Task<INetworkChannel> AcceptChannelInboundSessionRequestAsync()
+    {
+      return await PeerRequestInboundBuffer.ReceiveAsync();
+    }
+        
+    public async Task StartPeerInboundListenerAsync()
     {
       TcpListener.Start(PEERS_COUNT_INBOUND);
 
       while (true)
       {
-        try
-        {
-          TcpClient client = await TcpListener.AcceptTcpClientAsync();
-          Debug.WriteLine("received inbound request from " + client.Client.RemoteEndPoint.ToString());
-          Peer peer = new Peer(client, this);
-          PeersInbound.Add(peer);
+        TcpClient client = await TcpListener.AcceptTcpClientAsync();
+        Console.WriteLine("Received inbound request from " + client.Client.RemoteEndPoint.ToString());
+        Peer peer = new Peer(client, this);
+        PeersInbound.Add(peer);
 
-          await peer.ConnectAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-          Debug.WriteLine(ex.Message);
-        }
+        Task startPeerTask = StartPeerAsync(peer);
       }
-    }
-
-    public async Task<NetworkMessage> GetMessageBlockchainAsync()
-    {
-      return await NetworkMessageBufferBlockchain.ReceiveAsync();
     }
 
     public async Task ExecuteSessionAsync(INetworkSession session)
     {
-      // allenfalls könnte jeder Peer einen eigenen Queue haben, damit könnten 
-      // Broadcast versendet werden und einzelne Peers angesprochen werden.
-      await NetworkSessionQueue.SendAsync(session);
+      while (true)
+      {
+        using (Peer peer = await DispatchPeerOutboundAsync(default(CancellationToken)))
+        {
+          if (await peer.TryExecuteSessionAsync(session, default(CancellationToken))) { break; }
+        }
+      }
+    }
+    async Task<Peer> DispatchPeerOutboundAsync(CancellationToken cancellationToken)
+    {
+      while (true)
+      {
+        foreach (Peer peer in PeersOutbound)
+        {
+          if (peer.TryDispatch())
+          {
+            return peer;
+          }
+        }
+        
+        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+      }
     }
 
-    static long getUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     public async Task PingAsync()
     {
@@ -121,11 +159,10 @@ namespace BToken.Networking
         await peer.PingAsync().ConfigureAwait(false);
       }
     }
-
-    public async Task GetBlocksAsync(List<UInt256> blockHashes)
+    
+    public uint GetProtocolVersion()
     {
-      await PeersOutbound.First().GetBlocksAsync(blockHashes).ConfigureAwait(false);
+      return ProtocolVersion;
     }
-
   }
 }

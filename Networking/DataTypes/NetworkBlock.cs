@@ -13,7 +13,7 @@ namespace BToken.Networking
     public byte[] Payload { get; private set; }
 
 
-    NetworkBlock(NetworkHeader networkHeader, int txCount, byte[] payload)
+    public NetworkBlock(NetworkHeader networkHeader, int txCount, byte[] payload)
     {
       Header = networkHeader;
       TXCount = txCount;
@@ -29,5 +29,6 @@ namespace BToken.Networking
 
       return new NetworkBlock(header, txCount, payload);
     }
+
   }
 }

@@ -1,105 +1,49 @@
-﻿using System.Diagnostics;
-
-using System;
-using System.Linq;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-using System.IO;
 
 using BToken.Networking;
 
-
 namespace BToken.Chaining
 {
-  public enum BlockCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
-
-
-  public partial class Blockchain : IBlockchain
+  public partial class Blockchain
   {
-    Chain MainChain;
-    List<Chain> SecondaryChains = new List<Chain>();
-    
-    BlockValidator Validator;
-    BlockLocator Locator;
-
-    BlockchainController Controller;
+    Headerchain Headerchain;
+    static IPayloadParser PayloadParser;
+    INetwork Network;
+    BlockArchiver Archiver;
 
 
     public Blockchain(
-      ChainBlock genesisBlock,
+      NetworkBlock genesisBlock,
       INetwork network,
-      List<BlockLocation> checkpoints,
-      IHeaderArchiver archiver)
+      List<ChainLocation> checkpoints,
+      IPayloadParser payloadParser)
     {
-      Controller = new BlockchainController(network, this, archiver);
-      MainChain = new Chain(genesisBlock);
+      Network = network;
+      Headerchain = new Headerchain(genesisBlock.Header, network, checkpoints, this);
+      PayloadParser = payloadParser;
 
-      Validator = new BlockValidator(checkpoints);
-      Locator = new BlockLocator(this);
+      Archiver = new BlockArchiver(this, network);
     }
 
     public async Task StartAsync()
     {
-      await Controller.StartAsync();
+      await Headerchain.StartAsync();
     }
-    
-    void InsertHeader(NetworkHeader header)
+
+    public async Task InitialBlockDownloadAsync()
     {
-      ChainProbe probe = GetChainProbe(header.HashPrevious);
-
-      Validator.ValidateHeader(probe, header, out UInt256 headerHash);
-
-      probe.ConnectHeader(header);
-
-      if (probe.IsTip())
-      {
-        probe.ExtendChain(headerHash);
-
-        if (probe.Chain == MainChain)
-        {
-          Locator.Update();
-          return;
-        }
-      }
-      else
-      {
-        probe.ForkChain(headerHash);
-        SecondaryChains.Add(probe.Chain);
-      }
-
-      if (probe.Chain.IsStrongerThan(MainChain))
-      {
-        ReorganizeChain(probe.Chain);
-      }
+      await Archiver.InitialBlockDownloadAsync();
     }
-    ChainProbe GetChainProbe(UInt256 hash)
+
+    public void DownloadBlock(NetworkHeader header)
     {
-      var probe = new ChainProbe(MainChain);
 
-      if (probe.GotoBlock(hash))
-      {
-        return probe;
-      }
-
-      foreach (Chain chain in SecondaryChains)
-      {
-        probe.Chain = chain;
-
-        if (probe.GotoBlock(hash))
-        {
-          return probe;
-        }
-      }
-
-      return null;
     }
-    void ReorganizeChain(Chain chain)
-    {
-      SecondaryChains.Remove(chain);
-      SecondaryChains.Add(MainChain);
-      MainChain = chain;
 
-      Locator.Reorganize();
-    }
   }
 }
