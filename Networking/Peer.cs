@@ -13,7 +13,7 @@ namespace BToken.Networking
 {
   partial class Network
   {
-    partial class Peer : IDisposable, INetworkChannel
+    partial class Peer : INetworkChannel
     {
       Network Network;
 
@@ -66,7 +66,7 @@ namespace BToken.Networking
         }
         finally
         {
-          Dispose();
+          TcpClient.Close();
         }
       }
 
@@ -75,6 +75,10 @@ namespace BToken.Networking
         IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
         IPEndPoint = new IPEndPoint(iPAddress, Port);
         await ConnectTCPAsync();
+        await HandshakeAsync();
+
+        Console.WriteLine("Connected with peer '{0}''",
+            IPEndPoint.Address.ToString());
       }
 
       async Task ProcessNetworkMessagesAsync()
@@ -180,67 +184,39 @@ namespace BToken.Networking
         AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
       async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage()).ConfigureAwait(false);
-      //async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
-      //{
-      //  InvMessage invMessage = new InvMessage(networkMessage);
-
-      //  if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
-      //  {
-      //    await Network.NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
-      //  }
-      //  if (invMessage.GetTXInventories().Any())
-      //  {
-      //    await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
-      //  };
-      //}
-      
+            
       public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage).ConfigureAwait(false);
+      public async Task<NetworkMessage> ReceiveMessageAsync(CancellationToken cancellationToken) => await ApplicationMessageBuffer.ReceiveAsync(cancellationToken);
 
       public void Dispose()
       {
-        TcpClient.Close();
+        Release();
       }
-      
+
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      public async Task<NetworkBlock> GetBlockAsync(UInt256 hash, CancellationToken cancellationToken)
+      public async Task<bool> TryExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken)
       {
-        var inventory = new Inventory(InventoryType.MSG_BLOCK, hash);
-        await NetworkMessageStreamer.WriteAsync(new GetDataMessage(new List<Inventory>() { inventory }));
-
-        while (true)
+        try
         {
-          NetworkMessage networkMessage = await ApplicationMessageBuffer.ReceiveAsync(cancellationToken);
-          var blockMessage = networkMessage as BlockMessage;
+          await session.RunAsync(this, cancellationToken);
+          ReportSessionSuccess(session);
+          
+          return true;
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine("Session '{0}' with peer '{1}' ended with exception: \n'{2}'",
+            session.GetType().ToString(),
+            IPEndPoint.Address.ToString(),
+            ex.Message);
 
-          if (blockMessage != null)
-          {
-            return blockMessage.NetworkBlock;
-          }
+          ReportSessionFail(session);
+
+          return false;
         }
       }
-      public async Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator)
-      {
-        await NetworkMessageStreamer.WriteAsync(new GetHeadersMessage(headerLocator));
-
-        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token;
-        HeadersMessage headersMessage = await ReceiveHeadersMessageAsync(cancellationToken);
-        return headersMessage.Headers;
-      }
-      async Task<HeadersMessage> ReceiveHeadersMessageAsync(CancellationToken cancellationToken)
-      {
-        while (true)
-        {
-          NetworkMessage networkMessage = await ApplicationMessageBuffer.ReceiveAsync(cancellationToken);
-          HeadersMessage headersMessage = networkMessage as HeadersMessage;
-
-          if (headersMessage != null)
-          {
-            return headersMessage;
-          }
-        }
-      }
-
+            
       public void ReportSessionSuccess(INetworkSession session)
       {
 

@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -13,7 +12,7 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BToken.Networking
 {
-  public partial class Network : Chaining.INetwork
+  public partial class Network : Chaining.INetwork, Accounting.INetwork
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70013;
@@ -128,14 +127,16 @@ namespace BToken.Networking
 
     public async Task ExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken)
     {
-      Peer peer = await GetPeerOutboundAsync(cancellationToken);
+      Peer peer = await DispatchPeerOutboundAsync(cancellationToken);
 
-      while(!await TryExecuteSessionAsync(session, peer, cancellationToken))
+      while(!await peer.TryExecuteSessionAsync(session, cancellationToken))
       {
-        peer = await GetPeerOutboundAsync(cancellationToken);
+        peer = await DispatchPeerOutboundAsync(cancellationToken);
       }
+
+      peer.Release();
     }
-    async Task<Peer> GetPeerOutboundAsync(CancellationToken cancellationToken)
+    async Task<Peer> DispatchPeerOutboundAsync(CancellationToken cancellationToken)
     {
       while (true)
       {
@@ -150,29 +151,6 @@ namespace BToken.Networking
         await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
       }
     }
-    public async Task<bool> TryExecuteSessionAsync(INetworkSession session, INetworkChannel channel, CancellationToken cancellationToken)
-    {
-      Peer peer = (Peer)channel;
-
-      try
-      {
-        await session.RunAsync(peer, cancellationToken);
-        peer.ReportSessionSuccess(session);
-
-        return true;
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine("Session '{0}' with peer '{1}' ended with exception: \n'{2}'",
-          session.GetType().ToString(),
-          peer.IPEndPoint.Address.ToString(),
-          ex.Message);
-
-        peer.ReportSessionFail(session);
-
-        return false;
-      }
-    }
 
     static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -183,12 +161,10 @@ namespace BToken.Networking
         await peer.PingAsync().ConfigureAwait(false);
       }
     }
-
-    public async Task<NetworkBlock> GetBlockAsync(UInt256 blockHash)
+    
+    public uint GetProtocolVersion()
     {
-      CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(10)).Token;
-      return await PeersOutbound.First().GetBlockAsync(blockHash, cancellationToken).ConfigureAwait(false);
+      return ProtocolVersion;
     }
-
   }
 }

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks.Dataflow;
 using System.Threading.Tasks;
+using System.Threading;
 
 using BToken.Networking;
 
@@ -18,42 +19,31 @@ namespace BToken.Chaining
     {
       class SessionHeaderDownload : INetworkSession
       {
-        Headerchain Blockchain;
+        Headerchain Headerchain;
         IHeaderArchiver Archiver;
 
         INetworkChannel Channel;
-
-        BufferBlock<bool> SignalSessionCompletion = new BufferBlock<bool>();
-
+        
 
         public SessionHeaderDownload(Headerchain blockchain, IHeaderArchiver archiver)
         {
-          Blockchain = blockchain;
+          Headerchain = blockchain;
           Archiver = archiver;
         }
 
-        public async Task RunAsync(INetworkChannel channel)
+        public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
         {
           Channel = channel;
 
-          await DownloadHeadersAsync();
-
-          SignalSessionCompletion.Post(true);
+          await DownloadHeadersAsync(cancellationToken);
         }
 
-        public async Task AwaitSignalCompletedAsync()
+        async Task DownloadHeadersAsync(CancellationToken cancellationDownloadHeaders)
         {
-          while(true)
-          {
-            bool signalCompleted = await SignalSessionCompletion.ReceiveAsync();
+          CancellationTokenSource CancellationGetHeaders = CancellationTokenSource.CreateLinkedTokenSource(cancellationDownloadHeaders);
+          CancellationGetHeaders.CancelAfter(TimeSpan.FromSeconds(20));
 
-            if (signalCompleted) { return; }
-          }
-        }
-
-        async Task DownloadHeadersAsync()
-        {
-          List<NetworkHeader> headers = await Channel.GetHeadersAsync(Blockchain.Locator.GetHeaderLocator());
+          List<NetworkHeader> headers = await GetHeadersAsync(Headerchain.Locator.GetHeaderLocator(), CancellationGetHeaders.Token);
 
           using (var archiveWriter = Archiver.GetWriter())
           {
@@ -61,10 +51,41 @@ namespace BToken.Chaining
             {
               InsertHeaders(headers, archiveWriter);
 
-              headers = await Channel.GetHeadersAsync(Blockchain.Locator.GetHeaderLocator());
+              CancellationGetHeaders.CancelAfter(TimeSpan.FromSeconds(2));
+
+              try
+              {
+                headers = await GetHeadersAsync(Headerchain.Locator.GetHeaderLocator(), CancellationGetHeaders.Token);
+              }
+              catch (OperationCanceledException ex)
+              {
+                Console.WriteLine("");
+                throw ex;
+              }
             }
           }
         }
+        async Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator, CancellationToken cancellationToken)
+        {
+          uint protocolVersion = Headerchain.Controller.Network.GetProtocolVersion();
+          await Channel.SendMessageAsync(new GetHeadersMessage(headerLocator, protocolVersion));
+
+          HeadersMessage headersMessage = await ReceiveHeadersMessageAsync(cancellationToken);
+          return headersMessage.Headers;
+        }
+        async Task<HeadersMessage> ReceiveHeadersMessageAsync(CancellationToken cancellationToken)
+        {
+          while (true)
+          {
+            NetworkMessage networkMessage = await Channel.ReceiveMessageAsync(cancellationToken);
+
+            if (networkMessage.Command == "headers")
+            {
+              return new HeadersMessage(networkMessage);
+            }
+          }
+        }
+
 
         void InsertHeaders(List<NetworkHeader> headers, IHeaderWriter archiveWriter)
         {
@@ -72,7 +93,7 @@ namespace BToken.Chaining
           {
             try
             {
-              Blockchain.InsertHeader(header);
+              Headerchain.InsertHeader(header);
             }
             catch (ChainException ex)
             {

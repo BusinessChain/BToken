@@ -1,29 +1,25 @@
 ﻿using System.Diagnostics;
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 
 using BToken.Networking;
-using BToken.Chaining;
 
 namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    class SessionBlockDownload
+    class SessionBlockDownload : INetworkSession
     {
       INetworkChannel Channel;
       
       public BlockArchiver Archiver;
       ChainLocation HeaderLocation;
       
-      BufferBlock<bool> SignalSessionCompletion = new BufferBlock<bool>();
-
 
       public SessionBlockDownload(BlockArchiver archiver, ChainLocation headerLocation)
       {
@@ -31,18 +27,16 @@ namespace BToken.Chaining
         HeaderLocation = headerLocation;
       }
 
-      public async Task RunAsync(INetworkChannel channel)
+      public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
       {
         Channel = channel;
 
         if (!await TryValidateBlockExistingAsync())
         {
-          await DownloadBlockAsync();
+          await DownloadBlockAsync(cancellationToken);
 
           Debug.WriteLine("downloaded block download height: '{0}'", HeaderLocation.Height);
         }
-        
-        SignalSessionCompletion.Post(true);
       }
       
       async Task<bool> TryValidateBlockExistingAsync()
@@ -98,10 +92,9 @@ namespace BToken.Chaining
         }
       }
 
-      async Task DownloadBlockAsync()
+      async Task DownloadBlockAsync(CancellationToken cancellationToken)
       {
-        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token;
-        NetworkBlock block = await Channel.GetBlockAsync(HeaderLocation.Hash, cancellationToken);
+        NetworkBlock block = await GetBlockAsync(HeaderLocation.Hash, cancellationToken);
 
         ValidateBlock(block);
 
@@ -114,16 +107,23 @@ namespace BToken.Chaining
           Debug.WriteLine(ex.Message);
         }
       }
-
-      public async Task AwaitSessionCompletedAsync()
+      public async Task<NetworkBlock> GetBlockAsync(UInt256 hash, CancellationToken cancellationToken)
       {
+        var inventory = new Inventory(InventoryType.MSG_BLOCK, hash);
+        await Channel.SendMessageAsync(new GetDataMessage(new List<Inventory>() { inventory }));
+
         while (true)
         {
-          bool signalSessionCompleted = await SignalSessionCompletion.ReceiveAsync().ConfigureAwait(false);
+          NetworkMessage networkMessage = await Channel.ReceiveMessageAsync(cancellationToken);
+          var blockMessage = networkMessage as BlockMessage;
 
-          if (signalSessionCompleted) { return; }
+          if (blockMessage != null)
+          {
+            return blockMessage.NetworkBlock;
+          }
         }
       }
+
     }
   }
 }

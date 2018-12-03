@@ -33,12 +33,12 @@ namespace BToken.Chaining
       {
         LoadHeadersFromArchive();
 
+        Task inboundSessionRequestListenerTask = StartInboundSessionRequestListenerAsync();
+
         await DownloadHeaderchainAsync();
 
         await Headerchain.Blockchain.InitialBlockDownloadAsync();
         
-        Task inboundSessionRequestListenerTask = StartInboundSessionRequestListenerAsync();
-
       }
       void LoadHeadersFromArchive()
       {
@@ -64,7 +64,6 @@ namespace BToken.Chaining
       async Task DownloadHeaderchainAsync()
       {
         var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
-
         await Network.ExecuteSessionAsync(sessionHeaderDownload, default(CancellationToken));
       }
 
@@ -72,31 +71,53 @@ namespace BToken.Chaining
       {
         while (true)
         {
-          INetworkChannel channel = await Network.AcceptChannelInboundSessionRequestAsync();
-          List<NetworkMessage> sessionRequests = channel.GetRequestMessages();
-
-          foreach(NetworkMessage networkMessage in sessionRequests)
+          using (INetworkChannel channel = await Network.AcceptChannelInboundSessionRequestAsync())
           {
-            switch (networkMessage)
+            List<NetworkMessage> sessionRequests = channel.GetRequestMessages();
+
+            foreach (NetworkMessage networkMessage in sessionRequests)
             {
-              case InvMessage invMessage:
-                //await ProcessInventoryMessageAsync(invMessage);
-                break;
+              INetworkSession session = null;
 
-              case Network.HeadersMessage headersMessage:
-                ProcessHeadersMessage(headersMessage);
-                break;
+              switch (networkMessage.Command)
+              {
+                case "inv":
+                  //await ProcessInventoryMessageAsync(invMessage);
+                  break;
 
-              case Network.BlockMessage blockMessage:
-                break;
+                case "getheaders":
+                  //var getHeadersMessage = new get();
+                  break;
 
-              default:
-                break;
+                case "headers":
+                  break;
+
+                case "block":
+                  break;
+
+                default:
+                  break;
+              }
+              
+              var executeSessionTask = channel.TryExecuteSessionAsync(session, default(CancellationToken));
             }
           }
         }
       }
-      void ProcessHeadersMessage(Network.HeadersMessage headersMessage)
+      //async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
+      //{
+      //  InvMessage invMessage = new InvMessage(networkMessage);
+
+      //  if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
+      //  {
+      //    await Network.NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
+      //  }
+      //  if (invMessage.GetTXInventories().Any())
+      //  {
+      //    await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
+      //  };
+      //}
+      void ProcessHeadersMessage(HeadersMessage headersMessage)
       {
         foreach (NetworkHeader header in headersMessage.Headers)
         {

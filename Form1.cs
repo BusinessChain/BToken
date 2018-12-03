@@ -35,11 +35,9 @@ namespace BToken
 
     private async void button_GetBlock_Click(object sender, EventArgs e)
     {
-      NetworkBlock block = await Program.Node.Network.GetBlockAsync(
-        new UInt256("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
-        );
-
-      // await Blocks
+      //NetworkBlock block = await Program.Node.Network.GetBlockAsync(
+      //  new UInt256("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
+      //  );
     }
   }
 }

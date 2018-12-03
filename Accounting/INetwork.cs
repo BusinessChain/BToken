@@ -11,7 +11,6 @@ namespace BToken.Accounting
 {
   public interface INetwork
   {
-    Task<INetworkChannel> GetChannelAsync(CancellationToken cancellationToken);
     Task<INetworkChannel> AcceptChannelInboundSessionRequestAsync();
   }
 }

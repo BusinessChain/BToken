@@ -4,9 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
-using System.Text.RegularExpressions;
 
 using BToken.Networking;
 using BToken.Chaining;
@@ -128,8 +128,10 @@ namespace BToken.Chaining
       void PostBlockDownloadSession(ChainLocation headerLocation)
       {
         var sessionBlockDownload = new SessionBlockDownload(this, headerLocation);
-        Task sendSessionTask = Network.SendSessionAsync(sessionBlockDownload);
-        BlockDownloadTasks.Add(sessionBlockDownload.AwaitSessionCompletedAsync());
+
+        var cancellationSesssionExecution = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        Task executeSessionTask = Network.ExecuteSessionAsync(sessionBlockDownload, cancellationSesssionExecution.Token);
+        BlockDownloadTasks.Add(executeSessionTask);
       }
       
     }
