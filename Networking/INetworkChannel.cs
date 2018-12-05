@@ -10,9 +10,8 @@ namespace BToken.Networking
 {
   public interface INetworkChannel : IDisposable
   {
-    List<NetworkMessage> GetRequestMessages();
-    Task<bool> TryExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken);
-
+    List<NetworkMessage> GetInboundRequestMessages();
+    
     Task SendMessageAsync(NetworkMessage message);
     Task<NetworkMessage> ReceiveMessageAsync(CancellationToken cancellationToken);
   }

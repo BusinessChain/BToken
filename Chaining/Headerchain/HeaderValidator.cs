@@ -93,7 +93,7 @@ namespace BToken.Chaining
       }
       void ValidateUniqueness(ChainProbe probe, UInt256 hash)
       {
-        if (probe.Header.HeadersNext.Any(b => probe.Chain.GetHeaderHash(b).IsEqual(hash)))
+        if (probe.Header.HeadersNext.Any(h => probe.GetHeaderHash(h).IsEqual(hash)))
         {
           throw new ChainException(BlockCode.DUPLICATE);
         }

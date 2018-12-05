@@ -48,7 +48,7 @@ namespace BToken.Chaining
 
     public void InsertBlock(NetworkHeader header, IPayloadParser payloadParser)
     {
-      ChainProbe probe = GetChainProbe(header.HashPrevious);
+      ChainProbe probe = GetProbeAtHeader(header.HashPrevious);
 
       ValidateBlock(probe, header, out UInt256 headerHash, payloadParser);
 
@@ -90,7 +90,7 @@ namespace BToken.Chaining
         payloadParser.ValidatePayload();
       }
     }
-    ChainProbe GetChainProbe(UInt256 hash)
+    ChainProbe GetProbeAtHeader(UInt256 hash)
     {
       var probe = new ChainProbe(MainChain);
 
@@ -101,7 +101,7 @@ namespace BToken.Chaining
 
       foreach (Chain chain in SecondaryChains)
       {
-        probe.Chain = chain;
+        probe = new ChainProbe(chain);
 
         if (probe.GoTo(hash))
         {

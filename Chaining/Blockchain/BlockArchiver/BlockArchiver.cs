@@ -103,13 +103,13 @@ namespace BToken.Chaining
       {
         var headerStreamer = new Headerchain.HeaderStreamer(Blockchain.Headerchain);
 
-        ChainLocation headerLocation = headerStreamer.ReadNextHeaderLocation();
+        ChainLocation headerLocation = headerStreamer.ReadNextHeaderLocationTowardRoot();
         while (headerLocation != null)
         {
           await AwaitNextDownloadTask();
           PostBlockDownloadSession(headerLocation);
 
-          headerLocation = headerStreamer.ReadNextHeaderLocation();
+          headerLocation = headerStreamer.ReadNextHeaderLocationTowardRoot();
         }
       }
       async Task AwaitNextDownloadTask()

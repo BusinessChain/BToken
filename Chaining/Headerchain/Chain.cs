@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
+using BToken.Networking;
 
 namespace BToken.Chaining
 {
@@ -21,7 +22,7 @@ namespace BToken.Chaining
       public Chain(ChainHeader headerRoot)
       {
         HeaderTip = headerRoot;
-        HeaderTipHash = new UInt256(Hashing.SHA256d(headerRoot.NetworkHeader.GetBytes()));
+        HeaderTipHash = headerRoot.NetworkHeader.GetHeaderHash();
         Height = 0;
         HeaderRoot = headerRoot;
         AccumulatedDifficulty = TargetManager.GetDifficulty(headerRoot.NetworkHeader.NBits);
@@ -39,17 +40,7 @@ namespace BToken.Chaining
         Height = headerTipHeight;
         HeaderRoot = headerRoot;
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerTip.NetworkHeader.NBits);
-      }            
-      
-      public UInt256 GetHeaderHash(ChainHeader header)
-      {
-        if (header == HeaderTip)
-        {
-          return HeaderTipHash;
-        }
-
-        return header.HeadersNext[0].NetworkHeader.HashPrevious;
-      }
+      }   
 
       public void ExtendChain(ChainHeader header, UInt256 headerHash)
       {
@@ -58,33 +49,6 @@ namespace BToken.Chaining
         Height++;
         AccumulatedDifficulty += TargetManager.GetDifficulty(header.NetworkHeader.NBits);
       }
-
-      //public List<ChainBlock> GetBlocksUnassignedPayload(int batchSize)
-      //{
-      //  if (Socket.BlockHighestAssigned == Socket.BlockTip) { return new List<ChainBlock>(); }
-
-      //  Probe.Block = Socket.BlockHighestAssigned.BlocksNext[0];
-
-      //  var blocksUnassignedPayload = new List<ChainBlock>();
-      //  while (blocksUnassignedPayload.Count < batchSize)
-      //  {
-      //    Socket.BlockHighestAssigned = Probe.Block;
-
-      //    if (Probe.Block.BlockStore == null)
-      //    {
-      //      blocksUnassignedPayload.Add(Probe.Block);
-      //    }
-
-      //    if (Probe.IsTip())
-      //    {
-      //      return blocksUnassignedPayload;
-      //    }
-
-      //    Probe.Block = Probe.Block.BlocksNext[0];
-      //  }
-
-      //  return blocksUnassignedPayload;
-      //}
 
       public bool IsStrongerThan(Chain chain) => chain == null ? true : AccumulatedDifficulty > chain.AccumulatedDifficulty;
     }

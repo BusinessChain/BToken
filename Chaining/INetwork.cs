@@ -12,7 +12,7 @@ namespace BToken.Chaining
   public interface INetwork
   {
     uint GetProtocolVersion();
-    Task<INetworkChannel> AcceptChannelInboundSessionRequestAsync();
+    Task<INetworkChannel> AcceptChannelInboundRequestAsync();
 
     Task ExecuteSessionAsync(INetworkSession session);
   }

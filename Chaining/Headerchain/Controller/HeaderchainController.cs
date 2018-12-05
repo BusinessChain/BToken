@@ -33,7 +33,7 @@ namespace BToken.Chaining
       {
         LoadHeadersFromArchive();
 
-        Task inboundSessionRequestListenerTask = StartInboundSessionRequestListenerAsync();
+        Task inboundSessionRequestListenerTask = StartInboundRequestListenerAsync();
 
         await DownloadHeaderchainAsync();
 
@@ -67,26 +67,25 @@ namespace BToken.Chaining
         await Network.ExecuteSessionAsync(sessionHeaderDownload);
       }
 
-      async Task StartInboundSessionRequestListenerAsync()
+      async Task StartInboundRequestListenerAsync()
       {
         while (true)
         {
-          using (INetworkChannel channel = await Network.AcceptChannelInboundSessionRequestAsync())
+          using (INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync())
           {
-            List<NetworkMessage> sessionRequests = channel.GetRequestMessages();
+            List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
 
-            foreach (NetworkMessage networkMessage in sessionRequests)
+            foreach (NetworkMessage inboundMessage in inboundMessages)
             {
-              INetworkSession session = null;
-
-              switch (networkMessage.Command)
+              switch (inboundMessage.Command)
               {
                 case "inv":
                   //await ProcessInventoryMessageAsync(invMessage);
                   break;
 
                 case "getheaders":
-                  //var getHeadersMessage = new get();
+                  var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                  ServeGetHeadersRequest(getHeadersMessage, channel);
                   break;
 
                 case "headers":
@@ -98,8 +97,6 @@ namespace BToken.Chaining
                 default:
                   break;
               }
-              
-              //var executeSessionTask = channel.TryExecuteSessionAsync(session, default(CancellationToken));
             }
           }
         }
@@ -149,7 +146,46 @@ namespace BToken.Chaining
           Headerchain.Blockchain.DownloadBlock(header);
         }
       }
-          
+      void ServeGetHeadersRequest(GetHeadersMessage getHeadersMessage, INetworkChannel channel)
+      {
+        List<NetworkHeader> headers = new List<NetworkHeader>();
+        var probe = new ChainProbe(Headerchain.MainChain);
+
+        SetProbeToMutualRoot(probe, getHeadersMessage.HeaderLocator);
+
+        NetworkHeader header = headerStreamer.ReadNextHeader();
+        while (header != null)
+        {
+          headers.Add(header);
+          header = headerStreamer.ReadNextHeader();
+        }
+
+        var headersMessage = new HeadersMessage(headers);
+        channel.SendMessageAsync(headersMessage);
+      }
+      static void SetProbeToMutualRoot(ChainProbe probe, List<UInt256> headerLocator)
+      {
+        foreach(UInt256 hash in headerLocator)
+        {
+          if (probe.GoTo(hash)) { return; }
+        }
+      }
+      static void SetStreamerPositionToMutualRoot(HeaderStreamer headerStreamer, List<UInt256> headerLocator)
+      {
+        // Use probe instead of streamer?
+        ChainLocation streamLocation = headerStreamer.ReadNextHeaderLocationTowardRoot();
+        while(streamLocation != null)
+        {
+          if(headerLocator.Any(h => h.IsEqual(streamLocation.Hash)))
+          {
+            return;
+          }
+
+          streamLocation = headerStreamer.ReadNextHeaderLocationTowardRoot();
+        }
+      }
+
+
     }
   }
 }

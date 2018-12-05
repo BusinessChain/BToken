@@ -104,7 +104,7 @@ namespace BToken.Networking
       Task startPeerTask = StartPeerAsync(peerNew);
     }
 
-    public async Task<INetworkChannel> AcceptChannelInboundSessionRequestAsync()
+    public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
       return await PeerRequestInboundBuffer.ReceiveAsync();
     }
@@ -146,6 +146,7 @@ namespace BToken.Networking
           }
         }
         
+        // add additional peer if bottleneck here, e.g. if 3 times no dispatch then create new peer
         await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
       }
     }

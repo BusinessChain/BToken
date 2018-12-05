@@ -13,8 +13,7 @@ namespace BToken.Chaining
     class ChainInserter
     {
       ChainProbe Probe;
-
-
+      
       public ChainInserter(ChainProbe chainProbe)
       {
         Probe = chainProbe;

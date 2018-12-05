@@ -17,14 +17,14 @@ namespace BToken.Networking
     {
       Network Network;
 
-      public IPEndPoint IPEndPoint { get; private set; }
+      IPEndPoint IPEndPoint;
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
 
       readonly object IsDispatchedLOCK = new object();
       bool IsDispatched = true;
 
-      public BufferBlock<NetworkMessage> ApplicationMessageBuffer;
+      BufferBlock<NetworkMessage> ApplicationMessageBuffer;
 
       ulong FeeFilterValue;
 
@@ -141,7 +141,7 @@ namespace BToken.Networking
         }
       }
 
-      public List<NetworkMessage> GetRequestMessages()
+      public List<NetworkMessage> GetInboundRequestMessages()
       {
         ApplicationMessageBuffer.TryReceiveAll(out IList<NetworkMessage> requestMessages);
         return (List<NetworkMessage>)requestMessages;

@@ -12,6 +12,12 @@ namespace BToken.Chaining
     public List<NetworkHeader> Headers { get; private set; } = new List<NetworkHeader>();
 
 
+    public HeadersMessage(List<NetworkHeader> headers) : base("headers")
+    {
+      Headers = headers;
+    }
+    // interface or abstract class with method serilize()
+
     public HeadersMessage(NetworkMessage message) : base("headers", message.Payload)
     {
       int startIndex = 0;
