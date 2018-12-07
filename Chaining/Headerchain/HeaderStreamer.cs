@@ -14,42 +14,82 @@ namespace BToken.Chaining
     {
       public class HeaderStreamer : ChainProbe
       {
-        Headerchain Headerchain;
-        ChainProbe Probe;
+        List<ChainHeader> Trail;
 
 
-        public HeaderStreamer(Headerchain headerchain)
+        public HeaderStreamer(Chain chain)
+          :base(chain)
+        { }
+
+        protected override void Initialize()
         {
-          Headerchain = headerchain;
-          Probe = new ChainProbe(Headerchain.MainChain);
+          base.Initialize();
+
+          Trail = new List<ChainHeader>();
         }
 
-        public bool GoTo(UInt256 hash)
+        public void FindRootLocation(List<UInt256> headerLocator)
         {
-          Probe.Initialize();
-
           while (true)
           {
-            if (Probe.Hash.IsEqual(hash))
+            bool isHashInLocator = headerLocator.Any(h => h.IsEqual(Hash));
+            if (isHashInLocator || Header == GenesisHeader)
             {
-              return true;
+              return;
             }
 
-            if (Probe.Header == Probe.Chain.HeaderRoot)
-            {
-              return false;
-            }
-
-            Probe.Push();
+            Push();
           }
         }
 
+        protected override void Push()
+        {
+          LayTrail();
+          base.Push();
+        }
+        void LayTrail()
+        {
+          if (Header.HeaderPrevious.HeadersNext.First() != Header)
+            Trail.Insert(0, Header);
+        }
+
+        void Pull()
+        {
+          Header = GetHeaderTowardTip();
+          Hash = GetHeaderHash(Header);
+
+          Depth--;
+        }
+        ChainHeader GetHeaderTowardTip()
+        {
+          if (Header.HeadersNext.Count == 0)
+          {
+            return null;
+          }
+
+          bool useTrail = Header.HeadersNext.Count > 1
+            && Trail.Any()
+            && Header.HeadersNext.Contains(Trail.First());
+
+          if (useTrail)
+          {
+            ChainHeader headerTrail = Trail.First();
+            Trail.Remove(headerTrail);
+            return headerTrail;
+          }
+          else
+          {
+            return Header.HeadersNext.First();
+          }
+        }
+
+
         public ChainLocation ReadNextHeaderLocationTowardRoot()
         {
-          if (Probe.Header != GenesisHeader)
+          if (Header != GenesisHeader)
           {
-            var chainLocation = new ChainLocation(Probe.GetHeight(), Probe.Hash);
-            Probe.Push();
+            var chainLocation = new ChainLocation(GetHeight(), Hash);
+            Push();
 
             return chainLocation;
           }
@@ -59,10 +99,10 @@ namespace BToken.Chaining
 
         public ChainLocation ReadNextHeaderLocationTowardTip()
         {
-          if (Probe.GetHeight() > 0)
+          if (GetHeight() > 0)
           {
-            var chainLocation = new ChainLocation(Probe.GetHeight(), Probe.Hash);
-            Probe.Push();
+            var chainLocation = new ChainLocation(GetHeight(), Hash);
+            Push();
 
             return chainLocation;
           }
@@ -72,10 +112,10 @@ namespace BToken.Chaining
 
         public NetworkHeader ReadNextHeader()
         {
-          if (Probe.GetHeight() > 0)
+          if (GetHeight() > 0)
           {
-            var header = Probe.Header;
-            Probe.Push();
+            var header = Header;
+            Push();
 
             return header.NetworkHeader;
           }

@@ -20,8 +20,6 @@ namespace BToken.Chaining
         public UInt256 Hash;
         public uint Depth;
 
-        List<ChainHeader> Trail;
-
 
         public ChainProbe(Chain chain)
         {
@@ -30,16 +28,14 @@ namespace BToken.Chaining
           Initialize();
         }
 
-        public virtual void Initialize()
+        protected virtual void Initialize()
         {
           Header = Chain.HeaderTip;
           Hash = Chain.HeaderTipHash;
           Depth = 0;
-
-          Trail = new List<ChainHeader>();
         }
 
-        public bool GoTo(UInt256 hash)
+        protected bool GoTo(UInt256 hash)
         {
           Initialize();
 
@@ -57,52 +53,15 @@ namespace BToken.Chaining
             Push();
           }
         }
-        public virtual void Push()
+        protected virtual void Push()
         {
-          LayTrail();
-
           Hash = Header.NetworkHeader.HashPrevious;
           Header = Header.HeaderPrevious;
 
           Depth++;
         }
-        void LayTrail()
-        {
-          if (Header.HeaderPrevious.HeadersNext.First() != Header)
-            Trail.Insert(0, Header);
-        }
 
-        public void Pull()
-        {
-          Header = GetHeaderTowardTip();
-          Hash = GetHeaderHash(Header);
-
-          Depth--;
-        }
-        ChainHeader GetHeaderTowardTip()
-        {
-          if (Header.HeadersNext.Count == 0)
-          {
-            return null;
-          }
-
-          bool useTrail = Header.HeadersNext.Count > 1
-            && Trail.Any()
-            && Header.HeadersNext.Contains(Trail.First());
-
-          if (useTrail)
-          {
-            ChainHeader headerTrail = Trail.First();
-            Trail.Remove(headerTrail);
-            return headerTrail;
-          }
-          else
-          {
-            return Header.HeadersNext.First();
-          }
-        }
-
-        public UInt256 GetHeaderHash(ChainHeader header)
+        protected UInt256 GetHeaderHash(ChainHeader header)
         {
           if (header.HeadersNext.Any())
           {
@@ -118,9 +77,9 @@ namespace BToken.Chaining
           }
         }
 
-        public bool IsTip() => Header == Chain.HeaderTip;
-        public bool IsRoot() => Header == Chain.HeaderRoot;
-        public uint GetHeight() => Chain.Height - Depth;
+        protected bool IsTip() => Header == Chain.HeaderTip;
+        protected bool IsRoot() => Header == Chain.HeaderRoot;
+        protected uint GetHeight() => Chain.Height - Depth;
 
       }
     }

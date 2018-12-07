@@ -30,12 +30,12 @@ namespace BToken.Chaining
           Headerchain.SignalInserterAvailable.Post(true);
         }
 
-        public override void Initialize()
+        protected override void Initialize()
         {
           base.Initialize();
           AccumulatedDifficulty = Chain.AccumulatedDifficulty;
         }
-        public override void Push()
+        protected override void Push()
         {
           base.Push();
           AccumulatedDifficulty -= TargetManager.GetDifficulty(Header.NetworkHeader.NBits);
@@ -169,7 +169,7 @@ namespace BToken.Chaining
           Header.HeadersNext.Add(chainHeader);
           return chainHeader;
         }
-        public Chain ForkChain(UInt256 headerHash)
+        Chain ForkChain(UInt256 headerHash)
         {
           ChainHeader header = Header.HeadersNext.Last();
           uint height = GetHeight() + 1;
@@ -179,8 +179,7 @@ namespace BToken.Chaining
             height: height,
             accumulatedDifficultyPrevious: AccumulatedDifficulty);
         }
-
-
+        
         public bool TryDispatch()
         {
           lock (IsDispatchedLOCK)

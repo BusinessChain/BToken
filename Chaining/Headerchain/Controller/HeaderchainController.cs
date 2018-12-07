@@ -151,7 +151,7 @@ namespace BToken.Chaining
         {
           List<NetworkHeader> headers = new List<NetworkHeader>();
 
-          var headerStreamer = new HeaderStreamer(Headerchain);
+          var headerStreamer = new HeaderStreamer(MainChain);
 
           headerStreamer.FindRootLocation(getHeadersMessage.HeaderLocator);
 

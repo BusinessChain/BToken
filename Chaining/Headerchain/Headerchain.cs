@@ -17,8 +17,8 @@ namespace BToken.Chaining
 
     partial class Headerchain
     {
-      Chain MainChain;
-      List<Chain> SecondaryChains = new List<Chain>();
+      static Chain MainChain;
+      static List<Chain> SecondaryChains = new List<Chain>();
       static ChainHeader GenesisHeader;
       static List<ChainLocation> Checkpoints;
 
