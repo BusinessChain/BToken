@@ -8,77 +8,80 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain
+  public partial class Blockchain
   {
-    public class HeaderStreamer
+    partial class Headerchain
     {
-      Headerchain Headerchain;
-      ChainProbe Probe;
-
-
-      public HeaderStreamer(Headerchain headerchain)
+      public class HeaderStreamer : ChainProbe
       {
-        Headerchain = headerchain;
-        Probe = new ChainProbe(Headerchain.MainChain);
-      }
+        Headerchain Headerchain;
+        ChainProbe Probe;
 
-      public bool GoTo(UInt256 hash)
-      {
-        Probe.Initialize();
 
-        while (true)
+        public HeaderStreamer(Headerchain headerchain)
         {
-          if (Probe.Hash.IsEqual(hash))
+          Headerchain = headerchain;
+          Probe = new ChainProbe(Headerchain.MainChain);
+        }
+
+        public bool GoTo(UInt256 hash)
+        {
+          Probe.Initialize();
+
+          while (true)
           {
-            return true;
+            if (Probe.Hash.IsEqual(hash))
+            {
+              return true;
+            }
+
+            if (Probe.Header == Probe.Chain.HeaderRoot)
+            {
+              return false;
+            }
+
+            Probe.Push();
+          }
+        }
+
+        public ChainLocation ReadNextHeaderLocationTowardRoot()
+        {
+          if (Probe.Header != GenesisHeader)
+          {
+            var chainLocation = new ChainLocation(Probe.GetHeight(), Probe.Hash);
+            Probe.Push();
+
+            return chainLocation;
           }
 
-          if (Probe.Header == Probe.Chain.HeaderRoot)
+          return null;
+        }
+
+        public ChainLocation ReadNextHeaderLocationTowardTip()
+        {
+          if (Probe.GetHeight() > 0)
           {
-            return false;
+            var chainLocation = new ChainLocation(Probe.GetHeight(), Probe.Hash);
+            Probe.Push();
+
+            return chainLocation;
           }
 
-          Probe.Push();
+          return null;
         }
-      }
 
-      public ChainLocation ReadNextHeaderLocationTowardRoot()
-      {
-        if(Probe.GetHeight() > 0)
+        public NetworkHeader ReadNextHeader()
         {
-          var chainLocation = new ChainLocation(Probe.GetHeight(), Probe.Hash);
-          Probe.Push();
+          if (Probe.GetHeight() > 0)
+          {
+            var header = Probe.Header;
+            Probe.Push();
 
-          return chainLocation;
+            return header.NetworkHeader;
+          }
+
+          return null;
         }
-
-        return null;
-      }
-
-      public ChainLocation ReadNextHeaderLocationTowardTip()
-      {
-        if (Probe.GetHeight() > 0)
-        {
-          var chainLocation = new ChainLocation(Probe.GetHeight(), Probe.Hash);
-          Probe.Push();
-
-          return chainLocation;
-        }
-
-        return null;
-      }
-
-      public NetworkHeader ReadNextHeader()
-      {
-        if (Probe.GetHeight() > 0)
-        {
-          var header = Probe.Header;
-          Probe.Push();
-
-          return header.NetworkHeader;
-        }
-
-        return null;
       }
     }
   }

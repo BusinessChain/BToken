@@ -4,12 +4,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 
 using BToken.Networking;
-using BToken.Chaining;
 
 namespace BToken.Chaining
 {
@@ -101,7 +99,7 @@ namespace BToken.Chaining
 
       public async Task InitialBlockDownloadAsync()
       {
-        var headerStreamer = new Headerchain.HeaderStreamer(Blockchain.Headerchain);
+        var headerStreamer = new Headerchain.HeaderStreamer(Blockchain.Headers);
 
         ChainLocation headerLocation = headerStreamer.ReadNextHeaderLocationTowardRoot();
         while (headerLocation != null)

@@ -12,106 +12,109 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain
+  public partial class Blockchain
   {
-    partial class HeaderchainController
+    partial class Headerchain
     {
-      class SessionHeaderDownload : INetworkSession
+      partial class HeaderchainController
       {
-        Headerchain Headerchain;
-        IHeaderArchiver Archiver;
-
-        INetworkChannel Channel;
-
-        const double SECONDS_TIMEOUT_GETHEADERS = 2;
-        
-
-        public SessionHeaderDownload(Headerchain blockchain, IHeaderArchiver archiver)
+        class SessionHeaderDownload : INetworkSession
         {
-          Headerchain = blockchain;
-          Archiver = archiver;
-        }
+          Headerchain Headerchain;
+          IHeaderArchiver Archiver;
 
-        public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
-        {
-          Channel = channel;
+          INetworkChannel Channel;
 
-          await DownloadHeadersAsync();
-        }
+          const double SECONDS_TIMEOUT_GETHEADERS = 2;
 
-        async Task DownloadHeadersAsync()
-        {
-          List<NetworkHeader> headers = await GetHeadersAsync(Headerchain.Locator.GetHeaderLocator());
 
-          using (var archiveWriter = Archiver.GetWriter())
+          public SessionHeaderDownload(Headerchain blockchain, IHeaderArchiver archiver)
           {
-            while (headers.Any())
-            {
-              await InsertHeadersAsync(headers, archiveWriter);
-
-              headers = await GetHeadersAsync(Headerchain.Locator.GetHeaderLocator());
-            }
+            Headerchain = blockchain;
+            Archiver = archiver;
           }
-        }
-        async Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator)
-        {
-          uint protocolVersion = Headerchain.Controller.Network.GetProtocolVersion();
-          await Channel.SendMessageAsync(new GetHeadersMessage(headerLocator, protocolVersion));
 
-          HeadersMessage headersMessage = await ReceiveHeadersMessageAsync();
-          return headersMessage.Headers;
-        }
-        async Task<HeadersMessage> ReceiveHeadersMessageAsync()
-        {
-          CancellationTokenSource CancellationGetHeaders = new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_GETHEADERS));
-
-          try
+          public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
           {
-            while (true)
-            {
-              NetworkMessage networkMessage = await Channel.ReceiveMessageAsync(CancellationGetHeaders.Token);
+            Channel = channel;
 
-              if (networkMessage.Command == "headers")
+            await DownloadHeadersAsync();
+          }
+
+          async Task DownloadHeadersAsync()
+          {
+            List<NetworkHeader> headers = await GetHeadersAsync(Headerchain.Locator.GetHeaderLocator());
+
+            using (var archiveWriter = Archiver.GetWriter())
+            {
+              while (headers.Any())
               {
-                return new HeadersMessage(networkMessage);
+                await InsertHeadersAsync(headers, archiveWriter);
+
+                headers = await GetHeadersAsync(Headerchain.Locator.GetHeaderLocator());
               }
             }
           }
-          catch (OperationCanceledException ex)
+          async Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator)
           {
-            Console.WriteLine("Timeout 'getheaders'");
-            throw ex;
-          }
-        }
+            uint protocolVersion = Headerchain.Controller.Network.GetProtocolVersion();
+            await Channel.SendMessageAsync(new GetHeadersMessage(headerLocator, protocolVersion));
 
-        async Task InsertHeadersAsync(List<NetworkHeader> headers, IHeaderWriter archiveWriter)
-        {
-          foreach (NetworkHeader header in headers)
+            HeadersMessage headersMessage = await ReceiveHeadersMessageAsync();
+            return headersMessage.Headers;
+          }
+          async Task<HeadersMessage> ReceiveHeadersMessageAsync()
           {
+            CancellationTokenSource CancellationGetHeaders = new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_GETHEADERS));
+
             try
             {
-              await Headerchain.InsertHeaderAsync(header);
-            }
-            catch (ChainException ex)
-            {
-              switch (ex.ErrorCode)
+              while (true)
               {
-                case BlockCode.ORPHAN:
-                  //await ProcessOrphanSessionAsync(headerHash);
-                  return;
+                NetworkMessage networkMessage = await Channel.ReceiveMessageAsync(CancellationGetHeaders.Token);
 
-                case BlockCode.DUPLICATE:
-                  return;
-
-                default:
-                  throw ex;
+                if (networkMessage.Command == "headers")
+                {
+                  return new HeadersMessage(networkMessage);
+                }
               }
             }
-
-            archiveWriter.StoreHeader(header);
+            catch (OperationCanceledException ex)
+            {
+              Console.WriteLine("Timeout 'getheaders'");
+              throw ex;
+            }
           }
+
+          async Task InsertHeadersAsync(List<NetworkHeader> headers, IHeaderWriter archiveWriter)
+          {
+            foreach (NetworkHeader header in headers)
+            {
+              try
+              {
+                await Headerchain.InsertHeaderAsync(header);
+              }
+              catch (ChainException ex)
+              {
+                switch (ex.ErrorCode)
+                {
+                  case BlockCode.ORPHAN:
+                    //await ProcessOrphanSessionAsync(headerHash);
+                    return;
+
+                  case BlockCode.DUPLICATE:
+                    return;
+
+                  default:
+                    throw ex;
+                }
+              }
+
+              archiveWriter.StoreHeader(header);
+            }
+          }
+
         }
-        
       }
     }
   }

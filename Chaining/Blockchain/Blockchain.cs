@@ -11,7 +11,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    Headerchain Headerchain;
+    Headerchain Headers;
     static IPayloadParser PayloadParser;
     INetwork Network;
     BlockArchiver Archiver;
@@ -24,7 +24,7 @@ namespace BToken.Chaining
       IPayloadParser payloadParser)
     {
       Network = network;
-      Headerchain = new Headerchain(genesisBlock.Header, network, checkpoints, this);
+      Headers = new Headerchain(genesisBlock.Header, network, checkpoints, this);
       PayloadParser = payloadParser;
 
       Archiver = new BlockArchiver(this, network);
@@ -32,7 +32,7 @@ namespace BToken.Chaining
 
     public async Task StartAsync()
     {
-      await Headerchain.StartAsync();
+      await Headers.StartAsync();
     }
 
     public async Task InitialBlockDownloadAsync()

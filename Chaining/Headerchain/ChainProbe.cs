@@ -8,115 +8,121 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain
+  public partial class Blockchain
   {
-    class ChainProbe
+    partial class Headerchain
     {
-      public Chain Chain;
-
-      public ChainHeader Header;
-      public UInt256 Hash;
-      public uint Depth;
-
-      List<ChainHeader> Trail;
-
-
-      public ChainProbe(Chain chain)
+      public class ChainProbe
       {
-        Chain = chain;
+        public Chain Chain;
 
-        Initialize();
-      }
+        public ChainHeader Header;
+        public UInt256 Hash;
+        public uint Depth;
 
-      public void Initialize()
-      {
-        Header = Chain.HeaderTip;
-        Hash = Chain.HeaderTipHash;
-        Depth = 0;
+        List<ChainHeader> Trail;
 
-        Trail = new List<ChainHeader>();
-      }
 
-      public bool GoTo(UInt256 hash)
-      {
-        while (true)
+        public ChainProbe(Chain chain)
         {
-          if (Hash.IsEqual(hash))
+          Chain = chain;
+
+          Initialize();
+        }
+
+        public virtual void Initialize()
+        {
+          Header = Chain.HeaderTip;
+          Hash = Chain.HeaderTipHash;
+          Depth = 0;
+
+          Trail = new List<ChainHeader>();
+        }
+
+        public bool GoTo(UInt256 hash)
+        {
+          Initialize();
+
+          while (true)
           {
-            return true;
+            if (Hash.IsEqual(hash))
+            {
+              return true;
+            }
+            if (IsRoot())
+            {
+              return false;
+            }
+
+            Push();
           }
-          if (Header == Chain.HeaderRoot)
+        }
+        public virtual void Push()
+        {
+          LayTrail();
+
+          Hash = Header.NetworkHeader.HashPrevious;
+          Header = Header.HeaderPrevious;
+
+          Depth++;
+        }
+        void LayTrail()
+        {
+          if (Header.HeaderPrevious.HeadersNext.First() != Header)
+            Trail.Insert(0, Header);
+        }
+
+        public void Pull()
+        {
+          Header = GetHeaderTowardTip();
+          Hash = GetHeaderHash(Header);
+
+          Depth--;
+        }
+        ChainHeader GetHeaderTowardTip()
+        {
+          if (Header.HeadersNext.Count == 0)
           {
-            return false;
+            return null;
           }
 
-          Push();
+          bool useTrail = Header.HeadersNext.Count > 1
+            && Trail.Any()
+            && Header.HeadersNext.Contains(Trail.First());
+
+          if (useTrail)
+          {
+            ChainHeader headerTrail = Trail.First();
+            Trail.Remove(headerTrail);
+            return headerTrail;
+          }
+          else
+          {
+            return Header.HeadersNext.First();
+          }
         }
-      }
-      public virtual void Push()
-      {
-        LayTrail();
 
-        Hash = Header.NetworkHeader.HashPrevious;
-        Header = Header.HeaderPrevious;
-        
-        Depth++;
-      }
-      void LayTrail()
-      {
-        if(Header.HeaderPrevious.HeadersNext.First() != Header)
-        Trail.Insert(0, Header);
-      }
-
-      public void Pull()
-      {
-        Header = GetHeaderTowardTip();
-        Hash = GetHeaderHash(Header);
-
-        Depth--;
-      }
-      ChainHeader GetHeaderTowardTip()
-      {
-        if(Header.HeadersNext.Count == 0)
+        public UInt256 GetHeaderHash(ChainHeader header)
         {
-          return null;
+          if (header.HeadersNext.Any())
+          {
+            return header.HeadersNext[0].NetworkHeader.HashPrevious;
+          }
+          else if (header == Chain.HeaderTip)
+          {
+            return Chain.HeaderTipHash;
+          }
+          else
+          {
+            return header.NetworkHeader.GetHeaderHash();
+          }
         }
 
-        bool useTrail = Header.HeadersNext.Count > 1 
-          && Trail.Any() 
-          && Header.HeadersNext.Contains(Trail.First());
+        public bool IsTip() => Header == Chain.HeaderTip;
+        public bool IsRoot() => Header == Chain.HeaderRoot;
+        public uint GetHeight() => Chain.Height - Depth;
 
-        if (useTrail)
-        {
-          ChainHeader headerTrail = Trail.First();
-          Trail.Remove(headerTrail);
-          return headerTrail;
-        }
-        else
-        {
-          return Header.HeadersNext.First();
-        }
       }
-
-      public UInt256 GetHeaderHash(ChainHeader header)
-      {
-        if (header.HeadersNext.Any())
-        {
-          return header.HeadersNext[0].NetworkHeader.HashPrevious;
-        }
-        else if (header == Chain.HeaderTip)
-        {
-          return Chain.HeaderTipHash;
-        }
-        else
-        {
-          return header.NetworkHeader.GetHeaderHash();
-        }
-      }
-
-      public bool IsTip() => Header == Chain.HeaderTip;
-      public uint GetHeight() => Chain.Height - Depth;
-
     }
   }
 }
