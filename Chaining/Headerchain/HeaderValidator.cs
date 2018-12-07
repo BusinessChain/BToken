@@ -30,9 +30,9 @@ namespace BToken.Chaining
           throw new ChainException(BlockCode.ORPHAN);
         }
 
-        ValidateTimeStamp(probe, header.UnixTimeSeconds);
+        ValidateTimeStamp(probe.Header, header.UnixTimeSeconds);
 
-        headerHash = new UInt256(Hashing.SHA256d(header.GetBytes()));
+        headerHash = header.GetHeaderHash();
 
         ValidateCheckpoint(probe, headerHash);
         ValidateUniqueness(probe, headerHash);
@@ -40,17 +40,17 @@ namespace BToken.Chaining
       }
       void ValidateCheckpoint(ChainProbe probe, UInt256 headerHash)
       {
-        uint nextBlockHeight = probe.GetHeight() + 1;
+        uint nextHeaderHeight = probe.GetHeight() + 1;
 
         bool chainLongerThanHighestCheckpoint = probe.Chain.Height >= HighestCheckpointHight;
-        bool nextHeightBelowHighestCheckpoint = !(nextBlockHeight > HighestCheckpointHight);
+        bool nextHeightBelowHighestCheckpoint = !(nextHeaderHeight > HighestCheckpointHight);
 
         if (chainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
         {
           throw new ChainException(BlockCode.INVALID);
         }
 
-        if (!ValidateBlockLocation(nextBlockHeight, headerHash))
+        if (!ValidateBlockLocation(nextHeaderHeight, headerHash))
         {
           throw new ChainException(BlockCode.INVALID);
         }
@@ -67,26 +67,15 @@ namespace BToken.Chaining
       }
       void ValidateProofOfWork(ChainProbe probe, uint nBits, UInt256 headerHash)
       {
-        if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(nBits)))
-        {
-          throw new ChainException(BlockCode.INVALID);
-        }
-
-        if (nBits != TargetManager.GetNextTargetBits(probe))
+        uint nextHeight = probe.GetHeight() + 1;
+        if (nBits != TargetManager.GetNextTargetBits(probe.Header, nextHeight))
         {
           throw new ChainException(BlockCode.INVALID);
         }
       }
-      void ValidateTimeStamp(ChainProbe probe, uint unixTimeSeconds)
+      void ValidateTimeStamp(ChainHeader header, uint unixTimeSeconds)
       {
-        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-        bool IsTimestampPremature = (long)unixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
-        if (IsTimestampPremature)
-        {
-          throw new ChainException(BlockCode.PREMATURE);
-        }
-
-        if (unixTimeSeconds <= GetMedianTimePast(probe))
+        if (unixTimeSeconds <= GetMedianTimePast(header))
         {
           throw new ChainException(BlockCode.INVALID);
         }
@@ -98,22 +87,21 @@ namespace BToken.Chaining
           throw new ChainException(BlockCode.DUPLICATE);
         }
       }
-      uint GetMedianTimePast(ChainProbe probe)
+      uint GetMedianTimePast(ChainHeader header)
       {
         const int MEDIAN_TIME_PAST = 11;
 
         List<uint> timestampsPast = new List<uint>();
-        ChainHeader block = probe.Header;
 
         int depth = 0;
         while (depth < MEDIAN_TIME_PAST)
         {
-          timestampsPast.Add(block.NetworkHeader.UnixTimeSeconds);
+          timestampsPast.Add(header.NetworkHeader.UnixTimeSeconds);
 
-          if (block.HeaderPrevious == null)
+          if (header.HeaderPrevious == null)
           { break; }
 
-          block = block.HeaderPrevious;
+          header = header.HeaderPrevious;
           depth++;
         }
 

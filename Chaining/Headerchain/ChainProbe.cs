@@ -16,10 +16,9 @@ namespace BToken.Chaining
 
       public ChainHeader Header;
       public UInt256 Hash;
-      public double AccumulatedDifficulty;
       public uint Depth;
 
-      List<ChainHeader> TrailTowardTip;
+      List<ChainHeader> Trail;
 
 
       public ChainProbe(Chain chain)
@@ -33,10 +32,9 @@ namespace BToken.Chaining
       {
         Header = Chain.HeaderTip;
         Hash = Chain.HeaderTipHash;
-        AccumulatedDifficulty = Chain.AccumulatedDifficulty;
         Depth = 0;
 
-        TrailTowardTip = new List<ChainHeader>();
+        Trail = new List<ChainHeader>();
       }
 
       public bool GoTo(UInt256 hash)
@@ -47,7 +45,6 @@ namespace BToken.Chaining
           {
             return true;
           }
-
           if (Header == Chain.HeaderRoot)
           {
             return false;
@@ -56,38 +53,44 @@ namespace BToken.Chaining
           Push();
         }
       }
-      public void Push()
+      public virtual void Push()
       {
-        SetTrailTowardTip();
+        LayTrail();
 
         Hash = Header.NetworkHeader.HashPrevious;
         Header = Header.HeaderPrevious;
-        AccumulatedDifficulty -= TargetManager.GetDifficulty(Header.NetworkHeader.NBits);
         
         Depth++;
       }
-      void SetTrailTowardTip()
+      void LayTrail()
       {
         if(Header.HeaderPrevious.HeadersNext.First() != Header)
-        TrailTowardTip.Insert(0, Header);
+        Trail.Insert(0, Header);
       }
 
       public void Pull()
       {
-        Header = GetNextHeaderTowardTip();
+        Header = GetHeaderTowardTip();
         Hash = GetHeaderHash(Header);
-        AccumulatedDifficulty += TargetManager.GetDifficulty(Header.NetworkHeader.NBits);
 
         Depth--;
       }
-      ChainHeader GetNextHeaderTowardTip()
+      ChainHeader GetHeaderTowardTip()
       {
-        bool useNextTrail = Header.HeadersNext.Count > 1 && TrailTowardTip.Any() && Header.HeadersNext.Contains(TrailTowardTip.First());
-        if (useNextTrail)
+        if(Header.HeadersNext.Count == 0)
         {
-          ChainHeader nextHeaderTrail = TrailTowardTip.First();
-          TrailTowardTip.Remove(nextHeaderTrail);
-          return nextHeaderTrail;
+          return null;
+        }
+
+        bool useTrail = Header.HeadersNext.Count > 1 
+          && Trail.Any() 
+          && Header.HeadersNext.Contains(Trail.First());
+
+        if (useTrail)
+        {
+          ChainHeader headerTrail = Trail.First();
+          Trail.Remove(headerTrail);
+          return headerTrail;
         }
         else
         {

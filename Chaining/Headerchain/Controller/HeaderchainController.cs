@@ -31,7 +31,7 @@ namespace BToken.Chaining
 
       public async Task StartAsync()
       {
-        LoadHeadersFromArchive();
+        await LoadHeadersFromArchiveAsync();
 
         Task inboundSessionRequestListenerTask = StartInboundRequestListenerAsync();
 
@@ -40,7 +40,7 @@ namespace BToken.Chaining
         await Headerchain.Blockchain.InitialBlockDownloadAsync();
         
       }
-      void LoadHeadersFromArchive()
+      async Task LoadHeadersFromArchiveAsync()
       {
         try
         {
@@ -50,7 +50,7 @@ namespace BToken.Chaining
 
             while (header != null)
             {
-              Headerchain.InsertHeader(header);
+              await Headerchain.InsertHeaderAsync(header);
 
               header = archiveReader.GetNextHeader();
             }
@@ -114,13 +114,13 @@ namespace BToken.Chaining
       //    await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
       //  };
       //}
-      void ProcessHeadersMessage(HeadersMessage headersMessage)
+      async Task ProcessHeadersMessageAsync(HeadersMessage headersMessage)
       {
         foreach (NetworkHeader header in headersMessage.Headers)
         {
           try
           {
-            Headerchain.InsertHeader(header);
+            await Headerchain.InsertHeaderAsync(header);
           }
           catch (ChainException ex)
           {

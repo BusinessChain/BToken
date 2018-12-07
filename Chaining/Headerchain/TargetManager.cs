@@ -13,29 +13,28 @@ namespace BToken.Chaining
       static readonly UInt256 DIFFICULTY_1_TARGET = new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000");
       const double MAX_TARGET = 2.695994666715064E67;
 
-      public static uint GetNextTargetBits(ChainProbe probe)
+      public static uint GetNextTargetBits(ChainHeader header, uint nextHeight)
       {
         uint nextTargetBits;
 
-        uint nextHeight = probe.GetHeight() + 1;
         if ((nextHeight % RETARGETING_BLOCK_INTERVAL) == 0)
         {
-          UInt256 nextTarget = GetNextTarget(probe);
+          UInt256 nextTarget = GetNextTarget(header);
           nextTargetBits = nextTarget.GetCompact();
         }
         else
         {
-          nextTargetBits = probe.Header.NetworkHeader.NBits;
+          nextTargetBits = header.NetworkHeader.NBits;
         }
 
         return nextTargetBits;
 
       }
-      static UInt256 GetNextTarget(ChainProbe probe)
+      static UInt256 GetNextTarget(ChainHeader header)
       {
-        ChainHeader headerIntervalStart = GetBlockPrevious(probe.Header, RETARGETING_BLOCK_INTERVAL - 1);
-        ulong actualTimespan = Limit(probe.Header.NetworkHeader.UnixTimeSeconds - headerIntervalStart.NetworkHeader.UnixTimeSeconds);
-        UInt256 targetOld = UInt256.ParseFromCompact(probe.Header.NetworkHeader.NBits);
+        ChainHeader headerIntervalStart = GetBlockPrevious(header, RETARGETING_BLOCK_INTERVAL - 1);
+        ulong actualTimespan = Limit(header.NetworkHeader.UnixTimeSeconds - headerIntervalStart.NetworkHeader.UnixTimeSeconds);
+        UInt256 targetOld = UInt256.ParseFromCompact(header.NetworkHeader.NBits);
 
         UInt256 targetNew = targetOld.MultiplyBy(actualTimespan).DivideBy(RETARGETING_TIMESPAN_INTERVAL);
 

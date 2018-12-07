@@ -23,7 +23,6 @@ namespace BToken.Chaining
 
       public void Reorganize()
       {
-        
         UInt256 hash = Headerchain.MainChain.HeaderTipHash;
         uint height = Headerchain.MainChain.Height;
 

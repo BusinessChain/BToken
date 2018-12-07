@@ -14,32 +14,19 @@ namespace BToken.Chaining
       public UInt256 HeaderTipHash { get; private set; }
       public uint Height { get; private set; }
       public double AccumulatedDifficulty { get; private set; }
-
       public ChainHeader HeaderRoot { get; private set; }
 
-
-
-      public Chain(ChainHeader headerRoot)
+      
+      public Chain(
+        ChainHeader headerRoot, 
+        uint height,
+        double accumulatedDifficultyPrevious)
       {
         HeaderTip = headerRoot;
         HeaderTipHash = headerRoot.NetworkHeader.GetHeaderHash();
-        Height = 0;
+        Height = height;
         HeaderRoot = headerRoot;
-        AccumulatedDifficulty = TargetManager.GetDifficulty(headerRoot.NetworkHeader.NBits);
-      }
-
-      public Chain(
-        ChainHeader headerTip,
-        UInt256 headerTipHash,
-        uint headerTipHeight,
-        ChainHeader headerRoot,
-        double accumulatedDifficultyPrevious)
-      {
-        HeaderTip = headerTip;
-        HeaderTipHash = headerTipHash;
-        Height = headerTipHeight;
-        HeaderRoot = headerRoot;
-        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerTip.NetworkHeader.NBits);
+        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerRoot.NetworkHeader.NBits);
       }   
 
       public void ExtendChain(ChainHeader header, UInt256 headerHash)
