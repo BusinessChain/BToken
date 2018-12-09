@@ -35,7 +35,7 @@ namespace BToken.Chaining
           Depth = 0;
         }
 
-        protected bool GoTo(UInt256 hash)
+        protected bool GoTo(UInt256 hash, ChainHeader stopHeader)
         {
           Initialize();
 
@@ -45,7 +45,7 @@ namespace BToken.Chaining
             {
               return true;
             }
-            if (IsRoot())
+            if (stopHeader == Header)
             {
               return false;
             }

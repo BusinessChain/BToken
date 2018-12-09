@@ -99,15 +99,15 @@ namespace BToken.Chaining
 
       public async Task InitialBlockDownloadAsync()
       {
-        var headerStreamer = new Headerchain.HeaderStreamer(Blockchain.Headers);
+        var headerStreamer = Blockchain.Headers.GetHeaderStreamer();
 
-        ChainLocation headerLocation = headerStreamer.ReadNextHeaderLocationTowardRoot();
+        ChainLocation headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
         while (headerLocation != null)
         {
           await AwaitNextDownloadTask();
           PostBlockDownloadSession(headerLocation);
 
-          headerLocation = headerStreamer.ReadNextHeaderLocationTowardRoot();
+          headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
         }
       }
       async Task AwaitNextDownloadTask()

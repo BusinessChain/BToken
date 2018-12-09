@@ -15,8 +15,22 @@ namespace BToken.Chaining
     public HeadersMessage(List<NetworkHeader> headers) : base("headers")
     {
       Headers = headers;
+      SerializePayload();
     }
-    // interface or abstract class with method serilize()
+    void SerializePayload()
+    {
+      var payload = new List<byte>();
+
+      payload.AddRange(VarInt.GetBytes(Headers.Count));
+
+      foreach(NetworkHeader header in Headers)
+      {
+        payload.AddRange(header.GetBytes());
+        payload.Add(0x00);
+      }
+
+      Payload = payload.ToArray();
+    }
 
     public HeadersMessage(NetworkMessage message) : base("headers", message.Payload)
     {

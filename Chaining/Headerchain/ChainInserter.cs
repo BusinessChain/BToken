@@ -43,13 +43,13 @@ namespace BToken.Chaining
 
         void FindPreviousHeader(NetworkHeader header)
         {
-          Chain = Headerchain.MainChain;
-          if (GoTo(header.HashPrevious)) { return; }
+          Chain = MainChain;
+          if (GoTo(header.HashPrevious, MainChain.HeaderRoot)) { return; }
 
-          foreach (Chain chain in Headerchain.SecondaryChains)
+          foreach (Chain chain in SecondaryChains)
           {
             Chain = chain;
-            if (GoTo(header.HashPrevious)) { return; }
+            if (GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
           }
 
           throw new ChainException(BlockCode.ORPHAN);

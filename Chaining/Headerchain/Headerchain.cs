@@ -98,7 +98,6 @@ namespace BToken.Chaining
           throw new ChainException(BlockCode.PREMATURE);
         }
       }
-
       void ReorganizeChain(Chain chain)
       {
         SecondaryChains.Remove(chain);
@@ -106,6 +105,11 @@ namespace BToken.Chaining
         MainChain = chain;
 
         Locator.Reorganize();
+      }
+
+      public HeaderStreamer GetHeaderStreamer()
+      {
+        return new HeaderStreamer(MainChain);
       }
 
     }

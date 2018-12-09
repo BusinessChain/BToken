@@ -41,7 +41,6 @@ namespace BToken.Chaining
             Push();
           }
         }
-
         protected override void Push()
         {
           LayTrail();
@@ -56,6 +55,7 @@ namespace BToken.Chaining
         void Pull()
         {
           Header = GetHeaderTowardTip();
+
           Hash = GetHeaderHash(Header);
 
           Depth--;
@@ -64,7 +64,7 @@ namespace BToken.Chaining
         {
           if (Header.HeadersNext.Count == 0)
           {
-            return null;
+            throw new ChainException("Cannot pull up on chain because it's at the end.");
           }
 
           bool useTrail = Header.HeadersNext.Count > 1
@@ -84,7 +84,7 @@ namespace BToken.Chaining
         }
 
 
-        public ChainLocation ReadNextHeaderLocationTowardRoot()
+        public ChainLocation ReadHeaderLocationTowardGenesis()
         {
           if (Header != GenesisHeader)
           {
@@ -97,31 +97,20 @@ namespace BToken.Chaining
           return null;
         }
 
-        public ChainLocation ReadNextHeaderLocationTowardTip()
+        public ChainHeader ReadNextHeaderTowardTip(out UInt256 headerHash)
         {
-          if (GetHeight() > 0)
+          if(IsTip())
           {
-            var chainLocation = new ChainLocation(GetHeight(), Hash);
-            Push();
-
-            return chainLocation;
+            headerHash = null;
+            return null;
           }
+          
+          Pull();
 
-          return null;
+          headerHash = Hash;
+          return Header;
         }
 
-        public NetworkHeader ReadNextHeader()
-        {
-          if (GetHeight() > 0)
-          {
-            var header = Header;
-            Push();
-
-            return header.NetworkHeader;
-          }
-
-          return null;
-        }
       }
     }
   }

@@ -4,9 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 
 using BToken.Networking;
 
@@ -33,7 +31,7 @@ namespace BToken.Chaining
         public async Task StartAsync()
         {
           await LoadHeadersFromArchiveAsync();
-
+          
           Task inboundSessionRequestListenerTask = StartInboundRequestListenerAsync();
 
           await DownloadHeaderchainAsync();
@@ -149,56 +147,24 @@ namespace BToken.Chaining
         }
         void ServeGetHeadersRequest(GetHeadersMessage getHeadersMessage, INetworkChannel channel)
         {
-          List<NetworkHeader> headers = new List<NetworkHeader>();
-
           var headerStreamer = new HeaderStreamer(MainChain);
-
           headerStreamer.FindRootLocation(getHeadersMessage.HeaderLocator);
 
-          NetworkHeader header = headerStreamer.ReadNextHeader();
-          while (header != null)
+          const int HEADERS_COUNT_MAX = 2000;
+          var headers = new List<NetworkHeader>();
+          UInt256 stopHash = getHeadersMessage.StopHash;
+          ChainHeader chainHeader = headerStreamer.ReadNextHeaderTowardTip(out UInt256 headerHash);
+
+          while (chainHeader != null && headers.Count < HEADERS_COUNT_MAX && !(headerHash.IsEqual(stopHash)))
           {
-            headers.Add(header);
-            header = headerStreamer.ReadNextHeader();
+            headers.Add(chainHeader.NetworkHeader);
+
+            chainHeader = headerStreamer.ReadNextHeaderTowardTip(out headerHash);
           }
 
           var headersMessage = new HeadersMessage(headers);
           channel.SendMessageAsync(headersMessage);
         }
-        HeaderStreamer GetHeaderStreamer(List<UInt256> headerLocator)
-        {
-          var probe = new ChainProbe(Headerchain.MainChain);
-
-          while (true)
-          {
-            bool isProbeHashInLocator = headerLocator.Any(h => h.IsEqual(probe.Hash));
-            if (isProbeHashInLocator)
-            {
-              return probe;
-            }
-            if (probe.Header == GenesisHeader)
-            {
-              return false;
-            }
-
-            Push();
-          }
-        }
-        static void SetStreamerPositionToMutualRoot(HeaderStreamer headerStreamer, List<UInt256> headerLocator)
-        {
-          // Use probe instead of streamer?
-          ChainLocation streamLocation = headerStreamer.ReadNextHeaderLocationTowardRoot();
-          while (streamLocation != null)
-          {
-            if (headerLocator.Any(h => h.IsEqual(streamLocation.Hash)))
-            {
-              return;
-            }
-
-            streamLocation = headerStreamer.ReadNextHeaderLocationTowardRoot();
-          }
-        }
-
 
       }
     }

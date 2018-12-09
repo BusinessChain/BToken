@@ -94,9 +94,9 @@ namespace BToken.Networking
         BlockchainHeight = 0; // We do not have that information at this point. I recommend this should be ignored.
         RelayOption = Network.RelayOption;
         
-        serializePayload();
+        SerializePayload();
       }
-      void serializePayload()
+      void SerializePayload()
       {
         List<byte> versionPayload = new List<byte>();
 

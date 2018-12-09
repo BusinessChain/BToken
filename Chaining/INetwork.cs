@@ -14,6 +14,10 @@ namespace BToken.Chaining
     uint GetProtocolVersion();
     Task<INetworkChannel> AcceptChannelInboundRequestAsync();
 
+
+    /// <summary>
+    /// Sessions will be executed only if network requests are served. 
+    /// </summary>
     Task ExecuteSessionAsync(INetworkSession session);
   }
 }
