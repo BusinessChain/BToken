@@ -4,122 +4,114 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.IO;
+using System.Threading.Tasks.Dataflow;
 
 using BToken.Networking;
 
 
 namespace BToken.Chaining
 {
-  public enum BlockCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
-
-
-  partial class Headerchain
+  public partial class Blockchain
   {
-    Chain MainChain;
-    List<Chain> SecondaryChains = new List<Chain>();
+    public enum BlockCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
 
-    HeaderValidator Validator;
-    HeaderLocator Locator;
-
-    HeaderchainController Controller;
-    HeaderArchiver Archiver = new HeaderArchiver();
-    Blockchain Blockchain;
-
-
-    public Headerchain(
-      NetworkHeader genesisHeader,
-      INetwork network,
-      List<ChainLocation> checkpoints,
-      Blockchain blockchain)
+    partial class Headerchain
     {
-      Controller = new HeaderchainController(network, this, Archiver);
-      MainChain = new Chain(new ChainHeader(genesisHeader, null));
+      static Chain MainChain;
+      static List<Chain> SecondaryChains = new List<Chain>();
+      static ChainHeader GenesisHeader;
+      static List<ChainLocation> Checkpoints;
 
-      Validator = new HeaderValidator(checkpoints);
-      Locator = new HeaderLocator(this);
-      Blockchain = blockchain;
-    }
+      HeaderLocator Locator;
 
-    public async Task StartAsync()
-    {
-      await Controller.StartAsync();
-    }
+      HeaderchainController Controller;
+      HeaderArchiver Archiver = new HeaderArchiver();
+      Blockchain Blockchain;
 
-    public void InsertBlock(NetworkHeader header, IPayloadParser payloadParser)
-    {
-      ChainProbe probe = GetChainProbe(header.HashPrevious);
+      BufferBlock<bool> SignalInserterAvailable = new BufferBlock<bool>();
+      ChainInserter Inserter;
 
-      ValidateBlock(probe, header, out UInt256 headerHash, payloadParser);
 
-      var inserter = new ChainInserter(probe);
-
-      inserter.ConnectHeader(header);
-
-      if (probe.IsTip())
+      public Headerchain(
+        NetworkHeader genesisHeader,
+        INetwork network,
+        List<ChainLocation> checkpoints,
+        Blockchain blockchain)
       {
-        inserter.ExtendChain(headerHash);
+        GenesisHeader = new ChainHeader(genesisHeader, null);
+        Checkpoints = checkpoints;
+        MainChain = new Chain(GenesisHeader, 0, 0);
+        Controller = new HeaderchainController(network, this, Archiver);
 
-        if (probe.Chain == MainChain)
+
+        Locator = new HeaderLocator(this);
+        Blockchain = blockchain;
+
+        Inserter = new ChainInserter(MainChain, this);
+      }
+
+      public async Task StartAsync()
+      {
+        await Controller.StartAsync();
+      }
+
+      async Task InsertHeaderAsync(NetworkHeader header)
+      {
+        ValidateHeader(header, out UInt256 headerHash);
+
+        using (Inserter = await DispatchInserterAsync())
         {
-          Locator.Update();
-          return;
+          Chain rivalChain = Inserter.InsertHeader(header, headerHash);
+
+          if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
+          {
+            ReorganizeChain(rivalChain);
+          }
         }
       }
-      else
+      async Task<ChainInserter> DispatchInserterAsync()
       {
-        inserter.ForkChain(headerHash);
-        SecondaryChains.Add(probe.Chain);
-      }
+        await SignalInserterAvailable.ReceiveAsync();
 
-      if (probe.Chain.IsStrongerThan(MainChain))
-      {
-        ReorganizeChain(probe.Chain);
-      }
-    }
-    void InsertHeader(NetworkHeader header)
-    {
-      InsertBlock(header, null);
-    }
-    void ValidateBlock(ChainProbe probe, NetworkHeader header, out UInt256 headerHash, IPayloadParser payloadParser)
-    {
-      Validator.ValidateHeader(probe, header, out headerHash);
-
-      if (payloadParser != null)
-      {
-        payloadParser.ValidatePayload();
-      }
-    }
-    ChainProbe GetChainProbe(UInt256 hash)
-    {
-      var probe = new ChainProbe(MainChain);
-
-      if (probe.GoTo(hash))
-      {
-        return probe;
-      }
-
-      foreach (Chain chain in SecondaryChains)
-      {
-        probe.Chain = chain;
-
-        if (probe.GoTo(hash))
+        if (Inserter.TryDispatch())
         {
-          return probe;
+          return Inserter;
+        }
+        else
+        {
+          throw new ChainException("Received signal available but could not dispatch.");
         }
       }
+      static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)
+      {
+        headerHash = header.GetHeaderHash();
 
-      return null;
+        if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+        {
+          throw new ChainException(BlockCode.INVALID);
+        }
+
+        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+        bool IsTimestampPremature = header.UnixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
+        if (IsTimestampPremature)
+        {
+          throw new ChainException(BlockCode.PREMATURE);
+        }
+      }
+      void ReorganizeChain(Chain chain)
+      {
+        SecondaryChains.Remove(chain);
+        SecondaryChains.Add(MainChain);
+        MainChain = chain;
+
+        Locator.Reorganize();
+      }
+
+      public HeaderStreamer GetHeaderStreamer()
+      {
+        return new HeaderStreamer(MainChain);
+      }
+
     }
-
-    void ReorganizeChain(Chain chain)
-    {
-      SecondaryChains.Remove(chain);
-      SecondaryChains.Add(MainChain);
-      MainChain = chain;
-
-      Locator.Reorganize();
-    }
-
   }
 }

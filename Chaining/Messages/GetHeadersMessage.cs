@@ -10,9 +10,9 @@ namespace BToken.Chaining
 {
   class GetHeadersMessage : NetworkMessage
   {
-    UInt32 ProtocolVersion;
-    List<UInt256> HeaderLocator = new List<UInt256>();
-    UInt256 StopHash;
+    public UInt32 ProtocolVersion { get; private set; }
+    public List<UInt256> HeaderLocator { get; private set; }  = new List<UInt256>();
+    public UInt256 StopHash { get; private set; }
 
     public GetHeadersMessage(List<UInt256> headerLocator, uint protocolVersion) : base("getheaders")
     {

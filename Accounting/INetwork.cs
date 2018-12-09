@@ -11,6 +11,6 @@ namespace BToken.Accounting
 {
   public interface INetwork
   {
-    Task<INetworkChannel> AcceptChannelInboundSessionRequestAsync();
+    Task<INetworkChannel> AcceptChannelInboundRequestAsync();
   }
 }

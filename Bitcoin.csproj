@@ -85,14 +85,12 @@
     <Compile Include="Accounting\INetwork.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
     <Compile Include="Chaining\Headerchain\HeaderStreamer.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderValidator.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocator.cs" />
     <Compile Include="Chaining\Headerchain\ChainLocation.cs" />
     <Compile Include="Chaining\Headerchain\ChainProbe.cs" />
     <Compile Include="Chaining\Headerchain\HeaderArchiver.cs" />
     <Compile Include="Chaining\Blockchain\BlockArchiver\BlockArchiver.cs" />
     <Compile Include="Chaining\Headerchain\Controller\HeaderchainController.cs" />
-    <Compile Include="Chaining\Headerchain\Controller\BlockPayloadLocator.cs" />
     <Compile Include="Chaining\Blockchain\BlockArchiver\BlockStore.cs" />
     <Compile Include="Chaining\Blockchain\BlockArchiver\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Headerchain\Controller\SessionHeaderDownload.cs" />

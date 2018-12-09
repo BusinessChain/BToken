@@ -17,14 +17,14 @@ namespace BToken.Networking
     {
       Network Network;
 
-      public IPEndPoint IPEndPoint { get; private set; }
+      IPEndPoint IPEndPoint;
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
 
       readonly object IsDispatchedLOCK = new object();
       bool IsDispatched = true;
 
-      public BufferBlock<NetworkMessage> ApplicationMessageBuffer;
+      BufferBlock<NetworkMessage> ApplicationMessageBuffer;
 
       ulong FeeFilterValue;
 
@@ -85,12 +85,12 @@ namespace BToken.Networking
       {
         while (true)
         {
-          NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(default(CancellationToken));
+          NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(default(CancellationToken)).ConfigureAwait(false);
 
           switch (networkMessage.Command)
           {
             case "version":
-              await ProcessVersionMessageAsync(networkMessage, default(CancellationToken));
+              await ProcessVersionMessageAsync(networkMessage, default(CancellationToken)).ConfigureAwait(false);
               break;
             case "ping":
               Task processPingMessageTask = ProcessPingMessageAsync(networkMessage);
@@ -141,7 +141,7 @@ namespace BToken.Networking
         }
       }
 
-      public List<NetworkMessage> GetRequestMessages()
+      public List<NetworkMessage> GetInboundRequestMessages()
       {
         ApplicationMessageBuffer.TryReceiveAll(out IList<NetworkMessage> requestMessages);
         return (List<NetworkMessage>)requestMessages;
@@ -195,7 +195,6 @@ namespace BToken.Networking
         try
         {
           await session.RunAsync(this, cancellationToken);
-          ReportSessionSuccess(session);
           
           return true;
         }
@@ -206,21 +205,9 @@ namespace BToken.Networking
             IPEndPoint.Address.ToString(),
             ex.Message);
 
-          ReportSessionFail(session);
-
           return false;
         }
       }
-            
-      public void ReportSessionSuccess(INetworkSession session)
-      {
-
-      }
-      public void ReportSessionFail(INetworkSession session)
-      {
-
-      }
-
     }
   }
 }

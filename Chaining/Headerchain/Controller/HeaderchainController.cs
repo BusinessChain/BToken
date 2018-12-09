@@ -4,152 +4,169 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 
 using BToken.Networking;
 
 namespace BToken.Chaining
 {
-
-  partial class Headerchain
+  public partial class Blockchain
   {
-    partial class HeaderchainController
+    partial class Headerchain
     {
-      INetwork Network;
-      Headerchain Headerchain;
-      IHeaderArchiver Archiver;
-
-
-      public HeaderchainController(INetwork network, Headerchain headerchain, IHeaderArchiver archiver)
+      partial class HeaderchainController
       {
-        Network = network;
-        Headerchain = headerchain;
-        Archiver = archiver;
-      }
+        INetwork Network;
+        Headerchain Headerchain;
+        IHeaderArchiver Archiver;
 
-      public async Task StartAsync()
-      {
-        LoadHeadersFromArchive();
 
-        Task inboundSessionRequestListenerTask = StartInboundSessionRequestListenerAsync();
-
-        await DownloadHeaderchainAsync();
-
-        await Headerchain.Blockchain.InitialBlockDownloadAsync();
-        
-      }
-      void LoadHeadersFromArchive()
-      {
-        try
+        public HeaderchainController(INetwork network, Headerchain headerchain, IHeaderArchiver archiver)
         {
-          using (var archiveReader = Archiver.GetReader())
-          {
-            NetworkHeader header = archiveReader.GetNextHeader();
-
-            while (header != null)
-            {
-              Headerchain.InsertHeader(header);
-
-              header = archiveReader.GetNextHeader();
-            }
-          }
+          Network = network;
+          Headerchain = headerchain;
+          Archiver = archiver;
         }
-        catch (Exception ex)
+
+        public async Task StartAsync()
         {
-          Debug.WriteLine(ex.Message);
+          await LoadHeadersFromArchiveAsync();
+          
+          Task inboundSessionRequestListenerTask = StartInboundRequestListenerAsync();
+
+          await DownloadHeaderchainAsync();
+
+          await Headerchain.Blockchain.InitialBlockDownloadAsync();
+
         }
-      }
-      async Task DownloadHeaderchainAsync()
-      {
-        var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
-        await Network.ExecuteSessionAsync(sessionHeaderDownload);
-      }
-
-      async Task StartInboundSessionRequestListenerAsync()
-      {
-        while (true)
-        {
-          using (INetworkChannel channel = await Network.AcceptChannelInboundSessionRequestAsync())
-          {
-            List<NetworkMessage> sessionRequests = channel.GetRequestMessages();
-
-            foreach (NetworkMessage networkMessage in sessionRequests)
-            {
-              INetworkSession session = null;
-
-              switch (networkMessage.Command)
-              {
-                case "inv":
-                  //await ProcessInventoryMessageAsync(invMessage);
-                  break;
-
-                case "getheaders":
-                  //var getHeadersMessage = new get();
-                  break;
-
-                case "headers":
-                  break;
-
-                case "block":
-                  break;
-
-                default:
-                  break;
-              }
-              
-              //var executeSessionTask = channel.TryExecuteSessionAsync(session, default(CancellationToken));
-            }
-          }
-        }
-      }
-      //async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
-      //{
-      //  InvMessage invMessage = new InvMessage(networkMessage);
-
-      //  if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
-      //  {
-      //    await Network.NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
-      //  }
-      //  if (invMessage.GetTXInventories().Any())
-      //  {
-      //    await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
-      //  };
-      //}
-      void ProcessHeadersMessage(HeadersMessage headersMessage)
-      {
-        foreach (NetworkHeader header in headersMessage.Headers)
+        async Task LoadHeadersFromArchiveAsync()
         {
           try
           {
-            Headerchain.InsertHeader(header);
-          }
-          catch (ChainException ex)
-          {
-            switch (ex.ErrorCode)
+            using (var archiveReader = Archiver.GetReader())
             {
-              case BlockCode.ORPHAN:
-                //await ProcessOrphanSessionAsync(headerHash);
-                return;
+              NetworkHeader header = archiveReader.GetNextHeader();
 
-              case BlockCode.DUPLICATE:
-                return;
+              while (header != null)
+              {
+                await Headerchain.InsertHeaderAsync(header);
 
-              default:
-                throw ex;
+                header = archiveReader.GetNextHeader();
+              }
             }
           }
-          
-          using (var archiveWriter = Archiver.GetWriter())
+          catch (Exception ex)
           {
-            archiveWriter.StoreHeader(header);
+            Debug.WriteLine(ex.Message);
+          }
+        }
+        async Task DownloadHeaderchainAsync()
+        {
+          var sessionHeaderDownload = new SessionHeaderDownload(Headerchain, Archiver);
+          await Network.ExecuteSessionAsync(sessionHeaderDownload);
+        }
+
+        async Task StartInboundRequestListenerAsync()
+        {
+          while (true)
+          {
+            using (INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync())
+            {
+              List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
+
+              foreach (NetworkMessage inboundMessage in inboundMessages)
+              {
+                switch (inboundMessage.Command)
+                {
+                  case "inv":
+                    //await ProcessInventoryMessageAsync(invMessage);
+                    break;
+
+                  case "getheaders":
+                    var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                    ServeGetHeadersRequest(getHeadersMessage, channel);
+                    break;
+
+                  case "headers":
+                    break;
+
+                  case "block":
+                    break;
+
+                  default:
+                    break;
+                }
+              }
+            }
+          }
+        }
+        //async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
+        //{
+        //  InvMessage invMessage = new InvMessage(networkMessage);
+
+        //  if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
+        //  {
+        //    await Network.NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
+        //  }
+        //  if (invMessage.GetTXInventories().Any())
+        //  {
+        //    await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
+        //  };
+        //}
+        async Task ProcessHeadersMessageAsync(HeadersMessage headersMessage)
+        {
+          foreach (NetworkHeader header in headersMessage.Headers)
+          {
+            try
+            {
+              await Headerchain.InsertHeaderAsync(header);
+            }
+            catch (ChainException ex)
+            {
+              switch (ex.ErrorCode)
+              {
+                case BlockCode.ORPHAN:
+                  //await ProcessOrphanSessionAsync(headerHash);
+                  return;
+
+                case BlockCode.DUPLICATE:
+                  return;
+
+                default:
+                  throw ex;
+              }
+            }
+
+            using (var archiveWriter = Archiver.GetWriter())
+            {
+              archiveWriter.StoreHeader(header);
+            }
+
+            Headerchain.Blockchain.DownloadBlock(header);
+          }
+        }
+        void ServeGetHeadersRequest(GetHeadersMessage getHeadersMessage, INetworkChannel channel)
+        {
+          var headerStreamer = new HeaderStreamer(MainChain);
+          headerStreamer.FindRootLocation(getHeadersMessage.HeaderLocator);
+
+          const int HEADERS_COUNT_MAX = 2000;
+          var headers = new List<NetworkHeader>();
+          UInt256 stopHash = getHeadersMessage.StopHash;
+          ChainHeader chainHeader = headerStreamer.ReadNextHeaderTowardTip(out UInt256 headerHash);
+
+          while (chainHeader != null && headers.Count < HEADERS_COUNT_MAX && !(headerHash.IsEqual(stopHash)))
+          {
+            headers.Add(chainHeader.NetworkHeader);
+
+            chainHeader = headerStreamer.ReadNextHeaderTowardTip(out headerHash);
           }
 
-          Headerchain.Blockchain.DownloadBlock(header);
+          var headersMessage = new HeadersMessage(headers);
+          channel.SendMessageAsync(headersMessage);
         }
+
       }
-          
     }
   }
 }

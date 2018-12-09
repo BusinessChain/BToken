@@ -63,7 +63,7 @@ namespace BToken.Networking
         byte[] checksum = createChecksum(networkMessage.Payload);
         Stream.Write(checksum, 0, ChecksumSize);
 
-        await Stream.WriteAsync(networkMessage.Payload, 0, networkMessage.Payload.Length).ConfigureAwait(false);
+        await Stream.WriteAsync(networkMessage.Payload, 0, networkMessage.Payload.Length);
       }
 
       byte[] createChecksum(byte[] payload)

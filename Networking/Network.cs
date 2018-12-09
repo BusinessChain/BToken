@@ -83,16 +83,18 @@ namespace BToken.Networking
       }
       catch
       {
-        RenewPeerWhenOutbound(peer);
+        if(IsPeerInbound(peer))
+        {
+          PeersInbound.Remove(peer);
+        }
+        else
+        {
+          ReplacePeerOutbound(peer);
+        }
       }
     }
-    void RenewPeerWhenOutbound(Peer peer)
+    void ReplacePeerOutbound(Peer peer)
     {
-      if (!PeersOutbound.Contains(peer))
-      {
-        return;
-      }
-
       var peerNew = new Peer(this);
 
       lock(ListPeersLOCK)
@@ -103,8 +105,12 @@ namespace BToken.Networking
 
       Task startPeerTask = StartPeerAsync(peerNew);
     }
+    bool IsPeerInbound(Peer peer)
+    {
+      return PeersInbound.Contains(peer);
+    }
 
-    public async Task<INetworkChannel> AcceptChannelInboundSessionRequestAsync()
+    public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
       return await PeerRequestInboundBuffer.ReceiveAsync();
     }
@@ -131,6 +137,8 @@ namespace BToken.Networking
         using (Peer peer = await DispatchPeerOutboundAsync(default(CancellationToken)))
         {
           if (await peer.TryExecuteSessionAsync(session, default(CancellationToken))) { break; }
+
+          ReplacePeerOutbound(peer);
         }
       }
     }
@@ -146,6 +154,7 @@ namespace BToken.Networking
           }
         }
         
+        // add additional peer if bottleneck here, e.g. if 3 times no dispatch then create new peer
         await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
       }
     }
@@ -164,5 +173,6 @@ namespace BToken.Networking
     {
       return ProtocolVersion;
     }
+
   }
 }

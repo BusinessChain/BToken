@@ -4,33 +4,113 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using BToken.Networking;
+
 namespace BToken.Chaining
 {
-  partial class Headerchain
+  public partial class Blockchain
   {
-    public class HeaderStreamer
+    partial class Headerchain
     {
-      Headerchain Headerchain;
-      ChainProbe Probe;
-
-
-      public HeaderStreamer(Headerchain headerchain)
+      public class HeaderStreamer : ChainProbe
       {
-        Headerchain = headerchain;
-        Probe = new ChainProbe(Headerchain.MainChain);
-      }
+        List<ChainHeader> Trail;
 
-      public ChainLocation ReadNextHeaderLocation()
-      {
-        if(Probe.GetHeight() > 0)
+
+        public HeaderStreamer(Chain chain)
+          :base(chain)
+        { }
+
+        protected override void Initialize()
         {
-          var chainLocation = new ChainLocation(Probe.GetHeight(), Probe.Hash);
-          Probe.Push();
+          base.Initialize();
 
-          return chainLocation;
+          Trail = new List<ChainHeader>();
         }
 
-        return null;
+        public void FindRootLocation(List<UInt256> headerLocator)
+        {
+          while (true)
+          {
+            bool isHashInLocator = headerLocator.Any(h => h.IsEqual(Hash));
+            if (isHashInLocator || Header == GenesisHeader)
+            {
+              return;
+            }
+
+            Push();
+          }
+        }
+        protected override void Push()
+        {
+          LayTrail();
+          base.Push();
+        }
+        void LayTrail()
+        {
+          if (Header.HeaderPrevious.HeadersNext.First() != Header)
+            Trail.Insert(0, Header);
+        }
+
+        void Pull()
+        {
+          Header = GetHeaderTowardTip();
+
+          Hash = GetHeaderHash(Header);
+
+          Depth--;
+        }
+        ChainHeader GetHeaderTowardTip()
+        {
+          if (Header.HeadersNext.Count == 0)
+          {
+            throw new ChainException("Cannot pull up on chain because it's at the end.");
+          }
+
+          bool useTrail = Header.HeadersNext.Count > 1
+            && Trail.Any()
+            && Header.HeadersNext.Contains(Trail.First());
+
+          if (useTrail)
+          {
+            ChainHeader headerTrail = Trail.First();
+            Trail.Remove(headerTrail);
+            return headerTrail;
+          }
+          else
+          {
+            return Header.HeadersNext.First();
+          }
+        }
+
+
+        public ChainLocation ReadHeaderLocationTowardGenesis()
+        {
+          if (Header != GenesisHeader)
+          {
+            var chainLocation = new ChainLocation(GetHeight(), Hash);
+            Push();
+
+            return chainLocation;
+          }
+
+          return null;
+        }
+
+        public ChainHeader ReadNextHeaderTowardTip(out UInt256 headerHash)
+        {
+          if(IsTip())
+          {
+            headerHash = null;
+            return null;
+          }
+          
+          Pull();
+
+          headerHash = Hash;
+          return Header;
+        }
+
       }
     }
   }
