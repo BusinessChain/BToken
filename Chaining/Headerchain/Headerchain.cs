@@ -22,10 +22,10 @@ namespace BToken.Chaining
       static ChainHeader GenesisHeader;
       static List<ChainLocation> Checkpoints;
 
-      HeaderLocator Locator;
-
-      HeaderArchiver Archiver = new HeaderArchiver();
       Blockchain Blockchain;
+
+      HeaderLocator Locator;
+      HeaderArchiver Archiver = new HeaderArchiver();
 
       BufferBlock<bool> SignalInserterAvailable = new BufferBlock<bool>();
       ChainInserter Inserter;
@@ -47,7 +47,7 @@ namespace BToken.Chaining
         Inserter = new ChainInserter(MainChain, this);
       }
       
-      public async Task InsertHeaderAsync(NetworkHeader header)
+      async Task InsertHeaderAsync(NetworkHeader header)
       {
         ValidateHeader(header, out UInt256 headerHash);
 
@@ -103,6 +103,10 @@ namespace BToken.Chaining
       {
         return new HeaderStreamer(MainChain);
       }
+      public HeaderInserter GetHeaderInserter()
+      {
+        return new HeaderInserter(this);
+      }
       public List<UInt256> GetHeaderLocator()
       {
         return Locator.GetHeaderLocator();
@@ -125,7 +129,7 @@ namespace BToken.Chaining
         }
         catch (Exception ex)
         {
-          Debug.WriteLine(ex.Message);
+          Console.WriteLine(ex.Message);
         }
       }
 

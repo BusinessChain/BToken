@@ -37,7 +37,7 @@ namespace BToken.Chaining
         {
           await DownloadBlockAsync();
 
-          Debug.WriteLine("downloaded block height: '{0}'", HeaderLocation.Height);
+          Console.WriteLine("'{0}' downloaded block height: '{1}'", Channel.GetHashCode(), HeaderLocation.Height);
         }
       }
       

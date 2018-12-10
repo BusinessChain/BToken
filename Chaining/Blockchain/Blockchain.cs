@@ -29,7 +29,7 @@ namespace BToken.Chaining
       PayloadParser = payloadParser;
 
       Archiver = new BlockArchiver(this, network);
-      Listener = new BlockchainRequestListener(network);
+      Listener = new BlockchainRequestListener(this, network);
     }
 
     public async Task StartAsync()

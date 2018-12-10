@@ -8,114 +8,118 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  class BlockchainRequestListener
+  public partial class Blockchain
   {
-    INetwork Network;
-
-
-    public BlockchainRequestListener(INetwork network)
+    class BlockchainRequestListener
     {
-      Network = network;
-    }
+      INetwork Network;
+      Blockchain Blockchain;
 
-    public async Task StartAsync()
-    {
-      while (true)
+
+      public BlockchainRequestListener(Blockchain blockchain, INetwork network)
       {
-        using (INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync())
+        Network = network;
+        Blockchain = blockchain;
+      }
+
+      public async Task StartAsync()
+      {
+        while (true)
         {
-          List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
-
-          foreach (NetworkMessage inboundMessage in inboundMessages)
+          using (INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync().ConfigureAwait(false))
           {
-            switch (inboundMessage.Command)
+            List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
+
+            foreach (NetworkMessage inboundMessage in inboundMessages)
             {
-              case "inv":
-                //await ProcessInventoryMessageAsync(invMessage);
-                break;
+              switch (inboundMessage.Command)
+              {
+                case "inv":
+                  //await ProcessInventoryMessageAsync(invMessage);
+                  break;
 
-              case "getheaders":
-                var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-                //ServeGetHeadersRequest(getHeadersMessage, channel);
-                break;
+                case "getheaders":
+                  var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                  ServeGetHeadersRequest(getHeadersMessage, channel);
+                  break;
 
-              case "headers":
-                break;
+                case "headers":
+                  var headersMessage = new HeadersMessage(inboundMessage);
+                  Task processHeadersMessageTask = ProcessHeadersMessageAsync(headersMessage, channel);
+                  break;
 
-              case "block":
-                break;
+                case "block":
+                  break;
 
-              default:
-                break;
+                default:
+                  break;
+              }
             }
           }
         }
       }
-    }
-    //async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
-    //{
-    //  InvMessage invMessage = new InvMessage(networkMessage);
+      //async Task ProcessInventoryMessageAsync(NetworkMessage networkMessage)
+      //{
+      //  InvMessage invMessage = new InvMessage(networkMessage);
 
-    //  if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
-    //  {
-    //    await Network.NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
-    //  }
-    //  if (invMessage.GetTXInventories().Any())
-    //  {
-    //    await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
-    //  };
-    //}
-    async Task ProcessHeadersMessageAsync(HeadersMessage headersMessage)
-    {
-      foreach (NetworkHeader header in headersMessage.Headers)
+      //  if (invMessage.GetBlockInventories().Any()) // direkt als property zu kreationszeit anlegen.
+      //  {
+      //    await Network.NetworkMessageBufferBlockchain.SendAsync(invMessage).ConfigureAwait(false);
+      //  }
+      //  if (invMessage.GetTXInventories().Any())
+      //  {
+      //    await Network.NetworkMessageBufferUTXO.SendAsync(invMessage).ConfigureAwait(false);
+      //  };
+      //}
+      async Task ProcessHeadersMessageAsync(HeadersMessage headersMessage, INetworkChannel channel)
       {
-        try
+        using (Headerchain.HeaderInserter headerInserter = Blockchain.Headers.GetHeaderInserter())
         {
-          await Headerchain.InsertHeaderAsync(header);
-        }
-        catch (ChainException ex)
-        {
-          switch (ex.ErrorCode)
+          foreach (NetworkHeader header in headersMessage.Headers)
           {
-            case BlockCode.ORPHAN:
-              //await ProcessOrphanSessionAsync(headerHash);
-              return;
+            try
+            {
+              await headerInserter.InsertHeaderAsync(header);
+            }
+            catch (ChainException ex)
+            {
+              switch (ex.ErrorCode)
+              {
+                case BlockCode.ORPHAN:
+                  //await ProcessOrphanSessionAsync(headerHash);
+                  return;
 
-            case BlockCode.DUPLICATE:
-              return;
+                case BlockCode.DUPLICATE:
+                  return;
 
-            default:
-              throw ex;
+                default:
+                  throw ex;
+              }
+            }
           }
         }
-
-        //using (var archiveWriter = Archiver.GetWriter())
-        //{
-        //  archiveWriter.StoreHeader(header);
-        //}
-
-        Blockchain.DownloadBlock(header);
       }
-    }
-    void ServeGetHeadersRequest(GetHeadersMessage getHeadersMessage, INetworkChannel channel)
-    {
-      Headerchain.HeaderStreamer headerStreamer = Headerchain.GetHeaderStreamer();
-      headerStreamer.FindRootLocation(getHeadersMessage.HeaderLocator);
-
-      const int HEADERS_COUNT_MAX = 2000;
-      var headers = new List<NetworkHeader>();
-      UInt256 stopHash = getHeadersMessage.StopHash;
-      NetworkHeader header = headerStreamer.ReadNextHeaderTowardTip(out UInt256 headerHash);
-
-      while (header != null && headers.Count < HEADERS_COUNT_MAX && !(headerHash.IsEqual(stopHash)))
+      void ServeGetHeadersRequest(GetHeadersMessage getHeadersMessage, INetworkChannel channel)
       {
-        headers.Add(header);
+        Headerchain.HeaderStreamer headerStreamer = Blockchain.Headers.GetHeaderStreamer();
+        headerStreamer.FindRootLocation(getHeadersMessage.HeaderLocator);
 
-        header = headerStreamer.ReadNextHeaderTowardTip(out headerHash);
+        const int HEADERS_COUNT_MAX = 2000;
+        var headers = new List<NetworkHeader>();
+        UInt256 stopHash = getHeadersMessage.StopHash;
+        NetworkHeader header = headerStreamer.ReadNextHeaderTowardTip(out UInt256 headerHash);
+
+        while (header != null && headers.Count < HEADERS_COUNT_MAX && !(headerHash.IsEqual(stopHash)))
+        {
+          headers.Add(header);
+
+          header = headerStreamer.ReadNextHeaderTowardTip(out headerHash);
+        }
+
+        var headersMessage = new HeadersMessage(headers);
+        channel.SendMessageAsync(headersMessage);
       }
 
-      var headersMessage = new HeadersMessage(headers);
-      channel.SendMessageAsync(headersMessage);
     }
   }
 }
