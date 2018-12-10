@@ -173,6 +173,5 @@ namespace BToken.Networking
     {
       return ProtocolVersion;
     }
-
   }
 }

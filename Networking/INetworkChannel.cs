@@ -14,5 +14,6 @@ namespace BToken.Networking
     
     Task SendMessageAsync(NetworkMessage message);
     Task<NetworkMessage> ReceiveMessageAsync(CancellationToken cancellationToken);
+    uint GetProtocolVersion();
   }
 }

@@ -15,6 +15,7 @@ namespace BToken.Chaining
     static IPayloadParser PayloadParser;
     INetwork Network;
     BlockArchiver Archiver;
+    BlockchainRequestListener Listener;
 
 
     public Blockchain(
@@ -28,22 +29,20 @@ namespace BToken.Chaining
       PayloadParser = payloadParser;
 
       Archiver = new BlockArchiver(this, network);
+      Listener = new BlockchainRequestListener(this, network);
     }
 
     public async Task StartAsync()
     {
-      await Headers.StartAsync();
-    }
+      await Headers.LoadFromArchiveAsync();
 
-    public async Task InitialBlockDownloadAsync()
-    {
-      await Archiver.InitialBlockDownloadAsync();
-    }
+      Task listenerTask = Listener.StartAsync();
 
-    public void DownloadBlock(NetworkHeader header)
-    {
+      await Headers.InitialHeaderDownloadAsync();
 
+      await Archiver.InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
     }
+    
 
   }
 }

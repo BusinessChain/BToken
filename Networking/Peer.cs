@@ -208,6 +208,11 @@ namespace BToken.Networking
           return false;
         }
       }
+
+      public uint GetProtocolVersion()
+      {
+        return ProtocolVersion;
+      }
     }
   }
 }
