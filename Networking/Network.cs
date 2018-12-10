@@ -136,7 +136,8 @@ namespace BToken.Networking
       {
         using (Peer peer = await DispatchPeerOutboundAsync(default(CancellationToken)))
         {
-          if (await peer.TryExecuteSessionAsync(session, default(CancellationToken))) { break; }
+          if (await peer.TryExecuteSessionAsync(session, default(CancellationToken)))
+          { break; }
 
           ReplacePeerOutbound(peer);
         }

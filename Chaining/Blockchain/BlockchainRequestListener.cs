@@ -45,7 +45,7 @@ namespace BToken.Chaining
 
                 case "headers":
                   var headersMessage = new HeadersMessage(inboundMessage);
-                  Task processHeadersMessageTask = ProcessHeadersMessageAsync(headersMessage, channel);
+                  await ProcessHeadersMessageAsync(headersMessage, channel);
                   break;
 
                 case "block":
