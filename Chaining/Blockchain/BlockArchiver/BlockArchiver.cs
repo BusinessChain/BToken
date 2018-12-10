@@ -97,10 +97,8 @@ namespace BToken.Chaining
       }
 
 
-      public async Task InitialBlockDownloadAsync()
+      public async Task InitialBlockDownloadAsync(Headerchain.HeaderStreamer headerStreamer)
       {
-        var headerStreamer = Blockchain.Headers.GetHeaderStreamer();
-
         ChainLocation headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
         while (headerLocation != null)
         {
@@ -129,7 +127,6 @@ namespace BToken.Chaining
         Task executeSessionTask = Network.ExecuteSessionAsync(sessionBlockDownload);
         BlockDownloadTasks.Add(executeSessionTask);
       }
-      
     }
   }
 }

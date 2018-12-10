@@ -24,7 +24,6 @@ namespace BToken.Chaining
 
       HeaderLocator Locator;
 
-      HeaderchainController Controller;
       HeaderArchiver Archiver = new HeaderArchiver();
       Blockchain Blockchain;
 
@@ -41,21 +40,14 @@ namespace BToken.Chaining
         GenesisHeader = new ChainHeader(genesisHeader, null);
         Checkpoints = checkpoints;
         MainChain = new Chain(GenesisHeader, 0, 0);
-        Controller = new HeaderchainController(network, this, Archiver);
 
-
-        Locator = new HeaderLocator(this);
+        Locator = new HeaderLocator();
         Blockchain = blockchain;
 
         Inserter = new ChainInserter(MainChain, this);
       }
-
-      public async Task StartAsync()
-      {
-        await Controller.StartAsync();
-      }
-
-      async Task InsertHeaderAsync(NetworkHeader header)
+      
+      public async Task InsertHeaderAsync(NetworkHeader header)
       {
         ValidateHeader(header, out UInt256 headerHash);
 
@@ -111,7 +103,36 @@ namespace BToken.Chaining
       {
         return new HeaderStreamer(MainChain);
       }
+      public List<UInt256> GetHeaderLocator()
+      {
+        return Locator.GetHeaderLocator();
+      }
+      public async Task LoadFromArchiveAsync()
+      {
+        try
+        {
+          using (var archiveReader = Archiver.GetReader())
+          {
+            NetworkHeader header = archiveReader.GetNextHeader();
 
+            while (header != null)
+            {
+              await InsertHeaderAsync(header);
+
+              header = archiveReader.GetNextHeader();
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          Debug.WriteLine(ex.Message);
+        }
+      }
+
+      public async Task InitialHeaderDownloadAsync()
+      {
+        await Blockchain.Network.ExecuteSessionAsync(new SessionHeaderDownload(this));
+      }
     }
   }
 }

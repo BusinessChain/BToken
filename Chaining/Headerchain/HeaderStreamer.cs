@@ -97,7 +97,7 @@ namespace BToken.Chaining
           return null;
         }
 
-        public ChainHeader ReadNextHeaderTowardTip(out UInt256 headerHash)
+        public NetworkHeader ReadNextHeaderTowardTip(out UInt256 headerHash)
         {
           if(IsTip())
           {
@@ -108,7 +108,7 @@ namespace BToken.Chaining
           Pull();
 
           headerHash = Hash;
-          return Header;
+          return Header.NetworkHeader;
         }
 
       }
