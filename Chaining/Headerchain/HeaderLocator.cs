@@ -12,23 +12,25 @@ namespace BToken.Chaining
     {
       class HeaderLocator
       {
+        Headerchain Headerchain;
         List<ChainLocation> BlockLocations = new List<ChainLocation>();
 
 
-        public HeaderLocator()
+        public HeaderLocator(Headerchain headerchain)
         {
+          Headerchain = headerchain;
           Update();
         }
 
         public void Reorganize()
         {
-          UInt256 hash = MainChain.HeaderTipHash;
-          uint height = MainChain.Height;
+          UInt256 hash = Headerchain.MainChain.HeaderTipHash;
+          uint height = Headerchain.MainChain.Height;
 
           BlockLocations = new List<ChainLocation>() { new ChainLocation(height, hash) };
 
 
-          ChainHeader block = MainChain.HeaderTip;
+          ChainHeader block = Headerchain.MainChain.HeaderTip;
           uint depth = 0;
           uint nextLocationDepth = 1;
 
@@ -53,8 +55,8 @@ namespace BToken.Chaining
 
         public void Update()
         {
-          uint height = MainChain.Height;
-          UInt256 hash = MainChain.HeaderTipHash;
+          uint height = Headerchain.MainChain.Height;
+          UInt256 hash = Headerchain.MainChain.HeaderTipHash;
 
           AddLocation(height, hash);
         }

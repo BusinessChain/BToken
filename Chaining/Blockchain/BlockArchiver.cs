@@ -51,6 +51,8 @@ namespace BToken.Chaining
 
       public async Task ArchiveBlockAsync(NetworkBlock block, UInt256 hash)
       {
+        ValidateBlock(hash, block);
+
         using (FileStream fileStream = CreateFile(hash))
         {
           byte[] headerBytes = block.Header.GetBytes();
@@ -62,7 +64,7 @@ namespace BToken.Chaining
         }
       }
 
-      public static async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
+      public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
       {
         using (FileStream blockFileStream = OpenFile(hash.ToString()))
         {
@@ -97,16 +99,21 @@ namespace BToken.Chaining
       }
 
 
-      public async Task InitialBlockDownloadAsync(Headerchain.HeaderStreamer headerStreamer)
+      public async Task InitialBlockDownloadAsync(Headerchain.HeaderStream headerStreamer)
       {
         ChainLocation headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
         while (headerLocation != null)
         {
-          await AwaitNextDownloadTask();
-          PostBlockDownloadSession(headerLocation);
+          if (!await TryValidateBlockExistingAsync(headerLocation.Hash))
+          {
+            await AwaitNextDownloadTask();
+            PostBlockDownloadSession(headerLocation);
+          }
 
           headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
         }
+
+        Console.WriteLine("Synchronizing blocks with network completed.");
       }
       async Task AwaitNextDownloadTask()
       {
@@ -122,11 +129,61 @@ namespace BToken.Chaining
       }
       void PostBlockDownloadSession(ChainLocation headerLocation)
       {
-        var sessionBlockDownload = new SessionBlockDownload(this, headerLocation);
+        var sessionBlockDownload = new SessionBlockDownload(headerLocation, this);
 
         Task executeSessionTask = Network.ExecuteSessionAsync(sessionBlockDownload);
         BlockDownloadTasks.Add(executeSessionTask);
       }
+      async Task<bool> TryValidateBlockExistingAsync(UInt256 hash)
+      {
+        try
+        {
+          NetworkBlock block = await ReadBlockAsync(hash);
+          if (block == null)
+          {
+            return false;
+          }
+
+          return TryValidate(hash, block);
+        }
+        catch (IOException)
+        {
+          return false;
+        }
+      }
+      bool TryValidate(UInt256 hash, NetworkBlock block)
+      {
+        try
+        {
+          ValidateBlock(hash, block);
+          return true;
+        }
+        catch (ChainException)
+        {
+          return false;
+        }
+      }
+      void ValidateBlock(UInt256 hash, NetworkBlock block)
+      {
+        const int PAYLOAD_LENGTH_MAX = 0x400000;
+        if (block.Payload.Length > PAYLOAD_LENGTH_MAX)
+        {
+          throw new ChainException(HeaderCode.INVALID);
+        }
+
+        UInt256 headerHash = block.Header.GetHeaderHash();
+        if (!hash.IsEqual(headerHash))
+        {
+          throw new ChainException(HeaderCode.INVALID);
+        }
+
+        UInt256 payloadHash = PayloadParser.GetPayloadHash(block.Payload);
+        if (!payloadHash.IsEqual(block.Header.MerkleRoot))
+        {
+          throw new ChainException(HeaderCode.INVALID);
+        }
+      }
+
     }
   }
 }

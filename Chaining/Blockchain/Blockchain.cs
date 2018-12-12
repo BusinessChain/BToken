@@ -35,14 +35,20 @@ namespace BToken.Chaining
     public async Task StartAsync()
     {
       await Headers.LoadFromArchiveAsync();
+      Console.WriteLine("Loaded headerchain from archive, height = '{0}'", Headers.GetHeight());
 
       Task listenerTask = Listener.StartAsync();
+      Console.WriteLine("Inbound request listener started...");
 
       await Headers.InitialHeaderDownloadAsync();
+      Console.WriteLine("Synchronized headerchain with network, height = '{0}'", Headers.GetHeight());
 
-      await Archiver.InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
+      Task initialBlockDownloadTask = Archiver.InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
     }
     
-
+    public BlockStream GetBlockStream()
+    {
+      return new BlockStream(this);
+    }
   }
 }

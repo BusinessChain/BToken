@@ -2,9 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using BToken.Chaining;
+using BToken.Networking;
 
 namespace BToken.Accounting
 {
@@ -23,9 +25,36 @@ namespace BToken.Accounting
     }
 
 
-    public void Start()
+    public async Task StartAsync()
     {
-      // listen to Bitcoin messages
+      // Load from UTXO archive
+
+      try
+      {
+        Blockchain.BlockStream blockStream = Blockchain.GetBlockStream();
+        NetworkBlock block = await blockStream.ReadBlockAsync().ConfigureAwait(false);
+
+        while (block != null)
+        {
+          InsertBlock(block);
+          block = await blockStream.ReadBlockAsync().ConfigureAwait(false);
+        }
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine(ex.Message);
+      }
+
+      Console.WriteLine("UTXO syncing completed");
+
+      // Listener to new blocks.
+    }
+
+    void InsertBlock(NetworkBlock block)
+    {
+      // erstelle UTXO STXO
+      Console.WriteLine("Thread: '{0}'> UTXO processes block: " + block.Header.HashPrevious, Thread.CurrentThread.ManagedThreadId);
+
     }
 
   }

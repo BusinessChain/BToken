@@ -13,14 +13,14 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public enum BlockCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
+    public enum HeaderCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
 
     partial class Headerchain
     {
-      static Chain MainChain;
-      static List<Chain> SecondaryChains = new List<Chain>();
-      static ChainHeader GenesisHeader;
-      static List<ChainLocation> Checkpoints;
+      Chain MainChain;
+      List<Chain> SecondaryChains = new List<Chain>();
+      ChainHeader GenesisHeader;
+      List<ChainLocation> Checkpoints;
 
       Blockchain Blockchain;
 
@@ -41,10 +41,10 @@ namespace BToken.Chaining
         Checkpoints = checkpoints;
         MainChain = new Chain(GenesisHeader, 0, 0);
 
-        Locator = new HeaderLocator();
+        Locator = new HeaderLocator(this);
         Blockchain = blockchain;
 
-        Inserter = new ChainInserter(MainChain, this);
+        Inserter = new ChainInserter(this);
       }
       
       async Task InsertHeaderAsync(NetworkHeader header)
@@ -80,14 +80,14 @@ namespace BToken.Chaining
 
         if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
         {
-          throw new ChainException(BlockCode.INVALID);
+          throw new ChainException(HeaderCode.INVALID);
         }
 
         const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
         bool IsTimestampPremature = header.UnixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
         if (IsTimestampPremature)
         {
-          throw new ChainException(BlockCode.PREMATURE);
+          throw new ChainException(HeaderCode.PREMATURE);
         }
       }
       void ReorganizeChain(Chain chain)
@@ -99,9 +99,9 @@ namespace BToken.Chaining
         Locator.Reorganize();
       }
 
-      public HeaderStreamer GetHeaderStreamer()
+      public HeaderStream GetHeaderStreamer()
       {
-        return new HeaderStreamer(MainChain);
+        return new HeaderStream(MainChain, GenesisHeader);
       }
       public HeaderInserter GetHeaderInserter()
       {
@@ -136,6 +136,11 @@ namespace BToken.Chaining
       public async Task InitialHeaderDownloadAsync()
       {
         await Blockchain.Network.ExecuteSessionAsync(new SessionHeaderDownload(this));
+      }
+      
+      public uint GetHeight()
+      {
+        return MainChain.Height;
       }
     }
   }

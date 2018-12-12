@@ -86,11 +86,11 @@ namespace BToken.Chaining
           {
             switch (ex.ErrorCode)
             {
-              case BlockCode.ORPHAN:
+              case HeaderCode.ORPHAN:
                 //await ProcessOrphanSessionAsync(headerHash);
                 return;
 
-              case BlockCode.DUPLICATE:
+              case HeaderCode.DUPLICATE:
                 return;
 
               default:

@@ -85,11 +85,11 @@ namespace BToken.Chaining
             {
               switch (ex.ErrorCode)
               {
-                case BlockCode.ORPHAN:
+                case HeaderCode.ORPHAN:
                   //await ProcessOrphanSessionAsync(headerHash);
                   return;
 
-                case BlockCode.DUPLICATE:
+                case HeaderCode.DUPLICATE:
                   return;
 
                 default:
@@ -101,7 +101,7 @@ namespace BToken.Chaining
       }
       void ServeGetHeadersRequest(GetHeadersMessage getHeadersMessage, INetworkChannel channel)
       {
-        Headerchain.HeaderStreamer headerStreamer = Blockchain.Headers.GetHeaderStreamer();
+        Headerchain.HeaderStream headerStreamer = Blockchain.Headers.GetHeaderStreamer();
         headerStreamer.FindRootLocation(getHeadersMessage.HeaderLocator);
 
         const int HEADERS_COUNT_MAX = 2000;

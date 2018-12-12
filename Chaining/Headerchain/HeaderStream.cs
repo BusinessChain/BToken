@@ -12,14 +12,17 @@ namespace BToken.Chaining
   {
     partial class Headerchain
     {
-      public class HeaderStreamer : ChainProbe
+      public class HeaderStream : ChainProbe
       {
         List<ChainHeader> Trail;
+        ChainHeader GenesisHeader;
 
 
-        public HeaderStreamer(Chain chain)
+        public HeaderStream(Chain chain, ChainHeader genesisHeader)
           :base(chain)
-        { }
+        {
+          GenesisHeader = genesisHeader;
+        }
 
         protected override void Initialize()
         {
