@@ -4,17 +4,17 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using BToken.Accounting;
+using BToken.Accounting.Bitcoin;
 using BToken.Chaining;
 using BToken.Networking;
 
-namespace BToken.Bitcoin
+namespace BToken
 {
   public class BitcoinNode
   {
     public Network Network { get; private set; }
     public Blockchain Blockchain { get; private set; }
-    public UTXO UTXO { get; private set; }
+    UTXO UTXO;
 
     BitcoinPayloadParser PayloadParser = new BitcoinPayloadParser();
     BitcoinGenesisBlock GenesisBlock = new BitcoinGenesisBlock();
@@ -29,7 +29,7 @@ namespace BToken.Bitcoin
     {
       Network = new Network();
       Blockchain = new Blockchain(GenesisBlock, Network, Checkpoints, PayloadParser);
-      UTXO = new UTXO(Blockchain, Network);
+      UTXO = new UTXO(Blockchain, Network, PayloadParser);
     }
 
     public async Task StartAsync()

@@ -73,7 +73,7 @@ namespace BToken.Chaining
       //}
       async Task ProcessHeadersMessageAsync(HeadersMessage headersMessage, INetworkChannel channel)
       {
-        using (Headerchain.HeaderInserter headerInserter = Blockchain.Headers.GetHeaderInserter())
+        using (Headerchain.HeaderWriter headerInserter = Blockchain.Headers.GetHeaderInserter())
         {
           foreach (NetworkHeader header in headersMessage.Headers)
           {

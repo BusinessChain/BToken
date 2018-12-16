@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
-namespace BToken.Bitcoin
+namespace BToken.Accounting.Bitcoin
 {
   class BitcoinGenesisBlock : NetworkBlock
   {

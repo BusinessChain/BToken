@@ -103,9 +103,9 @@ namespace BToken.Chaining
       {
         return new HeaderStream(MainChain, GenesisHeader);
       }
-      public HeaderInserter GetHeaderInserter()
+      public HeaderWriter GetHeaderInserter()
       {
-        return new HeaderInserter(this);
+        return new HeaderWriter(this);
       }
       public List<UInt256> GetHeaderLocator()
       {

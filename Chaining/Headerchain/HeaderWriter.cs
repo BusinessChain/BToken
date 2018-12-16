@@ -12,12 +12,12 @@ namespace BToken.Chaining
   {
     partial class Headerchain
     {
-      public class HeaderInserter : IDisposable
+      public class HeaderWriter : IDisposable
       {
         Headerchain Headerchain;
         IHeaderWriter ArchiveWriter;
 
-        public HeaderInserter(Headerchain headerchain)
+        public HeaderWriter(Headerchain headerchain)
         {
           Headerchain = headerchain;
           ArchiveWriter = headerchain.Archiver.GetWriter();

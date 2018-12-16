@@ -17,6 +17,7 @@ namespace BToken.Chaining
     {
       INetwork Network;
       Blockchain Blockchain;
+      IPayloadParser PayloadParser;
 
       static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
@@ -25,9 +26,10 @@ namespace BToken.Chaining
       const uint DOWNLOAD_TASK_COUNT_MAX = 8;
       
 
-      public BlockArchiver(Blockchain blockchain, INetwork network)
+      public BlockArchiver(IPayloadParser payloadParser, Blockchain blockchain, INetwork network)
       {
         Blockchain = blockchain;
+        PayloadParser = payloadParser;
         Network = network;
 
         BlockDownloadTasks = new List<Task>();
@@ -71,7 +73,11 @@ namespace BToken.Chaining
           byte[] blockBytes = new byte[blockFileStream.Length];
           int i = await blockFileStream.ReadAsync(blockBytes, 0, (int)blockFileStream.Length);
 
-          return NetworkBlock.ParseBlock(blockBytes);
+          var block = NetworkBlock.ParseBlock(blockBytes);
+
+          ValidateBlock(hash, block);
+
+          return block;
         }
       }
 
@@ -165,12 +171,6 @@ namespace BToken.Chaining
       }
       void ValidateBlock(UInt256 hash, NetworkBlock block)
       {
-        const int PAYLOAD_LENGTH_MAX = 0x400000;
-        if (block.Payload.Length > PAYLOAD_LENGTH_MAX)
-        {
-          throw new ChainException(HeaderCode.INVALID);
-        }
-
         UInt256 headerHash = block.Header.GetHeaderHash();
         if (!hash.IsEqual(headerHash))
         {

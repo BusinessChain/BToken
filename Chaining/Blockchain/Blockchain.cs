@@ -12,7 +12,6 @@ namespace BToken.Chaining
   public partial class Blockchain
   {
     Headerchain Headers;
-    static IPayloadParser PayloadParser;
     INetwork Network;
     BlockArchiver Archiver;
     BlockchainRequestListener Listener;
@@ -26,9 +25,8 @@ namespace BToken.Chaining
     {
       Network = network;
       Headers = new Headerchain(genesisBlock.Header, network, checkpoints, this);
-      PayloadParser = payloadParser;
 
-      Archiver = new BlockArchiver(this, network);
+      Archiver = new BlockArchiver(payloadParser, this, network);
       Listener = new BlockchainRequestListener(this, network);
     }
 
@@ -45,7 +43,7 @@ namespace BToken.Chaining
 
       Task initialBlockDownloadTask = Archiver.InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
     }
-    
+
     public BlockStream GetBlockStream()
     {
       return new BlockStream(this);
