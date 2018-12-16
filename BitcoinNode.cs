@@ -4,20 +4,20 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using BToken.Accounting;
+using BToken.Accounting.Bitcoin;
 using BToken.Chaining;
 using BToken.Networking;
 
-namespace BToken.Bitcoin
+namespace BToken
 {
   public class BitcoinNode
   {
     public Network Network { get; private set; }
-    public Blockchain BitcoinChain { get; private set; }
-    public UTXO UTXO { get; private set; }
+    public Blockchain Blockchain { get; private set; }
+    UTXO UTXO;
 
-    BitcoinPayloadParser BitcoinPayloadParser = new BitcoinPayloadParser();
-    BitcoinGenesisBlock BitcoinGenesisBlock = new BitcoinGenesisBlock();
+    BitcoinPayloadParser PayloadParser = new BitcoinPayloadParser();
+    BitcoinGenesisBlock GenesisBlock = new BitcoinGenesisBlock();
     List<ChainLocation> Checkpoints = new List<ChainLocation>()
       {
         new ChainLocation(height : 11111, hash : new UInt256("0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d")),
@@ -28,15 +28,15 @@ namespace BToken.Bitcoin
     public BitcoinNode()
     {
       Network = new Network();
-      BitcoinChain = new Blockchain(BitcoinGenesisBlock, Network, Checkpoints, BitcoinPayloadParser);
-      UTXO = new UTXO(BitcoinChain, Network);
+      Blockchain = new Blockchain(GenesisBlock, Network, Checkpoints, PayloadParser);
+      UTXO = new UTXO(Blockchain, Network, PayloadParser);
     }
 
     public async Task StartAsync()
     {
       Network.Start();
-      await BitcoinChain.StartAsync();
-      UTXO.Start();
+      await Blockchain.StartAsync();
+      await UTXO.StartAsync();
     }
   }
 }

@@ -22,8 +22,8 @@ namespace BToken.Chaining
         bool IsDispatched = false;
 
 
-        public ChainInserter(Chain chain, Headerchain headerchain)
-          : base(chain)
+        public ChainInserter(Headerchain headerchain)
+          : base(headerchain.MainChain)
         {
           Headerchain = headerchain;
 
@@ -43,16 +43,16 @@ namespace BToken.Chaining
 
         void FindPreviousHeader(NetworkHeader header)
         {
-          Chain = MainChain;
-          if (GoTo(header.HashPrevious, MainChain.HeaderRoot)) { return; }
+          Chain = Headerchain.MainChain;
+          if (GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
 
-          foreach (Chain chain in SecondaryChains)
+          foreach (Chain chain in Headerchain.SecondaryChains)
           {
             Chain = chain;
             if (GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
           }
 
-          throw new ChainException(BlockCode.ORPHAN);
+          throw new ChainException(HeaderCode.ORPHAN);
         }
 
         public Chain InsertHeader(NetworkHeader networkHeader, UInt256 headerHash)
@@ -95,22 +95,22 @@ namespace BToken.Chaining
         {
           uint nextHeaderHeight = GetHeight() + 1;
 
-          uint highestCheckpointHight = Checkpoints.Max(x => x.Height);
+          uint highestCheckpointHight = Headerchain.Checkpoints.Max(x => x.Height);
           bool mainChainLongerThanHighestCheckpoint = highestCheckpointHight <= Headerchain.MainChain.Height;
           bool nextHeightBelowHighestCheckpoint = nextHeaderHeight <= highestCheckpointHight;
           if (mainChainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
           {
-            throw new ChainException(BlockCode.INVALID);
+            throw new ChainException(HeaderCode.INVALID);
           }
 
           if (!ValidateBlockLocation(nextHeaderHeight, headerHash))
           {
-            throw new ChainException(BlockCode.INVALID);
+            throw new ChainException(HeaderCode.INVALID);
           }
         }
         bool ValidateBlockLocation(uint height, UInt256 hash)
         {
-          ChainLocation checkpoint = Checkpoints.Find(c => c.Height == height);
+          ChainLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
           if (checkpoint != null)
           {
             return checkpoint.Hash.IsEqual(hash);
@@ -123,21 +123,21 @@ namespace BToken.Chaining
           uint nextHeight = GetHeight() + 1;
           if (nBits != TargetManager.GetNextTargetBits(Header, nextHeight))
           {
-            throw new ChainException(BlockCode.INVALID);
+            throw new ChainException(HeaderCode.INVALID);
           }
         }
         void ValidateTimeStamp(uint unixTimeSeconds)
         {
           if (unixTimeSeconds <= GetMedianTimePast(Header))
           {
-            throw new ChainException(BlockCode.INVALID);
+            throw new ChainException(HeaderCode.INVALID);
           }
         }
         void ValidateUniqueness(UInt256 hash)
         {
           if (Header.HeadersNext.Any(h => GetHeaderHash(h).IsEqual(hash)))
           {
-            throw new ChainException(BlockCode.DUPLICATE);
+            throw new ChainException(HeaderCode.DUPLICATE);
           }
         }
         uint GetMedianTimePast(ChainHeader header)

@@ -37,7 +37,7 @@ namespace BToken.Chaining
       {
         List<NetworkHeader> headers = await GetHeadersAsync(Headerchain.GetHeaderLocator());
 
-        using (Headerchain.HeaderInserter inserter = Headerchain.GetHeaderInserter())
+        using (Headerchain.HeaderWriter inserter = Headerchain.GetHeaderInserter())
         {
           while (headers.Any())
           {
@@ -74,7 +74,7 @@ namespace BToken.Chaining
         }
       }
 
-      async Task InsertHeadersAsync(List<NetworkHeader> headers, Headerchain.HeaderInserter inserter)
+      async Task InsertHeadersAsync(List<NetworkHeader> headers, Headerchain.HeaderWriter inserter)
       {
         foreach (NetworkHeader header in headers)
         {
@@ -86,11 +86,11 @@ namespace BToken.Chaining
           {
             switch (ex.ErrorCode)
             {
-              case BlockCode.ORPHAN:
+              case HeaderCode.ORPHAN:
                 //await ProcessOrphanSessionAsync(headerHash);
                 return;
 
-              case BlockCode.DUPLICATE:
+              case HeaderCode.DUPLICATE:
                 return;
 
               default:

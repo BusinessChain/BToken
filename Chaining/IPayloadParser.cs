@@ -8,8 +8,7 @@ namespace BToken.Chaining
 {
   public interface IPayloadParser
   {
-    IPayload Parse(byte[] stream);
     UInt256 GetPayloadHash(byte[] payload);
-    void ValidatePayload();
+    void ValidatePayload(byte[] payload, UInt256 merkleRoot);
   }
 }

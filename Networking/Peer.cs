@@ -213,6 +213,10 @@ namespace BToken.Networking
       {
         return ProtocolVersion;
       }
+      public string GetIdentification()
+      {
+        return IPEndPoint.Address.ToString();
+      }
     }
   }
 }
