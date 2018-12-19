@@ -10,57 +10,80 @@ namespace BToken.Accounting.Bitcoin
   {
     class UTXOTransaction
     {
-      public Dictionary<string, string> UnspentOutputs = new Dictionary<string, string>();
-      public Dictionary<string, string> SpentOutputs = new Dictionary<string, string>();
+      UInt256 BlockHeaderHash;
+
+      public Dictionary<string, TXOutput> TXOutputs = new Dictionary<string, TXOutput>();
+      public Dictionary<string, TXInput> TXInputs = new Dictionary<string, TXInput>();
 
 
       public UTXOTransaction(List<BitcoinTX> bitcoinTXs, UInt256 blockHeaderHash)
       {
+        BlockHeaderHash = blockHeaderHash;
+
+        BitcoinTX coinbaseTX = bitcoinTXs.First();
+        bitcoinTXs.Remove(coinbaseTX);
+        ValidateCoinbaseTX(coinbaseTX);
+        FilterTXOutputs(coinbaseTX.TXOutputs, coinbaseTX.GetTXHash());
+        
         foreach (BitcoinTX bitcoinTX in bitcoinTXs)
         {
-          string txHashString = bitcoinTX.GetTXHash().ToString();
+          UInt256 txHash = bitcoinTX.GetTXHash();
 
-          SortTXOutputs(bitcoinTX.TXOutputs, txHashString, blockHeaderHash);
-          SortTXInputs(bitcoinTX.TXInputs, txHashString, blockHeaderHash);
+          FilterTXOutputs(bitcoinTX.TXOutputs, txHash);
+          FilterTXInputs(bitcoinTX.TXInputs, txHash);
         }
       }
-      void SortTXInputs(List<TXInput> txInputs, string txHashString, UInt256 blockHeaderHash)
+      void ValidateCoinbaseTX(BitcoinTX coinbaseTX)
+      {
+
+      }
+      //bool IsCoinbase(TXInput txInput)
+      //{
+      //  return GetOutputReference(txInput) == "0000000000000000000000000000000000000000000000000000000000000000.4294967295";
+      //}
+
+      void FilterTXOutputs(List<TXOutput> tXOutputs, UInt256 txHash)
+      {
+        for (int index = 0; index < tXOutputs.Count; index++)
+        {
+          TXOutput tXOutput = tXOutputs[index];
+          string outputReference = GetOutputReference(txHash, (uint)index);
+
+          if (TXOutputs.ContainsKey(outputReference))
+          {
+            throw new UTXOException(string.Format("ambiguous output '{0}' in block '{1}'",
+              outputReference, BlockHeaderHash));
+          }
+          else
+          {
+            TXOutputs.Add(outputReference, tXOutput);
+          }
+        }
+      }
+      void FilterTXInputs(List<TXInput> txInputs, UInt256 txHash)
       {
         for (int index = 0; index < txInputs.Count; index++)
         {
           TXInput txInput = txInputs[index];
-          string outputReference = GetOutputReference(txInput.TXID.ToString(), txInput.IndexOutput);
+          string outputReference = GetOutputReference(txInput);
 
-          if (UnspentOutputs.ContainsKey(outputReference))
+          if (TXOutputs.TryGetValue(outputReference, out TXOutput tXOutput))
           {
-            UnspentOutputs.Remove(outputReference);
+            if (tXOutput.TryUnlockScript(txInput.UnlockingScript))
+            {
+              TXOutputs.Remove(outputReference);
+            }
+            else
+            {
+              throw new UTXOException(string.Format("Invalid txInput '{0}' in tx '{1}' in block '{2}'",
+                index, txHash, BlockHeaderHash));
+            }
           }
           else
           {
-            SpentOutputs.Add(outputReference, blockHeaderHash.ToString());
+            TXInputs.Add(outputReference, txInput);
           }
         }
-      }
-      void SortTXOutputs(List<TXOutput> txOutputs, string txHashString, UInt256 blockHeaderHash)
-      {
-        for (int index = 0; index < txOutputs.Count; index++)
-        {
-          string outputReference = GetOutputReference(txHashString, (uint)index);
-
-          if (UnspentOutputs.ContainsKey(outputReference))
-          {
-            throw new UTXOException(string.Format("ambiguous output '{0}' in block '{1}'", outputReference, blockHeaderHash));
-          }
-          else
-          {
-            UnspentOutputs.Add(outputReference, blockHeaderHash.ToString());
-          }
-        }
-      }
-
-      static string GetOutputReference(string txid, uint index)
-      {
-        return txid + "." + index;
       }
     }
   }
