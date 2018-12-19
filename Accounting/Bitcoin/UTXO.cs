@@ -41,21 +41,12 @@ namespace BToken.Accounting.Bitcoin
 
         while (block != null)
         {
-          Console.WriteLine("Number of UTXOs : '{0}', Number of inputs: '{1}'", UnspentOutputs.Count, TXInputs.Count);
           Console.WriteLine("Start building UTXO block: '{0}', height: '{1}', size: '{2}'",
             blockStream.Location.Hash.ToString(),
             blockStream.Location.Height,
             block.Payload.Length);
-          Stopwatch stopWatch = Stopwatch.StartNew();
 
           BuildUTXO(block, blockStream.Location.Hash);
-
-          stopWatch.Stop();
-          Console.WriteLine("Built UTXO block: '{0}', height: '{1}', size: '{2}' elapsed time '{3}'", 
-            blockStream.Location.Hash.ToString(), 
-            blockStream.Location.Height, 
-            block.Payload.Length,
-            stopWatch.Elapsed.ToString());
 
           block = await blockStream.ReadBlockAsync().ConfigureAwait(false);
         }
@@ -67,7 +58,8 @@ namespace BToken.Accounting.Bitcoin
 
       Console.WriteLine("UTXO syncing completed");
 
-      // Listener to new blocks.
+
+      // Listen to new blocks.
     }
 
     void BuildUTXO(NetworkBlock block, UInt256 headerHash)
@@ -86,14 +78,7 @@ namespace BToken.Accounting.Bitcoin
 
       foreach (KeyValuePair<string, TXInput> tXInputBlockTransaction in uTXOBlockTransaction.TXInputs)
       {
-        try
-        {
-          TXInputs.Add(tXInputBlockTransaction.Key, tXInputBlockTransaction.Value);
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine(ex.Message);
-        }
+        TXInputs.Add(tXInputBlockTransaction.Key, tXInputBlockTransaction.Value);
       }
     }
 
@@ -140,8 +125,7 @@ namespace BToken.Accounting.Bitcoin
       BitcoinTX bitcoinTX = bitcoinTXs.Find(b => b.GetTXHash().IsEqual(txInput.TXID));
       return bitcoinTX.TXOutputs[(int)txInput.IndexOutput];
     }
-
-
+    
     static UInt256 GetHashFromOutputReference(string outputReference)
     {
       string txHashString = outputReference.Split('.')[0];
