@@ -8,12 +8,11 @@ using BToken.Networking;
 
 namespace BToken.Accounting.Bitcoin
 {
-
   class TXInput
   {
     public UInt256 TXID { get; private set; }
     public UInt32 IndexOutput { get; private set; }
-    byte[] UnlockingScript;
+    public byte[] UnlockingScript { get; private set; }
     UInt32 Sequence;
 
 
@@ -50,7 +49,7 @@ namespace BToken.Accounting.Bitcoin
         unlockingScript,
         sequence);
     }
-
+    
     public byte[] GetBytes()
     {
       List<byte> byteStream = new List<byte>();
@@ -102,6 +101,11 @@ namespace BToken.Accounting.Bitcoin
       byteStream.AddRange(LockingScript);
 
       return byteStream.ToArray();
+    }
+
+    public bool TryUnlockScript(byte[] unlockingScript)
+    {
+      return true;
     }
 
   }
@@ -226,7 +230,6 @@ namespace BToken.Accounting.Bitcoin
 
       return byteStream.ToArray();
     }
-
   }
 
 

@@ -48,5 +48,9 @@ namespace BToken.Chaining
     {
       return new BlockStream(this);
     }
+    public async Task<NetworkBlock> GetBlockAsync(UInt256 headerHash)
+    {
+      return await Archiver.ReadBlockAsync(headerHash);
+    }
   }
 }
