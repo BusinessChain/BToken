@@ -75,10 +75,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Accounting\Bitcoin\BitcoinScript.cs" />
+    <Compile Include="Accounting\Bitcoin\TXOutputsSpentMap.cs" />
     <Compile Include="Accounting\Bitcoin\UTXO.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinPayloadParser.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinGenesisBlock.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinTX.cs" />
+    <Compile Include="Accounting\Bitcoin\UTXOIndex.cs" />
     <Compile Include="Accounting\Bitcoin\UTXOTransaction.cs" />
     <Compile Include="Accounting\UTXOException.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />

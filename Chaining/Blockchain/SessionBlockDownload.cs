@@ -16,17 +16,17 @@ namespace BToken.Chaining
     class SessionBlockDownload : INetworkSession
     {
       INetworkChannel Channel;
-      BlockArchiver Archiver;
-      
+      Blockchain Blockchain;
+
       ChainLocation HeaderLocation;
 
       const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
 
-      public SessionBlockDownload(ChainLocation headerLocation, BlockArchiver archiver)
+      public SessionBlockDownload(ChainLocation headerLocation, Blockchain blockchain)
       {
         HeaderLocation = headerLocation;
-        Archiver = archiver;
+        Blockchain = blockchain;
       }
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
@@ -43,9 +43,10 @@ namespace BToken.Chaining
       async Task DownloadBlockAsync()
       {
         NetworkBlock block = await GetBlockAsync(HeaderLocation.Hash);
-        await Archiver.ArchiveBlockAsync(block, HeaderLocation.Hash);
+        Blockchain.ValidateBlock(HeaderLocation.Hash, block);
+        await Blockchain.Archiver.ArchiveBlockAsync(block, HeaderLocation.Hash);
       }
-      public async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)
+      async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)
       {
         try
         {

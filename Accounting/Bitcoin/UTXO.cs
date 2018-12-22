@@ -18,8 +18,10 @@ namespace BToken.Accounting.Bitcoin
     Blockchain Blockchain;
     BitcoinPayloadParser PayloadParser;
 
-    Dictionary<string, UInt256> UnspentOutputs = new Dictionary<string, UInt256>();
+    UTXOIndex Indexer;
+    Dictionary<string, UInt256> TXOutputs = new Dictionary<string, UInt256>();
     public Dictionary<string, TXInput> TXInputs = new Dictionary<string, TXInput>();
+    Dictionary<UInt256, byte[]> UnspentTXOutputs = new Dictionary<UInt256, byte[]>();
 
 
     public UTXO(Blockchain blockchain, INetwork network, BitcoinPayloadParser payloadParser)
@@ -28,8 +30,7 @@ namespace BToken.Accounting.Bitcoin
       Blockchain = blockchain;
       PayloadParser = payloadParser;
     }
-
-
+    
     public async Task StartAsync()
     {
       // Load from UTXO archive
@@ -37,18 +38,18 @@ namespace BToken.Accounting.Bitcoin
       try
       {
         Blockchain.BlockStream blockStream = Blockchain.GetBlockStream();
-        NetworkBlock block = await blockStream.ReadBlockAsync().ConfigureAwait(false);
+        NetworkBlock block = await blockStream.ReadBlockAsync();
 
         while (block != null)
         {
-          Console.WriteLine("Start building UTXO block: '{0}', height: '{1}', size: '{2}'",
+          Console.WriteLine("Building UTXO block: '{0}', height: '{1}', size: '{2}'",
             blockStream.Location.Hash.ToString(),
             blockStream.Location.Height,
             block.Payload.Length);
 
-          BuildUTXO(block, blockStream.Location.Hash);
+          Build(block, blockStream.Location.Hash);
 
-          block = await blockStream.ReadBlockAsync().ConfigureAwait(false);
+          block = await blockStream.ReadBlockAsync();
         }
       }
       catch(Exception ex)
@@ -62,17 +63,17 @@ namespace BToken.Accounting.Bitcoin
       // Listen to new blocks.
     }
 
-    void BuildUTXO(NetworkBlock block, UInt256 headerHash)
+    void Build(NetworkBlock block, UInt256 blockHeaderHash)
     {
       List<BitcoinTX> bitcoinTXs = PayloadParser.Parse(block.Payload);
-
-      var uTXOBlockTransaction = new UTXOTransaction(bitcoinTXs, headerHash);
+      var uTXOBlockTransaction = new UTXOTransaction(this, bitcoinTXs, blockHeaderHash);
 
       foreach (KeyValuePair<string, TXOutput> tXOutput in uTXOBlockTransaction.TXOutputs)
       {
         if (!TXInputs.Remove(tXOutput.Key))
         {
-          UnspentOutputs.Add(tXOutput.Key, headerHash);
+          //await Indexer.IndexOutputAsync(tXOutput.Key, blockHeaderHash);
+          TXOutputs.Add(tXOutput.Key, blockHeaderHash);
         }
       }
 
@@ -82,48 +83,10 @@ namespace BToken.Accounting.Bitcoin
       }
     }
 
-    async Task UpdateUTXO(NetworkBlock block, UInt256 headerHash)
+    void Update(NetworkBlock block, UInt256 headerHash)
     {
       List<BitcoinTX> bitcoinTXs = PayloadParser.Parse(block.Payload);
-      var uTXOBlockTransaction = new UTXOTransaction(bitcoinTXs, headerHash);
-
-      foreach (KeyValuePair<string, TXOutput> outpoint in uTXOBlockTransaction.TXOutputs)
-      {
-        if (UnspentOutputs.ContainsKey(outpoint.Key))
-        {
-          throw new UTXOException(string.Format("ambiguous output '{0}' in block '{1}'", outpoint.Key, headerHash));
-        }
-        else
-        {
-          UnspentOutputs.Add(outpoint.Key, headerHash);
-        }
-      }
-
-      foreach (KeyValuePair<string, TXInput> tXInput in uTXOBlockTransaction.TXInputs)
-      {
-        if (UnspentOutputs.TryGetValue(tXInput.Key, out UInt256 headerHashReferenced))
-        {
-          NetworkBlock blockReferenced = await Blockchain.GetBlockAsync(headerHashReferenced);
-          TXOutput txOutput = GetTXOutput(blockReferenced, tXInput.Value);
-
-          if (txOutput.TryUnlockScript(tXInput.Value.UnlockingScript))
-          {
-            UnspentOutputs.Remove(tXInput.Key);
-          }
-        }
-        else
-        {
-          throw new UTXOException(string.Format("Attempt to consume spent or nonexistant output '{0}' in block '{1}'",
-            tXInput.Key, headerHash));
-        }
-      }
-    }
-    TXOutput GetTXOutput(NetworkBlock blockReferenced, TXInput txInput)
-    {
-      List<BitcoinTX> bitcoinTXs = PayloadParser.Parse(blockReferenced.Payload);
-
-      BitcoinTX bitcoinTX = bitcoinTXs.Find(b => b.GetTXHash().IsEqual(txInput.TXID));
-      return bitcoinTX.TXOutputs[(int)txInput.IndexOutput];
+      var uTXOBlockTransaction = new UTXOTransaction(this, bitcoinTXs, headerHash);
     }
     
     static UInt256 GetHashFromOutputReference(string outputReference)

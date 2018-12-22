@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,6 +15,11 @@ namespace BToken.Chaining
     INetwork Network;
     BlockArchiver Archiver;
     BlockchainRequestListener Listener;
+    IPayloadParser PayloadParser;
+
+    // maybe protect this field with LOCK prevents block download stall bug
+    List<Task> BlockDownloadTasks = new List<Task>();
+    const uint DOWNLOAD_TASK_COUNT_MAX = 8;
 
 
     public Blockchain(
@@ -26,8 +31,9 @@ namespace BToken.Chaining
       Network = network;
       Headers = new Headerchain(genesisBlock.Header, network, checkpoints, this);
 
-      Archiver = new BlockArchiver(payloadParser, this, network);
+      Archiver = new BlockArchiver(this, network);
       Listener = new BlockchainRequestListener(this, network);
+      PayloadParser = payloadParser;
     }
 
     public async Task StartAsync()
@@ -41,7 +47,54 @@ namespace BToken.Chaining
       await Headers.InitialHeaderDownloadAsync();
       Console.WriteLine("Synchronized headerchain with network, height = '{0}'", Headers.GetHeight());
 
-      Task initialBlockDownloadTask = Archiver.InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
+      Task initialBlockDownloadTask = InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
+    }
+    async Task InitialBlockDownloadAsync(Headerchain.HeaderStream headerStreamer)
+    {
+      ChainLocation headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
+      while (headerLocation != null)
+      {
+        if (!await TryValidateBlockExistingAsync(headerLocation.Hash))
+        {
+          await AwaitNextDownloadTask();
+          PostBlockDownloadSession(headerLocation);
+        }
+
+        headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
+      }
+
+      Console.WriteLine("Synchronizing blocks with network completed.");
+    }
+    async Task AwaitNextDownloadTask()
+    {
+      if (BlockDownloadTasks.Count < DOWNLOAD_TASK_COUNT_MAX)
+      {
+        return;
+      }
+      else
+      {
+        Task blockDownloadTaskCompleted = await Task.WhenAny(BlockDownloadTasks);
+        BlockDownloadTasks.Remove(blockDownloadTaskCompleted);
+      }
+    }
+    void PostBlockDownloadSession(ChainLocation headerLocation)
+    {
+      var sessionBlockDownload = new SessionBlockDownload(headerLocation, this);
+
+      Task executeSessionTask = Network.ExecuteSessionAsync(sessionBlockDownload);
+      BlockDownloadTasks.Add(executeSessionTask);
+    }
+    async Task<bool> TryValidateBlockExistingAsync(UInt256 hash)
+    {
+      try
+      {
+        NetworkBlock block = await Archiver.ReadBlockAsync(hash);
+        ValidateBlock(hash, block);
+        return true;
+      }
+      catch (IOException) { }
+      catch (ChainException) { }
+      return false;
     }
 
     public BlockStream GetBlockStream()
@@ -51,6 +104,21 @@ namespace BToken.Chaining
     public async Task<NetworkBlock> GetBlockAsync(UInt256 headerHash)
     {
       return await Archiver.ReadBlockAsync(headerHash);
+    }
+       
+    void ValidateBlock(UInt256 hash, NetworkBlock block)
+    {
+      UInt256 headerHash = block.Header.GetHeaderHash();
+      if (!hash.IsEqual(headerHash))
+      {
+        throw new ChainException(HeaderCode.INVALID);
+      }
+
+      UInt256 payloadHash = PayloadParser.GetPayloadHash(block.Payload);
+      if (!payloadHash.IsEqual(block.Header.MerkleRoot))
+      {
+        throw new ChainException(HeaderCode.INVALID);
+      }
     }
   }
 }

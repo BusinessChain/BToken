@@ -15,25 +15,12 @@ namespace BToken.Chaining
   {
     partial class BlockArchiver
     {
-      INetwork Network;
-      Blockchain Blockchain;
-      IPayloadParser PayloadParser;
-
       static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
-      
-      List<Task> BlockDownloadTasks;
-      const uint DOWNLOAD_TASK_COUNT_MAX = 8;
-      
+            
 
-      public BlockArchiver(IPayloadParser payloadParser, Blockchain blockchain, INetwork network)
-      {
-        Blockchain = blockchain;
-        PayloadParser = payloadParser;
-        Network = network;
-
-        BlockDownloadTasks = new List<Task>();
-      }
+      public BlockArchiver(Blockchain blockchain, INetwork network)
+      { }
 
       FileStream CreateFile(UInt256 hash)
       {
@@ -53,7 +40,7 @@ namespace BToken.Chaining
 
       public async Task ArchiveBlockAsync(NetworkBlock block, UInt256 hash)
       {
-        ValidateBlock(hash, block);
+        // write cache
 
         using (FileStream fileStream = CreateFile(hash))
         {
@@ -68,16 +55,14 @@ namespace BToken.Chaining
 
       public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
       {
+        // read cache
+
         using (FileStream blockFileStream = OpenFile(hash.ToString()))
         {
           byte[] blockBytes = new byte[blockFileStream.Length];
           int i = await blockFileStream.ReadAsync(blockBytes, 0, (int)blockFileStream.Length);
 
-          var block = NetworkBlock.ParseBlock(blockBytes);
-
-          ValidateBlock(hash, block);
-
-          return block;
+          return NetworkBlock.ParseBlock(blockBytes);
         }
       }
 
@@ -102,86 +87,6 @@ namespace BToken.Chaining
           RootDirectory.Name,
           firstHexByte,
           secondHexByte);
-      }
-
-
-      public async Task InitialBlockDownloadAsync(Headerchain.HeaderStream headerStreamer)
-      {
-        ChainLocation headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
-        while (headerLocation != null)
-        {
-          if (!await TryValidateBlockExistingAsync(headerLocation.Hash))
-          {
-            await AwaitNextDownloadTask();
-            PostBlockDownloadSession(headerLocation);
-          }
-
-          headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
-        }
-
-        Console.WriteLine("Synchronizing blocks with network completed.");
-      }
-      async Task AwaitNextDownloadTask()
-      {
-        if (BlockDownloadTasks.Count < DOWNLOAD_TASK_COUNT_MAX)
-        {
-          return;
-        }
-        else
-        {
-          Task blockDownloadTaskCompleted = await Task.WhenAny(BlockDownloadTasks);
-          BlockDownloadTasks.Remove(blockDownloadTaskCompleted);
-        }
-      }
-      void PostBlockDownloadSession(ChainLocation headerLocation)
-      {
-        var sessionBlockDownload = new SessionBlockDownload(headerLocation, this);
-
-        Task executeSessionTask = Network.ExecuteSessionAsync(sessionBlockDownload);
-        BlockDownloadTasks.Add(executeSessionTask);
-      }
-      async Task<bool> TryValidateBlockExistingAsync(UInt256 hash)
-      {
-        try
-        {
-          NetworkBlock block = await ReadBlockAsync(hash);
-          if (block == null)
-          {
-            return false;
-          }
-
-          return TryValidate(hash, block);
-        }
-        catch (IOException)
-        {
-          return false;
-        }
-      }
-      bool TryValidate(UInt256 hash, NetworkBlock block)
-      {
-        try
-        {
-          ValidateBlock(hash, block);
-          return true;
-        }
-        catch (ChainException)
-        {
-          return false;
-        }
-      }
-      void ValidateBlock(UInt256 hash, NetworkBlock block)
-      {
-        UInt256 headerHash = block.Header.GetHeaderHash();
-        if (!hash.IsEqual(headerHash))
-        {
-          throw new ChainException(HeaderCode.INVALID);
-        }
-
-        UInt256 payloadHash = PayloadParser.GetPayloadHash(block.Payload);
-        if (!payloadHash.IsEqual(block.Header.MerkleRoot))
-        {
-          throw new ChainException(HeaderCode.INVALID);
-        }
       }
 
     }

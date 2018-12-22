@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 using BToken.Networking;
 
@@ -103,9 +104,14 @@ namespace BToken.Accounting.Bitcoin
       return byteStream.ToArray();
     }
 
-    public bool TryUnlockScript(byte[] unlockingScript)
+    public void UnlockScript(byte[] unlockingScript)
     {
-      return true;
+      if(!BitcoinScript.Evaluate(LockingScript, unlockingScript))
+      {
+        throw new UTXOException(string.Format("Input script '{0}' failed to unlock output script '{1}'",
+          new SoapHexBinary(unlockingScript).ToString(),
+          new SoapHexBinary(LockingScript).ToString()));
+      }
     }
 
   }
