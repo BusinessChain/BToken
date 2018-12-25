@@ -31,7 +31,7 @@ namespace BToken.Chaining
       Network = network;
       Headers = new Headerchain(genesisBlock.Header, network, checkpoints, this);
 
-      Archiver = new BlockArchiver(this, network);
+      Archiver = new BlockArchiver(this);
       Listener = new BlockchainRequestListener(this, network);
       PayloadParser = payloadParser;
     }
@@ -54,7 +54,7 @@ namespace BToken.Chaining
       ChainLocation headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
       while (headerLocation != null)
       {
-        if (!await TryValidateBlockExistingAsync(headerLocation.Hash))
+        if (!Archiver.BlockExists(headerLocation.Hash))
         {
           await AwaitNextDownloadTask();
           PostBlockDownloadSession(headerLocation);
@@ -84,26 +84,10 @@ namespace BToken.Chaining
       Task executeSessionTask = Network.ExecuteSessionAsync(sessionBlockDownload);
       BlockDownloadTasks.Add(executeSessionTask);
     }
-    async Task<bool> TryValidateBlockExistingAsync(UInt256 hash)
-    {
-      try
-      {
-        NetworkBlock block = await Archiver.ReadBlockAsync(hash);
-        ValidateBlock(hash, block);
-        return true;
-      }
-      catch (IOException) { }
-      catch (ChainException) { }
-      return false;
-    }
 
     public BlockStream GetBlockStream()
     {
       return new BlockStream(this);
-    }
-    public async Task<NetworkBlock> GetBlockAsync(UInt256 headerHash)
-    {
-      return await Archiver.ReadBlockAsync(headerHash);
     }
        
     void ValidateBlock(UInt256 hash, NetworkBlock block)

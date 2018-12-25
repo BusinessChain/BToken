@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace BToken.Networking
@@ -20,6 +20,7 @@ namespace BToken.Networking
       Payload = payload;
     }
 
+
     public static NetworkBlock ParseBlock(byte[] blockBytes)
     {
       int startIndex = 0;
@@ -30,5 +31,10 @@ namespace BToken.Networking
       return new NetworkBlock(header, txCount, payload);
     }
 
+    public static async Task<NetworkBlock> ReadBlockAsync(Stream stream)
+    {
+      byte[] blockBytes = new byte[stream.Length];
+      int i = await stream.ReadAsync(blockBytes, 0, (int)stream.Length);
+    }
   }
 }

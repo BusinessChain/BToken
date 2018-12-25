@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using BToken.Networking;
+using BToken.Chaining;
 
 namespace BToken.Accounting.Bitcoin
 {
@@ -96,7 +97,7 @@ namespace BToken.Accounting.Bitcoin
           if (tXOutputsSpentMap.Flags[(int)tXInput.IndexOutput])
           {
             throw new UTXOException(
-              string.Format("Referenced output txid: '{0}', index: '{1}' is already spent in same block.", 
+              string.Format("Referenced output txid: '{0}', index: '{1}' is already spent in same block.",
               tXInput.TXID, tXInput.IndexOutput));
           }
           else
@@ -108,7 +109,8 @@ namespace BToken.Accounting.Bitcoin
         }
         else if (UTXO.UnspentTXOutputs.TryGetValue(tXInput.TXID, out byte[] tXOutputIndex))
         {
-          NetworkBlock blockReferenced = await UTXO.Blockchain.GetBlockAsync(headerHashReferenced);
+          Blockchain.BlockStream
+          var blockReferenced = await UTXO.Blockchain.GetBlockAsync(blockHeaderHashBytes);
           tXOutput = GetTXOutput(blockReferenced, tXInput);
           tXOutput.UnlockScript(tXInput.UnlockingScript);
 

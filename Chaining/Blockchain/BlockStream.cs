@@ -29,11 +29,7 @@ namespace BToken.Chaining
         Location = HeaderStream.ReadHeaderLocationTowardGenesis();
 
         if (Location == null) { return null; }
-        return await RetrieveBlockFromArchive();
-      }
 
-      async Task<NetworkBlock> RetrieveBlockFromArchive()
-      {
         while (true)
         {
           try

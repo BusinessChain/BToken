@@ -17,15 +17,19 @@ namespace BToken.Chaining
     {
       static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
-            
 
-      public BlockArchiver(Blockchain blockchain, INetwork network)
-      { }
+      Blockchain Blockchain;
+
+
+      public BlockArchiver(Blockchain blockchain)
+      {
+        Blockchain = blockchain;
+      }
 
       FileStream CreateFile(UInt256 hash)
       {
         string filename = hash.ToString();
-        string fileRootPath = ConvertToRootPath(filename);
+        string fileRootPath = GenerateRootPath(filename);
 
         DirectoryInfo dir = Directory.CreateDirectory(fileRootPath);
 
@@ -53,32 +57,41 @@ namespace BToken.Chaining
         }
       }
 
-      public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
+      public async Task<NetworkBlock> ReadBlockAsync(UInt256 blockHeaderHashRequested)
       {
         // read cache
 
-        using (FileStream blockFileStream = OpenFile(hash.ToString()))
+        using (MemoryStream blockStream = OpenBlockStream(blockHeaderHashRequested.GetBytes()))
         {
-          byte[] blockBytes = new byte[blockFileStream.Length];
-          int i = await blockFileStream.ReadAsync(blockBytes, 0, (int)blockFileStream.Length);
+          NetworkBlock block = await NetworkBlock.ReadBlockAsync(blockStream);
 
-          return NetworkBlock.ParseBlock(blockBytes);
+          Blockchain.ValidateBlock(blockHeaderHashRequested, block);
+          return block;
+        }
+      }
+      public async Task<NetworkBlock> ReadBlockAsync(byte[] blockHeaderHashBytes)
+      {
+        using (MemoryStream blockStream = OpenBlockStream(blockHeaderHashBytes))
+        {
+          NetworkBlock block = await NetworkBlock.ReadBlockAsync(blockStream);
+
+          Blockchain.ValidateBlock(blockHeaderHashRequested, block);
+          return block;
         }
       }
 
-      static FileStream OpenFile(string filename)
+      static MemoryStream OpenBlockStream(byte[] blockHeaderHashBytes)
       {
-        string fileRootPath = ConvertToRootPath(filename);
-        string filePath = Path.Combine(fileRootPath, filename);
+        string filePath = Path.Combine(GenerateRootPath(filename), filename);
 
-        return new FileStream(
+        var fileStream = new FileStream(
           filePath,
           FileMode.Open,
           FileAccess.Read,
           FileShare.Read);
       }
 
-      static string ConvertToRootPath(string filename)
+      static string GenerateRootPath(string filename)
       {
         string firstHexByte = filename.Substring(62, 2);
         string secondHexByte = filename.Substring(60, 2);
@@ -89,6 +102,13 @@ namespace BToken.Chaining
           secondHexByte);
       }
 
+      public bool BlockExists(UInt256 blockHeaderHash)
+      {
+        string fileName = blockHeaderHash.ToString();
+        string filePath = Path.Combine(GenerateRootPath(fileName), fileName);
+
+        return File.Exists(filePath);
+      }
     }
   }
 }

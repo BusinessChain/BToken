@@ -18,7 +18,6 @@ namespace BToken.Accounting.Bitcoin
     Blockchain Blockchain;
     BitcoinPayloadParser PayloadParser;
 
-    UTXOIndex Indexer;
     Dictionary<string, UInt256> TXOutputs = new Dictionary<string, UInt256>();
     public Dictionary<string, TXInput> TXInputs = new Dictionary<string, TXInput>();
     Dictionary<UInt256, byte[]> UnspentTXOutputs = new Dictionary<UInt256, byte[]>();
@@ -72,7 +71,6 @@ namespace BToken.Accounting.Bitcoin
       {
         if (!TXInputs.Remove(tXOutput.Key))
         {
-          //await Indexer.IndexOutputAsync(tXOutput.Key, blockHeaderHash);
           TXOutputs.Add(tXOutput.Key, blockHeaderHash);
         }
       }
