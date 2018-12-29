@@ -67,18 +67,18 @@ namespace BToken.Accounting.Bitcoin
       List<BitcoinTX> bitcoinTXs = PayloadParser.Parse(block.Payload);
       var uTXOBlockTransaction = new UTXOTransaction(this, bitcoinTXs, blockHeaderHash);
 
-      foreach (KeyValuePair<string, TXOutput> tXOutput in uTXOBlockTransaction.TXOutputs)
-      {
-        if (!TXInputs.Remove(tXOutput.Key))
-        {
-          TXOutputs.Add(tXOutput.Key, blockHeaderHash);
-        }
-      }
+      //foreach (KeyValuePair<string, TXOutput> tXOutput in uTXOBlockTransaction.TXOutputs)
+      //{
+      //  if (!TXInputs.Remove(tXOutput.Key))
+      //  {
+      //    TXOutputs.Add(tXOutput.Key, blockHeaderHash);
+      //  }
+      //}
 
-      foreach (KeyValuePair<string, TXInput> tXInputBlockTransaction in uTXOBlockTransaction.TXInputs)
-      {
-        TXInputs.Add(tXInputBlockTransaction.Key, tXInputBlockTransaction.Value);
-      }
+      //foreach (KeyValuePair<string, TXInput> tXInputBlockTransaction in uTXOBlockTransaction.TXInputs)
+      //{
+      //  TXInputs.Add(tXInputBlockTransaction.Key, tXInputBlockTransaction.Value);
+      //}
     }
 
     void Update(NetworkBlock block, UInt256 headerHash)
@@ -99,7 +99,7 @@ namespace BToken.Accounting.Bitcoin
     }
     static string GetOutputReference(TXInput txInput)
     {
-      return GetOutputReference(txInput.TXID, txInput.IndexOutput);
+      return GetOutputReference(txInput.TXIDOutput, txInput.IndexOutput);
     }
     static string GetOutputReference(UInt256 txid, uint index)
     {

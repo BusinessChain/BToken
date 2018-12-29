@@ -47,24 +47,24 @@ namespace BToken.Chaining
       await Headers.InitialHeaderDownloadAsync();
       Console.WriteLine("Synchronized headerchain with network, height = '{0}'", Headers.GetHeight());
 
-      Task initialBlockDownloadTask = InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
+      //Task initialBlockDownloadTask = InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
     }
-    async Task InitialBlockDownloadAsync(Headerchain.HeaderStream headerStreamer)
-    {
-      ChainLocation headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
-      while (headerLocation != null)
-      {
-        if (!Archiver.BlockExists(headerLocation.Hash))
-        {
-          await AwaitNextDownloadTask();
-          PostBlockDownloadSession(headerLocation);
-        }
+    //async Task InitialBlockDownloadAsync(Headerchain.HeaderStream headerStreamer)
+    //{
+    //  ChainLocation headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
+    //  while (headerLocation != null)
+    //  {
+    //    if (!Archiver.BlockExists(headerLocation.Hash))
+    //    {
+    //      await AwaitNextDownloadTask();
+    //      PostBlockDownloadSession(headerLocation);
+    //    }
 
-        headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
-      }
+    //    headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
+    //  }
 
-      Console.WriteLine("Synchronizing blocks with network completed.");
-    }
+    //  Console.WriteLine("Synchronizing blocks with network completed.");
+    //}
     async Task AwaitNextDownloadTask()
     {
       if (BlockDownloadTasks.Count < DOWNLOAD_TASK_COUNT_MAX)

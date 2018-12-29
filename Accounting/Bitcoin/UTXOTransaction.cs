@@ -30,8 +30,6 @@ namespace BToken.Accounting.Bitcoin
       UInt256 BlockHeaderHash;
 
       Dictionary<UInt256, TXOutputsSpentMap> UnspentTXOutputs = new Dictionary<UInt256, TXOutputsSpentMap>();
-      public Dictionary<string, TXOutput> TXOutputs = new Dictionary<string, TXOutput>();
-      public Dictionary<string, TXInput> TXInputs = new Dictionary<string, TXInput>();
 
 
       public UTXOTransaction(UTXO uTXO, List<BitcoinTX> bitcoinTXs, UInt256 blockHeaderHash)
@@ -40,27 +38,52 @@ namespace BToken.Accounting.Bitcoin
         BlockHeaderHash = blockHeaderHash;
 
         BitcoinTX coinbaseTX = bitcoinTXs.First();
-        bitcoinTXs.Remove(coinbaseTX);
         ValidateCoinbaseTX(coinbaseTX);
-        ValidateTXOutputs(coinbaseTX);
+        bitcoinTXs.Remove(coinbaseTX);
 
-        bitcoinTXs.ForEach(b => ValidateTXOutputs(b));
-        bitcoinTXs.ForEach(b => ValidateTXInputsAsync(b));
-
-        foreach (KeyValuePair<string, TXOutput> tXOutput in TXOutputs)
+        foreach(BitcoinTX bitcoinTX in bitcoinTXs)
         {
-          UTXO.TXOutputs.Add(tXOutput.Key, BlockHeaderHash);
+          UInt256 tXHash = bitcoinTX.GetTXHash();
+
+          try
+          {
+            ValidateTXOutputs(bitcoinTX.TXOutputs, tXHash);
+          }
+          catch (UTXOException ex)
+          {
+            throw new UTXOException(
+              string.Format("Validating outputs in transaction '{0}' in block '{1}' threw exception.", 
+                tXHash, BlockHeaderHash),
+              ex);
+          }
         }
+
+        foreach (BitcoinTX bitcoinTX in bitcoinTXs)
+        {
+          UInt256 tXHash = bitcoinTX.GetTXHash();
+
+          try
+          {
+            ValidateTXInputsAsync(bitcoinTX.TXInputs);
+          }
+          catch (UTXOException ex)
+          {
+            throw new UTXOException(
+              string.Format("Validating inputs in transaction '{0}' in block '{1}' threw exception.",
+                tXHash, BlockHeaderHash),
+              ex);
+          }
+        }
+
       }
       void ValidateCoinbaseTX(BitcoinTX coinbaseTX)
       {
+        ValidateTXOutputs(coinbaseTX.TXOutputs, coinbaseTX.GetTXHash());
         //  return GetOutputReference(txInput) == "0000000000000000000000000000000000000000000000000000000000000000.4294967295";
       }
 
-      void ValidateTXOutputs(BitcoinTX bitcoinTX)
+      void ValidateTXOutputs(List<TXOutput> tXOutputs, UInt256 tXHash)
       {
-        UInt256 tXHash = bitcoinTX.GetTXHash();
-
         if (UnspentTXOutputs.ContainsKey(tXHash))
         {
           throw new UTXOException(
@@ -68,15 +91,15 @@ namespace BToken.Accounting.Bitcoin
         }
         else
         {
-          UnspentTXOutputs.Add(tXHash, new TXOutputsSpentMap(bitcoinTX.TXOutputs));
+          UnspentTXOutputs.Add(tXHash, new TXOutputsSpentMap(tXOutputs));
         }
       }
 
-      void ValidateTXInputsAsync(BitcoinTX bitcoinTX)
+      void ValidateTXInputsAsync(List<TXInput> tXInputs)
       {
-        for (int index = 0; index < bitcoinTX.TXInputs.Count; index++)
+        for (int index = 0; index < tXInputs.Count; index++)
         {
-          TXInput tXInput = bitcoinTX.TXInputs[index];
+          TXInput tXInput = tXInputs[index];
 
           try
           {
@@ -85,20 +108,21 @@ namespace BToken.Accounting.Bitcoin
           catch (UTXOException ex)
           {
             throw new UTXOException(
-              string.Format("Validate tXInput '{0}' in TX '{1}' in block '{2}' threw exception.", index, bitcoinTX.GetTXHash(), BlockHeaderHash),
+              string.Format("Validate tXInput '{0}' threw exception.", index),
               ex);
           }
         }
+
       }
       void ValidateTXInputAsync(TXInput tXInput)
       {
-        if (UnspentTXOutputs.TryGetValue(tXInput.TXID, out TXOutputsSpentMap tXOutputsSpentMap))
+        if (UnspentTXOutputs.TryGetValue(tXInput.TXIDOutput, out TXOutputsSpentMap tXOutputsSpentMap))
         {
           if (tXOutputsSpentMap.Flags[(int)tXInput.IndexOutput])
           {
             throw new UTXOException(
               string.Format("Referenced output txid: '{0}', index: '{1}' is already spent in same block.",
-              tXInput.TXID, tXInput.IndexOutput));
+              tXInput.TXIDOutput, tXInput.IndexOutput));
           }
           else
           {
@@ -107,9 +131,11 @@ namespace BToken.Accounting.Bitcoin
             tXOutputsSpentMap.Flags[(int)tXInput.IndexOutput] = true;
           }
         }
-        else if (UTXO.UnspentTXOutputs.TryGetValue(tXInput.TXID, out byte[] tXOutputIndex))
+        else if (UTXO.UnspentTXOutputs.TryGetValue(tXInput.TXIDOutput, out byte[] tXOutputIndex))
         {
-          Blockchain.BlockStream
+          byte[] tXID = new ArraySegment<byte>(tXOutputIndex, 0, 2).Array;
+
+          UTXOStream uTXOStream = new UTXOStream(tXID);
           var blockReferenced = await UTXO.Blockchain.GetBlockAsync(blockHeaderHashBytes);
           tXOutput = GetTXOutput(blockReferenced, tXInput);
           tXOutput.UnlockScript(tXInput.UnlockingScript);
@@ -119,15 +145,16 @@ namespace BToken.Accounting.Bitcoin
         else
         {
           throw new UTXOException(string.Format("TXInput references spent or nonexistant output TXID: '{0}', index: '{1}'",
-            tXInput.TXID, tXInput.IndexOutput));
+            tXInput.TXIDOutput, tXInput.IndexOutput));
         }
+
       }
 
       TXOutput GetTXOutput(NetworkBlock blockReferenced, TXInput txInput)
       {
         List<BitcoinTX> bitcoinTXs = UTXO.PayloadParser.Parse(blockReferenced.Payload);
 
-        BitcoinTX bitcoinTX = bitcoinTXs.Find(b => b.GetTXHash().IsEqual(txInput.TXID));
+        BitcoinTX bitcoinTX = bitcoinTXs.Find(b => b.GetTXHash().IsEqual(txInput.TXIDOutput));
         return bitcoinTX.TXOutputs[(int)txInput.IndexOutput];
       }
     }

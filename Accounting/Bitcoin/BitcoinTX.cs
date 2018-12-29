@@ -11,19 +11,19 @@ namespace BToken.Accounting.Bitcoin
 {
   class TXInput
   {
-    public UInt256 TXID { get; private set; }
+    public UInt256 TXIDOutput { get; private set; }
     public UInt32 IndexOutput { get; private set; }
     public byte[] UnlockingScript { get; private set; }
     UInt32 Sequence;
 
 
     public TXInput(
-      UInt256 tXID,
+      UInt256 tXIDOutput,
       UInt32 indexOutput,
       byte[] unlockingScript,
       UInt32 sequence)
     {
-      TXID = tXID;
+      TXIDOutput = tXIDOutput;
       IndexOutput = indexOutput;
       UnlockingScript = unlockingScript;
       Sequence = sequence;
@@ -31,9 +31,9 @@ namespace BToken.Accounting.Bitcoin
 
     public static TXInput Parse(byte[] byteStream, ref int startIndex)
     {
-      UInt256 tXIDPreviousOutput = new UInt256(byteStream, ref startIndex);
+      UInt256 tXIDOutput = new UInt256(byteStream, ref startIndex);
 
-      UInt32 indexPreviousOutput = BitConverter.ToUInt32(byteStream, startIndex);
+      UInt32 indexOutput = BitConverter.ToUInt32(byteStream, startIndex);
       startIndex += 4;
 
       int unlockingScriptLength = (int)VarInt.GetUInt64(byteStream, ref startIndex);
@@ -45,8 +45,8 @@ namespace BToken.Accounting.Bitcoin
       startIndex += 4;
       
       return new TXInput(
-        tXIDPreviousOutput,
-        indexPreviousOutput,
+        tXIDOutput,
+        indexOutput,
         unlockingScript,
         sequence);
     }
@@ -55,7 +55,7 @@ namespace BToken.Accounting.Bitcoin
     {
       List<byte> byteStream = new List<byte>();
 
-      byteStream.AddRange(TXID.GetBytes());
+      byteStream.AddRange(TXIDOutput.GetBytes());
       byteStream.AddRange(BitConverter.GetBytes(IndexOutput));
       byteStream.AddRange(VarInt.GetBytes(UnlockingScript.Length));
       byteStream.AddRange(UnlockingScript);
