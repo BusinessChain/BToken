@@ -76,7 +76,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Accounting\Bitcoin\BitcoinScript.cs" />
+    <Compile Include="Accounting\Bitcoin\TXInput.cs" />
+    <Compile Include="Accounting\Bitcoin\TXOutput.cs" />
     <Compile Include="Accounting\Bitcoin\TXOutputsSpentMap.cs" />
+    <Compile Include="Accounting\Bitcoin\TXWitness.cs" />
     <Compile Include="Accounting\Bitcoin\UTXO.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinPayloadParser.cs" />
     <Compile Include="Accounting\Bitcoin\BitcoinGenesisBlock.cs" />

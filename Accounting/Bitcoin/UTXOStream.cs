@@ -8,13 +8,22 @@ namespace BToken.Accounting.Bitcoin
 {
   partial class UTXO
   {
-    class UTXOStream
+    class UTXOStream : IDisposable
     {
       public UTXOStream(byte[] tXID)
       {
 
       }
 
+      public TXOutput ReadTXOutput()
+      {
+
+      }
+
+      public void Dispose()
+      {
+
+      }
     }
   }
 }

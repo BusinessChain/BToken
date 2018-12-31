@@ -3,131 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 using BToken.Networking;
 
 namespace BToken.Accounting.Bitcoin
 {
-  class TXInput
-  {
-    public UInt256 TXIDOutput { get; private set; }
-    public UInt32 IndexOutput { get; private set; }
-    public byte[] UnlockingScript { get; private set; }
-    UInt32 Sequence;
-
-
-    public TXInput(
-      UInt256 tXIDOutput,
-      UInt32 indexOutput,
-      byte[] unlockingScript,
-      UInt32 sequence)
-    {
-      TXIDOutput = tXIDOutput;
-      IndexOutput = indexOutput;
-      UnlockingScript = unlockingScript;
-      Sequence = sequence;
-    }
-
-    public static TXInput Parse(byte[] byteStream, ref int startIndex)
-    {
-      UInt256 tXIDOutput = new UInt256(byteStream, ref startIndex);
-
-      UInt32 indexOutput = BitConverter.ToUInt32(byteStream, startIndex);
-      startIndex += 4;
-
-      int unlockingScriptLength = (int)VarInt.GetUInt64(byteStream, ref startIndex);
-      byte[] unlockingScript = new byte[unlockingScriptLength];
-      Array.Copy(byteStream, startIndex, unlockingScript, 0, unlockingScriptLength);
-      startIndex += unlockingScriptLength;
-
-      UInt32 sequence = BitConverter.ToUInt32(byteStream, startIndex);
-      startIndex += 4;
-      
-      return new TXInput(
-        tXIDOutput,
-        indexOutput,
-        unlockingScript,
-        sequence);
-    }
-    
-    public byte[] GetBytes()
-    {
-      List<byte> byteStream = new List<byte>();
-
-      byteStream.AddRange(TXIDOutput.GetBytes());
-      byteStream.AddRange(BitConverter.GetBytes(IndexOutput));
-      byteStream.AddRange(VarInt.GetBytes(UnlockingScript.Length));
-      byteStream.AddRange(UnlockingScript);
-      byteStream.AddRange(BitConverter.GetBytes(Sequence));
-
-      return byteStream.ToArray();
-    }
-
-  }
-  class TXOutput
-  {
-    UInt64 Value;
-    byte[] LockingScript;
-
-    public TXOutput(
-      UInt64 value,
-      byte[] lockingScript)
-    {
-      Value = value;
-      LockingScript = lockingScript;
-    }
-
-    public static TXOutput Parse(byte[] byteStream, ref int startIndex)
-    {
-      UInt64 value = BitConverter.ToUInt64(byteStream, startIndex);
-      startIndex += 8;
-
-      int lockingScriptLength = (int)VarInt.GetUInt64(byteStream, ref startIndex);
-      byte[] lockingScript = new byte[lockingScriptLength];
-      Array.Copy(byteStream, startIndex, lockingScript, 0, lockingScriptLength);
-      startIndex += lockingScriptLength;
-
-      return new TXOutput(
-        value,
-        lockingScript);
-    }
-
-    public byte[] GetBytes()
-    {
-      List<byte> byteStream = new List<byte>();
-
-      byteStream.AddRange(BitConverter.GetBytes(Value));
-      byteStream.AddRange(VarInt.GetBytes(LockingScript.Length));
-      byteStream.AddRange(LockingScript);
-
-      return byteStream.ToArray();
-    }
-
-    public void UnlockScript(byte[] unlockingScript)
-    {
-      if(!BitcoinScript.Evaluate(LockingScript, unlockingScript))
-      {
-        throw new UTXOException(string.Format("Input script '{0}' failed to unlock output script '{1}'",
-          new SoapHexBinary(unlockingScript).ToString(),
-          new SoapHexBinary(LockingScript).ToString()));
-      }
-    }
-
-  }
-  class TXWitness
-  {
-    public static TXWitness Parse(byte[] byteStream, ref int startIndex)
-    {
-      return new TXWitness();
-    }
-
-    public byte[] GetBytes()
-    {
-      return new byte[0];
-    }
-  }
-
   class BitcoinTX
   {
     const byte FLAG_WITNESS_IS_PRESENT = 0x01;
@@ -237,7 +117,6 @@ namespace BToken.Accounting.Bitcoin
       return byteStream.ToArray();
     }
   }
-
 
   static class BitcoinTXExtensionMethods
   {

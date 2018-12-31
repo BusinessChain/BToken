@@ -2,11 +2,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
 
 using BToken.Networking;
-using BToken.Chaining;
 
 namespace BToken.Accounting.Bitcoin
 {
@@ -14,18 +13,6 @@ namespace BToken.Accounting.Bitcoin
   {
     class UTXOTransaction
     {
-      class TXOutputsSpentMap
-      {
-        public List<TXOutput> TXOutputs;
-        public BitArray Flags;
-
-        public TXOutputsSpentMap(List<TXOutput> tXOutputs)
-        {
-          TXOutputs = tXOutputs;
-          Flags = new BitArray(tXOutputs.Count);
-        }
-      }
-
       UTXO UTXO;
       UInt256 BlockHeaderHash;
 
@@ -118,7 +105,7 @@ namespace BToken.Accounting.Bitcoin
       {
         if (UnspentTXOutputs.TryGetValue(tXInput.TXIDOutput, out TXOutputsSpentMap tXOutputsSpentMap))
         {
-          if (tXOutputsSpentMap.Flags[(int)tXInput.IndexOutput])
+          if (tXOutputsSpentMap.FlagsOutputsSpent[(int)tXInput.IndexOutput])
           {
             throw new UTXOException(
               string.Format("Referenced output txid: '{0}', index: '{1}' is already spent in same block.",
@@ -127,27 +114,58 @@ namespace BToken.Accounting.Bitcoin
           else
           {
             TXOutput tXOutput = tXOutputsSpentMap.TXOutputs[(int)tXInput.IndexOutput];
-            tXOutput.UnlockScript(tXInput.UnlockingScript);
-            tXOutputsSpentMap.Flags[(int)tXInput.IndexOutput] = true;
+
+            if (BitcoinScript.Evaluate(tXOutput.LockingScript, tXInput.UnlockingScript))
+            {
+              SetOutputSpentFlag(tXOutputsSpentMap.FlagsOutputsSpent, tXInput.IndexOutput);
+            }
+            else
+            {
+              throw new UTXOException(string.Format("Input script '{0}' failed to unlock output script '{1}'",
+                new SoapHexBinary(tXInput.UnlockingScript).ToString(),
+                new SoapHexBinary(tXOutput.LockingScript).ToString()));
+            }
           }
         }
         else if (UTXO.UnspentTXOutputs.TryGetValue(tXInput.TXIDOutput, out byte[] tXOutputIndex))
         {
+          byte[] tXOutputsSpentByteMap = new ArraySegment<byte>(tXOutputIndex, 2, tXOutputIndex.Length - 8).Array;
+          if (flagsOutputsSpent[(int)tXInput.IndexOutput])
+          {
+            throw new UTXOException(
+              string.Format("Referenced output txid: '{0}', index: '{1}' is already spent.",
+              tXInput.TXIDOutput, tXInput.IndexOutput));
+          }
+
           byte[] tXID = new ArraySegment<byte>(tXOutputIndex, 0, 2).Array;
+          using (UTXOStream uTXOStream = new UTXOStream(tXID))
+          {
+            TXOutput tXOutput = uTXOStream.ReadTXOutput();
 
-          UTXOStream uTXOStream = new UTXOStream(tXID);
-          var blockReferenced = await UTXO.Blockchain.GetBlockAsync(blockHeaderHashBytes);
-          tXOutput = GetTXOutput(blockReferenced, tXInput);
-          tXOutput.UnlockScript(tXInput.UnlockingScript);
+            while (tXOutput != null)
+            {
+              if(BitcoinScript.Evaluate(tXOutput.LockingScript, tXInput.UnlockingScript))
+              {
+                flagsOutputsSpent.Set((int)tXInput.IndexOutput, true);
+                return;
+              }
+              tXOutput = uTXOStream.ReadTXOutput();
+            }
+          }
 
-          UTXO.TXOutputs.Remove(outputReference);
-        }
-        else
-        {
           throw new UTXOException(string.Format("TXInput references spent or nonexistant output TXID: '{0}', index: '{1}'",
             tXInput.TXIDOutput, tXInput.IndexOutput));
         }
 
+      }
+
+      void SetOutputSpentFlag(byte[] flagsOutputsSpent, uint index)
+      {
+        uint byteIndex = index / 8;
+        byte flagByte = flagsOutputsSpent[byteIndex];
+
+        uint bitIndex = index % 8;
+        //write bit
       }
 
       TXOutput GetTXOutput(NetworkBlock blockReferenced, TXInput txInput)

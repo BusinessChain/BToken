@@ -1,11 +1,21 @@
 ﻿using System.Collections.Generic;
+using System.Collections;
+using System;
 
 namespace BToken.Accounting.Bitcoin
 {
-  internal class TXOutputsSpentMap : TXOutputsUnspentMap
+  partial class UTXO
   {
-    public TXOutputsSpentMap(List<TXOutput> tXOutputs) : base(tXOutputs)
+    class TXOutputsSpentMap
     {
+      public List<TXOutput> TXOutputs;
+      public byte[] FlagsOutputsSpent;
+
+      public TXOutputsSpentMap(List<TXOutput> tXOutputs)
+      {
+        TXOutputs = tXOutputs;
+        FlagsOutputsSpent = new byte[(tXOutputs.Count + 7) / 8];
+      }
     }
   }
 }
