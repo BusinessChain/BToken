@@ -11,14 +11,14 @@ namespace BToken.Accounting.Bitcoin
   class TXInput
   {
     public UInt256 TXIDOutput { get; private set; }
-    public UInt32 IndexOutput { get; private set; }
+    public int IndexOutput { get; private set; }
     public byte[] UnlockingScript { get; private set; }
     UInt32 Sequence;
 
 
     public TXInput(
       UInt256 tXIDOutput,
-      UInt32 indexOutput,
+      int indexOutput,
       byte[] unlockingScript,
       UInt32 sequence)
     {
@@ -45,7 +45,7 @@ namespace BToken.Accounting.Bitcoin
 
       return new TXInput(
         tXIDOutput,
-        indexOutput,
+        (int)indexOutput,
         unlockingScript,
         sequence);
     }

@@ -35,6 +35,7 @@ namespace BToken.Networking
     {
       byte[] blockBytes = new byte[stream.Length];
       int i = await stream.ReadAsync(blockBytes, 0, (int)stream.Length);
+      return ParseBlock(blockBytes);
     }
   }
 }

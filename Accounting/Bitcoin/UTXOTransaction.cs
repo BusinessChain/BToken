@@ -63,15 +63,15 @@ namespace BToken.Accounting.Bitcoin
         }
 
       }
+
       void ValidateCoinbaseTX(BitcoinTX coinbaseTX)
       {
         ValidateTXOutputs(coinbaseTX.TXOutputs, coinbaseTX.GetTXHash());
         //  return GetOutputReference(txInput) == "0000000000000000000000000000000000000000000000000000000000000000.4294967295";
       }
-
       void ValidateTXOutputs(List<TXOutput> tXOutputs, UInt256 tXHash)
       {
-        if (UnspentTXOutputs.ContainsKey(tXHash))
+        if (UnspentTXOutputs.ContainsKey(tXHash)|| UTXO.UnspentTXOutputs.ContainsKey(tXHash))
         {
           throw new UTXOException(
             string.Format("Ambiguous transaction '{0}' in block '{1}'", tXHash, BlockHeaderHash));
@@ -81,7 +81,6 @@ namespace BToken.Accounting.Bitcoin
           UnspentTXOutputs.Add(tXHash, new TXOutputsSpentMap(tXOutputs));
         }
       }
-
       void ValidateTXInputsAsync(List<TXInput> tXInputs)
       {
         for (int index = 0; index < tXInputs.Count; index++)
@@ -105,7 +104,7 @@ namespace BToken.Accounting.Bitcoin
       {
         if (UnspentTXOutputs.TryGetValue(tXInput.TXIDOutput, out TXOutputsSpentMap tXOutputsSpentMap))
         {
-          if (tXOutputsSpentMap.FlagsOutputsSpent[(int)tXInput.IndexOutput])
+          if (GetOutputSpentFlag(tXOutputsSpentMap.FlagsOutputsSpent, tXInput.IndexOutput))
           {
             throw new UTXOException(
               string.Format("Referenced output txid: '{0}', index: '{1}' is already spent in same block.",
@@ -113,7 +112,7 @@ namespace BToken.Accounting.Bitcoin
           }
           else
           {
-            TXOutput tXOutput = tXOutputsSpentMap.TXOutputs[(int)tXInput.IndexOutput];
+            TXOutput tXOutput = tXOutputsSpentMap.TXOutputs[tXInput.IndexOutput];
 
             if (BitcoinScript.Evaluate(tXOutput.LockingScript, tXInput.UnlockingScript))
             {
@@ -130,7 +129,7 @@ namespace BToken.Accounting.Bitcoin
         else if (UTXO.UnspentTXOutputs.TryGetValue(tXInput.TXIDOutput, out byte[] tXOutputIndex))
         {
           byte[] tXOutputsSpentByteMap = new ArraySegment<byte>(tXOutputIndex, 2, tXOutputIndex.Length - 8).Array;
-          if (flagsOutputsSpent[(int)tXInput.IndexOutput])
+          if (GetOutputSpentFlag(tXOutputsSpentByteMap, tXInput.IndexOutput))
           {
             throw new UTXOException(
               string.Format("Referenced output txid: '{0}', index: '{1}' is already spent.",
@@ -138,7 +137,9 @@ namespace BToken.Accounting.Bitcoin
           }
 
           byte[] tXID = new ArraySegment<byte>(tXOutputIndex, 0, 2).Array;
-          using (UTXOStream uTXOStream = new UTXOStream(tXID))
+          byte[] blockHeaderHash = new ArraySegment<byte>(tXOutputIndex, tXOutputIndex.Length - 8, 4).Array;
+          byte[] position = new ArraySegment<byte>(tXOutputIndex, tXOutputIndex.Length - 4, 4).Array;
+          using (UTXOStream uTXOStream = new UTXOStream(tXID, blockHeaderHash, position))
           {
             TXOutput tXOutput = uTXOStream.ReadTXOutput();
 
@@ -146,7 +147,7 @@ namespace BToken.Accounting.Bitcoin
             {
               if(BitcoinScript.Evaluate(tXOutput.LockingScript, tXInput.UnlockingScript))
               {
-                flagsOutputsSpent.Set((int)tXInput.IndexOutput, true);
+                SetOutputSpentFlag(tXOutputsSpentByteMap, tXInput.IndexOutput);
                 return;
               }
               tXOutput = uTXOStream.ReadTXOutput();
@@ -156,16 +157,20 @@ namespace BToken.Accounting.Bitcoin
           throw new UTXOException(string.Format("TXInput references spent or nonexistant output TXID: '{0}', index: '{1}'",
             tXInput.TXIDOutput, tXInput.IndexOutput));
         }
-
       }
 
-      void SetOutputSpentFlag(byte[] flagsOutputsSpent, uint index)
+      static void SetOutputSpentFlag(byte[] flagsOutputsSpent, int index)
       {
-        uint byteIndex = index / 8;
-        byte flagByte = flagsOutputsSpent[byteIndex];
-
-        uint bitIndex = index % 8;
-        //write bit
+        int byteIndex = index / 8;
+        int bitIndex = index % 8;
+        flagsOutputsSpent[byteIndex] |= (byte)(0x01 << bitIndex);
+      }
+      static bool GetOutputSpentFlag(byte[] flagsOutputsSpent, int index)
+      {
+        int byteIndex = index / 8;
+        int bitIndex = index % 8;
+        byte maskFlag = (byte)(0x01 << bitIndex);
+        return (maskFlag & flagsOutputsSpent[byteIndex]) != 0x00;
       }
 
       TXOutput GetTXOutput(NetworkBlock blockReferenced, TXInput txInput)
@@ -173,7 +178,7 @@ namespace BToken.Accounting.Bitcoin
         List<BitcoinTX> bitcoinTXs = UTXO.PayloadParser.Parse(blockReferenced.Payload);
 
         BitcoinTX bitcoinTX = bitcoinTXs.Find(b => b.GetTXHash().IsEqual(txInput.TXIDOutput));
-        return bitcoinTX.TXOutputs[(int)txInput.IndexOutput];
+        return bitcoinTX.TXOutputs[txInput.IndexOutput];
       }
     }
   }

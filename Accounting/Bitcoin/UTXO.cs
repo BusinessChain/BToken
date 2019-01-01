@@ -101,7 +101,7 @@ namespace BToken.Accounting.Bitcoin
     {
       return GetOutputReference(txInput.TXIDOutput, txInput.IndexOutput);
     }
-    static string GetOutputReference(UInt256 txid, uint index)
+    static string GetOutputReference(UInt256 txid, int index)
     {
       return txid + "." + index;
     }
