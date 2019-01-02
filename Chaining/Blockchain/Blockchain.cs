@@ -41,7 +41,7 @@ namespace BToken.Chaining
       await Headers.InitialHeaderDownloadAsync();
       Console.WriteLine("Synchronized headerchain with network, height = '{0}'", Headers.GetHeight());
 
-      Task initialBlockDownloadTask = Archiver.InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
+     // Task initialBlockDownloadTask = Archiver.InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
     }
 
     public BlockStream GetBlockStream()

@@ -86,6 +86,7 @@
     <Compile Include="Chaining\Blockchain\BlockchainRequestListener.cs" />
     <Compile Include="Chaining\Blockchain\BlockStream.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
+    <Compile Include="Chaining\Headerchain\DirectHeaderAccess.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Chaining\Headerchain\HeaderStream.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocator.cs" />
