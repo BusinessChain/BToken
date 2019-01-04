@@ -24,6 +24,7 @@ namespace BToken.Chaining
 
       Blockchain Blockchain;
 
+      DirectHeaderAccess DirectHeaderAccessor;
       HeaderLocator Locator;
       HeaderArchiver Archiver = new HeaderArchiver();
 
@@ -41,6 +42,7 @@ namespace BToken.Chaining
         Checkpoints = checkpoints;
         MainChain = new Chain(GenesisHeader, 0, 0);
 
+        DirectHeaderAccessor = new DirectHeaderAccess(this);
         Locator = new HeaderLocator(this);
         Blockchain = blockchain;
 
@@ -71,7 +73,7 @@ namespace BToken.Chaining
         }
         else
         {
-          throw new ChainException("Received signal available but could not dispatch.");
+          throw new ChainException("Received signal available but could not dispatch inserter.");
         }
       }
       static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)

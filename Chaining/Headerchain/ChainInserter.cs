@@ -40,21 +40,7 @@ namespace BToken.Chaining
           base.Push();
           AccumulatedDifficulty -= TargetManager.GetDifficulty(Header.NetworkHeader.NBits);
         }
-
-        void FindPreviousHeader(NetworkHeader header)
-        {
-          Chain = Headerchain.MainChain;
-          if (GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
-
-          foreach (Chain chain in Headerchain.SecondaryChains)
-          {
-            Chain = chain;
-            if (GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
-          }
-
-          throw new ChainException(HeaderCode.ORPHAN);
-        }
-
+        
         public Chain InsertHeader(NetworkHeader networkHeader, UInt256 headerHash)
         {
           FindPreviousHeader(networkHeader);
@@ -72,6 +58,7 @@ namespace BToken.Chaining
             if (Chain == Headerchain.MainChain)
             {
               Headerchain.Locator.Update();
+              Headerchain.DirectHeaderAccessor.Update();
               return null;
             }
 
@@ -83,6 +70,19 @@ namespace BToken.Chaining
             Headerchain.SecondaryChains.Add(chainForked);
             return ForkChain(headerHash);
           }
+        }
+        void FindPreviousHeader(NetworkHeader header)
+        {
+          Chain = Headerchain.MainChain;
+          if (GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
+
+          foreach (Chain chain in Headerchain.SecondaryChains)
+          {
+            Chain = chain;
+            if (GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
+          }
+
+          throw new ChainException(HeaderCode.ORPHAN);
         }
         void ValidateHeader(NetworkHeader header, UInt256 headerHash)
         {
