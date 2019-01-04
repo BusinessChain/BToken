@@ -36,7 +36,7 @@ namespace BToken
     {
       Network.Start();
       await Blockchain.StartAsync();
-      await UTXO.StartAsync();
+      //await UTXO.StartAsync();
     }
   }
 }
