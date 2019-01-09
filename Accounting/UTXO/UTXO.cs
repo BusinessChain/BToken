@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using BToken.Chaining;
 using BToken.Networking;
 
-namespace BToken.Accounting.Bitcoin
+namespace BToken.Accounting.UTXO
 {
   partial class UTXO
   {
@@ -18,9 +18,7 @@ namespace BToken.Accounting.Bitcoin
     Blockchain Blockchain;
     BitcoinPayloadParser PayloadParser;
 
-    Dictionary<string, UInt256> TXOutputs = new Dictionary<string, UInt256>();
-    public Dictionary<string, TXInput> TXInputs = new Dictionary<string, TXInput>();
-    Dictionary<UInt256, byte[]> UnspentTXOutputs = new Dictionary<UInt256, byte[]>();
+    Dictionary<byte[], byte[]> UTXOTable;
 
 
     public UTXO(Blockchain blockchain, INetwork network, BitcoinPayloadParser payloadParser)
@@ -28,6 +26,8 @@ namespace BToken.Accounting.Bitcoin
       Network = network;
       Blockchain = blockchain;
       PayloadParser = payloadParser;
+
+      UTXOTable = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
     }
     
     public async Task StartAsync()
@@ -65,7 +65,7 @@ namespace BToken.Accounting.Bitcoin
     void Build(NetworkBlock block, UInt256 blockHeaderHash)
     {
       List<BitcoinTX> bitcoinTXs = PayloadParser.Parse(block.Payload);
-      var uTXOBlockTransaction = new UTXOTransaction(this, bitcoinTXs, blockHeaderHash);
+      var uTXOBlockTransaction = new UTXOTransaction(bitcoinTXs, blockHeaderHash);
 
       //foreach (KeyValuePair<string, TXOutput> tXOutput in uTXOBlockTransaction.TXOutputs)
       //{
@@ -84,26 +84,24 @@ namespace BToken.Accounting.Bitcoin
     void Update(NetworkBlock block, UInt256 headerHash)
     {
       List<BitcoinTX> bitcoinTXs = PayloadParser.Parse(block.Payload);
-      var uTXOBlockTransaction = new UTXOTransaction(this, bitcoinTXs, headerHash);
+      var uTXOBlockTransaction = new UTXOTransaction(bitcoinTXs, headerHash);
+      uTXOBlockTransaction.Process();
     }
-    
-    static UInt256 GetHashFromOutputReference(string outputReference)
+
+
+    static void SetOutputSpentFlag(byte[] flagsOutputsSpent, int index)
     {
-      string txHashString = outputReference.Split('.')[0];
-      return new UInt256(txHashString);
+      int byteIndex = index / 8;
+      int bitIndex = index % 8;
+      flagsOutputsSpent[byteIndex] |= (byte)(0x01 << bitIndex);
     }
-    static int GetIndexFromOutputReference(string outputReference)
+    static bool IsOutputSpent(byte[] tXOutputIndex, int index)
     {
-      string indexString = outputReference.Split('.')[1];
-      return int.Parse(indexString);
+      int byteIndex = index / 8;
+      int bitIndex = index % 8;
+      byte maskFlag = (byte)(0x01 << bitIndex);
+      return (maskFlag & tXOutputIndex[byteIndex]) != 0x00;
     }
-    static string GetOutputReference(TXInput txInput)
-    {
-      return GetOutputReference(txInput.TXIDOutput, txInput.IndexOutput);
-    }
-    static string GetOutputReference(UInt256 txid, int index)
-    {
-      return txid + "." + index;
-    }
+
   }
 }

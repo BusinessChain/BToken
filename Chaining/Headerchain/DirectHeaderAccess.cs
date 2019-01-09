@@ -42,29 +42,6 @@ namespace BToken.Chaining
             Console.WriteLine("Failed to update DirectHeaderAccess: " + ex.Message);
           }
         }
-
-        class EqualityComparerByteArray : IEqualityComparer<byte[]>
-        {
-          public bool Equals(byte[] arr1,byte[] arr2)
-          {
-            if(arr1.Length != arr2.Length)
-            {
-              return false;
-            }
-            for (int i = 0; i < arr1.Length; i++)
-            {
-              if (arr1[i] != arr2[i])
-              {
-                return false;
-              }
-            }
-            return true;
-          }
-          public int GetHashCode(byte[] arr1)
-          {
-            return BitConverter.ToInt32(arr1, 0);
-          }
-        }
       }
     }
   }

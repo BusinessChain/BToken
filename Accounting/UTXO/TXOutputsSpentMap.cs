@@ -2,7 +2,7 @@
 using System.Collections;
 using System;
 
-namespace BToken.Accounting.Bitcoin
+namespace BToken.Accounting.UTXO
 {
   partial class UTXO
   {
@@ -15,6 +15,11 @@ namespace BToken.Accounting.Bitcoin
       {
         TXOutputs = tXOutputs;
         FlagsOutputsSpent = new byte[(tXOutputs.Count + 7) / 8];
+      }
+
+      public byte[] GetBytes()
+      {
+        return null;
       }
     }
   }

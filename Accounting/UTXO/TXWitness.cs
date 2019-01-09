@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
-namespace BToken.Accounting.Bitcoin
+namespace BToken.Accounting.UTXO
 {
   class TXWitness
   {

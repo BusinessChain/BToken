@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>BToken</RootNamespace>
     <AssemblyName>BToken</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <NuGetPackageImportStamp>
@@ -75,18 +75,18 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Accounting\Bitcoin\BitcoinScript.cs" />
-    <Compile Include="Accounting\Bitcoin\TXInput.cs" />
-    <Compile Include="Accounting\Bitcoin\TXOutput.cs" />
-    <Compile Include="Accounting\Bitcoin\TXOutputsSpentMap.cs" />
-    <Compile Include="Accounting\Bitcoin\TXWitness.cs" />
-    <Compile Include="Accounting\Bitcoin\UTXO.cs" />
-    <Compile Include="Accounting\Bitcoin\BitcoinPayloadParser.cs" />
-    <Compile Include="Accounting\Bitcoin\BitcoinGenesisBlock.cs" />
-    <Compile Include="Accounting\Bitcoin\BitcoinTX.cs" />
-    <Compile Include="Accounting\Bitcoin\UTXOIndex.cs" />
-    <Compile Include="Accounting\Bitcoin\UTXOStream.cs" />
-    <Compile Include="Accounting\Bitcoin\UTXOTransaction.cs" />
+    <Compile Include="Accounting\UTXO\BitcoinScript.cs" />
+    <Compile Include="Accounting\UTXO\TXInput.cs" />
+    <Compile Include="Accounting\UTXO\TXOutput.cs" />
+    <Compile Include="Accounting\UTXO\TXOutputsSpentMap.cs" />
+    <Compile Include="Accounting\UTXO\TXWitness.cs" />
+    <Compile Include="Accounting\UTXO\UTXO.cs" />
+    <Compile Include="Accounting\UTXO\BitcoinPayloadParser.cs" />
+    <Compile Include="Accounting\UTXO\BitcoinGenesisBlock.cs" />
+    <Compile Include="Accounting\UTXO\BitcoinTX.cs" />
+    <Compile Include="Accounting\UTXO\UTXOIndex.cs" />
+    <Compile Include="Accounting\UTXO\UTXOStream.cs" />
+    <Compile Include="Accounting\UTXO\UTXOTransaction.cs" />
     <Compile Include="Accounting\UTXOException.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
     <Compile Include="Accounting\INetwork.cs" />
@@ -108,6 +108,7 @@
     <Compile Include="Chaining\Headerchain\Chain.cs" />
     <Compile Include="Chaining\Headerchain\IHeaderArchiver.cs" />
     <Compile Include="Chaining\INetwork.cs" />
+    <Compile Include="DataTypes\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\Hashing.cs" />
     <Compile Include="Chaining\Headerchain\ChainHeader.cs" />

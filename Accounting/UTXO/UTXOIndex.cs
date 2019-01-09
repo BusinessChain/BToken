@@ -5,7 +5,7 @@ using System.Text;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace BToken.Accounting.Bitcoin
+namespace BToken.Accounting.UTXO
 {
   partial class UTXO
   {
