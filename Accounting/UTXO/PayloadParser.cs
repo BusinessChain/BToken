@@ -8,7 +8,7 @@ using BToken.Chaining;
 
 namespace BToken.Accounting.UTXO
 {
-  class BitcoinPayloadParser : IPayloadParser
+  class PayloadParser : IPayloadParser
   {
 
     public UInt256 GetPayloadHash(byte[] payload)
@@ -16,20 +16,20 @@ namespace BToken.Accounting.UTXO
       return ComputeMerkleRootHash(Parse(payload));
     }
 
-    public List<BitcoinTX> Parse(byte[] payload)
+    public List<TX> Parse(byte[] payload)
     {
-      var bitcoinTXs = new List<BitcoinTX>();
+      var bitcoinTXs = new List<TX>();
 
       int startIndex = 0;
       while (startIndex < payload.Length)
       {
-        bitcoinTXs.Add(BitcoinTX.Parse(payload, ref startIndex));
+        bitcoinTXs.Add(TX.Parse(payload, ref startIndex));
       }
 
       return bitcoinTXs;
     }
 
-    UInt256 ComputeMerkleRootHash(List<BitcoinTX> bitcoinTXs)
+    UInt256 ComputeMerkleRootHash(List<TX> bitcoinTXs)
     {
       const int HASH_BYTE_SIZE = 32;
 

@@ -16,12 +16,12 @@ namespace BToken.Accounting.UTXO
   {
     INetwork Network;
     Blockchain Blockchain;
-    BitcoinPayloadParser PayloadParser;
+    PayloadParser PayloadParser;
 
     Dictionary<byte[], byte[]> UTXOTable;
 
 
-    public UTXO(Blockchain blockchain, INetwork network, BitcoinPayloadParser payloadParser)
+    public UTXO(Blockchain blockchain, INetwork network, PayloadParser payloadParser)
     {
       Network = network;
       Blockchain = blockchain;
@@ -64,7 +64,7 @@ namespace BToken.Accounting.UTXO
 
     void Build(NetworkBlock block, UInt256 blockHeaderHash)
     {
-      List<BitcoinTX> bitcoinTXs = PayloadParser.Parse(block.Payload);
+      List<TX> bitcoinTXs = PayloadParser.Parse(block.Payload);
       var uTXOBlockTransaction = new UTXOTransaction(bitcoinTXs, blockHeaderHash);
 
       //foreach (KeyValuePair<string, TXOutput> tXOutput in uTXOBlockTransaction.TXOutputs)
@@ -83,18 +83,11 @@ namespace BToken.Accounting.UTXO
 
     void Update(NetworkBlock block, UInt256 headerHash)
     {
-      List<BitcoinTX> bitcoinTXs = PayloadParser.Parse(block.Payload);
+      List<TX> bitcoinTXs = PayloadParser.Parse(block.Payload);
       var uTXOBlockTransaction = new UTXOTransaction(bitcoinTXs, headerHash);
-      uTXOBlockTransaction.Process();
+      uTXOBlockTransaction.ProcessAsync();
     }
-
-
-    static void SetOutputSpentFlag(byte[] flagsOutputsSpent, int index)
-    {
-      int byteIndex = index / 8;
-      int bitIndex = index % 8;
-      flagsOutputsSpent[byteIndex] |= (byte)(0x01 << bitIndex);
-    }
+    
     static bool IsOutputSpent(byte[] tXOutputIndex, int index)
     {
       int byteIndex = index / 8;

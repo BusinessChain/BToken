@@ -8,7 +8,7 @@ using BToken.Networking;
 
 namespace BToken.Accounting.UTXO
 {
-  class BitcoinTX
+  class TX
   {
     const byte FLAG_WITNESS_IS_PRESENT = 0x01;
 
@@ -20,7 +20,7 @@ namespace BToken.Accounting.UTXO
 
 
 
-    BitcoinTX(
+    TX(
       UInt32 version,
       List<TXInput> tXInputs,
       List<TXOutput> tXOutputs,
@@ -34,7 +34,7 @@ namespace BToken.Accounting.UTXO
       LockTime = lockTime;
     }
 
-    public static BitcoinTX Parse(byte[] byteStream, ref int startIndex)
+    public static TX Parse(byte[] byteStream, ref int startIndex)
     {
       UInt32 version = BitConverter.ToUInt32(byteStream, startIndex);
       startIndex += 4;
@@ -75,7 +75,7 @@ namespace BToken.Accounting.UTXO
       UInt32 lockTime = BitConverter.ToUInt32(byteStream, startIndex);
       startIndex += 4;
 
-      return new BitcoinTX(
+      return new TX(
         version,
         tXInputs,
         tXOutputs,
@@ -120,7 +120,7 @@ namespace BToken.Accounting.UTXO
 
   static class BitcoinTXExtensionMethods
   {
-    public static UInt256 GetTXHash(this BitcoinTX bitcoinTX)
+    public static UInt256 GetTXHash(this TX bitcoinTX)
     {
       return new UInt256(Hashing.SHA256d(bitcoinTX.GetBytes()));
     }

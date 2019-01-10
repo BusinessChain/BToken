@@ -6,11 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Accounting.UTXO
 {
-  class BitcoinScript
+  class TXStream
   {
-    public static bool Evaluate(byte[] lockingScript, byte[] unlockingScript)
-    {
-      return true;
-    }
   }
 }

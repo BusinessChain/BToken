@@ -75,19 +75,20 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Accounting\UTXO\BitcoinScript.cs" />
+    <Compile Include="Accounting\UTXO\Script.cs" />
     <Compile Include="Accounting\UTXO\TXInput.cs" />
     <Compile Include="Accounting\UTXO\TXOutput.cs" />
     <Compile Include="Accounting\UTXO\TXOutputsSpentMap.cs" />
+    <Compile Include="Accounting\UTXO\TXStream.cs" />
     <Compile Include="Accounting\UTXO\TXWitness.cs" />
     <Compile Include="Accounting\UTXO\UTXO.cs" />
-    <Compile Include="Accounting\UTXO\BitcoinPayloadParser.cs" />
-    <Compile Include="Accounting\UTXO\BitcoinGenesisBlock.cs" />
-    <Compile Include="Accounting\UTXO\BitcoinTX.cs" />
+    <Compile Include="Accounting\UTXO\PayloadParser.cs" />
+    <Compile Include="Accounting\UTXO\GenesisBlock.cs" />
+    <Compile Include="Accounting\UTXO\TX.cs" />
     <Compile Include="Accounting\UTXO\UTXOIndex.cs" />
     <Compile Include="Accounting\UTXO\UTXOStream.cs" />
     <Compile Include="Accounting\UTXO\UTXOTransaction.cs" />
-    <Compile Include="Accounting\UTXOException.cs" />
+    <Compile Include="Accounting\UTXO\UTXOException.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
     <Compile Include="Accounting\INetwork.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainRequestListener.cs" />

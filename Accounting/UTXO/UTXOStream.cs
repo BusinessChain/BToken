@@ -35,13 +35,14 @@ namespace BToken.Accounting.UTXO
 
         while (UTXO.UTXOTable.TryGetValue(uTXOKey, out byte[] tXOutputIndex))
         {
-          if (IsOutputSpent(tXOutputIndex, tXInput.IndexOutput))
+          byte[] bitMapTXOutputsSpent = new ArraySegment<byte>(tXOutputIndex, 0, tXOutputIndex.Length - 4).Array;
+          if (IsOutputSpent(bitMapTXOutputsSpent, tXInput.IndexOutput))
           {
             uTXOKey = tXIDOutputBytes.Take(++numberOfKeyBytes).ToArray();
             continue;
           }
 
-          return new ArraySegment<byte>(tXOutputIndex, tXOutputIndex.Length - 8, 4).Array;
+          return new ArraySegment<byte>(tXOutputIndex, tXOutputIndex.Length - 3, 4).Array;
         }
 
         throw new UTXOException(string.Format("TXInput references spent or nonexistant output TXID: '{0}', index: '{1}'",
