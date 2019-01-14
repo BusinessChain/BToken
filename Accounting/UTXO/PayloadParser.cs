@@ -8,14 +8,8 @@ using BToken.Chaining;
 
 namespace BToken.Accounting.UTXO
 {
-  class PayloadParser : IPayloadParser
+  class PayloadParser
   {
-
-    public UInt256 GetPayloadHash(byte[] payload)
-    {
-      return ComputeMerkleRootHash(Parse(payload));
-    }
-
     public List<TX> Parse(byte[] payload)
     {
       var bitcoinTXs = new List<TX>();
@@ -29,7 +23,7 @@ namespace BToken.Accounting.UTXO
       return bitcoinTXs;
     }
 
-    UInt256 ComputeMerkleRootHash(List<TX> bitcoinTXs)
+    public UInt256 ComputeMerkleRootHash(List<TX> bitcoinTXs)
     {
       const int HASH_BYTE_SIZE = 32;
 

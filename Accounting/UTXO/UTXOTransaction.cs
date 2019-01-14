@@ -5,7 +5,7 @@ using System.Linq;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
 
-using BToken.Networking;
+using BToken.Chaining;
 
 namespace BToken.Accounting.UTXO
 {
@@ -16,56 +16,56 @@ namespace BToken.Accounting.UTXO
       UTXO UTXO;
       UInt256 BlockHeaderHash;
       TX CoinbaseTX;
-      List<TX> BitcoinTXs;
+      List<TX> TXs;
       UInt256[] TXHashes;
-    
 
-      public UTXOTransaction(List<TX> bitcoinTXs, UInt256 blockHeaderHash)
+
+      public UTXOTransaction(List<TX> tXs, UInt256 blockHeaderHash)
       {
         BlockHeaderHash = blockHeaderHash;
-        CoinbaseTX = bitcoinTXs.First();
-        BitcoinTXs = bitcoinTXs.Skip(1).ToList();
-        TXHashes = new UInt256[BitcoinTXs.Count];
+        CoinbaseTX = tXs.First();
+        TXs = tXs.Skip(1).ToList();
+        TXHashes = new UInt256[TXs.Count];
       }
 
       public async Task ProcessAsync()
       {
-        ParseTXOutputs(CoinbaseTX, CoinbaseTX.GetTXHash());
+        await InsertTXOutputsAsync(CoinbaseTX, CoinbaseTX.GetTXHash());
 
-        for(int i = 0; i < BitcoinTXs.Count; i++)
+        for (int i = 0; i < TXs.Count; i++)
         {
-          TXHashes[i] = BitcoinTXs[i].GetTXHash();
+          TXHashes[i] = TXs[i].GetTXHash();
 
           try
           {
-            ParseTXOutputs(BitcoinTXs[i], TXHashes[i]);
+            await InsertTXOutputsAsync(TXs[i], TXHashes[i]);
           }
           catch (Exception ex)
           {
             // Coinbase
-            Undo(BitcoinTXs[i]);
+            Undo(TXs[i]);
 
             throw ex;
           }
         }
 
-        for (int i = 0; i < BitcoinTXs.Count; i++)
+        for (int i = 0; i < TXs.Count; i++)
         {
           try
           {
-            await ValidateTXInputsAsync(BitcoinTXs[i], TXHashes[i]);
+            await ValidateTXInputsAsync(TXs[i], TXHashes[i]);
           }
           catch (Exception ex)
           {
             // Coinbase
-            Undo(BitcoinTXs[i]);
+            Undo(TXs[i]);
 
             throw ex;
           }
         }
       }
 
-      void ParseTXOutputs(TX bitcoinTX, UInt256 tXHash)
+      async Task InsertTXOutputsAsync(TX tX, UInt256 tXHash)
       {
         byte[] tXHashBytes = tXHash.GetBytes();
         int numberOfKeyBytes = 4;
@@ -79,35 +79,29 @@ namespace BToken.Accounting.UTXO
               string.Format("Ambiguous transaction '{0}' in block '{1}'", tXHash, BlockHeaderHash));
           }
 
-          byte[] headerHashKey = new ArraySegment<byte>(tXOutputIndex, tXOutputIndex.Length - 3, 4).Array;
-          using (TXStream tXStream = new TXStream(headerHashKey))
+          byte[] headerIndex = new ArraySegment<byte>(tXOutputIndex, tXOutputIndex.Length - 3, 4).Array;
+          if (await UTXO.ReadTXAsync(tXHash, headerIndex) != null)
           {
-            TX bitcoinTXExisting = tXStream.ReadTX();
-
-            while(bitcoinTXExisting != null)
-            {
-              if (tXHash.IsEqual(bitcoinTXExisting.GetTXHash()))
-              {
-                throw new UTXOException(
-                  string.Format("Ambiguous transaction '{0}' in block '{1}'", tXHash, BlockHeaderHash));
-              }
-
-              bitcoinTXExisting = tXStream.ReadTX();
-            }
+            throw new UTXOException(
+              string.Format("Ambiguous transaction '{0}' in block '{1}' and block header hash index '{2}'",
+              tXHash,
+              BlockHeaderHash,
+              new SoapHexBinary(headerIndex)));
           }
 
-          uTXOKey = tXHashBytes.Take(++numberOfKeyBytes).ToArray();
+          numberOfKeyBytes++;
+          uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
         }
 
-        byte[] bitMapTXOutputsSpent = new byte[(bitcoinTX.TXOutputs.Count + 7) / 8];
+        byte[] bitMapTXOutputsSpent = new byte[(tX.TXOutputs.Count + 7) / 8];
         UTXO.UTXOTable.Add(uTXOKey, bitMapTXOutputsSpent);
       }
-      
-      async Task ValidateTXInputsAsync(TX bitcoinTX, UInt256 tXHash)
+
+      async Task ValidateTXInputsAsync(TX tX, UInt256 tXHash)
       {
-        for (int index = 0; index < bitcoinTX.TXInputs.Count; index++)
+        for (int index = 0; index < tX.TXInputs.Count; index++)
         {
-          TXInput tXInput = bitcoinTX.TXInputs[index];
+          TXInput tXInput = tX.TXInputs[index];
 
           try
           {
@@ -124,72 +118,67 @@ namespace BToken.Accounting.UTXO
       }
       async Task ValidateTXInputAsync(TXInput tXInput)
       {
-        //if (UnspentTXOutputs.TryGetValue(tXInput.TXIDOutput, out TXOutputsSpentMap tXOutputsSpentMap))
-        //{
-        //  if (GetOutputSpentFlag(tXOutputsSpentMap.FlagsOutputsSpent, tXInput.IndexOutput))
-        //  {
-        //    throw new UTXOException(
-        //      string.Format("Referenced output txid: '{0}', index: '{1}' is already spent in same block.",
-        //      tXInput.TXIDOutput, tXInput.IndexOutput));
-        //  }
-        //  else
-        //  {
-        //    TXOutput tXOutput = tXOutputsSpentMap.TXOutputs[tXInput.IndexOutput];
+        byte[] tXHashBytes = tXInput.TXIDOutput.GetBytes();
+        int numberOfKeyBytes = 4;
+        byte[] uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
 
-        //    if (BitcoinScript.Evaluate(tXOutput.LockingScript, tXInput.UnlockingScript))
-        //    {
-        //      SetOutputSpentFlag(tXOutputsSpentMap.FlagsOutputsSpent, tXInput.IndexOutput);
-        //    }
-        //    else
-        //    {
-        //      throw new UTXOException(string.Format("Input script '{0}' failed to unlock output script '{1}'",
-        //        new SoapHexBinary(tXInput.UnlockingScript),
-        //        new SoapHexBinary(tXOutput.LockingScript)));
-        //    }
-        //  }
-        //}
-        var tupleTXOutput = await GetTupleTXOutputAsync(tXInput);
-        if (Script.Evaluate(tupleTXOutput.lockingScript, tXInput.UnlockingScript))
+        while (UTXO.UTXOTable.TryGetValue(uTXOKey, out byte[] tXOutputIndex))
         {
-          SpendTXOutput(tupleTXOutput.bitMapTXOutputsSpent, tXInput.IndexOutput);
+          byte[] blockHeaderHashIndex = new ArraySegment<byte>(tXOutputIndex, tXOutputIndex.Length - 3, 4).Array;
+          TX tX = await UTXO.ReadTXAsync(tXInput.TXIDOutput, blockHeaderHashIndex);
+          if (tX == null)
+          {
+            numberOfKeyBytes++;
+            uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
+            continue;
+          }
+          else
+          {
+            byte[] bitMapTXOutputsSpent = new ArraySegment<byte>(tXOutputIndex, 0, tXOutputIndex.Length - 4).Array;
+            if (IsOutputSpent(bitMapTXOutputsSpent, tXInput.IndexOutput))
+            {
+              throw new UTXOException(string.Format("TXInput references spent output TXID: '{0}', index: '{1}', block index: '{2}'",
+                tXInput.TXIDOutput, 
+                tXInput.IndexOutput,
+                new SoapHexBinary(uTXOKey)));
+            }
+
+            TXOutput tXOutput = tX.TXOutputs[tXInput.IndexOutput];
+            if (Script.Evaluate(tXOutput.LockingScript, tXInput.UnlockingScript))
+            {
+              SpendTXOutput(bitMapTXOutputsSpent, tXInput.IndexOutput);
+            }
+            else
+            {
+              throw new UTXOException(string.Format("Input script '{0}' failed to unlock output script '{1}'",
+                new SoapHexBinary(tXInput.UnlockingScript),
+                new SoapHexBinary(tXOutput.LockingScript)));
+            }
+
+            if(AreAllOutputsSpent(bitMapTXOutputsSpent))
+            {
+              UTXO.UTXOTable.Remove(uTXOKey);
+            }
+          }
         }
-        else
-        {
-          throw new UTXOException(string.Format("Input script '{0}' failed to unlock output script '{1}'",
-            new SoapHexBinary(tXInput.UnlockingScript),
-            new SoapHexBinary(tupleTXOutput.lockingScript)));
-        }
+
+        throw new UTXOException(string.Format("TXInput references spent or nonexistant output TXID: '{0}', index: '{1}'",
+          tXInput.TXIDOutput, tXInput.IndexOutput));
       }
+      static bool AreAllOutputsSpent(byte[] bitMapTXOutputsSpent)
+      {
+        for(int i = 0; i < bitMapTXOutputsSpent.Length; i++)
+        {
+          if (bitMapTXOutputsSpent[i] != 0x00) { return false; }
+        }
 
+        return true;
+      }
       static void SpendTXOutput(byte[] bitMapTXOutputsSpent, int index)
       {
         int byteIndex = index / 8;
         int bitIndex = index % 8;
         bitMapTXOutputsSpent[byteIndex] |= (byte)(0x01 << bitIndex);
-      }
-
-      async Task<(byte[] lockingScript, byte[] bitMapTXOutputsSpent)> GetTupleTXOutputAsync(TXInput tXInput)
-      {
-        using (UTXOStream uTXOStream = new UTXOStream(UTXO, tXInput))
-        {
-          TXOutput tXOutput = uTXOStream.ReadTXOutput();
-
-          while (tXOutput != null)
-          {
-            if (Script.Evaluate(tXOutput.LockingScript, tXInput.UnlockingScript))
-            {
-              SetOutputSpentFlag(tXOutputsSpentByteMap, tXInput.IndexOutput);
-              return;
-            }
-            tXOutput = uTXOStream.ReadTXOutput();
-          }
-        }
-
-        byte[] lockingScript = null;
-        byte[] spentBitMap = null;
-        
-        await Task.Delay(1);
-        return (lockingScript, spentBitMap);
       }
     }
   }

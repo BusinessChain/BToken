@@ -21,6 +21,7 @@ namespace BToken
           return false;
         }
       }
+
       return true;
     }
     public int GetHashCode(byte[] arr)

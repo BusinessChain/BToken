@@ -58,7 +58,7 @@ namespace BToken.Chaining
             if (Chain == Headerchain.MainChain)
             {
               Headerchain.Locator.Update();
-              Headerchain.DirectHeaderAccessor.Update();
+              Headerchain.UpdateHeaderIndex();
               return null;
             }
 
@@ -82,7 +82,7 @@ namespace BToken.Chaining
             if (GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
           }
 
-          throw new ChainException(HeaderCode.ORPHAN);
+          throw new ChainException(ChainCode.ORPHAN);
         }
         void ValidateHeader(NetworkHeader header, UInt256 headerHash)
         {
@@ -100,12 +100,12 @@ namespace BToken.Chaining
           bool nextHeightBelowHighestCheckpoint = nextHeaderHeight <= highestCheckpointHight;
           if (mainChainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
           {
-            throw new ChainException(HeaderCode.INVALID);
+            throw new ChainException(ChainCode.INVALID);
           }
 
           if (!ValidateBlockLocation(nextHeaderHeight, headerHash))
           {
-            throw new ChainException(HeaderCode.INVALID);
+            throw new ChainException(ChainCode.INVALID);
           }
         }
         bool ValidateBlockLocation(uint height, UInt256 hash)
@@ -123,21 +123,21 @@ namespace BToken.Chaining
           uint nextHeight = GetHeight() + 1;
           if (nBits != TargetManager.GetNextTargetBits(Header, nextHeight))
           {
-            throw new ChainException(HeaderCode.INVALID);
+            throw new ChainException(ChainCode.INVALID);
           }
         }
         void ValidateTimeStamp(uint unixTimeSeconds)
         {
           if (unixTimeSeconds <= GetMedianTimePast(Header))
           {
-            throw new ChainException(HeaderCode.INVALID);
+            throw new ChainException(ChainCode.INVALID);
           }
         }
         void ValidateUniqueness(UInt256 hash)
         {
           if (Header.HeadersNext.Any(h => GetHeaderHash(h).IsEqual(hash)))
           {
-            throw new ChainException(HeaderCode.DUPLICATE);
+            throw new ChainException(ChainCode.DUPLICATE);
           }
         }
         uint GetMedianTimePast(ChainHeader header)

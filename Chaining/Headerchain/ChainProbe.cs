@@ -73,14 +73,13 @@ namespace BToken.Chaining
           }
           else
           {
-            return header.NetworkHeader.GetHeaderHash();
+            return header.NetworkHeader.ComputeHeaderHash();
           }
         }
 
         protected bool IsTip() => Header == Chain.HeaderTip;
         protected bool IsRoot() => Header == Chain.HeaderRoot;
         protected uint GetHeight() => Chain.Height - Depth;
-
       }
     }
   }

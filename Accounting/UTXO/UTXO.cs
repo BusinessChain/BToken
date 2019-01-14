@@ -36,8 +36,8 @@ namespace BToken.Accounting.UTXO
 
       try
       {
-        Blockchain.BlockStream blockStream = Blockchain.GetBlockStream();
-        NetworkBlock block = await blockStream.ReadBlockAsync();
+        Blockchain.BlockReader blockStream = Blockchain.GetBlockReader();
+        NetworkBlock block = await blockStream.ReadBlockNextInChainAsync();
 
         while (block != null)
         {
@@ -46,9 +46,11 @@ namespace BToken.Accounting.UTXO
             blockStream.Location.Height,
             block.Payload.Length);
 
-          Build(block, blockStream.Location.Hash);
+          List<TX> tXs = PayloadParser.Parse(block.Payload);
+          ValidatePayload(block.Header.MerkleRoot, tXs);
+          Build(tXs, blockStream.Location.Hash);
 
-          block = await blockStream.ReadBlockAsync();
+          block = await blockStream.ReadBlockNextInChainAsync();
         }
       }
       catch(Exception ex)
@@ -61,10 +63,17 @@ namespace BToken.Accounting.UTXO
 
       // Listen to new blocks.
     }
-
-    void Build(NetworkBlock block, UInt256 blockHeaderHash)
+    void ValidatePayload(UInt256 merkleRootHash, List<TX> bitcoinTXs)
     {
-      List<TX> bitcoinTXs = PayloadParser.Parse(block.Payload);
+      UInt256 merkleRootHashComputed = PayloadParser.ComputeMerkleRootHash(bitcoinTXs);
+      if (!merkleRootHashComputed.IsEqual(merkleRootHash))
+      {
+        throw new UTXOException("Corrupted payload.");
+      }
+    }
+
+    void Build(List<TX> bitcoinTXs, UInt256 blockHeaderHash)
+    {
       var uTXOBlockTransaction = new UTXOTransaction(bitcoinTXs, blockHeaderHash);
 
       //foreach (KeyValuePair<string, TXOutput> tXOutput in uTXOBlockTransaction.TXOutputs)
@@ -81,11 +90,13 @@ namespace BToken.Accounting.UTXO
       //}
     }
 
-    void Update(NetworkBlock block, UInt256 headerHash)
+    async Task Update(NetworkBlock block, UInt256 hash)
     {
-      List<TX> bitcoinTXs = PayloadParser.Parse(block.Payload);
-      var uTXOBlockTransaction = new UTXOTransaction(bitcoinTXs, headerHash);
-      uTXOBlockTransaction.ProcessAsync();
+      List<TX> tXs = PayloadParser.Parse(block.Payload);
+      ValidatePayload(block.Header.MerkleRoot, tXs);
+
+      var uTXOBlockTransaction = new UTXOTransaction(tXs, hash);
+      await uTXOBlockTransaction.ProcessAsync();
     }
     
     static bool IsOutputSpent(byte[] tXOutputIndex, int index)
@@ -96,5 +107,25 @@ namespace BToken.Accounting.UTXO
       return (maskFlag & tXOutputIndex[byteIndex]) != 0x00;
     }
 
+    async Task<TX> ReadTXAsync(UInt256 tXHash, byte[] headerIndex)
+    {
+      List<NetworkBlock> blocks = await Blockchain.ReadBlocksAsync(headerIndex);
+
+      foreach (NetworkBlock block in blocks)
+      {
+        List<TX> tXs = PayloadParser.Parse(block.Payload);
+        ValidatePayload(block.Header.MerkleRoot, tXs);
+
+        foreach (TX tX in tXs)
+        {
+          if(tX.GetTXHash().IsEqual(tXHash))
+          {
+            return tX;
+          }
+        }
+      }
+
+      return null;
+    }
   }
 }

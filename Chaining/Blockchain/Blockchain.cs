@@ -15,7 +15,6 @@ namespace BToken.Chaining
     INetwork Network;
     BlockArchiver Archiver;
     BlockchainRequestListener Listener;
-    IPayloadParser PayloadParser;
 
     // maybe protect this field with LOCK prevents block download stall bug
     List<Task> BlockDownloadTasks = new List<Task>();
@@ -25,15 +24,13 @@ namespace BToken.Chaining
     public Blockchain(
       NetworkBlock genesisBlock,
       INetwork network,
-      List<ChainLocation> checkpoints,
-      IPayloadParser payloadParser)
+      List<ChainLocation> checkpoints)
     {
       Network = network;
       Headers = new Headerchain(genesisBlock.Header, network, checkpoints, this);
 
       Archiver = new BlockArchiver(this);
       Listener = new BlockchainRequestListener(this, network);
-      PayloadParser = payloadParser;
     }
 
     public async Task StartAsync()
@@ -85,23 +82,35 @@ namespace BToken.Chaining
       BlockDownloadTasks.Add(executeSessionTask);
     }
 
-    public BlockStream GetBlockStream()
+    public BlockReader GetBlockReader()
     {
-      return new BlockStream(this);
+      return new BlockReader(this);
     }
-       
-    void ValidateBlock(UInt256 hash, NetworkBlock block)
+    public async Task<List<NetworkBlock>> ReadBlocksAsync(byte[] headerIndex)
     {
-      UInt256 headerHash = block.Header.GetHeaderHash();
-      if (!hash.IsEqual(headerHash))
+      List<Headerchain.ChainHeader> headers = Headers.ReadHeaders(headerIndex);
+      var blocks = new List<NetworkBlock>();
+
+      foreach(var header in headers)
       {
-        throw new ChainException(HeaderCode.INVALID);
+        if(!Headerchain.TryGetHeaderHash(header, out UInt256 hash))
+        {
+          hash = header.NetworkHeader.ComputeHeaderHash();
+        }
+        NetworkBlock block = await Archiver.ReadBlockAsync(hash);
+        ValidateHeader(hash, block);
+        blocks.Add(block);
       }
 
-      UInt256 payloadHash = PayloadParser.GetPayloadHash(block.Payload);
-      if (!payloadHash.IsEqual(block.Header.MerkleRoot))
+      return blocks;
+    }
+       
+    void ValidateHeader(UInt256 hash, NetworkBlock block)
+    {
+      UInt256 hashComputed = block.Header.ComputeHeaderHash();
+      if (!hash.IsEqual(hashComputed))
       {
-        throw new ChainException(HeaderCode.INVALID);
+        throw new ChainException(ChainCode.INVALID);
       }
     }
   }

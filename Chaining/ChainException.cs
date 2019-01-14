@@ -10,7 +10,7 @@ namespace BToken.Chaining
   {
     class ChainException : Exception
     {
-      public HeaderCode ErrorCode { get; private set; }
+      public ChainCode ErrorCode { get; private set; }
 
 
       public ChainException()
@@ -27,7 +27,7 @@ namespace BToken.Chaining
       {
       }
 
-      public ChainException(HeaderCode errorCode)
+      public ChainException(ChainCode errorCode)
       {
         ErrorCode = errorCode;
       }

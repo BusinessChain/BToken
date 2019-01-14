@@ -13,7 +13,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public enum HeaderCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
+    public enum ChainCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
 
     partial class Headerchain
     {
@@ -24,7 +24,7 @@ namespace BToken.Chaining
 
       Blockchain Blockchain;
 
-      DirectHeaderAccess DirectHeaderAccessor;
+      Dictionary<byte[], List<ChainHeader>> IndexTable;
       HeaderLocator Locator;
       HeaderArchiver Archiver = new HeaderArchiver();
 
@@ -42,7 +42,7 @@ namespace BToken.Chaining
         Checkpoints = checkpoints;
         MainChain = new Chain(GenesisHeader, 0, 0);
 
-        DirectHeaderAccessor = new DirectHeaderAccess(this);
+        IndexTable = new Dictionary<byte[], List<ChainHeader>>(new EqualityComparerByteArray());
         Locator = new HeaderLocator(this);
         Blockchain = blockchain;
 
@@ -78,18 +78,19 @@ namespace BToken.Chaining
       }
       static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)
       {
-        headerHash = header.GetHeaderHash();
+        headerHash = header.ComputeHeaderHash();
 
+        // Probably a bug: the header hash should be equal to NBits
         if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
         {
-          throw new ChainException(HeaderCode.INVALID);
+          throw new ChainException(ChainCode.INVALID);
         }
 
         const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
         bool IsTimestampPremature = header.UnixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
         if (IsTimestampPremature)
         {
-          throw new ChainException(HeaderCode.PREMATURE);
+          throw new ChainException(ChainCode.PREMATURE);
         }
       }
       void ReorganizeChain(Chain chain)
@@ -101,9 +102,47 @@ namespace BToken.Chaining
         Locator.Reorganize();
       }
 
-      public HeaderStream GetHeaderStreamer()
+      void UpdateHeaderIndex()
       {
-        return new HeaderStream(MainChain, GenesisHeader);
+        byte[] keyHeader = MainChain.HeaderTipHash.GetBytes().Take(4).ToArray();
+        ChainHeader header = MainChain.HeaderTip;
+
+        if (!IndexTable.TryGetValue(keyHeader, out List<ChainHeader> headers))
+        {
+          headers = new List<ChainHeader>();
+          IndexTable.Add(keyHeader, headers);
+        }
+        headers.Add(header);
+      }
+
+      public static bool TryGetHeaderHash(ChainHeader header, out UInt256 headerHash)
+      {        
+        if (header.HeadersNext.Any())
+        {
+          headerHash = header.HeadersNext[0].NetworkHeader.HashPrevious;
+          return true;
+        }
+        else
+        {
+          headerHash = null;
+          return false;
+        }
+      }
+
+      public List<ChainHeader> ReadHeaders(byte[] keyHeaderIndex)
+      {
+        if(IndexTable.TryGetValue(keyHeaderIndex, out List<ChainHeader> headers))
+        {
+          return headers;
+        }
+        else
+        {
+          return new List<ChainHeader>();
+        }
+      }
+      public HeaderReader GetHeaderReader()
+      {
+        return new HeaderReader(MainChain, GenesisHeader);
       }
       public HeaderWriter GetHeaderInserter()
       {

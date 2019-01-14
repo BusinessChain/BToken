@@ -25,7 +25,7 @@ namespace BToken.Chaining
           double accumulatedDifficultyPrevious)
         {
           HeaderTip = headerRoot;
-          HeaderTipHash = headerRoot.NetworkHeader.GetHeaderHash();
+          HeaderTipHash = headerRoot.NetworkHeader.ComputeHeaderHash();
           Height = height;
           HeaderRoot = headerRoot;
           AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerRoot.NetworkHeader.NBits);

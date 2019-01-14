@@ -79,7 +79,6 @@
     <Compile Include="Accounting\UTXO\TXInput.cs" />
     <Compile Include="Accounting\UTXO\TXOutput.cs" />
     <Compile Include="Accounting\UTXO\TXOutputsSpentMap.cs" />
-    <Compile Include="Accounting\UTXO\TXStream.cs" />
     <Compile Include="Accounting\UTXO\TXWitness.cs" />
     <Compile Include="Accounting\UTXO\UTXO.cs" />
     <Compile Include="Accounting\UTXO\PayloadParser.cs" />
@@ -92,11 +91,10 @@
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
     <Compile Include="Accounting\INetwork.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainRequestListener.cs" />
-    <Compile Include="Chaining\Blockchain\BlockStream.cs" />
+    <Compile Include="Chaining\Blockchain\BlockReader.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
-    <Compile Include="Chaining\Headerchain\DirectHeaderAccess.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderStream.cs" />
+    <Compile Include="Chaining\Headerchain\HeaderReader.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocator.cs" />
     <Compile Include="Chaining\Headerchain\ChainLocation.cs" />
     <Compile Include="Chaining\Headerchain\ChainProbe.cs" />
@@ -104,7 +102,6 @@
     <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
     <Compile Include="Chaining\Blockchain\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Headerchain\SessionHeaderDownload.cs" />
-    <Compile Include="Chaining\IPayloadParser.cs" />
     <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Chaining\Headerchain\Chain.cs" />
     <Compile Include="Chaining\Headerchain\IHeaderArchiver.cs" />

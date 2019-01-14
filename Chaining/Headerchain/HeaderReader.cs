@@ -12,13 +12,13 @@ namespace BToken.Chaining
   {
     partial class Headerchain
     {
-      public class HeaderStream : ChainProbe
+      public class HeaderReader : ChainProbe
       {
         List<ChainHeader> Trail;
         ChainHeader GenesisHeader;
 
 
-        public HeaderStream(Chain chain, ChainHeader genesisHeader)
+        public HeaderReader(Chain chain, ChainHeader genesisHeader)
           :base(chain)
         {
           GenesisHeader = genesisHeader;

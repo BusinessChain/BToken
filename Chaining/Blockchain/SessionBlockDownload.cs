@@ -43,7 +43,7 @@ namespace BToken.Chaining
       async Task DownloadBlockAsync()
       {
         NetworkBlock block = await GetBlockAsync(HeaderLocation.Hash);
-        Blockchain.ValidateBlock(HeaderLocation.Hash, block);
+        Blockchain.ValidateHeader(HeaderLocation.Hash, block);
         await Blockchain.Archiver.ArchiveBlockAsync(block, HeaderLocation.Hash);
       }
       async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)
@@ -62,7 +62,7 @@ namespace BToken.Chaining
             if (networkMessage.Command == "block")
             {
               var blockMessage = new BlockMessage(networkMessage);
-              UInt256 hashReceived = blockMessage.NetworkBlock.Header.GetHeaderHash();
+              UInt256 hashReceived = blockMessage.NetworkBlock.Header.ComputeHeaderHash();
               if (hashReceived.IsEqual(hashRequested))
               {
                 return blockMessage.NetworkBlock;

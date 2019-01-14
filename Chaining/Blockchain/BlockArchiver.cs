@@ -64,18 +64,6 @@ namespace BToken.Chaining
         using (MemoryStream blockStream = OpenBlockStream(blockHeaderHashRequested.GetBytes()))
         {
           NetworkBlock block = await NetworkBlock.ReadBlockAsync(blockStream);
-
-          Blockchain.ValidateBlock(blockHeaderHashRequested, block);
-          return block;
-        }
-      }
-      public async Task<NetworkBlock> ReadBlockAsync(byte[] blockHeaderHashBytes)
-      {
-        using (MemoryStream blockStream = OpenBlockStream(blockHeaderHashBytes))
-        {
-          NetworkBlock block = await NetworkBlock.ReadBlockAsync(blockStream);
-
-          Blockchain.ValidateBlock(blockHeaderHashRequested, block);
           return block;
         }
       }

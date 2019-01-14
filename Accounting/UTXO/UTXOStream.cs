@@ -13,13 +13,13 @@ namespace BToken.Accounting.UTXO
     {
       UTXO UTXO;
       TXInput TXInput;
-      byte[] BlockHeaderHash;
+      byte[] BlockIndex;
 
       public UTXOStream(UTXO uTXO, TXInput tXInput)
       {
         UTXO = uTXO;
         TXInput = tXInput;
-        BlockHeaderHash = GetBlockHeaderHashKey(tXInput);
+        BlockIndex = GetBlockIndex(tXInput);
       }
 
       public TXOutput ReadTXOutput()
@@ -27,7 +27,7 @@ namespace BToken.Accounting.UTXO
         throw new NotImplementedException();
       }
 
-      byte[] GetBlockHeaderHashKey(TXInput tXInput)
+      byte[] GetBlockIndex(TXInput tXInput)
       {
         int numberOfKeyBytes = 4;
         var tXIDOutputBytes = tXInput.TXIDOutput.GetBytes();
@@ -48,7 +48,7 @@ namespace BToken.Accounting.UTXO
         throw new UTXOException(string.Format("TXInput references spent or nonexistant output TXID: '{0}', index: '{1}'",
           tXInput.TXIDOutput, tXInput.IndexOutput));
       }
-
+      
       public void Dispose()
       {
 

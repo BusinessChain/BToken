@@ -10,23 +10,23 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public class BlockStream
+    public class BlockReader
     {
       Blockchain Blockchain;
-      Headerchain.HeaderStream HeaderStream;
+      Headerchain.HeaderReader HeaderReader;
 
       public ChainLocation Location { get; private set; }
 
 
-      public BlockStream(Blockchain blockchain)
+      public BlockReader(Blockchain blockchain)
       {
         Blockchain = blockchain;
-        HeaderStream = Blockchain.Headers.GetHeaderStreamer();
+        HeaderReader = Blockchain.Headers.GetHeaderReader();
       }
 
-      public async Task<NetworkBlock> ReadBlockAsync()
+      public async Task<NetworkBlock> ReadBlockNextInChainAsync()
       {
-        Location = HeaderStream.ReadHeaderLocationTowardGenesis();
+        Location = HeaderReader.ReadHeaderLocationTowardGenesis();
 
         if (Location == null) { return null; }
 
