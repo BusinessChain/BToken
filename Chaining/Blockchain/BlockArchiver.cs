@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
 using System.IO;
 
@@ -29,7 +29,7 @@ namespace BToken.Chaining
       FileStream CreateFile(UInt256 hash)
       {
         string filename = hash.ToString();
-        string fileRootPath = GenerateRootPath(filename);
+        string fileRootPath = GenerateRootPath(hash);
 
         DirectoryInfo dir = Directory.CreateDirectory(fileRootPath);
 
@@ -57,45 +57,32 @@ namespace BToken.Chaining
         }
       }
 
-      public async Task<NetworkBlock> ReadBlockAsync(UInt256 blockHeaderHashRequested)
+      public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
       {
         // read cache
 
-        using (MemoryStream blockStream = OpenBlockStream(blockHeaderHashRequested.GetBytes()))
+        string filename = hash.ToString();
+        string fileRootPath = GenerateRootPath(hash);
+        string filePath = Path.Combine(fileRootPath, filename);
+        
+        using (FileStream fileStream = new FileStream(
+          filePath,
+          FileMode.Open,
+          FileAccess.Read,
+          FileShare.Read))
         {
-          NetworkBlock block = await NetworkBlock.ReadBlockAsync(blockStream);
+          NetworkBlock block = await NetworkBlock.ReadBlockAsync(fileStream);
           return block;
         }
       }
 
-      static MemoryStream OpenBlockStream(byte[] blockHeaderHashBytes)
+      static string GenerateRootPath(UInt256 blockHash)
       {
-        string filePath = Path.Combine(GenerateRootPath(filename), filename);
-
-        var fileStream = new FileStream(
-          filePath,
-          FileMode.Open,
-          FileAccess.Read,
-          FileShare.Read);
-      }
-
-      static string GenerateRootPath(string filename)
-      {
-        string firstHexByte = filename.Substring(62, 2);
-        string secondHexByte = filename.Substring(60, 2);
+        string blockHashIndex = new SoapHexBinary(blockHash.GetBytes().Take(2).ToArray()).ToString();
 
         return Path.Combine(
           RootDirectory.Name,
-          firstHexByte,
-          secondHexByte);
-      }
-
-      public bool BlockExists(UInt256 blockHeaderHash)
-      {
-        string fileName = blockHeaderHash.ToString();
-        string filePath = Path.Combine(GenerateRootPath(fileName), fileName);
-
-        return File.Exists(filePath);
+          blockHashIndex);
       }
     }
   }

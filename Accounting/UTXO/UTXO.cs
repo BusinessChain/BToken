@@ -74,7 +74,7 @@ namespace BToken.Accounting.UTXO
 
     void Build(List<TX> bitcoinTXs, UInt256 blockHeaderHash)
     {
-      var uTXOBlockTransaction = new UTXOTransaction(bitcoinTXs, blockHeaderHash);
+      var uTXOBlockTransaction = new UTXOTransaction(this, bitcoinTXs, blockHeaderHash);
 
       //foreach (KeyValuePair<string, TXOutput> tXOutput in uTXOBlockTransaction.TXOutputs)
       //{
@@ -95,18 +95,26 @@ namespace BToken.Accounting.UTXO
       List<TX> tXs = PayloadParser.Parse(block.Payload);
       ValidatePayload(block.Header.MerkleRoot, tXs);
 
-      var uTXOBlockTransaction = new UTXOTransaction(tXs, hash);
-      await uTXOBlockTransaction.ProcessAsync();
+      var uTXOTransaction = new UTXOTransaction(this, tXs, hash);
+      await uTXOTransaction.ProcessAsync();
     }
     
-    static bool IsOutputSpent(byte[] tXOutputIndex, int index)
+    static bool IsOutputSpent(byte[] bitMapTXOutputsSpent, int index)
     {
       int byteIndex = index / 8;
       int bitIndex = index % 8;
       byte maskFlag = (byte)(0x01 << bitIndex);
-      return (maskFlag & tXOutputIndex[byteIndex]) != 0x00;
-    }
 
+      try
+      {
+        return (maskFlag & bitMapTXOutputsSpent[byteIndex]) != 0x00;
+      }
+      catch (ArgumentOutOfRangeException)
+      {
+        return true;
+      }
+    }
+    
     async Task<TX> ReadTXAsync(UInt256 tXHash, byte[] headerIndex)
     {
       List<NetworkBlock> blocks = await Blockchain.ReadBlocksAsync(headerIndex);
