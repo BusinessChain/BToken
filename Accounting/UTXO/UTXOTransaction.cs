@@ -34,7 +34,7 @@ namespace BToken.Accounting.UTXO
         HashesTX = new UInt256[TXs.Count];
       }
 
-      public async Task ProcessAsync()
+      public async Task InsertAsync()
       {
         byte[] uTXOKey = await GetUTXOKeyFreeAsync(HashCoinbaseTX);
         byte[] uTXOIndex = CreateUTXOIndex(CoinbaseTX.TXOutputs.Count);
@@ -58,7 +58,6 @@ namespace BToken.Accounting.UTXO
           uTXOIndex = CreateUTXOIndex(TXs[i].TXOutputs.Count);
           UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
         }
-        
         for (int i = 0; i < TXs.Count; i++)
         {
           try
@@ -317,6 +316,7 @@ namespace BToken.Accounting.UTXO
           }
         }
       }
+
     }
   }
 }

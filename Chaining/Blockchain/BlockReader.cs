@@ -24,7 +24,7 @@ namespace BToken.Chaining
         HeaderReader = Blockchain.Headers.GetHeaderReader();
       }
 
-      public async Task<NetworkBlock> ReadBlockNextInChainAsync()
+      public async Task<NetworkBlock> ReadBlockAsync()
       {
         Location = HeaderReader.ReadHeaderLocationTowardGenesis();
 
@@ -39,7 +39,7 @@ namespace BToken.Chaining
           catch (IOException)
           {
             await Task.Delay(1000).ConfigureAwait(false);
-            Console.WriteLine("waiting for Block '{0}' to download", Location.Hash);
+            Console.WriteLine("waiting for Block '{0}' to be accessible... ", Location.Hash);
           }
         }
       }

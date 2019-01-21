@@ -99,20 +99,19 @@ namespace BToken.Chaining
           }
         }
       }
-      void ServeGetHeadersRequest(GetHeadersMessage getHeadersMessage, INetworkChannel channel)
+      void ServeGetHeadersRequest(GetHeadersMessage messageGetHeaders, INetworkChannel channel)
       {
         Headerchain.HeaderReader headerStreamer = Blockchain.Headers.GetHeaderReader();
-        headerStreamer.FindRootLocation(getHeadersMessage.HeaderLocator);
+        headerStreamer.FindRootLocation(messageGetHeaders.HeaderLocator);
 
         const int HEADERS_COUNT_MAX = 2000;
         var headers = new List<NetworkHeader>();
-        UInt256 stopHash = getHeadersMessage.StopHash;
+        UInt256 stopHash = messageGetHeaders.StopHash;
         NetworkHeader header = headerStreamer.ReadNextHeaderTowardTip(out UInt256 headerHash);
 
         while (header != null && headers.Count < HEADERS_COUNT_MAX && !(headerHash.IsEqual(stopHash)))
         {
           headers.Add(header);
-
           header = headerStreamer.ReadNextHeaderTowardTip(out headerHash);
         }
 
@@ -120,6 +119,9 @@ namespace BToken.Chaining
         channel.SendMessageAsync(headersMessage);
       }
 
+      // Über Direct Header Access den root Header suchen, danach die nächsten 2000 Blöcke senden.
+      // Idealerweise ist Main immer Zweig[0], dann braucht es die ganze Trail Scheisse nicht.
+      // Danach braucht HeaderStreamer keine Funktion ReadNextHeaderTowardTip mehr
     }
   }
 }
