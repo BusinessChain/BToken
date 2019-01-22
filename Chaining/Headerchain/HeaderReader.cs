@@ -23,40 +23,20 @@ namespace BToken.Chaining
           GenesisHeader = headerchain.GenesisHeader;
         }
                
-        public ChainLocation ReadHeaderLocation()
+        public NetworkHeader ReadHeader(out ChainLocation chainLocation)
         {
           if (Header != GenesisHeader)
           {
-            var chainLocation = new ChainLocation(GetHeight(), Hash);
+            chainLocation = new ChainLocation(GetHeight(), Hash);
+            NetworkHeader header = Header.NetworkHeader;
+
             Push();
 
-            return chainLocation;
+            return header;
           }
 
+          chainLocation = null;
           return null;
-        }
-
-        public NetworkHeader ReadHeader(out UInt256 headerHash)
-        {
-          if(Header == null)
-          {
-            headerHash = null;
-            return null;
-          }
-
-          NetworkHeader header = Header.NetworkHeader;
-          headerHash = Hash;
-
-          if (Header == GenesisHeader)
-          {
-            Header = null;
-          }
-          else
-          {
-            Push();
-          }
-
-          return header;
         }
 
       }

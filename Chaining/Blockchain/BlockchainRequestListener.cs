@@ -106,18 +106,18 @@ namespace BToken.Chaining
         Headerchain.HeaderReader headerStreamer = Blockchain.Headers.GetHeaderReader();
         var headers = new List<NetworkHeader>();
         
-        NetworkHeader header = headerStreamer.ReadHeader(out UInt256 headerHash);
+        NetworkHeader header = headerStreamer.ReadHeader(out ChainLocation headerLocation);
         while(header != null 
           && headers.Count < HEADERS_COUNT_MAX 
-          && !messageGetHeaders.HeaderLocator.Contains(headerHash))
+          && !messageGetHeaders.HeaderLocator.Contains(headerLocation.Hash))
         {
-          if(headerHash.Equals(messageGetHeaders.StopHash))
+          if(headerLocation.Hash.Equals(messageGetHeaders.StopHash))
           {
             headers.Clear();
           }
 
           headers.Insert(0, header);
-          header = headerStreamer.ReadHeader(out headerHash);
+          header = headerStreamer.ReadHeader(out headerLocation);
         }
 
         channel.SendMessageAsync(new HeadersMessage(headers));

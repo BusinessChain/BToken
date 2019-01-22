@@ -103,7 +103,6 @@ namespace BToken.Accounting.UTXO
 
         return uTXOKey;
       }
-
       async Task RemoveTXOutputIndexesAsync(TX stopTX)
       {
         int i = 0;
@@ -132,7 +131,6 @@ namespace BToken.Accounting.UTXO
           uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
         }
       }
-
       async Task UnspendTXOutputsReferencedUntilTX(TX stopTX)
       {
         int i = 0;
@@ -194,7 +192,6 @@ namespace BToken.Accounting.UTXO
 
         }
       }
-
       byte[] CreateUTXOIndex(int tXOutputsCount)
       {
         byte[] uTXOIndex = new byte[NumberHeaderIndexBytes + (tXOutputsCount + 7) / 8];
@@ -209,7 +206,6 @@ namespace BToken.Accounting.UTXO
             NumberHeaderIndexBytes,
             uTXOIndex.Length - NumberHeaderIndexBytes).Array;
       }
-
       async Task SpendTXOutputsReferencedAsync(TX tX, UInt256 tXHash)
       {
         for (int index = 0; index < tX.TXInputs.Count; index++)
@@ -229,7 +225,6 @@ namespace BToken.Accounting.UTXO
           }
         }
       }
-
       async Task<(byte[] uTXOKey, byte[] uTXOIndex, TXOutput tXOutput)>
         GetTXOutputTupleAsync(TXInput tXInput)
       {
@@ -317,6 +312,45 @@ namespace BToken.Accounting.UTXO
         }
       }
 
+      public async Task BuildAsync()
+      {
+        byte[] uTXOKey = await GetUTXOKeyFreeAsync(HashCoinbaseTX);
+        byte[] uTXOIndex = CreateUTXOIndex(CoinbaseTX.TXOutputs.Count);
+        UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
+
+        for (int i = 0; i < TXs.Count; i++)
+        {
+          HashesTX[i] = TXs[i].GetTXHash();
+
+          try
+          {
+            uTXOKey = await GetUTXOKeyFreeAsync(HashesTX[i]);
+          }
+          catch (UTXOException ex)
+          {
+            await RemoveTXOutputIndexAsync(HashCoinbaseTX);
+            await RemoveTXOutputIndexesAsync(stopTX: TXs[i]);
+            throw ex;
+          }
+
+          uTXOIndex = CreateUTXOIndex(TXs[i].TXOutputs.Count);
+          UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
+        }
+        for (int i = 0; i < TXs.Count; i++)
+        {
+          try
+          {
+            await SpendTXOutputsReferencedAsync(TXs[i], HashesTX[i]);
+          }
+          catch (Exception ex)
+          {
+            await RemoveTXOutputIndexAsync(HashCoinbaseTX);
+            await RemoveTXOutputIndexesAsync(stopTX: null);
+            await UnspendTXOutputsReferencedUntilTX(stopTX: TXs[i]);
+            throw ex;
+          }
+        }
+      }
     }
   }
 }

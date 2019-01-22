@@ -45,10 +45,11 @@ namespace BToken.Accounting.UTXO
             blockStream.Location.Hash.ToString(),
             blockStream.Location.Height,
             block.Payload.Length);
+          
+          ValidatePayload(block, out List<TX> tXs);
 
-          List<TX> tXs = PayloadParser.Parse(block.Payload);
-          ValidatePayload(block.Header.MerkleRoot, tXs);
-          Build(tXs, blockStream.Location.Hash);
+          var uTXOTransaction = new UTXOTransaction(this, tXs, blockStream.Location.Hash);
+          await uTXOTransaction.BuildAsync();
 
           block = await blockStream.ReadBlockAsync();
         }
@@ -63,10 +64,11 @@ namespace BToken.Accounting.UTXO
 
       // Listen to new blocks.
     }
-    void ValidatePayload(UInt256 merkleRootHash, List<TX> bitcoinTXs)
+    void ValidatePayload(NetworkBlock block, out List<TX> tXs)
     {
-      UInt256 merkleRootHashComputed = PayloadParser.ComputeMerkleRootHash(bitcoinTXs);
-      if (!merkleRootHashComputed.Equals(merkleRootHash))
+      tXs = PayloadParser.Parse(block.Payload);
+      UInt256 merkleRootHashComputed = PayloadParser.ComputeMerkleRootHash(tXs);
+      if (!merkleRootHashComputed.Equals(block.Header.MerkleRoot))
       {
         throw new UTXOException("Corrupted payload.");
       }
@@ -74,8 +76,7 @@ namespace BToken.Accounting.UTXO
     
     async Task Update(NetworkBlock block, UInt256 hash)
     {
-      List<TX> tXs = PayloadParser.Parse(block.Payload);
-      ValidatePayload(block.Header.MerkleRoot, tXs);
+      ValidatePayload(block, out List<TX> tXs);
 
       var uTXOTransaction = new UTXOTransaction(this, tXs, hash);
       await uTXOTransaction.InsertAsync();
@@ -103,8 +104,7 @@ namespace BToken.Accounting.UTXO
 
       foreach (NetworkBlock block in blocks)
       {
-        List<TX> tXs = PayloadParser.Parse(block.Payload);
-        ValidatePayload(block.Header.MerkleRoot, tXs);
+        ValidatePayload(block, out List<TX> tXs);
 
         foreach (TX tX in tXs)
         {

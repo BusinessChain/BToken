@@ -26,7 +26,8 @@ namespace BToken.Chaining
 
       public async Task<NetworkBlock> ReadBlockAsync()
       {
-        Location = HeaderReader.ReadHeaderLocation();
+        HeaderReader.ReadHeader(out ChainLocation location);
+        Location = location;
 
         if (Location == null) { return null; }
 
