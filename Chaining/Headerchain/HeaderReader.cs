@@ -18,10 +18,10 @@ namespace BToken.Chaining
         ChainHeader GenesisHeader;
 
 
-        public HeaderReader(Chain chain, ChainHeader genesisHeader)
-          :base(chain)
+        public HeaderReader(Headerchain headerchain)
+          :base(headerchain.MainChain)
         {
-          GenesisHeader = genesisHeader;
+          GenesisHeader = headerchain.GenesisHeader;
         }
 
         protected override void Initialize()
@@ -31,19 +31,6 @@ namespace BToken.Chaining
           Trail = new List<ChainHeader>();
         }
 
-        public void FindRootLocation(List<UInt256> headerLocator)
-        {
-          while (true)
-          {
-            bool isHashInLocator = headerLocator.Any(h => h.IsEqual(Hash));
-            if (isHashInLocator || Header == GenesisHeader)
-            {
-              return;
-            }
-
-            Push();
-          }
-        }
         protected override void Push()
         {
           LayTrail();
@@ -100,18 +87,27 @@ namespace BToken.Chaining
           return null;
         }
 
-        public NetworkHeader ReadNextHeaderTowardTip(out UInt256 headerHash)
+        public NetworkHeader ReadHeader(out UInt256 headerHash)
         {
-          if(IsTip())
+          if(Header == null)
           {
             headerHash = null;
             return null;
           }
-          
-          Pull();
 
+          NetworkHeader header = Header.NetworkHeader;
           headerHash = Hash;
-          return Header.NetworkHeader;
+
+          if (Header == GenesisHeader)
+          {
+            Header = null;
+          }
+          else
+          {
+            Push();
+          }
+
+          return header;
         }
 
       }

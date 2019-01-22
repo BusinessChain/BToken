@@ -48,17 +48,17 @@ namespace BToken.Chaining
           ValidateHeader(networkHeader, headerHash);
 
           var chainHeader = new ChainHeader(networkHeader, Header);
-
           Header.HeadersNext.Add(chainHeader);
 
+          Headerchain.UpdateHeaderIndex(chainHeader, headerHash);
+          
           if (IsTip())
           {
             Chain.ExtendChain(chainHeader, headerHash);
 
             if (Chain == Headerchain.MainChain)
             {
-              Headerchain.Locator.Update();
-              Headerchain.UpdateHeaderIndex();
+              Headerchain.LocatorMainChain.Update();
               return null;
             }
 
@@ -113,7 +113,7 @@ namespace BToken.Chaining
           ChainLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
           if (checkpoint != null)
           {
-            return checkpoint.Hash.IsEqual(hash);
+            return checkpoint.Hash.Equals(hash);
           }
 
           return true;
@@ -135,7 +135,7 @@ namespace BToken.Chaining
         }
         void ValidateUniqueness(UInt256 hash)
         {
-          if (Header.HeadersNext.Any(h => GetHeaderHash(h).IsEqual(hash)))
+          if (Header.HeadersNext.Select(h => GetHeaderHash(h)).Contains(hash))
           {
             throw new ChainException(ChainCode.DUPLICATE);
           }

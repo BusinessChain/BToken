@@ -108,7 +108,7 @@ namespace BToken.Chaining
     void ValidateHeader(UInt256 hash, NetworkBlock block)
     {
       UInt256 hashComputed = block.Header.ComputeHeaderHash();
-      if (!hash.IsEqual(hashComputed))
+      if (!hash.Equals(hashComputed))
       {
         throw new ChainException(ChainCode.INVALID);
       }

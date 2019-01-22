@@ -156,15 +156,6 @@ namespace BToken
     {
       return Data > number.Data;
     }
-    public bool IsEqual(UInt256 number)
-    {
-      if (number == null)
-      {
-        return false;
-      }
-
-      return Data.Equals(number.Data);
-    }
 
     public static UInt256 Min(UInt256 number1, UInt256 number2)
     {
@@ -173,6 +164,19 @@ namespace BToken
         return number2;
       }
       return number1;
+    }
+
+    public override bool Equals(object obj)
+    {
+      UInt256 uInt256 = obj as UInt256;
+
+      if (uInt256 == null) { return false; }
+      return Data.Equals(uInt256.Data);
+    }
+
+    public override int GetHashCode()
+    {
+      return Data.GetHashCode();
     }
 
     public static explicit operator double(UInt256 d)

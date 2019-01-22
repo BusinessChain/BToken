@@ -63,7 +63,7 @@ namespace BToken.Chaining
             {
               var blockMessage = new BlockMessage(networkMessage);
               UInt256 hashReceived = blockMessage.NetworkBlock.Header.ComputeHeaderHash();
-              if (hashReceived.IsEqual(hashRequested))
+              if (hashReceived.Equals(hashRequested))
               {
                 return blockMessage.NetworkBlock;
               }

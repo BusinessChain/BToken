@@ -41,7 +41,7 @@ namespace BToken.Chaining
 
           while (true)
           {
-            if (Hash.IsEqual(hash))
+            if (Hash.Equals(hash))
             {
               return true;
             }
@@ -78,7 +78,6 @@ namespace BToken.Chaining
         }
 
         protected bool IsTip() => Header == Chain.HeaderTip;
-        protected bool IsRoot() => Header == Chain.HeaderRoot;
         protected uint GetHeight() => Chain.Height - Depth;
       }
     }

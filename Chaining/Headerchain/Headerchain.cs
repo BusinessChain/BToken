@@ -24,8 +24,10 @@ namespace BToken.Chaining
 
       Blockchain Blockchain;
 
-      Dictionary<byte[], List<ChainHeader>> IndexTable;
-      HeaderLocator Locator;
+      Dictionary<byte[], List<ChainHeader>> HeaderIndex;
+      int NumberHeaderIndexBytes = 4;
+
+      HeaderLocator LocatorMainChain;
       HeaderArchiver Archiver = new HeaderArchiver();
 
       BufferBlock<bool> SignalInserterAvailable = new BufferBlock<bool>();
@@ -42,8 +44,8 @@ namespace BToken.Chaining
         Checkpoints = checkpoints;
         MainChain = new Chain(GenesisHeader, 0, 0);
 
-        IndexTable = new Dictionary<byte[], List<ChainHeader>>(new EqualityComparerByteArray());
-        Locator = new HeaderLocator(this);
+        HeaderIndex = new Dictionary<byte[], List<ChainHeader>>(new EqualityComparerByteArray());
+        LocatorMainChain = new HeaderLocator(this);
         Blockchain = blockchain;
 
         Inserter = new ChainInserter(this);
@@ -80,7 +82,6 @@ namespace BToken.Chaining
       {
         headerHash = header.ComputeHeaderHash();
 
-        // Probably a bug: the header hash should be equal to NBits
         if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
         {
           throw new ChainException(ChainCode.INVALID);
@@ -99,18 +100,17 @@ namespace BToken.Chaining
         SecondaryChains.Add(MainChain);
         MainChain = chain;
 
-        Locator.Reorganize();
+        LocatorMainChain.Reorganize();
       }
 
-      void UpdateHeaderIndex()
+      void UpdateHeaderIndex(ChainHeader header, UInt256 headerHash)
       {
-        byte[] keyHeader = MainChain.HeaderTipHash.GetBytes().Take(4).ToArray();
-        ChainHeader header = MainChain.HeaderTip;
+        byte[] keyHeader = headerHash.GetBytes().Take(NumberHeaderIndexBytes).ToArray();
 
-        if (!IndexTable.TryGetValue(keyHeader, out List<ChainHeader> headers))
+        if (!HeaderIndex.TryGetValue(keyHeader, out List<ChainHeader> headers))
         {
           headers = new List<ChainHeader>();
-          IndexTable.Add(keyHeader, headers);
+          HeaderIndex.Add(keyHeader, headers);
         }
         headers.Add(header);
       }
@@ -131,7 +131,7 @@ namespace BToken.Chaining
 
       public List<ChainHeader> ReadHeaders(byte[] keyHeaderIndex)
       {
-        if(IndexTable.TryGetValue(keyHeaderIndex, out List<ChainHeader> headers))
+        if(HeaderIndex.TryGetValue(keyHeaderIndex, out List<ChainHeader> headers))
         {
           return headers;
         }
@@ -142,7 +142,7 @@ namespace BToken.Chaining
       }
       public HeaderReader GetHeaderReader()
       {
-        return new HeaderReader(MainChain, GenesisHeader);
+        return new HeaderReader(this);
       }
       public HeaderWriter GetHeaderInserter()
       {
@@ -150,7 +150,7 @@ namespace BToken.Chaining
       }
       public List<UInt256> GetHeaderLocator()
       {
-        return Locator.GetHeaderLocator();
+        return LocatorMainChain.GetHeaderLocator();
       }
       public async Task LoadFromArchiveAsync()
       {

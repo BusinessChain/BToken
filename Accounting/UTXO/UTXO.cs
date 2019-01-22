@@ -66,7 +66,7 @@ namespace BToken.Accounting.UTXO
     void ValidatePayload(UInt256 merkleRootHash, List<TX> bitcoinTXs)
     {
       UInt256 merkleRootHashComputed = PayloadParser.ComputeMerkleRootHash(bitcoinTXs);
-      if (!merkleRootHashComputed.IsEqual(merkleRootHash))
+      if (!merkleRootHashComputed.Equals(merkleRootHash))
       {
         throw new UTXOException("Corrupted payload.");
       }
@@ -108,7 +108,7 @@ namespace BToken.Accounting.UTXO
 
         foreach (TX tX in tXs)
         {
-          if(tX.GetTXHash().IsEqual(tXHash))
+          if(tX.GetTXHash().Equals(tXHash))
           {
             return tX;
           }
