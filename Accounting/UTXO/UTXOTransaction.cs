@@ -15,8 +15,6 @@ namespace BToken.Accounting.UTXO
     {
       UTXO UTXO;
       UInt256 HeaderHash;
-      TX CoinbaseTX;
-      UInt256 HashCoinbaseTX;
       List<TX> TXs;
       UInt256[] HashesTX;
 
@@ -28,17 +26,12 @@ namespace BToken.Accounting.UTXO
       {
         UTXO = uTXO;
         HeaderHash = blockHeaderHash;
-        CoinbaseTX = tXs.First();
-        HashCoinbaseTX = CoinbaseTX.GetTXHash();
-        TXs = tXs.Skip(1).ToList();
+        TXs = tXs;
         HashesTX = new UInt256[TXs.Count];
       }
 
       public async Task InsertAsync()
       {
-        byte[] uTXOKey = await GetUTXOKeyFreeAsync(HashCoinbaseTX);
-        byte[] uTXOIndex = CreateUTXOIndex(CoinbaseTX.TXOutputs.Count);
-        UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
 
         for (int i = 0; i < TXs.Count; i++)
         {
@@ -46,18 +39,16 @@ namespace BToken.Accounting.UTXO
 
           try
           {
-            uTXOKey = await GetUTXOKeyFreeAsync(HashesTX[i]);
+            await InsertNewTXOutputsAsync(TXs[i].TXOutputs.Count, HashesTX[i]);
           }
           catch (UTXOException ex)
           {
-            await RemoveTXOutputIndexAsync(HashCoinbaseTX);
             await RemoveTXOutputIndexesAsync(stopTX: TXs[i]);
             throw ex;
           }
 
-          uTXOIndex = CreateUTXOIndex(TXs[i].TXOutputs.Count);
-          UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
         }
+
         for (int i = 0; i < TXs.Count; i++)
         {
           try
@@ -66,7 +57,6 @@ namespace BToken.Accounting.UTXO
           }
           catch (Exception ex)
           {
-            await RemoveTXOutputIndexAsync(HashCoinbaseTX);
             await RemoveTXOutputIndexesAsync(stopTX: null);
             await UnspendTXOutputsReferencedUntilTX(stopTX: TXs[i]);
             throw ex;
@@ -192,13 +182,6 @@ namespace BToken.Accounting.UTXO
 
         }
       }
-      byte[] CreateUTXOIndex(int tXOutputsCount)
-      {
-        byte[] uTXOIndex = new byte[NumberHeaderIndexBytes + (tXOutputsCount + 7) / 8];
-        Array.Copy(HeaderHash.GetBytes(), 0, uTXOIndex, 0, NumberHeaderIndexBytes);
-
-        return uTXOIndex;
-      }
       byte[] GetBitMapFromUTXOIndex(byte[] uTXOIndex)
       {
         return new ArraySegment<byte>(
@@ -254,8 +237,7 @@ namespace BToken.Accounting.UTXO
       {
         var tXOutputTuple = await GetTXOutputTupleAsync(tXInput);
 
-        byte[] bitMapTXOutputsSpent = GetBitMapFromUTXOIndex(tXOutputTuple.uTXOIndex);
-        if (IsOutputSpent(bitMapTXOutputsSpent, tXInput.IndexOutput))
+        if (IsOutputSpent(tXOutputTuple.uTXOIndex, tXInput.IndexOutput))
         {
           throw new UTXOException(string.Format("TXOutput '{0}', index: '{1}', block index: '{2}' already spent.",
             tXInput.TXIDOutput,
@@ -266,11 +248,9 @@ namespace BToken.Accounting.UTXO
         {
           if (Script.Evaluate(tXOutputTuple.tXOutput.LockingScript, tXInput.UnlockingScript))
           {
-            int byteIndex = tXInput.IndexOutput / 8;
-            int bitIndex = tXInput.IndexOutput % 8;
-            bitMapTXOutputsSpent[byteIndex] |= (byte)(0x01 << bitIndex);
+            SpendTXOutputBit(tXOutputTuple.uTXOIndex, tXInput.IndexOutput);
 
-            if (AreAllOutputsSpent(bitMapTXOutputsSpent))
+            if (AreAllOutputBitsSpent(tXOutputTuple.uTXOIndex))
             {
               UTXO.UTXOTable.Remove(tXOutputTuple.uTXOKey);
               FillGapInUTXO(tXOutputTuple.uTXOKey);
@@ -285,11 +265,26 @@ namespace BToken.Accounting.UTXO
         }
 
       }
-      bool AreAllOutputsSpent(byte[] bitMapTXOutputsSpent)
+      bool IsOutputSpent(byte[] uTXOIndex, int index)
       {
-        for (int i = 0; i < bitMapTXOutputsSpent.Length; i++)
+        int byteIndex = index / 8 + NumberHeaderIndexBytes;
+        int bitIndex = index % 8;
+        byte maskFlag = (byte)(0x01 << bitIndex);
+
+        try
         {
-          if (bitMapTXOutputsSpent[i] != 0xFF) { return false; }
+          return (maskFlag & uTXOIndex[byteIndex]) != 0x00;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+          return true;
+        }
+      }
+      bool AreAllOutputBitsSpent(byte[] uTXOIndex)
+      {
+        for (int i = NumberHeaderIndexBytes; i < uTXOIndex.Length; i++)
+        {
+          if (uTXOIndex[i] != 0xFF) { return false; }
         }
 
         return true;
@@ -312,44 +307,99 @@ namespace BToken.Accounting.UTXO
         }
       }
 
-      public async Task BuildAsync()
+      public async Task BuildAsync(Dictionary<UInt256, List<TXInput>> tXInputsUnfunded)
       {
-        byte[] uTXOKey = await GetUTXOKeyFreeAsync(HashCoinbaseTX);
-        byte[] uTXOIndex = CreateUTXOIndex(CoinbaseTX.TXOutputs.Count);
-        UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
-
+        InsertInputsUnfunded(tXInputsUnfunded);
+                        
         for (int i = 0; i < TXs.Count; i++)
         {
           HashesTX[i] = TXs[i].GetTXHash();
-
-          try
-          {
-            uTXOKey = await GetUTXOKeyFreeAsync(HashesTX[i]);
-          }
-          catch (UTXOException ex)
-          {
-            await RemoveTXOutputIndexAsync(HashCoinbaseTX);
-            await RemoveTXOutputIndexesAsync(stopTX: TXs[i]);
-            throw ex;
-          }
-
-          uTXOIndex = CreateUTXOIndex(TXs[i].TXOutputs.Count);
-          UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
+          await BuildTXOutputsAsync(TXs[i].TXOutputs.Count, HashesTX[i], tXInputsUnfunded);
         }
-        for (int i = 0; i < TXs.Count; i++)
+      }
+      void InsertInputsUnfunded(Dictionary<UInt256, List<TXInput>> txInputsUnfundedTotal)
+      {
+        for (int t = 1; t < TXs.Count; t++)
         {
-          try
+          for (int i = 0; i < TXs[t].TXInputs.Count; i++)
           {
-            await SpendTXOutputsReferencedAsync(TXs[i], HashesTX[i]);
-          }
-          catch (Exception ex)
-          {
-            await RemoveTXOutputIndexAsync(HashCoinbaseTX);
-            await RemoveTXOutputIndexesAsync(stopTX: null);
-            await UnspendTXOutputsReferencedUntilTX(stopTX: TXs[i]);
-            throw ex;
+            TXInput tXInput = TXs[t].TXInputs[i];
+            if (txInputsUnfundedTotal.TryGetValue(tXInput.TXIDOutput, out List<TXInput> tXInputsUnfunded))
+            {
+              if (tXInputsUnfunded.Any(tu => tu.IndexOutput == tXInput.IndexOutput))
+              {
+                throw new UTXOException("Double spend detected during UTXO build.");
+              }
+              else
+              {
+                tXInputsUnfunded.Add(tXInput);
+              }
+            }
+            else
+            {
+              tXInputsUnfunded = new List<TXInput> { tXInput };
+              txInputsUnfundedTotal.Add(tXInput.TXIDOutput, tXInputsUnfunded);
+            }
           }
         }
+      }
+      async Task BuildTXOutputsAsync(int countTXOutputs, UInt256 hashTX, Dictionary<UInt256, List<TXInput>> tXInputsUnfunded)
+      {
+        if (tXInputsUnfunded.TryGetValue(hashTX, out List<TXInput> tXInputs))
+        {
+          byte[] uTXOIndex = CreateUTXOIndex(countTXOutputs);
+
+          for (int i = 0; i < tXInputs.Count; i++)
+          {
+            TXInput tXInput = tXInputs[i];
+            SpendTXOutputBit(uTXOIndex, tXInputs[i].IndexOutput);
+          }
+
+          await InsertUTXOIndexAsync(uTXOIndex, hashTX);
+          tXInputsUnfunded.Remove(hashTX);
+        }
+        else
+        {
+          await InsertNewTXOutputsAsync(countTXOutputs, hashTX);
+        }
+      }
+
+      byte[] CreateUTXOIndex(int tXOutputsCount)
+      {
+        byte[] uTXOIndex = new byte[NumberHeaderIndexBytes + (tXOutputsCount + 7) / 8];
+
+        int numberOfBitsRemainder = tXOutputsCount % 8;
+        if (numberOfBitsRemainder > 0)
+        {
+          SpendExcessBits(uTXOIndex, numberOfBitsRemainder);
+        }
+
+        Array.Copy(HeaderHash.GetBytes(), 0, uTXOIndex, 0, NumberHeaderIndexBytes);
+
+        return uTXOIndex;
+      }
+      void SpendExcessBits(byte[] uTXOIndex, int numberOfBitsRemainder)
+      {
+        for (int i = numberOfBitsRemainder; i < 8; i++)
+        {
+          uTXOIndex[uTXOIndex.Length - 1] |= (byte)(0x01 << i);
+        }
+      }
+      async Task InsertNewTXOutputsAsync(int countTXOutputs, UInt256 hashTX)
+      {
+        byte[] uTXOIndex = CreateUTXOIndex(countTXOutputs);
+        await InsertUTXOIndexAsync(uTXOIndex, hashTX);
+      }
+      async Task InsertUTXOIndexAsync(byte[] uTXOIndex, UInt256 hashTX)
+      {
+        byte[] uTXOKey = await GetUTXOKeyFreeAsync(hashTX);
+        UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
+      }
+      void SpendTXOutputBit(byte[] uTXOIndex, int indexTXOutput)
+      {
+        int byteIndex = indexTXOutput / 8 + NumberHeaderIndexBytes;
+        int bitIndex = indexTXOutput % 8;
+        uTXOIndex[byteIndex] |= (byte)(0x01 << bitIndex);
       }
     }
   }

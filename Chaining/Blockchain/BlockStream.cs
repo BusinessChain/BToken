@@ -10,7 +10,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public class BlockReader
+    public class BlockStream
     {
       Blockchain Blockchain;
       Headerchain.HeaderReader HeaderReader;
@@ -18,7 +18,7 @@ namespace BToken.Chaining
       public ChainLocation Location { get; private set; }
 
 
-      public BlockReader(Blockchain blockchain)
+      public BlockStream(Blockchain blockchain)
       {
         Blockchain = blockchain;
         HeaderReader = Blockchain.Headers.GetHeaderReader();
@@ -29,21 +29,16 @@ namespace BToken.Chaining
         HeaderReader.ReadHeader(out ChainLocation location);
         Location = location;
 
-        if (Location == null) { return null; }
-
-        while (true)
+        if (Location == null)
         {
-          try
-          {
-            return await Blockchain.Archiver.ReadBlockAsync(Location.Hash);
-          }
-          catch (IOException)
-          {
-            await Task.Delay(1000).ConfigureAwait(false);
-            Console.WriteLine("waiting for Block '{0}' to be accessible... ", Location.Hash);
-          }
+          return null;
+        }
+        else
+        {
+          return await Blockchain.Archiver.ReadBlockAsync(Location.Hash);
         }
       }
     }
   }
+
 }

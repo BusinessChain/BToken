@@ -65,14 +65,22 @@ namespace BToken.Chaining
         string fileRootPath = GenerateRootPath(hash);
         string filePath = Path.Combine(fileRootPath, filename);
         
-        using (FileStream fileStream = new FileStream(
-          filePath,
-          FileMode.Open,
-          FileAccess.Read,
-          FileShare.Read))
+        if(File.Exists(filePath))
         {
-          NetworkBlock block = await NetworkBlock.ReadBlockAsync(fileStream);
-          return block;
+          using (FileStream fileStream = new FileStream(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read))
+          {
+            return await NetworkBlock.ReadBlockAsync(fileStream);
+          }
+        }
+        else
+        {
+          var sessionBlockDownload = new SessionBlockDownload(hash, Blockchain);
+          await Blockchain.Network.ExecuteSessionAsync(sessionBlockDownload);
+          return sessionBlockDownload.BlockDownloaded;
         }
       }
 

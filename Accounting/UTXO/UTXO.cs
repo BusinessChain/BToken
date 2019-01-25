@@ -36,9 +36,10 @@ namespace BToken.Accounting.UTXO
 
       try
       {
-        Blockchain.BlockReader blockStream = Blockchain.GetBlockReader();
+        var tXInputsUnfunded = new Dictionary<UInt256, List<TXInput>>();
+        Blockchain.BlockStream blockStream = Blockchain.GetBlockStream();
         NetworkBlock block = await blockStream.ReadBlockAsync();
-
+        
         while (block != null)
         {
           Console.WriteLine("Building UTXO block: '{0}', height: '{1}', size: '{2}'",
@@ -49,7 +50,7 @@ namespace BToken.Accounting.UTXO
           ValidatePayload(block, out List<TX> tXs);
 
           var uTXOTransaction = new UTXOTransaction(this, tXs, blockStream.Location.Hash);
-          await uTXOTransaction.BuildAsync();
+          await uTXOTransaction.BuildAsync(tXInputsUnfunded);
 
           block = await blockStream.ReadBlockAsync();
         }
@@ -64,13 +65,14 @@ namespace BToken.Accounting.UTXO
 
       // Listen to new blocks.
     }
+
     void ValidatePayload(NetworkBlock block, out List<TX> tXs)
     {
       tXs = PayloadParser.Parse(block.Payload);
       UInt256 merkleRootHashComputed = PayloadParser.ComputeMerkleRootHash(tXs);
       if (!merkleRootHashComputed.Equals(block.Header.MerkleRoot))
       {
-        throw new UTXOException("Corrupted payload.");
+        throw new UTXOException("Payload corrupted.");
       }
     }
     
@@ -81,23 +83,7 @@ namespace BToken.Accounting.UTXO
       var uTXOTransaction = new UTXOTransaction(this, tXs, hash);
       await uTXOTransaction.InsertAsync();
     }
-    
-    static bool IsOutputSpent(byte[] bitMapTXOutputsSpent, int index)
-    {
-      int byteIndex = index / 8;
-      int bitIndex = index % 8;
-      byte maskFlag = (byte)(0x01 << bitIndex);
-
-      try
-      {
-        return (maskFlag & bitMapTXOutputsSpent[byteIndex]) != 0x00;
-      }
-      catch (ArgumentOutOfRangeException)
-      {
-        return true;
-      }
-    }
-    
+        
     async Task<TX> ReadTXAsync(UInt256 tXHash, byte[] headerIndex)
     {
       List<NetworkBlock> blocks = await Blockchain.ReadBlocksAsync(headerIndex);
@@ -105,7 +91,7 @@ namespace BToken.Accounting.UTXO
       foreach (NetworkBlock block in blocks)
       {
         ValidatePayload(block, out List<TX> tXs);
-
+        
         foreach (TX tX in tXs)
         {
           if(tX.GetTXHash().Equals(tXHash))

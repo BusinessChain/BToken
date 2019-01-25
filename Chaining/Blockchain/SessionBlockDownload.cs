@@ -18,14 +18,15 @@ namespace BToken.Chaining
       INetworkChannel Channel;
       Blockchain Blockchain;
 
-      ChainLocation HeaderLocation;
+      UInt256 HashHeader;
+      public NetworkBlock BlockDownloaded { get; private set; }
 
       const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
 
-      public SessionBlockDownload(ChainLocation headerLocation, Blockchain blockchain)
+      public SessionBlockDownload(UInt256 hashHeader, Blockchain blockchain)
       {
-        HeaderLocation = headerLocation;
+        HashHeader = hashHeader;
         Blockchain = blockchain;
       }
 
@@ -35,16 +36,16 @@ namespace BToken.Chaining
 
         await DownloadBlockAsync();
 
-        Console.WriteLine("Channel '{0}' downloaded block height: '{1}'",
-          Channel.GetIdentification(),
-          HeaderLocation.Height);
+        Console.WriteLine("Channel '{0}' downloaded block: '{1}'", 
+          Channel.GetIdentification(), HashHeader);
       }
       
       async Task DownloadBlockAsync()
       {
-        NetworkBlock block = await GetBlockAsync(HeaderLocation.Hash);
-        Blockchain.ValidateHeader(HeaderLocation.Hash, block);
-        await Blockchain.Archiver.ArchiveBlockAsync(block, HeaderLocation.Hash);
+        NetworkBlock block = await GetBlockAsync(HashHeader);
+        Blockchain.ValidateHeader(HashHeader, block);
+        await Blockchain.Archiver.ArchiveBlockAsync(block, HashHeader);
+        BlockDownloaded = block;
       }
       async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)
       {

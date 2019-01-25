@@ -17,7 +17,8 @@ namespace BToken.Accounting.UTXO
       int startIndex = 0;
       while (startIndex < payload.Length)
       {
-        bitcoinTXs.Add(TX.Parse(payload, ref startIndex));
+        TX tX = TX.Parse(payload, ref startIndex);
+        bitcoinTXs.Add(tX);
       }
 
       return bitcoinTXs;
@@ -64,9 +65,5 @@ namespace BToken.Accounting.UTXO
       return arrayConcat;
     }
 
-
-    public void ValidatePayload(byte[] payload, UInt256 merkleRoot)
-    {
-    }
   }
 }

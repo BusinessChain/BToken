@@ -16,10 +16,6 @@ namespace BToken.Chaining
     BlockArchiver Archiver;
     BlockchainRequestListener Listener;
 
-    // maybe protect this field with LOCK prevents block download stall bug
-    List<Task> BlockDownloadTasks = new List<Task>();
-    const uint DOWNLOAD_TASK_COUNT_MAX = 8;
-
 
     public Blockchain(
       NetworkBlock genesisBlock,
@@ -43,48 +39,11 @@ namespace BToken.Chaining
 
       await Headers.InitialHeaderDownloadAsync();
       Console.WriteLine("Synchronized headerchain with network, height = '{0}'", Headers.GetHeight());
-
-      //Task initialBlockDownloadTask = InitialBlockDownloadAsync(Headers.GetHeaderStreamer());
-    }
-    //async Task InitialBlockDownloadAsync(Headerchain.HeaderStream headerStreamer)
-    //{
-    //  ChainLocation headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
-    //  while (headerLocation != null)
-    //  {
-    //    if (!Archiver.BlockExists(headerLocation.Hash))
-    //    {
-    //      await AwaitNextDownloadTask();
-    //      PostBlockDownloadSession(headerLocation);
-    //    }
-
-    //    headerLocation = headerStreamer.ReadHeaderLocationTowardGenesis();
-    //  }
-
-    //  Console.WriteLine("Synchronizing blocks with network completed.");
-    //}
-    async Task AwaitNextDownloadTask()
-    {
-      if (BlockDownloadTasks.Count < DOWNLOAD_TASK_COUNT_MAX)
-      {
-        return;
-      }
-      else
-      {
-        Task blockDownloadTaskCompleted = await Task.WhenAny(BlockDownloadTasks);
-        BlockDownloadTasks.Remove(blockDownloadTaskCompleted);
-      }
-    }
-    void PostBlockDownloadSession(ChainLocation headerLocation)
-    {
-      var sessionBlockDownload = new SessionBlockDownload(headerLocation, this);
-
-      Task executeSessionTask = Network.ExecuteSessionAsync(sessionBlockDownload);
-      BlockDownloadTasks.Add(executeSessionTask);
     }
 
-    public BlockReader GetBlockReader()
+    public BlockStream GetBlockStream()
     {
-      return new BlockReader(this);
+      return new BlockStream(this);
     }
     public async Task<List<NetworkBlock>> ReadBlocksAsync(byte[] headerIndex)
     {
