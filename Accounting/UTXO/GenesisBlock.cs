@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
-namespace BToken.Accounting.Bitcoin
+namespace BToken.Accounting.UTXO
 {
-  class BitcoinGenesisBlock : NetworkBlock
+  class GenesisBlock : NetworkBlock
   {
-    public BitcoinGenesisBlock()
+    public GenesisBlock()
      : base(new BitcoinGenesisHeader(), 1, new byte[100])
     { }
   }

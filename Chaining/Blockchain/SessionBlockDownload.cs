@@ -16,17 +16,18 @@ namespace BToken.Chaining
     class SessionBlockDownload : INetworkSession
     {
       INetworkChannel Channel;
-      BlockArchiver Archiver;
-      
-      ChainLocation HeaderLocation;
+      Blockchain Blockchain;
+
+      UInt256 HashHeader;
+      public NetworkBlock BlockDownloaded { get; private set; }
 
       const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
 
-      public SessionBlockDownload(ChainLocation headerLocation, BlockArchiver archiver)
+      public SessionBlockDownload(UInt256 hashHeader, Blockchain blockchain)
       {
-        HeaderLocation = headerLocation;
-        Archiver = archiver;
+        HashHeader = hashHeader;
+        Blockchain = blockchain;
       }
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
@@ -35,17 +36,18 @@ namespace BToken.Chaining
 
         await DownloadBlockAsync();
 
-        Console.WriteLine("Channel '{0}' downloaded block height: '{1}'",
-          Channel.GetIdentification(),
-          HeaderLocation.Height);
+        Console.WriteLine("Channel '{0}' downloaded block: '{1}'", 
+          Channel.GetIdentification(), HashHeader);
       }
       
       async Task DownloadBlockAsync()
       {
-        NetworkBlock block = await GetBlockAsync(HeaderLocation.Hash);
-        await Archiver.ArchiveBlockAsync(block, HeaderLocation.Hash);
+        NetworkBlock block = await GetBlockAsync(HashHeader);
+        Blockchain.ValidateHeader(HashHeader, block);
+        await Blockchain.Archiver.ArchiveBlockAsync(block, HashHeader);
+        BlockDownloaded = block;
       }
-      public async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)
+      async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)
       {
         try
         {
@@ -61,8 +63,8 @@ namespace BToken.Chaining
             if (networkMessage.Command == "block")
             {
               var blockMessage = new BlockMessage(networkMessage);
-              UInt256 hashReceived = blockMessage.NetworkBlock.Header.GetHeaderHash();
-              if (hashReceived.IsEqual(hashRequested))
+              UInt256 hashReceived = blockMessage.NetworkBlock.Header.ComputeHeaderHash();
+              if (hashReceived.Equals(hashRequested))
               {
                 return blockMessage.NetworkBlock;
               }

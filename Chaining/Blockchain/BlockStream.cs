@@ -13,7 +13,7 @@ namespace BToken.Chaining
     public class BlockStream
     {
       Blockchain Blockchain;
-      Headerchain.HeaderStream HeaderStream;
+      Headerchain.HeaderReader HeaderReader;
 
       public ChainLocation Location { get; private set; }
 
@@ -21,32 +21,24 @@ namespace BToken.Chaining
       public BlockStream(Blockchain blockchain)
       {
         Blockchain = blockchain;
-        HeaderStream = Blockchain.Headers.GetHeaderStreamer();
+        HeaderReader = Blockchain.Headers.GetHeaderReader();
       }
 
       public async Task<NetworkBlock> ReadBlockAsync()
       {
-        Location = HeaderStream.ReadHeaderLocationTowardGenesis();
+        HeaderReader.ReadHeader(out ChainLocation location);
+        Location = location;
 
-        if (Location == null) { return null; }
-        return await RetrieveBlockFromArchive();
-      }
-
-      async Task<NetworkBlock> RetrieveBlockFromArchive()
-      {
-        while (true)
+        if (Location == null)
         {
-          try
-          {
-            return await Blockchain.Archiver.ReadBlockAsync(Location.Hash);
-          }
-          catch (IOException)
-          {
-            await Task.Delay(1000).ConfigureAwait(false);
-            Console.WriteLine("waiting for Block '{0}' to download", Location.Hash);
-          }
+          return null;
+        }
+        else
+        {
+          return await Blockchain.Archiver.ReadBlockAsync(Location.Hash);
         }
       }
     }
   }
+
 }

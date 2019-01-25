@@ -6,30 +6,25 @@ using System.Threading.Tasks;
 
 using BToken.Chaining;
 
-namespace BToken.Accounting.Bitcoin
+namespace BToken.Accounting.UTXO
 {
-  class BitcoinPayloadParser : IPayloadParser
+  class PayloadParser
   {
-
-    public UInt256 GetPayloadHash(byte[] payload)
+    public List<TX> Parse(byte[] payload)
     {
-      return ComputeMerkleRootHash(Parse(payload));
-    }
-
-    public List<BitcoinTX> Parse(byte[] payload)
-    {
-      var bitcoinTXs = new List<BitcoinTX>();
+      var bitcoinTXs = new List<TX>();
 
       int startIndex = 0;
       while (startIndex < payload.Length)
       {
-        bitcoinTXs.Add(BitcoinTX.Parse(payload, ref startIndex));
+        TX tX = TX.Parse(payload, ref startIndex);
+        bitcoinTXs.Add(tX);
       }
 
       return bitcoinTXs;
     }
 
-    UInt256 ComputeMerkleRootHash(List<BitcoinTX> bitcoinTXs)
+    public UInt256 ComputeMerkleRootHash(List<TX> bitcoinTXs)
     {
       const int HASH_BYTE_SIZE = 32;
 
@@ -70,9 +65,5 @@ namespace BToken.Accounting.Bitcoin
       return arrayConcat;
     }
 
-
-    public void ValidatePayload(byte[] payload, UInt256 merkleRoot)
-    {
-    }
   }
 }

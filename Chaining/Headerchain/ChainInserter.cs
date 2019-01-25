@@ -40,21 +40,7 @@ namespace BToken.Chaining
           base.Push();
           AccumulatedDifficulty -= TargetManager.GetDifficulty(Header.NetworkHeader.NBits);
         }
-
-        void FindPreviousHeader(NetworkHeader header)
-        {
-          Chain = Headerchain.MainChain;
-          if (GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
-
-          foreach (Chain chain in Headerchain.SecondaryChains)
-          {
-            Chain = chain;
-            if (GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
-          }
-
-          throw new ChainException(HeaderCode.ORPHAN);
-        }
-
+        
         public Chain InsertHeader(NetworkHeader networkHeader, UInt256 headerHash)
         {
           FindPreviousHeader(networkHeader);
@@ -62,16 +48,17 @@ namespace BToken.Chaining
           ValidateHeader(networkHeader, headerHash);
 
           var chainHeader = new ChainHeader(networkHeader, Header);
-
           Header.HeadersNext.Add(chainHeader);
 
+          Headerchain.UpdateHeaderIndex(chainHeader, headerHash);
+          
           if (IsTip())
           {
             Chain.ExtendChain(chainHeader, headerHash);
 
             if (Chain == Headerchain.MainChain)
             {
-              Headerchain.Locator.Update();
+              Headerchain.LocatorMainChain.Update();
               return null;
             }
 
@@ -83,6 +70,19 @@ namespace BToken.Chaining
             Headerchain.SecondaryChains.Add(chainForked);
             return ForkChain(headerHash);
           }
+        }
+        void FindPreviousHeader(NetworkHeader header)
+        {
+          Chain = Headerchain.MainChain;
+          if (GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
+
+          foreach (Chain chain in Headerchain.SecondaryChains)
+          {
+            Chain = chain;
+            if (GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
+          }
+
+          throw new ChainException(ChainCode.ORPHAN);
         }
         void ValidateHeader(NetworkHeader header, UInt256 headerHash)
         {
@@ -100,12 +100,12 @@ namespace BToken.Chaining
           bool nextHeightBelowHighestCheckpoint = nextHeaderHeight <= highestCheckpointHight;
           if (mainChainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
           {
-            throw new ChainException(HeaderCode.INVALID);
+            throw new ChainException(ChainCode.INVALID);
           }
 
           if (!ValidateBlockLocation(nextHeaderHeight, headerHash))
           {
-            throw new ChainException(HeaderCode.INVALID);
+            throw new ChainException(ChainCode.INVALID);
           }
         }
         bool ValidateBlockLocation(uint height, UInt256 hash)
@@ -113,7 +113,7 @@ namespace BToken.Chaining
           ChainLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
           if (checkpoint != null)
           {
-            return checkpoint.Hash.IsEqual(hash);
+            return checkpoint.Hash.Equals(hash);
           }
 
           return true;
@@ -123,21 +123,21 @@ namespace BToken.Chaining
           uint nextHeight = GetHeight() + 1;
           if (nBits != TargetManager.GetNextTargetBits(Header, nextHeight))
           {
-            throw new ChainException(HeaderCode.INVALID);
+            throw new ChainException(ChainCode.INVALID);
           }
         }
         void ValidateTimeStamp(uint unixTimeSeconds)
         {
           if (unixTimeSeconds <= GetMedianTimePast(Header))
           {
-            throw new ChainException(HeaderCode.INVALID);
+            throw new ChainException(ChainCode.INVALID);
           }
         }
         void ValidateUniqueness(UInt256 hash)
         {
-          if (Header.HeadersNext.Any(h => GetHeaderHash(h).IsEqual(hash)))
+          if (Header.HeadersNext.Select(h => GetHeaderHash(h)).Contains(hash))
           {
-            throw new ChainException(HeaderCode.DUPLICATE);
+            throw new ChainException(ChainCode.DUPLICATE);
           }
         }
         uint GetMedianTimePast(ChainHeader header)

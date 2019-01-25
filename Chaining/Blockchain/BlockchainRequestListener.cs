@@ -15,6 +15,8 @@ namespace BToken.Chaining
       INetwork Network;
       Blockchain Blockchain;
 
+      const int HEADERS_COUNT_MAX = 2000;
+
 
       public BlockchainRequestListener(Blockchain blockchain, INetwork network)
       {
@@ -85,11 +87,11 @@ namespace BToken.Chaining
             {
               switch (ex.ErrorCode)
               {
-                case HeaderCode.ORPHAN:
+                case ChainCode.ORPHAN:
                   //await ProcessOrphanSessionAsync(headerHash);
                   return;
 
-                case HeaderCode.DUPLICATE:
+                case ChainCode.DUPLICATE:
                   return;
 
                 default:
@@ -99,27 +101,27 @@ namespace BToken.Chaining
           }
         }
       }
-      void ServeGetHeadersRequest(GetHeadersMessage getHeadersMessage, INetworkChannel channel)
+      void ServeGetHeadersRequest(GetHeadersMessage messageGetHeaders, INetworkChannel channel)
       {
-        Headerchain.HeaderStream headerStreamer = Blockchain.Headers.GetHeaderStreamer();
-        headerStreamer.FindRootLocation(getHeadersMessage.HeaderLocator);
-
-        const int HEADERS_COUNT_MAX = 2000;
+        Headerchain.HeaderReader headerStreamer = Blockchain.Headers.GetHeaderReader();
         var headers = new List<NetworkHeader>();
-        UInt256 stopHash = getHeadersMessage.StopHash;
-        NetworkHeader header = headerStreamer.ReadNextHeaderTowardTip(out UInt256 headerHash);
-
-        while (header != null && headers.Count < HEADERS_COUNT_MAX && !(headerHash.IsEqual(stopHash)))
+        
+        NetworkHeader header = headerStreamer.ReadHeader(out ChainLocation headerLocation);
+        while(header != null 
+          && headers.Count < HEADERS_COUNT_MAX 
+          && !messageGetHeaders.HeaderLocator.Contains(headerLocation.Hash))
         {
-          headers.Add(header);
+          if(headerLocation.Hash.Equals(messageGetHeaders.StopHash))
+          {
+            headers.Clear();
+          }
 
-          header = headerStreamer.ReadNextHeaderTowardTip(out headerHash);
+          headers.Insert(0, header);
+          header = headerStreamer.ReadHeader(out headerLocation);
         }
 
-        var headersMessage = new HeadersMessage(headers);
-        channel.SendMessageAsync(headersMessage);
+        channel.SendMessageAsync(new HeadersMessage(headers));
       }
-
     }
   }
 }
