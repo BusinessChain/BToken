@@ -12,14 +12,14 @@ namespace BToken.Chaining
   public partial class Blockchain
   {
     Headerchain Headers;
-    INetwork Network;
+    Network Network;
     BlockArchiver Archiver;
     BlockchainRequestListener Listener;
 
 
     public Blockchain(
       NetworkBlock genesisBlock,
-      INetwork network,
+      Network network,
       List<ChainLocation> checkpoints)
     {
       Network = network;

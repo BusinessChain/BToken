@@ -14,14 +14,14 @@ namespace BToken.Accounting.UTXO
 {
   partial class UTXO
   {
-    INetwork Network;
+    Network Network;
     Blockchain Blockchain;
     PayloadParser PayloadParser;
 
     Dictionary<byte[], byte[]> UTXOTable;
 
 
-    public UTXO(Blockchain blockchain, INetwork network, PayloadParser payloadParser)
+    public UTXO(Blockchain blockchain, Network network, PayloadParser payloadParser)
     {
       Network = network;
       Blockchain = blockchain;

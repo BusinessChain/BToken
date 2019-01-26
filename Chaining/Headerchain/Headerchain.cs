@@ -36,7 +36,7 @@ namespace BToken.Chaining
 
       public Headerchain(
         NetworkHeader genesisHeader,
-        INetwork network,
+        Network network,
         List<ChainLocation> checkpoints,
         Blockchain blockchain)
       {
