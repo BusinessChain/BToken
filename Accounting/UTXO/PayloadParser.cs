@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using BToken.Chaining;
+using BToken.Hashing;
 
 namespace BToken.Accounting.UTXO
 {
@@ -30,7 +30,7 @@ namespace BToken.Accounting.UTXO
 
       List<byte[]> merkleList = bitcoinTXs.Select(tx =>
       {
-        return Hashing.SHA256d(tx.GetBytes());
+        return SHA256d.Compute(tx.GetBytes());
       }).ToList();
 
       return new UInt256(GetRoot(merkleList, HASH_BYTE_SIZE));
@@ -48,7 +48,7 @@ namespace BToken.Accounting.UTXO
         for (int i = 0; i < merkleList.Count; i += 2)
         {
           byte[] leafPairHashesConcat = ConcatenateArrays(merkleList[i], merkleList[i + 1], hashByteSize);
-          merkleListNext.Add(Hashing.SHA256d(leafPairHashesConcat));
+          merkleListNext.Add(SHA256d.Compute(leafPairHashesConcat));
         }
 
         merkleList = merkleListNext;

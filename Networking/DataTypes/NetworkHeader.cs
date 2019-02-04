@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 
+using BToken.Hashing;
+
 namespace BToken.Networking
 {
   public class NetworkHeader
@@ -78,7 +80,7 @@ namespace BToken.Networking
   {
     public static UInt256 ComputeHeaderHash(this NetworkHeader header)
     {
-      return new UInt256(Hashing.SHA256d(header.GetBytes()));
+      return new UInt256(SHA256d.Compute(header.GetBytes()));
     }
   }
 }
