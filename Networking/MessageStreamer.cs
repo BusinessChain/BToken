@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 
+using BToken.Hashing;
+
 namespace BToken.Networking
 {
   partial class Network
@@ -68,7 +70,7 @@ namespace BToken.Networking
 
       byte[] createChecksum(byte[] payload)
       {
-        return Hashing.SHA256d(payload).Take(ChecksumSize).ToArray();
+        return SHA256d.Compute(payload).Take(ChecksumSize).ToArray();
       }
 
       public async Task<NetworkMessage> ReadAsync(CancellationToken cancellationToken)

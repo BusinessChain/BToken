@@ -10,22 +10,22 @@ using System.Threading.Tasks;
 using BToken.Chaining;
 using BToken.Networking;
 
-namespace BToken.Accounting.UTXO
+namespace BToken.Accounting
 {
-  partial class UTXO
+  public partial class UTXO
   {
-    INetwork Network;
+    Network Network;
     Blockchain Blockchain;
     PayloadParser PayloadParser;
 
     Dictionary<byte[], byte[]> UTXOTable;
 
 
-    public UTXO(Blockchain blockchain, INetwork network, PayloadParser payloadParser)
+    public UTXO(Blockchain blockchain, Network network)
     {
       Network = network;
       Blockchain = blockchain;
-      PayloadParser = payloadParser;
+      PayloadParser = new PayloadParser();
 
       UTXOTable = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
     }

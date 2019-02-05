@@ -2,7 +2,7 @@
 using System.Collections;
 using System;
 
-namespace BToken.Accounting.UTXO
+namespace BToken.Accounting
 {
   partial class UTXO
   {

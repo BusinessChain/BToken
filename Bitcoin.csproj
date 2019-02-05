@@ -75,6 +75,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\Script.cs" />
     <Compile Include="Accounting\UTXO\TXInput.cs" />
     <Compile Include="Accounting\UTXO\TXOutput.cs" />
@@ -87,8 +88,8 @@
     <Compile Include="Accounting\UTXO\UTXOIndex.cs" />
     <Compile Include="Accounting\UTXO\UTXOTransaction.cs" />
     <Compile Include="Accounting\UTXO\UTXOException.cs" />
+    <Compile Include="Accounting\Wallet\Wallet.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
-    <Compile Include="Accounting\INetwork.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainRequestListener.cs" />
     <Compile Include="Chaining\Blockchain\BlockStream.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
@@ -107,7 +108,7 @@
     <Compile Include="Chaining\INetwork.cs" />
     <Compile Include="DataTypes\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
-    <Compile Include="Hashing\Hashing.cs" />
+    <Compile Include="Hashing\SHA256d.cs" />
     <Compile Include="Chaining\Headerchain\ChainHeader.cs" />
     <Compile Include="Chaining\Headerchain\TargetManager.cs" />
     <Compile Include="Networking\DataTypes\NetworkAddress.cs" />

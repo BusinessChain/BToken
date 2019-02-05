@@ -12,13 +12,13 @@ namespace BToken.Chaining
   {
     class BlockchainRequestListener
     {
-      INetwork Network;
+      Network Network;
       Blockchain Blockchain;
 
       const int HEADERS_COUNT_MAX = 2000;
 
 
-      public BlockchainRequestListener(Blockchain blockchain, INetwork network)
+      public BlockchainRequestListener(Blockchain blockchain, Network network)
       {
         Network = network;
         Blockchain = blockchain;

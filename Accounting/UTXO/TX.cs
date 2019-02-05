@@ -4,9 +4,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using BToken.Hashing;
 using BToken.Networking;
 
-namespace BToken.Accounting.UTXO
+namespace BToken.Accounting
 {
   class TX
   {
@@ -122,7 +123,7 @@ namespace BToken.Accounting.UTXO
   {
     public static UInt256 GetTXHash(this TX bitcoinTX)
     {
-      return new UInt256(Hashing.SHA256d(bitcoinTX.GetBytes()));
+      return new UInt256(SHA256d.Compute(bitcoinTX.GetBytes()));
     }
   }
 }
