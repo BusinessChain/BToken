@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
-namespace BToken.Accounting.UTXO
+namespace BToken.Accounting
 {
   class TXInput
   {

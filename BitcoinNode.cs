@@ -4,7 +4,7 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using BToken.Accounting.UTXO;
+using BToken.Accounting;
 using BToken.Chaining;
 using BToken.Networking;
 
@@ -15,8 +15,8 @@ namespace BToken
     public Network Network { get; private set; }
     public Blockchain Blockchain { get; private set; }
     UTXO UTXO;
-
-    PayloadParser PayloadParser = new PayloadParser();
+    Wallet Wallet;
+    
     GenesisBlock GenesisBlock = new GenesisBlock();
     List<ChainLocation> Checkpoints = new List<ChainLocation>()
       {
@@ -29,7 +29,8 @@ namespace BToken
     {
       Network = new Network();
       Blockchain = new Blockchain(GenesisBlock, Network, Checkpoints);
-      UTXO = new UTXO(Blockchain, Network, PayloadParser);
+      UTXO = new UTXO(Blockchain, Network);
+      Wallet = new Wallet(UTXO);
     }
 
     public async Task StartAsync()
@@ -37,6 +38,10 @@ namespace BToken
       Network.Start();
       await Blockchain.StartAsync();
       await UTXO.StartAsync();
+
+
+      Wallet.GeneratePublicKey();
+
     }
   }
 }

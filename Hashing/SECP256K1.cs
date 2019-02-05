@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 using System.Numerics;
 using System.Globalization;
 
-namespace BToken
+namespace BToken.Hashing
 {
-  class SECP256K1
+  public static class SECP256K1
   {
     static readonly BigInteger P = BigInteger.Parse("0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", NumberStyles.HexNumber);
     static readonly BigInteger B = 7;

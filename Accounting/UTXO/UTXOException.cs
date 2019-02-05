@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Accounting.UTXO
+namespace BToken.Accounting
 {
   class UTXOException : Exception
   {

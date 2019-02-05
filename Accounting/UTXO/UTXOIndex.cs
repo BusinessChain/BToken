@@ -5,7 +5,7 @@ using System.Text;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace BToken.Accounting.UTXO
+namespace BToken.Accounting
 {
   partial class UTXO
   {

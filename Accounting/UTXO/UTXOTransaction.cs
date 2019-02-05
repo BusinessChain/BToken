@@ -5,9 +5,7 @@ using System.Linq;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
 
-using BToken.Chaining;
-
-namespace BToken.Accounting.UTXO
+namespace BToken.Accounting
 {
   partial class UTXO
   {

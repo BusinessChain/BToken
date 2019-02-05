@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using BToken.Hashing;
 
-namespace BToken.Accounting.UTXO
+namespace BToken.Accounting
 {
   class PayloadParser
   {
