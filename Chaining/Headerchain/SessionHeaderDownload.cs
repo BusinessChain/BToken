@@ -35,14 +35,14 @@ namespace BToken.Chaining
 
       async Task DownloadHeadersAsync()
       {
-        List<NetworkHeader> headers = await GetHeadersAsync(Headerchain.GetHeaderLocator());
+        List<NetworkHeader> headers = await GetHeadersAsync(Headerchain.LocatorMainChain.ToList());
 
-        using (Headerchain.HeaderWriter inserter = Headerchain.GetHeaderInserter())
+        using (var inserter = new HeaderWriter(Headerchain))
         {
           while (headers.Any())
           {
             await InsertHeadersAsync(headers, inserter);
-            headers = await GetHeadersAsync(Headerchain.GetHeaderLocator());
+            headers = await GetHeadersAsync(Headerchain.LocatorMainChain.ToList());
           }
         }
       }

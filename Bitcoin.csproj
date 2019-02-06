@@ -89,7 +89,7 @@
     <Compile Include="Accounting\UTXO\UTXOTransaction.cs" />
     <Compile Include="Accounting\UTXO\UTXOException.cs" />
     <Compile Include="Accounting\Wallet\Wallet.cs" />
-    <Compile Include="Chaining\Headerchain\RequestListener.cs" />
+    <Compile Include="Node\NetworkListener.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Chaining\Headerchain\HeaderReader.cs" />
@@ -127,15 +127,15 @@
     <Compile Include="Networking\DataTypes\NetworkBlock.cs" />
     <Compile Include="Chaining\Headerchain\Headerchain.cs" />
     <Compile Include="Networking\MessageStreamer.cs" />
-    <Compile Include="Chaining\Messages\GetHeadersMessage.cs" />
-    <Compile Include="Chaining\Messages\HeadersMessage.cs" />
+    <Compile Include="Node\Messages\GetHeadersMessage.cs" />
+    <Compile Include="Node\Messages\HeadersMessage.cs" />
     <Compile Include="Networking\DataTypes\NetworkMessage.cs" />
     <Compile Include="Networking\Messages\PingMessage.cs" />
     <Compile Include="Networking\Messages\PongMessage.cs" />
     <Compile Include="Networking\Messages\SendHeadersMessage.cs" />
     <Compile Include="Networking\Network.cs" />
     <Compile Include="Accounting\UTXO\Messages\BlockMessage.cs" />
-    <Compile Include="Chaining\Messages\GetBlocksMessage.cs" />
+    <Compile Include="Node\Messages\GetBlocksMessage.cs" />
     <Compile Include="Accounting\UTXO\Messages\GetDataMessage.cs" />
     <Compile Include="Networking\Messages\InvMessage.cs" />
     <Compile Include="Networking\Messages\RejectMessage.cs" />
@@ -145,7 +145,7 @@
     <Compile Include="Networking\PeerHandshakeManager.cs" />
     <Compile Include="Networking\Peer.cs" />
     <Compile Include="Networking\ProtocolVersion.cs" />
-    <Compile Include="BitcoinNode.cs" />
+    <Compile Include="Node\BitcoinNode.cs" />
     <Compile Include="Networking\ServiceFlags.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

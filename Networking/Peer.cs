@@ -105,18 +105,10 @@ namespace BToken.Networking
               ProcessFeeFilterMessage(networkMessage);
               break;
             default:
-              ProcessApplicationMessage(networkMessage);
+              ApplicationMessageBuffer.Post(networkMessage);
+              Network.PeerRequestInboundBuffer.Post(this);
               break;
           }
-        }
-      }
-      void ProcessApplicationMessage(NetworkMessage networkMessage)
-      {
-        ApplicationMessageBuffer.Post(networkMessage);
-        
-        if (TryDispatch())
-        {
-          Network.PeerRequestInboundBuffer.Post(this);
         }
       }
 

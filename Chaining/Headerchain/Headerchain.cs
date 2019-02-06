@@ -21,7 +21,6 @@ namespace BToken.Chaining
     List<ChainLocation> Checkpoints;
 
     Network Network;
-    RequestListener Listener;
 
     Dictionary<byte[], List<ChainHeader>> HeaderIndex;
     int NumberHeaderIndexBytes = 4;
@@ -31,6 +30,8 @@ namespace BToken.Chaining
 
     BufferBlock<bool> SignalInserterAvailable = new BufferBlock<bool>();
     ChainInserter Inserter;
+    
+    const int HEADERS_COUNT_MAX = 2000;
 
 
     public Headerchain(
@@ -45,7 +46,6 @@ namespace BToken.Chaining
       HeaderIndex = new Dictionary<byte[], List<ChainHeader>>(new EqualityComparerByteArray());
       LocatorMainChain = new HeaderLocator(this);
       Network = network;
-      Listener = new RequestListener(this, Network);
 
       Inserter = new ChainInserter(this);
     }
@@ -54,14 +54,61 @@ namespace BToken.Chaining
     {
       await LoadFromArchiveAsync();
       Console.WriteLine("Loaded headerchain from archive, height = '{0}'", MainChain.Height);
-
-      Task listenerTask = Listener.StartAsync();
-      Console.WriteLine("Inbound request listener started...");
-
+      
       await InitialHeaderDownloadAsync();
       Console.WriteLine("Synchronized headerchain with network, height = '{0}'", MainChain.Height);
     }
 
+    public List<NetworkHeader> GetHeaders(List<UInt256> headerLocator, UInt256 stopHash)
+    {
+      HeaderReader headerStreamer = new HeaderReader(this);
+      var headers = new List<NetworkHeader>();
+
+      NetworkHeader header = headerStreamer.ReadHeader(out ChainLocation headerLocation);
+      while (header != null
+        && headers.Count < HEADERS_COUNT_MAX
+        && !headerLocator.Contains(headerLocation.Hash))
+      {
+        if (headerLocation.Hash.Equals(stopHash))
+        {
+          headers.Clear();
+        }
+
+        headers.Insert(0, header);
+        header = headerStreamer.ReadHeader(out headerLocation);
+      }
+
+      return headers;
+    }
+
+    public async Task InsertHeadersAsync(List<NetworkHeader> headers)
+    {
+      using (HeaderWriter headerInserter = new HeaderWriter(this))
+      {
+        foreach (NetworkHeader header in headers)
+        {
+          try
+          {
+            await headerInserter.InsertHeaderAsync(header);
+          }
+          catch (ChainException ex)
+          {
+            switch (ex.ErrorCode)
+            {
+              case ChainCode.ORPHAN:
+                //await ProcessOrphanSessionAsync(headerHash);
+                return;
+
+              case ChainCode.DUPLICATE:
+                return;
+
+              default:
+                throw ex;
+            }
+          }
+        }
+      }
+    }
     async Task InsertHeaderAsync(NetworkHeader header)
     {
       ValidateHeader(header, out UInt256 headerHash);
@@ -151,18 +198,7 @@ namespace BToken.Chaining
         return new List<ChainHeader>();
       }
     }
-    public HeaderReader GetHeaderReader()
-    {
-      return new HeaderReader(this);
-    }
-    public HeaderWriter GetHeaderInserter()
-    {
-      return new HeaderWriter(this);
-    }
-    public List<UInt256> GetHeaderLocator()
-    {
-      return LocatorMainChain.GetHeaderLocator();
-    }
+
     public async Task LoadFromArchiveAsync()
     {
       try
@@ -189,6 +225,5 @@ namespace BToken.Chaining
     {
       await Network.ExecuteSessionAsync(new SessionHeaderDownload(this));
     }
-
   }
 }

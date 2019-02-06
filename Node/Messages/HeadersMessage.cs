@@ -5,7 +5,7 @@ using System.Text;
 
 using BToken.Networking;
 
-namespace BToken.Chaining
+namespace BToken
 {
   class HeadersMessage : NetworkMessage
   {

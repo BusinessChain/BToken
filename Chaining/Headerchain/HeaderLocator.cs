@@ -58,7 +58,7 @@ namespace BToken.Chaining
 
         AddLocation(height, hash);
       }
-      public List<UInt256> GetHeaderLocator()
+      public List<UInt256> ToList()
       {
         return BlockLocations.Select(b => b.Hash).ToList();
       }

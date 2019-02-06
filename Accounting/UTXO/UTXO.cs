@@ -39,7 +39,7 @@ namespace BToken.Accounting
       try
       {
         var tXInputsUnfunded = new Dictionary<UInt256, List<TXInput>>();
-        Headerchain.HeaderReader headerStreamer = Headerchain.GetHeaderReader();
+        var headerStreamer = new Headerchain.HeaderReader(Headerchain);
 
         headerStreamer.ReadHeader(out ChainLocation location);
 
@@ -67,8 +67,6 @@ namespace BToken.Accounting
 
       Console.WriteLine("UTXO syncing completed");
 
-
-      // Listen to new blocks.
     }
 
     void ValidatePayload(NetworkBlock block, out List<TX> tXs)

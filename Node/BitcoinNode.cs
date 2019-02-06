@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿using System;
 
 using System.Threading;
 using System.Collections.Generic;
@@ -10,13 +10,15 @@ using BToken.Networking;
 
 namespace BToken
 {
-  public class BitcoinNode
+  public partial class BitcoinNode
   {
     public Network Network { get; private set; }
     public Headerchain Headerchain { get; private set; }
     UTXO UTXO;
     Wallet Wallet;
-    
+
+    NetworkListener Listener;
+
     GenesisBlock GenesisBlock = new GenesisBlock();
     List<ChainLocation> Checkpoints = new List<ChainLocation>()
       {
@@ -31,6 +33,8 @@ namespace BToken
       Headerchain = new Headerchain(GenesisBlock.Header, Network, Checkpoints);
       UTXO = new UTXO(Headerchain, Network);
       Wallet = new Wallet(UTXO);
+
+      Listener = new NetworkListener(Network, this);
     }
 
     public async Task StartAsync()
@@ -38,6 +42,8 @@ namespace BToken
       Network.Start();
       await Headerchain.StartAsync();
       await UTXO.StartAsync();
+
+      Task listenerTask = Listener.StartAsync();
 
 
       Wallet.GeneratePublicKey();

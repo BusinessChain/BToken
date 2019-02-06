@@ -112,7 +112,14 @@ namespace BToken.Networking
 
     public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
-      return await PeerRequestInboundBuffer.ReceiveAsync();
+      Peer peer;
+
+      do
+      {
+        peer = await PeerRequestInboundBuffer.ReceiveAsync();
+      } while (!peer.TryDispatch());
+
+      return peer;
     }
         
     public async Task StartPeerInboundListenerAsync()
