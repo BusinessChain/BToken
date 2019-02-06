@@ -8,24 +8,21 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  partial class Headerchain
   {
-    partial class Headerchain
+    public interface IHeaderArchiver
     {
-      public interface IHeaderArchiver
-      {
-        IHeaderWriter GetWriter();
-        IHeaderReader GetReader();
-      }
+      IHeaderWriter GetWriter();
+      IHeaderReader GetReader();
+    }
 
-      public interface IHeaderWriter : IDisposable
-      {
-        void StoreHeader(NetworkHeader header);
-      }
-      public interface IHeaderReader : IDisposable
-      {
-        NetworkHeader GetNextHeader();
-      }
+    public interface IHeaderWriter : IDisposable
+    {
+      void StoreHeader(NetworkHeader header);
+    }
+    public interface IHeaderReader : IDisposable
+    {
+      NetworkHeader GetNextHeader();
     }
   }
 }

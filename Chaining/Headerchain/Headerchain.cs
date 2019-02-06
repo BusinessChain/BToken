@@ -11,178 +11,184 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public enum ChainCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
+
+  public partial class Headerchain
   {
-    public enum ChainCode { ORPHAN, DUPLICATE, INVALID, PREMATURE };
+    Chain MainChain;
+    List<Chain> SecondaryChains = new List<Chain>();
+    ChainHeader GenesisHeader;
+    List<ChainLocation> Checkpoints;
 
-    partial class Headerchain
+    Network Network;
+    RequestListener Listener;
+
+    Dictionary<byte[], List<ChainHeader>> HeaderIndex;
+    int NumberHeaderIndexBytes = 4;
+
+    HeaderLocator LocatorMainChain;
+    HeaderArchiver Archiver = new HeaderArchiver();
+
+    BufferBlock<bool> SignalInserterAvailable = new BufferBlock<bool>();
+    ChainInserter Inserter;
+
+
+    public Headerchain(
+      NetworkHeader genesisHeader,
+      Network network,
+      List<ChainLocation> checkpoints)
     {
-      Chain MainChain;
-      List<Chain> SecondaryChains = new List<Chain>();
-      ChainHeader GenesisHeader;
-      List<ChainLocation> Checkpoints;
+      GenesisHeader = new ChainHeader(genesisHeader, null);
+      Checkpoints = checkpoints;
+      MainChain = new Chain(GenesisHeader, 0, 0);
 
-      Blockchain Blockchain;
+      HeaderIndex = new Dictionary<byte[], List<ChainHeader>>(new EqualityComparerByteArray());
+      LocatorMainChain = new HeaderLocator(this);
+      Network = network;
+      Listener = new RequestListener(this, Network);
 
-      Dictionary<byte[], List<ChainHeader>> HeaderIndex;
-      int NumberHeaderIndexBytes = 4;
+      Inserter = new ChainInserter(this);
+    }
+       
+    public async Task StartAsync()
+    {
+      await LoadFromArchiveAsync();
+      Console.WriteLine("Loaded headerchain from archive, height = '{0}'", MainChain.Height);
 
-      HeaderLocator LocatorMainChain;
-      HeaderArchiver Archiver = new HeaderArchiver();
+      Task listenerTask = Listener.StartAsync();
+      Console.WriteLine("Inbound request listener started...");
 
-      BufferBlock<bool> SignalInserterAvailable = new BufferBlock<bool>();
-      ChainInserter Inserter;
+      await InitialHeaderDownloadAsync();
+      Console.WriteLine("Synchronized headerchain with network, height = '{0}'", MainChain.Height);
+    }
 
+    async Task InsertHeaderAsync(NetworkHeader header)
+    {
+      ValidateHeader(header, out UInt256 headerHash);
 
-      public Headerchain(
-        NetworkHeader genesisHeader,
-        Network network,
-        List<ChainLocation> checkpoints,
-        Blockchain blockchain)
+      using (Inserter = await DispatchInserterAsync())
       {
-        GenesisHeader = new ChainHeader(genesisHeader, null);
-        Checkpoints = checkpoints;
-        MainChain = new Chain(GenesisHeader, 0, 0);
+        Chain rivalChain = Inserter.InsertHeader(header, headerHash);
 
-        HeaderIndex = new Dictionary<byte[], List<ChainHeader>>(new EqualityComparerByteArray());
-        LocatorMainChain = new HeaderLocator(this);
-        Blockchain = blockchain;
-
-        Inserter = new ChainInserter(this);
-      }
-      
-      async Task InsertHeaderAsync(NetworkHeader header)
-      {
-        ValidateHeader(header, out UInt256 headerHash);
-
-        using (Inserter = await DispatchInserterAsync())
+        if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
         {
-          Chain rivalChain = Inserter.InsertHeader(header, headerHash);
-
-          if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
-          {
-            ReorganizeChain(rivalChain);
-          }
+          ReorganizeChain(rivalChain);
         }
-      }
-      async Task<ChainInserter> DispatchInserterAsync()
-      {
-        await SignalInserterAvailable.ReceiveAsync();
-
-        if (Inserter.TryDispatch())
-        {
-          return Inserter;
-        }
-        else
-        {
-          throw new ChainException("Received signal available but could not dispatch inserter.");
-        }
-      }
-      static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)
-      {
-        headerHash = header.ComputeHeaderHash();
-
-        if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
-        {
-          throw new ChainException(ChainCode.INVALID);
-        }
-
-        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-        bool IsTimestampPremature = header.UnixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
-        if (IsTimestampPremature)
-        {
-          throw new ChainException(ChainCode.PREMATURE);
-        }
-      }
-      void ReorganizeChain(Chain chain)
-      {
-        SecondaryChains.Remove(chain);
-        SecondaryChains.Add(MainChain);
-        MainChain = chain;
-
-        LocatorMainChain.Reorganize();
-      }
-
-      void UpdateHeaderIndex(ChainHeader header, UInt256 headerHash)
-      {
-        byte[] keyHeader = headerHash.GetBytes().Take(NumberHeaderIndexBytes).ToArray();
-
-        if (!HeaderIndex.TryGetValue(keyHeader, out List<ChainHeader> headers))
-        {
-          headers = new List<ChainHeader>();
-          HeaderIndex.Add(keyHeader, headers);
-        }
-        headers.Add(header);
-      }
-
-      public static bool TryGetHeaderHash(ChainHeader header, out UInt256 headerHash)
-      {        
-        if (header.HeadersNext.Any())
-        {
-          headerHash = header.HeadersNext[0].NetworkHeader.HashPrevious;
-          return true;
-        }
-        else
-        {
-          headerHash = null;
-          return false;
-        }
-      }
-
-      public List<ChainHeader> ReadHeaders(byte[] keyHeaderIndex)
-      {
-        if(HeaderIndex.TryGetValue(keyHeaderIndex, out List<ChainHeader> headers))
-        {
-          return headers;
-        }
-        else
-        {
-          return new List<ChainHeader>();
-        }
-      }
-      public HeaderReader GetHeaderReader()
-      {
-        return new HeaderReader(this);
-      }
-      public HeaderWriter GetHeaderInserter()
-      {
-        return new HeaderWriter(this);
-      }
-      public List<UInt256> GetHeaderLocator()
-      {
-        return LocatorMainChain.GetHeaderLocator();
-      }
-      public async Task LoadFromArchiveAsync()
-      {
-        try
-        {
-          using (var archiveReader = Archiver.GetReader())
-          {
-            NetworkHeader header = archiveReader.GetNextHeader();
-
-            while (header != null)
-            {
-              await InsertHeaderAsync(header);
-
-              header = archiveReader.GetNextHeader();
-            }
-          }
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine(ex.Message);
-        }
-      }
-
-      public async Task InitialHeaderDownloadAsync()
-      {
-        await Blockchain.Network.ExecuteSessionAsync(new SessionHeaderDownload(this));
-      }
-      
-      public uint GetHeight()
-      {
-        return MainChain.Height;
       }
     }
+    async Task<ChainInserter> DispatchInserterAsync()
+    {
+      await SignalInserterAvailable.ReceiveAsync();
+
+      if (Inserter.TryDispatch())
+      {
+        return Inserter;
+      }
+      else
+      {
+        throw new ChainException("Received signal available but could not dispatch inserter.");
+      }
+    }
+    static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)
+    {
+      headerHash = header.ComputeHeaderHash();
+
+      if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+      {
+        throw new ChainException(ChainCode.INVALID);
+      }
+
+      const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+      bool IsTimestampPremature = header.UnixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
+      if (IsTimestampPremature)
+      {
+        throw new ChainException(ChainCode.PREMATURE);
+      }
+    }
+    void ReorganizeChain(Chain chain)
+    {
+      SecondaryChains.Remove(chain);
+      SecondaryChains.Add(MainChain);
+      MainChain = chain;
+
+      LocatorMainChain.Reorganize();
+    }
+
+    void UpdateHeaderIndex(ChainHeader header, UInt256 headerHash)
+    {
+      byte[] keyHeader = headerHash.GetBytes().Take(NumberHeaderIndexBytes).ToArray();
+
+      if (!HeaderIndex.TryGetValue(keyHeader, out List<ChainHeader> headers))
+      {
+        headers = new List<ChainHeader>();
+        HeaderIndex.Add(keyHeader, headers);
+      }
+      headers.Add(header);
+    }
+
+    public static bool TryGetHeaderHash(ChainHeader header, out UInt256 headerHash)
+    {
+      if (header.HeadersNext.Any())
+      {
+        headerHash = header.HeadersNext[0].NetworkHeader.HashPrevious;
+        return true;
+      }
+      else
+      {
+        headerHash = null;
+        return false;
+      }
+    }
+
+    public List<ChainHeader> ReadHeaders(byte[] keyHeaderIndex)
+    {
+      if (HeaderIndex.TryGetValue(keyHeaderIndex, out List<ChainHeader> headers))
+      {
+        return headers;
+      }
+      else
+      {
+        return new List<ChainHeader>();
+      }
+    }
+    public HeaderReader GetHeaderReader()
+    {
+      return new HeaderReader(this);
+    }
+    public HeaderWriter GetHeaderInserter()
+    {
+      return new HeaderWriter(this);
+    }
+    public List<UInt256> GetHeaderLocator()
+    {
+      return LocatorMainChain.GetHeaderLocator();
+    }
+    public async Task LoadFromArchiveAsync()
+    {
+      try
+      {
+        using (var archiveReader = Archiver.GetReader())
+        {
+          NetworkHeader header = archiveReader.GetNextHeader();
+
+          while (header != null)
+          {
+            await InsertHeaderAsync(header);
+
+            header = archiveReader.GetNextHeader();
+          }
+        }
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine(ex.Message);
+      }
+    }
+
+    async Task InitialHeaderDownloadAsync()
+    {
+      await Network.ExecuteSessionAsync(new SessionHeaderDownload(this));
+    }
+
   }
 }

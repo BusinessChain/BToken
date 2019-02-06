@@ -8,20 +8,20 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    class BlockchainRequestListener
+    class RequestListener
     {
       Network Network;
-      Blockchain Blockchain;
+      Headerchain Headerchain;
 
       const int HEADERS_COUNT_MAX = 2000;
 
 
-      public BlockchainRequestListener(Blockchain blockchain, Network network)
+      public RequestListener(Headerchain headerchain, Network network)
       {
         Network = network;
-        Blockchain = blockchain;
+        Headerchain = headerchain;
       }
 
       public async Task StartAsync()
@@ -75,7 +75,7 @@ namespace BToken.Chaining
       //}
       async Task ProcessHeadersMessageAsync(HeadersMessage headersMessage, INetworkChannel channel)
       {
-        using (Headerchain.HeaderWriter headerInserter = Blockchain.Headers.GetHeaderInserter())
+        using (HeaderWriter headerInserter = Headerchain.GetHeaderInserter())
         {
           foreach (NetworkHeader header in headersMessage.Headers)
           {
@@ -103,7 +103,7 @@ namespace BToken.Chaining
       }
       void ServeGetHeadersRequest(GetHeadersMessage messageGetHeaders, INetworkChannel channel)
       {
-        Headerchain.HeaderReader headerStreamer = Blockchain.Headers.GetHeaderReader();
+        HeaderReader headerStreamer = Headerchain.GetHeaderReader();
         var headers = new List<NetworkHeader>();
         
         NetworkHeader header = headerStreamer.ReadHeader(out ChainLocation headerLocation);

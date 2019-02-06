@@ -13,7 +13,7 @@ namespace BToken
   public class BitcoinNode
   {
     public Network Network { get; private set; }
-    public Blockchain Blockchain { get; private set; }
+    public Headerchain Headerchain { get; private set; }
     UTXO UTXO;
     Wallet Wallet;
     
@@ -28,15 +28,15 @@ namespace BToken
     public BitcoinNode()
     {
       Network = new Network();
-      Blockchain = new Blockchain(GenesisBlock, Network, Checkpoints);
-      UTXO = new UTXO(Blockchain, Network);
+      Headerchain = new Headerchain(GenesisBlock.Header, Network, Checkpoints);
+      UTXO = new UTXO(Headerchain, Network);
       Wallet = new Wallet(UTXO);
     }
 
     public async Task StartAsync()
     {
       Network.Start();
-      await Blockchain.StartAsync();
+      await Headerchain.StartAsync();
       await UTXO.StartAsync();
 
 

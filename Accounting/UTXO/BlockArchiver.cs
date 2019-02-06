@@ -9,21 +9,22 @@ using System.IO;
 
 using BToken.Networking;
 
-namespace BToken.Chaining
+namespace BToken.Accounting
 {
-  public partial class Blockchain
+  public partial class UTXO
   {
     partial class BlockArchiver
     {
       static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
 
-      Blockchain Blockchain;
+      UTXO UTXO;
+      Network Network;
 
-
-      public BlockArchiver(Blockchain blockchain)
+      public BlockArchiver(UTXO uTXO, Network network)
       {
-        Blockchain = blockchain;
+        UTXO = uTXO;
+        Network = network;
       }
 
       FileStream CreateFile(UInt256 hash)
@@ -78,8 +79,8 @@ namespace BToken.Chaining
         }
         else
         {
-          var sessionBlockDownload = new SessionBlockDownload(hash, Blockchain);
-          await Blockchain.Network.ExecuteSessionAsync(sessionBlockDownload);
+          var sessionBlockDownload = new SessionBlockDownload(hash, this);
+          await Network.ExecuteSessionAsync(sessionBlockDownload);
           return sessionBlockDownload.BlockDownloaded;
         }
       }

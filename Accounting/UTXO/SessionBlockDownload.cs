@@ -9,14 +9,14 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
-namespace BToken.Chaining
+namespace BToken.Accounting
 {
-  public partial class Blockchain
+  public partial class UTXO
   {
     class SessionBlockDownload : INetworkSession
     {
       INetworkChannel Channel;
-      Blockchain Blockchain;
+      BlockArchiver Archiver;
 
       UInt256 HashHeader;
       public NetworkBlock BlockDownloaded { get; private set; }
@@ -24,10 +24,10 @@ namespace BToken.Chaining
       const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
 
-      public SessionBlockDownload(UInt256 hashHeader, Blockchain blockchain)
+      public SessionBlockDownload(UInt256 hashHeader, BlockArchiver archiver)
       {
         HashHeader = hashHeader;
-        Blockchain = blockchain;
+        Archiver = archiver;
       }
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
@@ -43,8 +43,8 @@ namespace BToken.Chaining
       async Task DownloadBlockAsync()
       {
         NetworkBlock block = await GetBlockAsync(HashHeader);
-        Blockchain.ValidateHeader(HashHeader, block);
-        await Blockchain.Archiver.ArchiveBlockAsync(block, HashHeader);
+        ValidateHeader(HashHeader, block);
+        await Archiver.ArchiveBlockAsync(block, HashHeader);
         BlockDownloaded = block;
       }
       async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)

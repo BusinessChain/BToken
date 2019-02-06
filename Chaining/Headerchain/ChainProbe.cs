@@ -8,78 +8,75 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    partial class Headerchain
+    public class ChainProbe
     {
-      public class ChainProbe
+      public Chain Chain;
+
+      public ChainHeader Header;
+      public UInt256 Hash;
+      public uint Depth;
+
+
+      public ChainProbe(Chain chain)
       {
-        public Chain Chain;
+        Chain = chain;
 
-        public ChainHeader Header;
-        public UInt256 Hash;
-        public uint Depth;
-
-
-        public ChainProbe(Chain chain)
-        {
-          Chain = chain;
-
-          Initialize();
-        }
-
-        protected virtual void Initialize()
-        {
-          Header = Chain.HeaderTip;
-          Hash = Chain.HeaderTipHash;
-          Depth = 0;
-        }
-
-        protected bool GoTo(UInt256 hash, ChainHeader stopHeader)
-        {
-          Initialize();
-
-          while (true)
-          {
-            if (Hash.Equals(hash))
-            {
-              return true;
-            }
-            if (stopHeader == Header)
-            {
-              return false;
-            }
-
-            Push();
-          }
-        }
-        protected virtual void Push()
-        {
-          Hash = Header.NetworkHeader.HashPrevious;
-          Header = Header.HeaderPrevious;
-
-          Depth++;
-        }
-
-        protected UInt256 GetHeaderHash(ChainHeader header)
-        {
-          if (header.HeadersNext.Any())
-          {
-            return header.HeadersNext[0].NetworkHeader.HashPrevious;
-          }
-          else if (header == Chain.HeaderTip)
-          {
-            return Chain.HeaderTipHash;
-          }
-          else
-          {
-            return header.NetworkHeader.ComputeHeaderHash();
-          }
-        }
-
-        protected bool IsTip() => Header == Chain.HeaderTip;
-        protected uint GetHeight() => Chain.Height - Depth;
+        Initialize();
       }
+
+      protected virtual void Initialize()
+      {
+        Header = Chain.HeaderTip;
+        Hash = Chain.HeaderTipHash;
+        Depth = 0;
+      }
+
+      protected bool GoTo(UInt256 hash, ChainHeader stopHeader)
+      {
+        Initialize();
+
+        while (true)
+        {
+          if (Hash.Equals(hash))
+          {
+            return true;
+          }
+          if (stopHeader == Header)
+          {
+            return false;
+          }
+
+          Push();
+        }
+      }
+      protected virtual void Push()
+      {
+        Hash = Header.NetworkHeader.HashPrevious;
+        Header = Header.HeaderPrevious;
+
+        Depth++;
+      }
+
+      protected UInt256 GetHeaderHash(ChainHeader header)
+      {
+        if (header.HeadersNext.Any())
+        {
+          return header.HeadersNext[0].NetworkHeader.HashPrevious;
+        }
+        else if (header == Chain.HeaderTip)
+        {
+          return Chain.HeaderTipHash;
+        }
+        else
+        {
+          return header.NetworkHeader.ComputeHeaderHash();
+        }
+      }
+
+      protected bool IsTip() => Header == Chain.HeaderTip;
+      protected uint GetHeight() => Chain.Height - Depth;
     }
   }
 }

@@ -8,31 +8,28 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  partial class Headerchain
   {
-    partial class Headerchain
+    public class HeaderWriter : IDisposable
     {
-      public class HeaderWriter : IDisposable
+      Headerchain Headerchain;
+      IHeaderWriter ArchiveWriter;
+
+      public HeaderWriter(Headerchain headerchain)
       {
-        Headerchain Headerchain;
-        IHeaderWriter ArchiveWriter;
+        Headerchain = headerchain;
+        ArchiveWriter = headerchain.Archiver.GetWriter();
+      }
 
-        public HeaderWriter(Headerchain headerchain)
-        {
-          Headerchain = headerchain;
-          ArchiveWriter = headerchain.Archiver.GetWriter();
-        }
-        
-        public async Task InsertHeaderAsync(NetworkHeader header)
-        {
-          await Headerchain.InsertHeaderAsync(header);
-          ArchiveWriter.StoreHeader(header);
-        }
+      public async Task InsertHeaderAsync(NetworkHeader header)
+      {
+        await Headerchain.InsertHeaderAsync(header);
+        ArchiveWriter.StoreHeader(header);
+      }
 
-        public void Dispose()
-        {
-          ArchiveWriter.Dispose();
-        }
+      public void Dispose()
+      {
+        ArchiveWriter.Dispose();
       }
     }
   }
