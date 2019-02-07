@@ -91,7 +91,6 @@
     <Compile Include="Accounting\Wallet\Wallet.cs" />
     <Compile Include="Node\NetworkListener.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Chaining\Headerchain\HeaderReader.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocator.cs" />
     <Compile Include="Chaining\Headerchain\ChainLocation.cs" />
@@ -102,7 +101,6 @@
     <Compile Include="Chaining\Headerchain\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Chaining\Headerchain\Chain.cs" />
-    <Compile Include="Chaining\Headerchain\IHeaderArchiver.cs" />
     <Compile Include="DataTypes\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\SHA256d.cs" />

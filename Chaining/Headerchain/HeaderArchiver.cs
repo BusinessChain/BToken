@@ -10,22 +10,14 @@ namespace BToken.Chaining
 {
   public partial class Headerchain
   {
-    class HeaderArchiver : IHeaderArchiver
+    class HeaderArchiver
     {
       readonly static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "HeaderArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
       static string FilePath = Path.Combine(RootDirectory.Name, "Headerchain");
 
-      public IHeaderWriter GetWriter()
-      {
-        return new HeaderWriter();
-      }
-      public IHeaderReader GetReader()
-      {
-        return new HeaderReader();
-      }
 
-      class HeaderWriter : IHeaderWriter, IDisposable
+      public class HeaderWriter : IDisposable
       {
         FileStream FileStream;
 
@@ -74,7 +66,7 @@ namespace BToken.Chaining
         }
       }
 
-      class HeaderReader : IHeaderReader, IDisposable
+      public class HeaderReader : IDisposable
       {
         FileStream FileStream;
 

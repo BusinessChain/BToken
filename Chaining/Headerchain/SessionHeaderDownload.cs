@@ -37,11 +37,11 @@ namespace BToken.Chaining
       {
         List<NetworkHeader> headers = await GetHeadersAsync(Headerchain.LocatorMainChain.ToList());
 
-        using (var inserter = new HeaderWriter(Headerchain))
+        using (var archiveWriter = new HeaderArchiver.HeaderWriter())
         {
           while (headers.Any())
           {
-            await InsertHeadersAsync(headers, inserter);
+            await InsertHeadersAsync(headers, archiveWriter);
             headers = await GetHeadersAsync(Headerchain.LocatorMainChain.ToList());
           }
         }
@@ -74,13 +74,14 @@ namespace BToken.Chaining
         }
       }
 
-      async Task InsertHeadersAsync(List<NetworkHeader> headers, Headerchain.HeaderWriter inserter)
+      async Task InsertHeadersAsync(List<NetworkHeader> headers, HeaderArchiver.HeaderWriter archiveWriter)
       {
         foreach (NetworkHeader header in headers)
         {
           try
           {
-            await inserter.InsertHeaderAsync(header);
+            await Headerchain.InsertHeaderAsync(header);
+            archiveWriter.StoreHeader(header);
           }
           catch (ChainException ex)
           {

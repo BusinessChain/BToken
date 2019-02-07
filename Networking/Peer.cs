@@ -24,7 +24,7 @@ namespace BToken.Networking
       readonly object IsDispatchedLOCK = new object();
       bool IsDispatched = true;
 
-      BufferBlock<NetworkMessage> ApplicationMessageBuffer;
+      BufferBlock<NetworkMessage> InboundRequestMessageBuffer;
 
       ulong FeeFilterValue;
 
@@ -33,7 +33,7 @@ namespace BToken.Networking
       {
         Network = network;
 
-        ApplicationMessageBuffer = new BufferBlock<NetworkMessage>(
+        InboundRequestMessageBuffer = new BufferBlock<NetworkMessage>(
           new DataflowBlockOptions() {
             BoundedCapacity = 2000 });
     }
@@ -105,7 +105,7 @@ namespace BToken.Networking
               ProcessFeeFilterMessage(networkMessage);
               break;
             default:
-              ApplicationMessageBuffer.Post(networkMessage);
+              InboundRequestMessageBuffer.Post(networkMessage);
               Network.PeerRequestInboundBuffer.Post(this);
               break;
           }
@@ -135,7 +135,7 @@ namespace BToken.Networking
 
       public List<NetworkMessage> GetInboundRequestMessages()
       {
-        ApplicationMessageBuffer.TryReceiveAll(out IList<NetworkMessage> requestMessages);
+        InboundRequestMessageBuffer.TryReceiveAll(out IList<NetworkMessage> requestMessages);
         return (List<NetworkMessage>)requestMessages;
       }
 
@@ -178,7 +178,7 @@ namespace BToken.Networking
       async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage()).ConfigureAwait(false);
             
       public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage).ConfigureAwait(false);
-      public async Task<NetworkMessage> ReceiveMessageAsync(CancellationToken cancellationToken) => await ApplicationMessageBuffer.ReceiveAsync(cancellationToken);
+      public async Task<NetworkMessage> ReceiveMessageAsync(CancellationToken cancellationToken) => await InboundRequestMessageBuffer.ReceiveAsync(cancellationToken);
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 

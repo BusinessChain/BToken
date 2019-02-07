@@ -83,13 +83,14 @@ namespace BToken.Chaining
 
     public async Task InsertHeadersAsync(List<NetworkHeader> headers)
     {
-      using (HeaderWriter headerInserter = new HeaderWriter(this))
+      using (var archiveWriter = new HeaderArchiver.HeaderWriter())
       {
         foreach (NetworkHeader header in headers)
         {
           try
           {
-            await headerInserter.InsertHeaderAsync(header);
+            await InsertHeaderAsync(header);
+            archiveWriter.StoreHeader(header);
           }
           catch (ChainException ex)
           {
@@ -203,7 +204,7 @@ namespace BToken.Chaining
     {
       try
       {
-        using (var archiveReader = Archiver.GetReader())
+        using (var archiveReader = new HeaderArchiver.HeaderReader())
         {
           NetworkHeader header = archiveReader.GetNextHeader();
 
