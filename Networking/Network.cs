@@ -29,11 +29,11 @@ namespace BToken.Networking
     TcpListener TcpListener;
 
 
-    readonly object ListPeersLOCK = new object();
+    readonly object ListPeersOutboundLOCK = new object();
     List<Peer> PeersOutbound = new List<Peer>();
     List<Peer> PeersInbound = new List<Peer>();
-
-    BufferBlock<Peer> PeerRequestInboundBuffer = new BufferBlock<Peer>();
+    
+    BufferBlock<Peer> PeersRequestInbound = new BufferBlock<Peer>();
 
 
     public Network()
@@ -97,7 +97,7 @@ namespace BToken.Networking
     {
       var peerNew = new Peer(this);
 
-      lock(ListPeersLOCK)
+      lock(ListPeersOutboundLOCK)
       {
         int indexPeer = PeersOutbound.FindIndex(p => p == peer);
         PeersOutbound[indexPeer] = peerNew;
@@ -112,7 +112,14 @@ namespace BToken.Networking
 
     public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
-      return await PeerRequestInboundBuffer.ReceiveAsync();
+      Peer peer;
+
+      do
+      {
+        peer = await PeersRequestInbound.ReceiveAsync();
+      } while (!peer.TryDispatch());
+
+      return peer;
     }
         
     public async Task StartPeerInboundListenerAsync()
@@ -137,12 +144,15 @@ namespace BToken.Networking
         using (Peer peer = await DispatchPeerOutboundAsync(default(CancellationToken)))
         {
           if (await peer.TryExecuteSessionAsync(session, default(CancellationToken)))
-          { break; }
+          {
+            return;
+          }
 
           ReplacePeerOutbound(peer);
         }
       }
     }
+
     async Task<Peer> DispatchPeerOutboundAsync(CancellationToken cancellationToken)
     {
       while (true)
@@ -154,7 +164,7 @@ namespace BToken.Networking
             return peer;
           }
         }
-        
+
         // add additional peer if bottleneck here, e.g. if 3 times no dispatch then create new peer
         await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
       }

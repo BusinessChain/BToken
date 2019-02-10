@@ -14,18 +14,18 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    Network Network;
-    Blockchain Blockchain;
+    Headerchain Headerchain;
     PayloadParser PayloadParser;
+    UTXOArchiver Archiver;
 
     Dictionary<byte[], byte[]> UTXOTable;
 
 
-    public UTXO(Blockchain blockchain, Network network)
+    public UTXO(Headerchain headerchain, Network network)
     {
-      Network = network;
-      Blockchain = blockchain;
+      Headerchain = headerchain;
       PayloadParser = new PayloadParser();
+      Archiver = new UTXOArchiver(this, network);
 
       UTXOTable = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
     }
@@ -37,22 +37,25 @@ namespace BToken.Accounting
       try
       {
         var tXInputsUnfunded = new Dictionary<UInt256, List<TXInput>>();
-        Blockchain.BlockStream blockStream = Blockchain.GetBlockStream();
-        NetworkBlock block = await blockStream.ReadBlockAsync();
-        
-        while (block != null)
+
+        var headerStreamer = new Headerchain.HeaderStream(Headerchain);
+        headerStreamer.ReadHeader(out ChainLocation location);
+
+        while (location != null)
         {
+          NetworkBlock block = await Archiver.ReadBlockAsync(location.Hash);
+
           Console.WriteLine("Building UTXO block: '{0}', height: '{1}', size: '{2}'",
-            blockStream.Location.Hash.ToString(),
-            blockStream.Location.Height,
+            location.Hash.ToString(),
+            location.Height,
             block.Payload.Length);
           
           ValidatePayload(block, out List<TX> tXs);
 
-          var uTXOTransaction = new UTXOTransaction(this, tXs, blockStream.Location.Hash);
+          var uTXOTransaction = new UTXOTransaction(this, tXs, location.Hash);
           await uTXOTransaction.BuildAsync(tXInputsUnfunded);
 
-          block = await blockStream.ReadBlockAsync();
+          headerStreamer.ReadHeader(out location);
         }
       }
       catch(Exception ex)
@@ -61,11 +64,19 @@ namespace BToken.Accounting
       }
 
       Console.WriteLine("UTXO syncing completed");
-
-
-      // Listen to new blocks.
     }
 
+    public async Task NotifyBlockHeadersAsync(List<UInt256> hashes, INetworkChannel channel)
+    {
+      foreach(UInt256 hash in hashes)
+      {
+        NetworkBlock block = await Archiver.ReadBlockAsync(hash, channel);
+        ValidatePayload(block, out List<TX> tXs);
+        var uTXOTransaction = new UTXOTransaction(this, tXs, hash);
+        await uTXOTransaction.InsertAsync();
+      }
+
+    }
     void ValidatePayload(NetworkBlock block, out List<TX> tXs)
     {
       tXs = PayloadParser.Parse(block.Payload);
@@ -75,18 +86,22 @@ namespace BToken.Accounting
         throw new UTXOException("Payload corrupted.");
       }
     }
-    
-    async Task Update(NetworkBlock block, UInt256 hash)
-    {
-      ValidatePayload(block, out List<TX> tXs);
 
-      var uTXOTransaction = new UTXOTransaction(this, tXs, hash);
-      await uTXOTransaction.InsertAsync();
-    }
-        
     async Task<TX> ReadTXAsync(UInt256 tXHash, byte[] headerIndex)
     {
-      List<NetworkBlock> blocks = await Blockchain.ReadBlocksAsync(headerIndex);
+      List<Headerchain.ChainHeader> headers = Headerchain.ReadHeaders(headerIndex);
+      var blocks = new List<NetworkBlock>();
+
+      foreach (var header in headers)
+      {
+        if (!Headerchain.TryGetHeaderHash(header, out UInt256 hash))
+        {
+          hash = header.NetworkHeader.ComputeHeaderHash();
+        }
+        NetworkBlock block = await Archiver.ReadBlockAsync(hash);
+        ValidateHeaderHash(hash, block);
+        blocks.Add(block);
+      }
 
       foreach (NetworkBlock block in blocks)
       {
@@ -102,6 +117,15 @@ namespace BToken.Accounting
       }
 
       return null;
+    }
+
+    static void ValidateHeaderHash(UInt256 hash, NetworkBlock block)
+    {
+      UInt256 hashComputed = block.Header.ComputeHeaderHash();
+      if (!hash.Equals(hashComputed))
+      {
+        throw new ChainException(ChainCode.INVALID);
+      }
     }
   }
 }

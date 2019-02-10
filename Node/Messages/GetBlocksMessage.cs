@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
-namespace BToken.Chaining
+namespace BToken
 {
   class GetBlocksMessage : NetworkMessage
   {

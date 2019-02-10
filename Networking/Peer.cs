@@ -23,8 +23,9 @@ namespace BToken.Networking
 
       readonly object IsDispatchedLOCK = new object();
       bool IsDispatched = true;
-
-      BufferBlock<NetworkMessage> ApplicationMessageBuffer;
+      
+      BufferBlock<NetworkMessage> SessionMessages;
+      BufferBlock<NetworkMessage> InboundRequestMessages;
 
       ulong FeeFilterValue;
 
@@ -33,10 +34,16 @@ namespace BToken.Networking
       {
         Network = network;
 
-        ApplicationMessageBuffer = new BufferBlock<NetworkMessage>(
+        SessionMessages = new BufferBlock<NetworkMessage>(
           new DataflowBlockOptions() {
             BoundedCapacity = 2000 });
-    }
+
+        InboundRequestMessages = new BufferBlock<NetworkMessage>(
+          new DataflowBlockOptions()
+          {
+            BoundedCapacity = 10
+          });
+      }
       public Peer(TcpClient tcpClient, Network network)
         : this(network)
       {
@@ -52,7 +59,10 @@ namespace BToken.Networking
         {
           await ConnectAsync();
 
-          IsDispatched = false;
+          lock(IsDispatchedLOCK)
+          {
+            IsDispatched = false;
+          }
 
           await ProcessNetworkMessagesAsync();
         }
@@ -85,38 +95,45 @@ namespace BToken.Networking
       {
         while (true)
         {
-          NetworkMessage networkMessage = await NetworkMessageStreamer.ReadAsync(default(CancellationToken)).ConfigureAwait(false);
+          NetworkMessage message = await NetworkMessageStreamer.ReadAsync(default(CancellationToken)).ConfigureAwait(false);
 
-          switch (networkMessage.Command)
+
+          switch (message.Command)
           {
             case "version":
-              await ProcessVersionMessageAsync(networkMessage, default(CancellationToken)).ConfigureAwait(false);
+              await ProcessVersionMessageAsync(message, default(CancellationToken)).ConfigureAwait(false);
               break;
             case "ping":
-              Task processPingMessageTask = ProcessPingMessageAsync(networkMessage);
+              Task processPingMessageTask = ProcessPingMessageAsync(message);
               break;
             case "addr":
-              ProcessAddressMessage(networkMessage);
+              ProcessAddressMessage(message);
               break;
             case "sendheaders":
-              Task processSendHeadersMessageTask = ProcessSendHeadersMessageAsync(networkMessage);
+              Task processSendHeadersMessageTask = ProcessSendHeadersMessageAsync(message);
               break;
             case "feefilter":
-              ProcessFeeFilterMessage(networkMessage);
+              ProcessFeeFilterMessage(message);
               break;
             default:
-              ProcessApplicationMessage(networkMessage);
+              ProcessApplicationMessage(message);
               break;
           }
         }
       }
-      void ProcessApplicationMessage(NetworkMessage networkMessage)
+      void ProcessApplicationMessage(NetworkMessage message)
       {
-        ApplicationMessageBuffer.Post(networkMessage);
-        
-        if (TryDispatch())
+        lock (IsDispatchedLOCK)
         {
-          Network.PeerRequestInboundBuffer.Post(this);
+          if (IsDispatched)
+          {
+            SessionMessages.Post(message);
+          }
+          else
+          {
+            InboundRequestMessages.Post(message);
+            Network.PeersRequestInbound.Post(this);
+          }
         }
       }
 
@@ -143,8 +160,12 @@ namespace BToken.Networking
 
       public List<NetworkMessage> GetInboundRequestMessages()
       {
-        ApplicationMessageBuffer.TryReceiveAll(out IList<NetworkMessage> requestMessages);
-        return (List<NetworkMessage>)requestMessages;
+        if(InboundRequestMessages.TryReceiveAll(out IList<NetworkMessage> messages))
+        {
+          return (List<NetworkMessage>)messages;
+        }
+
+        return new List<NetworkMessage>();
       }
 
       async Task ConnectTCPAsync()
@@ -183,10 +204,14 @@ namespace BToken.Networking
       {
         AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
-      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage()).ConfigureAwait(false);
-            
-      public async Task SendMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(networkMessage).ConfigureAwait(false);
-      public async Task<NetworkMessage> ReceiveMessageAsync(CancellationToken cancellationToken) => await ApplicationMessageBuffer.ReceiveAsync(cancellationToken);
+      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage());
+
+      public async Task SendMessageAsync(NetworkMessage networkMessage)
+      {
+        await NetworkMessageStreamer.WriteAsync(networkMessage);
+      }
+
+      public async Task<NetworkMessage> ReceiveSessionMessageAsync(CancellationToken cancellationToken) => await SessionMessages.ReceiveAsync(cancellationToken);
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
@@ -195,7 +220,6 @@ namespace BToken.Networking
         try
         {
           await session.RunAsync(this, cancellationToken);
-          
           return true;
         }
         catch (Exception ex)

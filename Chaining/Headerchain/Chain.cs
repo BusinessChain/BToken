@@ -6,41 +6,38 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    partial class Headerchain
+    class Chain
     {
-      public class Chain
+      public ChainHeader HeaderTip { get; private set; }
+      public UInt256 HeaderTipHash { get; private set; }
+      public uint Height { get; private set; }
+      public double AccumulatedDifficulty { get; private set; }
+      public ChainHeader HeaderRoot { get; private set; }
+
+
+      public Chain(
+        ChainHeader headerRoot,
+        uint height,
+        double accumulatedDifficultyPrevious)
       {
-        public ChainHeader HeaderTip { get; private set; }
-        public UInt256 HeaderTipHash { get; private set; }
-        public uint Height { get; private set; }
-        public double AccumulatedDifficulty { get; private set; }
-        public ChainHeader HeaderRoot { get; private set; }
-
-
-        public Chain(
-          ChainHeader headerRoot,
-          uint height,
-          double accumulatedDifficultyPrevious)
-        {
-          HeaderTip = headerRoot;
-          HeaderTipHash = headerRoot.NetworkHeader.ComputeHeaderHash();
-          Height = height;
-          HeaderRoot = headerRoot;
-          AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerRoot.NetworkHeader.NBits);
-        }
-
-        public void ExtendChain(ChainHeader header, UInt256 headerHash)
-        {
-          HeaderTip = header;
-          HeaderTipHash = headerHash;
-          Height++;
-          AccumulatedDifficulty += TargetManager.GetDifficulty(header.NetworkHeader.NBits);
-        }
-
-        public bool IsStrongerThan(Chain chain) => chain == null ? true : AccumulatedDifficulty > chain.AccumulatedDifficulty;
+        HeaderTip = headerRoot;
+        HeaderTipHash = headerRoot.NetworkHeader.ComputeHeaderHash();
+        Height = height;
+        HeaderRoot = headerRoot;
+        AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerRoot.NetworkHeader.NBits);
       }
+
+      public void ExtendChain(ChainHeader header, UInt256 headerHash)
+      {
+        HeaderTip = header;
+        HeaderTipHash = headerHash;
+        Height++;
+        AccumulatedDifficulty += TargetManager.GetDifficulty(header.NetworkHeader.NBits);
+      }
+
+      public bool IsStrongerThan(Chain chain) => chain == null ? true : AccumulatedDifficulty > chain.AccumulatedDifficulty;
     }
   }
 }

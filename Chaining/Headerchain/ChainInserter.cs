@@ -9,197 +9,194 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    partial class Headerchain
+    class ChainInserter : IDisposable
     {
-      class ChainInserter : ChainProbe, IDisposable
+      Headerchain Headerchain;
+      ChainProbe Probe;
+      public double AccumulatedDifficulty;
+
+      readonly object IsDispatchedLOCK = new object();
+      bool IsDispatched = false;
+
+
+      public ChainInserter(Headerchain headerchain)
       {
-        Headerchain Headerchain;
-        public double AccumulatedDifficulty;
+        Headerchain = headerchain;
+        Probe = new ChainProbe(headerchain.MainChain);
+        Headerchain.SignalInserterAvailable.Post(true);
+      }
 
-        readonly object IsDispatchedLOCK = new object();
-        bool IsDispatched = false;
+      public void Initialize()
+      {
+        Probe.Initialize();
+        AccumulatedDifficulty = Probe.Chain.AccumulatedDifficulty;
+      }
+      public void Push()
+      {
+        Probe.Push();
+        AccumulatedDifficulty -= TargetManager.GetDifficulty(Probe.Header.NetworkHeader.NBits);
+      }
 
+      public Chain InsertHeader(NetworkHeader networkHeader, UInt256 headerHash)
+      {
+        FindPreviousHeader(networkHeader);
 
-        public ChainInserter(Headerchain headerchain)
-          : base(headerchain.MainChain)
+        ValidateHeader(networkHeader, headerHash);
+
+        var chainHeader = new ChainHeader(networkHeader, Probe.Header);
+        Probe.Header.HeadersNext.Add(chainHeader);
+
+        Headerchain.UpdateHeaderIndex(chainHeader, headerHash);
+
+        if (Probe.IsTip())
         {
-          Headerchain = headerchain;
+          Probe.Chain.ExtendChain(chainHeader, headerHash);
 
-          Headerchain.SignalInserterAvailable.Post(true);
-        }
-
-        protected override void Initialize()
-        {
-          base.Initialize();
-          AccumulatedDifficulty = Chain.AccumulatedDifficulty;
-        }
-        protected override void Push()
-        {
-          base.Push();
-          AccumulatedDifficulty -= TargetManager.GetDifficulty(Header.NetworkHeader.NBits);
-        }
-        
-        public Chain InsertHeader(NetworkHeader networkHeader, UInt256 headerHash)
-        {
-          FindPreviousHeader(networkHeader);
-
-          ValidateHeader(networkHeader, headerHash);
-
-          var chainHeader = new ChainHeader(networkHeader, Header);
-          Header.HeadersNext.Add(chainHeader);
-
-          Headerchain.UpdateHeaderIndex(chainHeader, headerHash);
-          
-          if (IsTip())
+          if (Probe.Chain == Headerchain.MainChain)
           {
-            Chain.ExtendChain(chainHeader, headerHash);
-
-            if (Chain == Headerchain.MainChain)
-            {
-              Headerchain.LocatorMainChain.Update();
-              return null;
-            }
-
-            return Chain;
-          }
-          else
-          {
-            Chain chainForked = ForkChain(headerHash);
-            Headerchain.SecondaryChains.Add(chainForked);
-            return ForkChain(headerHash);
-          }
-        }
-        void FindPreviousHeader(NetworkHeader header)
-        {
-          Chain = Headerchain.MainChain;
-          if (GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
-
-          foreach (Chain chain in Headerchain.SecondaryChains)
-          {
-            Chain = chain;
-            if (GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
+            Headerchain.Locator.Update();
+            return null;
           }
 
-          throw new ChainException(ChainCode.ORPHAN);
+          return Probe.Chain;
         }
-        void ValidateHeader(NetworkHeader header, UInt256 headerHash)
+        else
         {
-          ValidateTimeStamp(header.UnixTimeSeconds);
-          ValidateCheckpoint(headerHash);
-          ValidateUniqueness(headerHash);
-          ValidateProofOfWork(header.NBits, headerHash);
+          Chain chainForked = ForkChain(headerHash);
+          Headerchain.SecondaryChains.Add(chainForked);
+          return ForkChain(headerHash);
         }
-        void ValidateCheckpoint(UInt256 headerHash)
-        {
-          uint nextHeaderHeight = GetHeight() + 1;
+      }
+      void FindPreviousHeader(NetworkHeader header)
+      {
+        Probe.Chain = Headerchain.MainChain;
+        if (Probe.GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
 
-          uint highestCheckpointHight = Headerchain.Checkpoints.Max(x => x.Height);
-          bool mainChainLongerThanHighestCheckpoint = highestCheckpointHight <= Headerchain.MainChain.Height;
-          bool nextHeightBelowHighestCheckpoint = nextHeaderHeight <= highestCheckpointHight;
-          if (mainChainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
+        foreach (Chain chain in Headerchain.SecondaryChains)
+        {
+          Probe.Chain = chain;
+          if (Probe.GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
+        }
+
+        throw new ChainException(ChainCode.ORPHAN);
+      }
+      void ValidateHeader(NetworkHeader header, UInt256 headerHash)
+      {
+        ValidateTimeStamp(header.UnixTimeSeconds);
+        ValidateCheckpoint(headerHash);
+        ValidateUniqueness(headerHash);
+        ValidateProofOfWork(header.NBits, headerHash);
+      }
+      void ValidateCheckpoint(UInt256 headerHash)
+      {
+        uint nextHeaderHeight = Probe.GetHeight() + 1;
+
+        uint highestCheckpointHight = Headerchain.Checkpoints.Max(x => x.Height);
+        bool mainChainLongerThanHighestCheckpoint = highestCheckpointHight <= Headerchain.MainChain.Height;
+        bool nextHeightBelowHighestCheckpoint = nextHeaderHeight <= highestCheckpointHight;
+        if (mainChainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
+        {
+          throw new ChainException(ChainCode.INVALID);
+        }
+
+        if (!ValidateBlockLocation(nextHeaderHeight, headerHash))
+        {
+          throw new ChainException(ChainCode.INVALID);
+        }
+      }
+      bool ValidateBlockLocation(uint height, UInt256 hash)
+      {
+        ChainLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
+        if (checkpoint != null)
+        {
+          return checkpoint.Hash.Equals(hash);
+        }
+
+        return true;
+      }
+      void ValidateProofOfWork(uint nBits, UInt256 headerHash)
+      {
+        uint nextHeight = Probe.GetHeight() + 1;
+        if (nBits != TargetManager.GetNextTargetBits(Probe.Header, nextHeight))
+        {
+          throw new ChainException(ChainCode.INVALID);
+        }
+      }
+      void ValidateTimeStamp(uint unixTimeSeconds)
+      {
+        if (unixTimeSeconds <= GetMedianTimePast(Probe.Header))
+        {
+          throw new ChainException(ChainCode.INVALID);
+        }
+      }
+      void ValidateUniqueness(UInt256 hash)
+      {
+        if (Probe.Header.HeadersNext.Select(h => Probe.GetHeaderHash(h)).Contains(hash))
+        {
+          throw new ChainException(ChainCode.DUPLICATE);
+        }
+      }
+      uint GetMedianTimePast(ChainHeader header)
+      {
+        const int MEDIAN_TIME_PAST = 11;
+
+        List<uint> timestampsPast = new List<uint>();
+
+        int depth = 0;
+        while (depth < MEDIAN_TIME_PAST)
+        {
+          timestampsPast.Add(header.NetworkHeader.UnixTimeSeconds);
+
+          if (header.HeaderPrevious == null)
+          { break; }
+
+          header = header.HeaderPrevious;
+          depth++;
+        }
+
+        timestampsPast.Sort();
+
+        return timestampsPast[timestampsPast.Count / 2];
+      }
+
+      ChainHeader ConnectHeader(NetworkHeader header)
+      {
+        var chainHeader = new ChainHeader(header, Probe.Header);
+        Probe.Header.HeadersNext.Add(chainHeader);
+        return chainHeader;
+      }
+      Chain ForkChain(UInt256 headerHash)
+      {
+        ChainHeader header = Probe.Header.HeadersNext.Last();
+        uint height = Probe.GetHeight() + 1;
+
+        return new Chain(
+          headerRoot: Probe.Header,
+          height: height,
+          accumulatedDifficultyPrevious: AccumulatedDifficulty);
+      }
+
+      public bool TryDispatch()
+      {
+        lock (IsDispatchedLOCK)
+        {
+          if (IsDispatched)
           {
-            throw new ChainException(ChainCode.INVALID);
+            return false;
           }
 
-          if (!ValidateBlockLocation(nextHeaderHeight, headerHash))
-          {
-            throw new ChainException(ChainCode.INVALID);
-          }
-        }
-        bool ValidateBlockLocation(uint height, UInt256 hash)
-        {
-          ChainLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
-          if (checkpoint != null)
-          {
-            return checkpoint.Hash.Equals(hash);
-          }
-
+          IsDispatched = true;
           return true;
         }
-        void ValidateProofOfWork(uint nBits, UInt256 headerHash)
+      }
+      public void Dispose()
+      {
+        lock (IsDispatchedLOCK)
         {
-          uint nextHeight = GetHeight() + 1;
-          if (nBits != TargetManager.GetNextTargetBits(Header, nextHeight))
-          {
-            throw new ChainException(ChainCode.INVALID);
-          }
-        }
-        void ValidateTimeStamp(uint unixTimeSeconds)
-        {
-          if (unixTimeSeconds <= GetMedianTimePast(Header))
-          {
-            throw new ChainException(ChainCode.INVALID);
-          }
-        }
-        void ValidateUniqueness(UInt256 hash)
-        {
-          if (Header.HeadersNext.Select(h => GetHeaderHash(h)).Contains(hash))
-          {
-            throw new ChainException(ChainCode.DUPLICATE);
-          }
-        }
-        uint GetMedianTimePast(ChainHeader header)
-        {
-          const int MEDIAN_TIME_PAST = 11;
-
-          List<uint> timestampsPast = new List<uint>();
-
-          int depth = 0;
-          while (depth < MEDIAN_TIME_PAST)
-          {
-            timestampsPast.Add(header.NetworkHeader.UnixTimeSeconds);
-
-            if (header.HeaderPrevious == null)
-            { break; }
-
-            header = header.HeaderPrevious;
-            depth++;
-          }
-
-          timestampsPast.Sort();
-
-          return timestampsPast[timestampsPast.Count / 2];
-        }
-
-        ChainHeader ConnectHeader(NetworkHeader header)
-        {
-          var chainHeader = new ChainHeader(header, Header);
-          Header.HeadersNext.Add(chainHeader);
-          return chainHeader;
-        }
-        Chain ForkChain(UInt256 headerHash)
-        {
-          ChainHeader header = Header.HeadersNext.Last();
-          uint height = GetHeight() + 1;
-
-          return new Chain(
-            headerRoot: Header,
-            height: height,
-            accumulatedDifficultyPrevious: AccumulatedDifficulty);
-        }
-        
-        public bool TryDispatch()
-        {
-          lock (IsDispatchedLOCK)
-          {
-            if (IsDispatched)
-            {
-              return false;
-            }
-
-            IsDispatched = true;
-            return true;
-          }
-        }
-        public void Dispose()
-        {
-          lock (IsDispatchedLOCK)
-          {
-            IsDispatched = false;
-            Headerchain.SignalInserterAvailable.Post(true);
-          }
+          IsDispatched = false;
+          Headerchain.SignalInserterAvailable.Post(true);
         }
       }
     }

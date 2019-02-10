@@ -1,38 +1,58 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
+using System.Threading;
 
 using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    partial class Headerchain
+    public class HeaderWriter : IDisposable
     {
-      public class HeaderWriter : IDisposable
+      FileStream FileStream;
+
+      public HeaderWriter()
       {
-        Headerchain Headerchain;
-        IHeaderWriter ArchiveWriter;
+        FileStream = WaitForFile(
+          FilePath,
+          FileMode.Append,
+          FileAccess.Write,
+          FileShare.None);
+      }
 
-        public HeaderWriter(Headerchain headerchain)
+      static FileStream WaitForFile(string fullPath, FileMode fileMode, FileAccess fileAccess, FileShare fileShare)
+      {
+        for (int numTries = 0; numTries < 10; numTries++)
         {
-          Headerchain = headerchain;
-          ArchiveWriter = headerchain.Archiver.GetWriter();
-        }
-        
-        public async Task InsertHeaderAsync(NetworkHeader header)
-        {
-          await Headerchain.InsertHeaderAsync(header);
-          ArchiveWriter.StoreHeader(header);
+          FileStream fs = null;
+          try
+          {
+            fs = new FileStream(fullPath, fileMode, fileAccess, fileShare);
+            return fs;
+          }
+          catch (IOException)
+          {
+            if (fs != null)
+            {
+              fs.Dispose();
+            }
+            Thread.Sleep(50);
+          }
         }
 
-        public void Dispose()
-        {
-          ArchiveWriter.Dispose();
-        }
+        throw new IOException(string.Format("File '{0}' cannot be accessed because it is blocked by another process.", fullPath));
+      }
+
+      public void StoreHeader(NetworkHeader header)
+      {
+        byte[] headerBytes = header.GetBytes();
+        FileStream.Write(headerBytes, 0, headerBytes.Length);
+      }
+
+      public void Dispose()
+      {
+        FileStream.Dispose();
       }
     }
   }

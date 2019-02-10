@@ -4,28 +4,45 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
+using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 
 using BToken.Networking;
 
-namespace BToken.Chaining
+namespace BToken.Accounting
 {
-  public partial class Blockchain
+  public partial class UTXO
   {
-    partial class BlockArchiver
+    partial class UTXOArchiver
     {
       static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BlockArchive");
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
 
-      Blockchain Blockchain;
+      UTXO UTXO;
+      Network Network;
 
-
-      public BlockArchiver(Blockchain blockchain)
+      public UTXOArchiver(UTXO uTXO, Network network)
       {
-        Blockchain = blockchain;
+        UTXO = uTXO;
+        Network = network;
       }
 
+
+      public async Task ArchiveBlockAsync(NetworkBlock block, UInt256 hash)
+      {
+        // write cache
+
+        using (FileStream fileStream = CreateFile(hash))
+        {
+          byte[] headerBytes = block.Header.GetBytes();
+          byte[] txCount = VarInt.GetBytes(block.TXCount).ToArray();
+
+          await fileStream.WriteAsync(headerBytes, 0, headerBytes.Length);
+          await fileStream.WriteAsync(txCount, 0, txCount.Length);
+          await fileStream.WriteAsync(block.Payload, 0, block.Payload.Length);
+        }
+      }
       FileStream CreateFile(UInt256 hash)
       {
         string filename = hash.ToString();
@@ -42,22 +59,11 @@ namespace BToken.Chaining
           FileShare.None);
       }
 
-      public async Task ArchiveBlockAsync(NetworkBlock block, UInt256 hash)
-      {
-        // write cache
-
-        using (FileStream fileStream = CreateFile(hash))
-        {
-          byte[] headerBytes = block.Header.GetBytes();
-          byte[] txCount = VarInt.GetBytes(block.TXCount).ToArray();
-
-          await fileStream.WriteAsync(headerBytes, 0, headerBytes.Length);
-          await fileStream.WriteAsync(txCount, 0, txCount.Length);
-          await fileStream.WriteAsync(block.Payload, 0, block.Payload.Length);
-        }
-      }
-
       public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
+      {
+        return await ReadBlockAsync(hash, null);
+      }
+      public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash, INetworkChannel channel)
       {
         // read cache
 
@@ -65,7 +71,7 @@ namespace BToken.Chaining
         string fileRootPath = GenerateRootPath(hash);
         string filePath = Path.Combine(fileRootPath, filename);
         
-        if(File.Exists(filePath))
+        try
         {
           using (FileStream fileStream = new FileStream(
             filePath,
@@ -76,11 +82,17 @@ namespace BToken.Chaining
             return await NetworkBlock.ReadBlockAsync(fileStream);
           }
         }
-        else
+        catch (FileNotFoundException)
         {
-          var sessionBlockDownload = new SessionBlockDownload(hash, Blockchain);
-          await Blockchain.Network.ExecuteSessionAsync(sessionBlockDownload);
-          return sessionBlockDownload.BlockDownloaded;
+          var sessionBlockDownload = new SessionBlockDownload(hash);
+
+          if (channel == null || !await channel.TryExecuteSessionAsync(sessionBlockDownload, default(CancellationToken)))
+          {
+            await Network.ExecuteSessionAsync(sessionBlockDownload);
+          }
+          
+          Task archiveBlockTask = ArchiveBlockAsync(sessionBlockDownload.Block, hash);
+          return sessionBlockDownload.Block;
         }
       }
 

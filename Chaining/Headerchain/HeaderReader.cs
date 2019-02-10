@@ -1,44 +1,44 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 
 using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  public partial class Headerchain
   {
-    partial class Headerchain
+    class HeaderReader : IDisposable
     {
-      public class HeaderReader : ChainProbe
+      FileStream FileStream;
+
+      public HeaderReader()
       {
-        ChainHeader GenesisHeader;
+        FileStream = new FileStream(
+          FilePath,
+          FileMode.Open,
+          FileAccess.Read,
+          FileShare.Read);
+      }
 
+      public NetworkHeader GetNextHeader()
+      {
+        byte[] headerBytes = new byte[81];
+        int bytesReadCount = FileStream.Read(headerBytes, 0, 80);
 
-        public HeaderReader(Headerchain headerchain)
-          :base(headerchain.MainChain)
+        if (bytesReadCount < 80)
         {
-          GenesisHeader = headerchain.GenesisHeader;
-        }
-               
-        public NetworkHeader ReadHeader(out ChainLocation chainLocation)
-        {
-          if (Header != GenesisHeader)
-          {
-            chainLocation = new ChainLocation(GetHeight(), Hash);
-            NetworkHeader header = Header.NetworkHeader;
-
-            Push();
-
-            return header;
-          }
-
-          chainLocation = null;
           return null;
         }
 
+        int startIndex = 0;
+        return NetworkHeader.ParseHeader(headerBytes, out int txCount, ref startIndex);
+      }
+
+      public void Dispose()
+      {
+        FileStream.Dispose();
       }
     }
   }
