@@ -3,7 +3,6 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,18 +15,16 @@ namespace BToken.Accounting
     class SessionBlockDownload : INetworkSession
     {
       INetworkChannel Channel;
-      BlockArchiver Archiver;
 
-      UInt256 HashHeader;
-      public NetworkBlock BlockDownloaded { get; private set; }
+      UInt256 HeaderHash;
+      public NetworkBlock Block { get; private set; }
 
       const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
 
-      public SessionBlockDownload(UInt256 hashHeader, BlockArchiver archiver)
+      public SessionBlockDownload(UInt256 hashHeader)
       {
-        HashHeader = hashHeader;
-        Archiver = archiver;
+        HeaderHash = hashHeader;
       }
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
@@ -37,15 +34,14 @@ namespace BToken.Accounting
         await DownloadBlockAsync();
 
         Console.WriteLine("Channel '{0}' downloaded block: '{1}'", 
-          Channel.GetIdentification(), HashHeader);
+          Channel.GetIdentification(), HeaderHash);
       }
       
       async Task DownloadBlockAsync()
       {
-        NetworkBlock block = await GetBlockAsync(HashHeader);
-        ValidateHeader(HashHeader, block);
-        await Archiver.ArchiveBlockAsync(block, HashHeader);
-        BlockDownloaded = block;
+        NetworkBlock block = await GetBlockAsync(HeaderHash);
+        ValidateHeaderHash(HeaderHash, block);
+        Block = block;
       }
       async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)
       {
@@ -58,7 +54,7 @@ namespace BToken.Accounting
 
           while (true)
           {
-            NetworkMessage networkMessage = await Channel.ReceiveMessageAsync(CancellationGetBlock.Token);
+            NetworkMessage networkMessage = await Channel.ReceiveSessionMessageAsync(CancellationGetBlock.Token);
 
             if (networkMessage.Command == "block")
             {

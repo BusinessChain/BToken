@@ -42,9 +42,9 @@ namespace BToken.Networking
       public MessageStreamer(Stream stream)
       {
         Stream = stream;
-        populateMagicBytes();
+        InitializeMagicBytes();
       }
-      void populateMagicBytes()
+      void InitializeMagicBytes()
       {
         for (int i = 0; i < MagicBytes.Length; i++)
         {

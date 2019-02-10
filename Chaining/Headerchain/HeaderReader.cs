@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 
 using BToken.Networking;
 
@@ -10,33 +9,37 @@ namespace BToken.Chaining
 {
   public partial class Headerchain
   {
-    public class HeaderReader : ChainProbe
+    class HeaderReader : IDisposable
     {
-      ChainHeader GenesisHeader;
+      FileStream FileStream;
 
-
-      public HeaderReader(Headerchain headerchain)
-        : base(headerchain.MainChain)
+      public HeaderReader()
       {
-        GenesisHeader = headerchain.GenesisHeader;
+        FileStream = new FileStream(
+          FilePath,
+          FileMode.Open,
+          FileAccess.Read,
+          FileShare.Read);
       }
 
-      public NetworkHeader ReadHeader(out ChainLocation chainLocation)
+      public NetworkHeader GetNextHeader()
       {
-        if (Header != GenesisHeader)
+        byte[] headerBytes = new byte[81];
+        int bytesReadCount = FileStream.Read(headerBytes, 0, 80);
+
+        if (bytesReadCount < 80)
         {
-          chainLocation = new ChainLocation(GetHeight(), Hash);
-          NetworkHeader header = Header.NetworkHeader;
-
-          Push();
-
-          return header;
+          return null;
         }
 
-        chainLocation = null;
-        return null;
+        int startIndex = 0;
+        return NetworkHeader.ParseHeader(headerBytes, out int txCount, ref startIndex);
       }
 
+      public void Dispose()
+      {
+        FileStream.Dispose();
+      }
     }
   }
 }

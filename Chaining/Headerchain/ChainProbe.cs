@@ -10,7 +10,7 @@ namespace BToken.Chaining
 {
   public partial class Headerchain
   {
-    public class ChainProbe
+    class ChainProbe
     {
       public Chain Chain;
 
@@ -26,14 +26,14 @@ namespace BToken.Chaining
         Initialize();
       }
 
-      protected virtual void Initialize()
+      public void Initialize()
       {
         Header = Chain.HeaderTip;
         Hash = Chain.HeaderTipHash;
         Depth = 0;
       }
 
-      protected bool GoTo(UInt256 hash, ChainHeader stopHeader)
+      public bool GoTo(UInt256 hash, ChainHeader stopHeader)
       {
         Initialize();
 
@@ -51,7 +51,7 @@ namespace BToken.Chaining
           Push();
         }
       }
-      protected virtual void Push()
+      public void Push()
       {
         Hash = Header.NetworkHeader.HashPrevious;
         Header = Header.HeaderPrevious;
@@ -59,7 +59,7 @@ namespace BToken.Chaining
         Depth++;
       }
 
-      protected UInt256 GetHeaderHash(ChainHeader header)
+      public UInt256 GetHeaderHash(ChainHeader header)
       {
         if (header.HeadersNext.Any())
         {
@@ -75,8 +75,8 @@ namespace BToken.Chaining
         }
       }
 
-      protected bool IsTip() => Header == Chain.HeaderTip;
-      protected uint GetHeight() => Chain.Height - Depth;
+      public bool IsTip() => Header == Chain.HeaderTip;
+      public uint GetHeight() => Chain.Height - Depth;
     }
   }
 }

@@ -8,7 +8,7 @@ namespace BToken.Chaining
 {
   public partial class Headerchain
   {
-    class HeaderLocator
+    public class HeaderLocator
     {
       Headerchain Headerchain;
       List<ChainLocation> BlockLocations = new List<ChainLocation>();

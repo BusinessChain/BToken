@@ -14,20 +14,18 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    Network Network;
     Headerchain Headerchain;
     PayloadParser PayloadParser;
-    BlockArchiver Archiver;
+    UTXOArchiver Archiver;
 
     Dictionary<byte[], byte[]> UTXOTable;
 
 
     public UTXO(Headerchain headerchain, Network network)
     {
-      Network = network;
       Headerchain = headerchain;
       PayloadParser = new PayloadParser();
-      Archiver = new BlockArchiver(this, network);
+      Archiver = new UTXOArchiver(this, network);
 
       UTXOTable = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
     }
@@ -39,8 +37,8 @@ namespace BToken.Accounting
       try
       {
         var tXInputsUnfunded = new Dictionary<UInt256, List<TXInput>>();
-        var headerStreamer = new Headerchain.HeaderReader(Headerchain);
 
+        var headerStreamer = new Headerchain.HeaderStream(Headerchain);
         headerStreamer.ReadHeader(out ChainLocation location);
 
         while (location != null)
@@ -66,9 +64,19 @@ namespace BToken.Accounting
       }
 
       Console.WriteLine("UTXO syncing completed");
-
     }
 
+    public async Task NotifyBlockHeadersAsync(List<UInt256> hashes, INetworkChannel channel)
+    {
+      foreach(UInt256 hash in hashes)
+      {
+        NetworkBlock block = await Archiver.ReadBlockAsync(hash, channel);
+        ValidatePayload(block, out List<TX> tXs);
+        var uTXOTransaction = new UTXOTransaction(this, tXs, hash);
+        await uTXOTransaction.InsertAsync();
+      }
+
+    }
     void ValidatePayload(NetworkBlock block, out List<TX> tXs)
     {
       tXs = PayloadParser.Parse(block.Payload);
@@ -78,15 +86,7 @@ namespace BToken.Accounting
         throw new UTXOException("Payload corrupted.");
       }
     }
-    
-    async Task Update(NetworkBlock block, UInt256 hash)
-    {
-      ValidatePayload(block, out List<TX> tXs);
 
-      var uTXOTransaction = new UTXOTransaction(this, tXs, hash);
-      await uTXOTransaction.InsertAsync();
-    }
-        
     async Task<TX> ReadTXAsync(UInt256 tXHash, byte[] headerIndex)
     {
       List<Headerchain.ChainHeader> headers = Headerchain.ReadHeaders(headerIndex);
@@ -99,7 +99,7 @@ namespace BToken.Accounting
           hash = header.NetworkHeader.ComputeHeaderHash();
         }
         NetworkBlock block = await Archiver.ReadBlockAsync(hash);
-        ValidateHeader(hash, block);
+        ValidateHeaderHash(hash, block);
         blocks.Add(block);
       }
 
@@ -119,7 +119,7 @@ namespace BToken.Accounting
       return null;
     }
 
-    static void ValidateHeader(UInt256 hash, NetworkBlock block)
+    static void ValidateHeaderHash(UInt256 hash, NetworkBlock block)
     {
       UInt256 hashComputed = block.Header.ComputeHeaderHash();
       if (!hash.Equals(hashComputed))

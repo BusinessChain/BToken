@@ -11,9 +11,10 @@ namespace BToken.Chaining
 {
   public partial class Headerchain
   {
-    class ChainInserter : ChainProbe, IDisposable
+    class ChainInserter : IDisposable
     {
       Headerchain Headerchain;
+      ChainProbe Probe;
       public double AccumulatedDifficulty;
 
       readonly object IsDispatchedLOCK = new object();
@@ -21,22 +22,21 @@ namespace BToken.Chaining
 
 
       public ChainInserter(Headerchain headerchain)
-        : base(headerchain.MainChain)
       {
         Headerchain = headerchain;
-
+        Probe = new ChainProbe(headerchain.MainChain);
         Headerchain.SignalInserterAvailable.Post(true);
       }
 
-      protected override void Initialize()
+      public void Initialize()
       {
-        base.Initialize();
-        AccumulatedDifficulty = Chain.AccumulatedDifficulty;
+        Probe.Initialize();
+        AccumulatedDifficulty = Probe.Chain.AccumulatedDifficulty;
       }
-      protected override void Push()
+      public void Push()
       {
-        base.Push();
-        AccumulatedDifficulty -= TargetManager.GetDifficulty(Header.NetworkHeader.NBits);
+        Probe.Push();
+        AccumulatedDifficulty -= TargetManager.GetDifficulty(Probe.Header.NetworkHeader.NBits);
       }
 
       public Chain InsertHeader(NetworkHeader networkHeader, UInt256 headerHash)
@@ -45,22 +45,22 @@ namespace BToken.Chaining
 
         ValidateHeader(networkHeader, headerHash);
 
-        var chainHeader = new ChainHeader(networkHeader, Header);
-        Header.HeadersNext.Add(chainHeader);
+        var chainHeader = new ChainHeader(networkHeader, Probe.Header);
+        Probe.Header.HeadersNext.Add(chainHeader);
 
         Headerchain.UpdateHeaderIndex(chainHeader, headerHash);
 
-        if (IsTip())
+        if (Probe.IsTip())
         {
-          Chain.ExtendChain(chainHeader, headerHash);
+          Probe.Chain.ExtendChain(chainHeader, headerHash);
 
-          if (Chain == Headerchain.MainChain)
+          if (Probe.Chain == Headerchain.MainChain)
           {
-            Headerchain.LocatorMainChain.Update();
+            Headerchain.Locator.Update();
             return null;
           }
 
-          return Chain;
+          return Probe.Chain;
         }
         else
         {
@@ -71,13 +71,13 @@ namespace BToken.Chaining
       }
       void FindPreviousHeader(NetworkHeader header)
       {
-        Chain = Headerchain.MainChain;
-        if (GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
+        Probe.Chain = Headerchain.MainChain;
+        if (Probe.GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
 
         foreach (Chain chain in Headerchain.SecondaryChains)
         {
-          Chain = chain;
-          if (GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
+          Probe.Chain = chain;
+          if (Probe.GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
         }
 
         throw new ChainException(ChainCode.ORPHAN);
@@ -91,7 +91,7 @@ namespace BToken.Chaining
       }
       void ValidateCheckpoint(UInt256 headerHash)
       {
-        uint nextHeaderHeight = GetHeight() + 1;
+        uint nextHeaderHeight = Probe.GetHeight() + 1;
 
         uint highestCheckpointHight = Headerchain.Checkpoints.Max(x => x.Height);
         bool mainChainLongerThanHighestCheckpoint = highestCheckpointHight <= Headerchain.MainChain.Height;
@@ -118,22 +118,22 @@ namespace BToken.Chaining
       }
       void ValidateProofOfWork(uint nBits, UInt256 headerHash)
       {
-        uint nextHeight = GetHeight() + 1;
-        if (nBits != TargetManager.GetNextTargetBits(Header, nextHeight))
+        uint nextHeight = Probe.GetHeight() + 1;
+        if (nBits != TargetManager.GetNextTargetBits(Probe.Header, nextHeight))
         {
           throw new ChainException(ChainCode.INVALID);
         }
       }
       void ValidateTimeStamp(uint unixTimeSeconds)
       {
-        if (unixTimeSeconds <= GetMedianTimePast(Header))
+        if (unixTimeSeconds <= GetMedianTimePast(Probe.Header))
         {
           throw new ChainException(ChainCode.INVALID);
         }
       }
       void ValidateUniqueness(UInt256 hash)
       {
-        if (Header.HeadersNext.Select(h => GetHeaderHash(h)).Contains(hash))
+        if (Probe.Header.HeadersNext.Select(h => Probe.GetHeaderHash(h)).Contains(hash))
         {
           throw new ChainException(ChainCode.DUPLICATE);
         }
@@ -163,17 +163,17 @@ namespace BToken.Chaining
 
       ChainHeader ConnectHeader(NetworkHeader header)
       {
-        var chainHeader = new ChainHeader(header, Header);
-        Header.HeadersNext.Add(chainHeader);
+        var chainHeader = new ChainHeader(header, Probe.Header);
+        Probe.Header.HeadersNext.Add(chainHeader);
         return chainHeader;
       }
       Chain ForkChain(UInt256 headerHash)
       {
-        ChainHeader header = Header.HeadersNext.Last();
-        uint height = GetHeight() + 1;
+        ChainHeader header = Probe.Header.HeadersNext.Last();
+        uint height = Probe.GetHeight() + 1;
 
         return new Chain(
-          headerRoot: Header,
+          headerRoot: Probe.Header,
           height: height,
           accumulatedDifficultyPrevious: AccumulatedDifficulty);
       }

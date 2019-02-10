@@ -11,9 +11,9 @@ namespace BToken.Networking
   public interface INetworkChannel : IDisposable
   {
     List<NetworkMessage> GetInboundRequestMessages();
-    
+    Task<bool> TryExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken);
     Task SendMessageAsync(NetworkMessage message);
-    Task<NetworkMessage> ReceiveMessageAsync(CancellationToken cancellationToken);
+    Task<NetworkMessage> ReceiveSessionMessageAsync(CancellationToken cancellationToken);
     uint GetProtocolVersion();
 
     string GetIdentification();

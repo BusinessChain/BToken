@@ -8,7 +8,7 @@ namespace BToken.Chaining
 {
   public partial class Headerchain
   {
-    public class Chain
+    class Chain
     {
       public ChainHeader HeaderTip { get; private set; }
       public UInt256 HeaderTipHash { get; private set; }

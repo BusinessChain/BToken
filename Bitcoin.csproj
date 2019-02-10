@@ -75,6 +75,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\Script.cs" />
     <Compile Include="Accounting\UTXO\TXInput.cs" />
@@ -89,16 +90,15 @@
     <Compile Include="Accounting\UTXO\UTXOTransaction.cs" />
     <Compile Include="Accounting\UTXO\UTXOException.cs" />
     <Compile Include="Accounting\Wallet\Wallet.cs" />
-    <Compile Include="Node\NetworkListener.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderReader.cs" />
+    <Compile Include="Chaining\Headerchain\HeaderStream.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocator.cs" />
     <Compile Include="Chaining\Headerchain\ChainLocation.cs" />
     <Compile Include="Chaining\Headerchain\ChainProbe.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderArchiver.cs" />
-    <Compile Include="Accounting\UTXO\BlockArchiver.cs" />
+    <Compile Include="Chaining\Headerchain\HeaderReader.cs" />
+    <Compile Include="Accounting\UTXO\UTXOArchiver.cs" />
     <Compile Include="Accounting\UTXO\SessionBlockDownload.cs" />
-    <Compile Include="Chaining\Headerchain\SessionHeaderDownload.cs" />
+    <Compile Include="Node\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Chaining\Headerchain\Chain.cs" />
     <Compile Include="DataTypes\EqualityComparerByteArray.cs" />
@@ -127,7 +127,7 @@
     <Compile Include="Networking\MessageStreamer.cs" />
     <Compile Include="Node\Messages\GetHeadersMessage.cs" />
     <Compile Include="Node\Messages\HeadersMessage.cs" />
-    <Compile Include="Networking\DataTypes\NetworkMessage.cs" />
+    <Compile Include="Networking\Messages\NetworkMessage.cs" />
     <Compile Include="Networking\Messages\PingMessage.cs" />
     <Compile Include="Networking\Messages\PongMessage.cs" />
     <Compile Include="Networking\Messages\SendHeadersMessage.cs" />

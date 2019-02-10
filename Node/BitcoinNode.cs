@@ -1,6 +1,4 @@
 ﻿using System;
-
-using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -13,11 +11,9 @@ namespace BToken
   public partial class BitcoinNode
   {
     public Network Network { get; private set; }
-    public Headerchain Headerchain { get; private set; }
+    Headerchain Headerchain;
     UTXO UTXO;
     Wallet Wallet;
-
-    NetworkListener Listener;
 
     GenesisBlock GenesisBlock = new GenesisBlock();
     List<ChainLocation> Checkpoints = new List<ChainLocation>()
@@ -30,24 +26,67 @@ namespace BToken
     public BitcoinNode()
     {
       Network = new Network();
-      Headerchain = new Headerchain(GenesisBlock.Header, Network, Checkpoints);
+      Headerchain = new Headerchain(GenesisBlock.Header, Checkpoints);
       UTXO = new UTXO(Headerchain, Network);
       Wallet = new Wallet(UTXO);
-
-      Listener = new NetworkListener(Network, this);
     }
 
     public async Task StartAsync()
     {
       Network.Start();
-      await Headerchain.StartAsync();
-      await UTXO.StartAsync();
+      
+      await Headerchain.LoadFromArchiveAsync();
+      Console.WriteLine("Loaded headerchain from archive, height '{0}'", Headerchain.GetHeight());
 
-      Task listenerTask = Listener.StartAsync();
+      await Network.ExecuteSessionAsync(new SessionHeaderDownload(Headerchain));
+      Console.WriteLine("downloaded headerchain from network, height '{0}'", Headerchain.GetHeight());
+
+      //await UTXO.StartAsync();
+
+      Task listenerTask = StartNetworkListenerAsync();
 
 
       Wallet.GeneratePublicKey();
+    }
 
+    async Task StartNetworkListenerAsync()
+    {
+      while (true)
+      {
+        using (INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync())
+        {
+          List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
+
+          foreach (NetworkMessage inboundMessage in inboundMessages)
+          {
+            switch (inboundMessage.Command)
+            {
+              case "inv":
+                //await ProcessInventoryMessageAsync(invMessage);
+                break;
+
+              case "getheaders":
+                var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
+                await channel.SendMessageAsync(new HeadersMessage(headers));
+                break;
+
+              case "headers":
+                var headersMessage = new HeadersMessage(inboundMessage);
+                List<UInt256> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
+                await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
+                break;
+
+              case "block":
+                break;
+
+              default:
+                break;
+            }
+          }
+        }
+
+      }
     }
   }
 }
