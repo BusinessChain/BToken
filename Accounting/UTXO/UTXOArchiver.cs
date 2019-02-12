@@ -20,12 +20,10 @@ namespace BToken.Accounting
       static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
 
       UTXO UTXO;
-      Network Network;
 
-      public UTXOArchiver(UTXO uTXO, Network network)
+      public UTXOArchiver(UTXO uTXO)
       {
         UTXO = uTXO;
-        Network = network;
       }
 
 
@@ -45,12 +43,7 @@ namespace BToken.Accounting
       }
       FileStream CreateFile(UInt256 hash)
       {
-        string filename = hash.ToString();
-        string fileRootPath = GenerateRootPath(hash);
-
-        DirectoryInfo dir = Directory.CreateDirectory(fileRootPath);
-
-        string filePath = Path.Combine(fileRootPath, filename);
+        string filePath = CreateFilePath(hash);
 
         return new FileStream(
           filePath,
@@ -59,50 +52,35 @@ namespace BToken.Accounting
           FileShare.None);
       }
 
-      public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
+      public void DeleteBlock(UInt256 hash)
       {
-        return await ReadBlockAsync(hash, null);
+
       }
-      public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash, INetworkChannel channel)
+
+      public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
       {
         // read cache
 
-        string filename = hash.ToString();
-        string fileRootPath = GenerateRootPath(hash);
-        string filePath = Path.Combine(fileRootPath, filename);
-        
-        try
-        {
-          using (FileStream fileStream = new FileStream(
-            filePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read))
-          {
-            return await NetworkBlock.ReadBlockAsync(fileStream);
-          }
-        }
-        catch (FileNotFoundException)
-        {
-          var sessionBlockDownload = new SessionBlockDownload(hash);
+        string filePath = CreateFilePath(hash);
 
-          if (channel == null || !await channel.TryExecuteSessionAsync(sessionBlockDownload, default(CancellationToken)))
-          {
-            await Network.ExecuteSessionAsync(sessionBlockDownload);
-          }
-          
-          Task archiveBlockTask = ArchiveBlockAsync(sessionBlockDownload.Block, hash);
-          return sessionBlockDownload.Block;
+        using (FileStream fileStream = new FileStream(
+          filePath,
+          FileMode.Open,
+          FileAccess.Read,
+          FileShare.Read))
+        {
+          return await NetworkBlock.ReadBlockAsync(fileStream);
         }
       }
-
-      static string GenerateRootPath(UInt256 blockHash)
+      string CreateFilePath(UInt256 blockHash)
       {
+        string filename = blockHash.ToString();
         string blockHashIndex = new SoapHexBinary(blockHash.GetBytes().Take(2).ToArray()).ToString();
 
         return Path.Combine(
           RootDirectory.Name,
-          blockHashIndex);
+          blockHashIndex,
+          blockHash.ToString());
       }
     }
   }

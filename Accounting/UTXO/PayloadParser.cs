@@ -10,18 +10,19 @@ namespace BToken.Accounting
 {
   class PayloadParser
   {
-    public List<TX> Parse(byte[] payload)
+    public List<TX> Parse(byte[] payload, out UInt256 merkleRootHash)
     {
-      var bitcoinTXs = new List<TX>();
+      var tXs = new List<TX>();
 
       int startIndex = 0;
       while (startIndex < payload.Length)
       {
         TX tX = TX.Parse(payload, ref startIndex);
-        bitcoinTXs.Add(tX);
+        tXs.Add(tX);
       }
 
-      return bitcoinTXs;
+      merkleRootHash = ComputeMerkleRootHash(tXs);
+      return tXs;
     }
 
     public UInt256 ComputeMerkleRootHash(List<TX> bitcoinTXs)

@@ -173,7 +173,6 @@ namespace BToken
       if (uInt256 == null) { return false; }
       return Data.Equals(uInt256.Data);
     }
-
     public override int GetHashCode()
     {
       return Data.GetHashCode();

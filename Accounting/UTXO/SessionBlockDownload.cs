@@ -32,22 +32,13 @@ namespace BToken.Accounting
         Channel = channel;
 
         await DownloadBlockAsync();
+      }
 
-        Console.WriteLine("Channel '{0}' downloaded block: '{1}'", 
-          Channel.GetIdentification(), HeaderHash);
-      }
-      
-      async Task DownloadBlockAsync()
-      {
-        NetworkBlock block = await GetBlockAsync(HeaderHash);
-        ValidateHeaderHash(HeaderHash, block);
-        Block = block;
-      }
-      async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)
+      async Task<NetworkBlock> DownloadBlockAsync()
       {
         try
         {
-          var inventory = new Inventory(InventoryType.MSG_BLOCK, hashRequested);
+          var inventory = new Inventory(InventoryType.MSG_BLOCK, HeaderHash);
           await Channel.SendMessageAsync(new GetDataMessage(new List<Inventory>() { inventory }));
 
           var CancellationGetBlock = new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
@@ -60,13 +51,13 @@ namespace BToken.Accounting
             {
               var blockMessage = new BlockMessage(networkMessage);
               UInt256 hashReceived = blockMessage.NetworkBlock.Header.ComputeHeaderHash();
-              if (hashReceived.Equals(hashRequested))
+              if (hashReceived.Equals(HeaderHash))
               {
-                return blockMessage.NetworkBlock;
+                Block = blockMessage.NetworkBlock;
               }
               else
               {
-                Console.WriteLine("Requested block '{0}' but received '{1}' on channel '{2}'", hashRequested, hashReceived, Channel.GetIdentification());
+                Console.WriteLine("Requested block '{0}' but received '{1}' on channel '{2}'", HeaderHash, hashReceived, Channel.GetIdentification());
               }
             }
           }
@@ -74,7 +65,7 @@ namespace BToken.Accounting
         catch (TaskCanceledException ex)
         {
           Console.WriteLine("Canceled download of block '{0}' from peer '{1}' due to timeout '{2}' seconds",
-            hashRequested,
+            HeaderHash,
             Channel.GetIdentification(),
             SECONDS_TIMEOUT_BLOCKDOWNLOAD);
 

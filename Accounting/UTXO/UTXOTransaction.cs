@@ -30,7 +30,6 @@ namespace BToken.Accounting
 
       public async Task InsertAsync()
       {
-
         for (int i = 0; i < TXs.Count; i++)
         {
           HashesTX[i] = TXs[i].GetTXHash();
@@ -44,7 +43,6 @@ namespace BToken.Accounting
             await RemoveTXOutputIndexesAsync(stopTX: TXs[i]);
             throw ex;
           }
-
         }
 
         for (int i = 0; i < TXs.Count; i++)
@@ -60,36 +58,6 @@ namespace BToken.Accounting
             throw ex;
           }
         }
-      }
-      async Task<byte[]> GetUTXOKeyFreeAsync(UInt256 tXHash)
-      {
-        byte[] tXHashBytes = tXHash.GetBytes();
-        int numberOfKeyBytes = NumberIndexKeyBytesMin;
-        byte[] uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
-
-        while (UTXO.UTXOTable.TryGetValue(uTXOKey, out byte[] UTXOIndex))
-        {
-          if (numberOfKeyBytes == tXHashBytes.Length)
-          {
-            throw new UTXOException(
-              string.Format("Ambiguous transaction '{0}' in block '{1}'", tXHash, HeaderHash));
-          }
-
-          byte[] headerIndex = new ArraySegment<byte>(UTXOIndex, 0, NumberHeaderIndexBytes).Array;
-          if (await UTXO.ReadTXAsync(tXHash, headerIndex) != null)
-          {
-            throw new UTXOException(
-              string.Format("Ambiguous transaction '{0}' in block '{1}' and block header index '{2}'",
-              tXHash,
-              HeaderHash,
-              new SoapHexBinary(headerIndex)));
-          }
-
-          numberOfKeyBytes++;
-          uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
-        }
-
-        return uTXOKey;
       }
       async Task RemoveTXOutputIndexesAsync(TX stopTX)
       {
@@ -177,7 +145,6 @@ namespace BToken.Accounting
             byte[] uTXOKey = await GetUTXOKeyFreeAsync(tXInput.TXIDOutput);
             UTXO.UTXOTable.Add(uTXOKey, uTXOIndexNEW);
           }
-
         }
       }
       byte[] GetBitMapFromUTXOIndex(byte[] uTXOIndex)
@@ -392,6 +359,36 @@ namespace BToken.Accounting
       {
         byte[] uTXOKey = await GetUTXOKeyFreeAsync(hashTX);
         UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
+      }
+      async Task<byte[]> GetUTXOKeyFreeAsync(UInt256 tXHash)
+      {
+        byte[] tXHashBytes = tXHash.GetBytes();
+        int numberOfKeyBytes = NumberIndexKeyBytesMin;
+        byte[] uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
+
+        while (UTXO.UTXOTable.TryGetValue(uTXOKey, out byte[] UTXOIndex))
+        {
+          if (numberOfKeyBytes == tXHashBytes.Length)
+          {
+            throw new UTXOException(
+              string.Format("Ambiguous transaction '{0}' in block '{1}'", tXHash, HeaderHash));
+          }
+
+          byte[] headerIndex = new ArraySegment<byte>(UTXOIndex, 0, NumberHeaderIndexBytes).Array;
+          if (await UTXO.ReadTXAsync(tXHash, headerIndex) != null)
+          {
+            throw new UTXOException(
+              string.Format("Ambiguous transaction '{0}' in block '{1}' and block header index '{2}'",
+              tXHash,
+              HeaderHash,
+              new SoapHexBinary(headerIndex)));
+          }
+
+          numberOfKeyBytes++;
+          uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
+        }
+
+        return uTXOKey;
       }
       void SpendTXOutputBit(byte[] uTXOIndex, int indexTXOutput)
       {

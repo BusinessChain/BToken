@@ -83,14 +83,20 @@ namespace BToken.Networking
       }
       catch
       {
-        if(IsPeerInbound(peer))
-        {
-          PeersInbound.Remove(peer);
-        }
-        else
-        {
-          ReplacePeerOutbound(peer);
-        }
+        RemoveChannel(peer);
+      }
+    }
+    public void RemoveChannel(INetworkChannel channel)
+    {
+      Peer peer = (Peer)channel;
+
+      if (IsPeerInbound(peer))
+      {
+        PeersInbound.Remove(peer);
+      }
+      else
+      {
+        ReplacePeerOutbound(peer);
       }
     }
     void ReplacePeerOutbound(Peer peer)
@@ -113,7 +119,6 @@ namespace BToken.Networking
     public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
       Peer peer;
-
       do
       {
         peer = await PeersRequestInbound.ReceiveAsync();
