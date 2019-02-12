@@ -153,7 +153,7 @@ namespace BToken.Networking
             return;
           }
 
-          ReplacePeerOutbound(peer);
+          RemoveChannel(peer);
         }
       }
     }

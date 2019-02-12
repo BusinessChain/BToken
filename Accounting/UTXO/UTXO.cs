@@ -87,28 +87,20 @@ namespace BToken.Accounting
     }
     async Task<List<TX>> DownloadBlockAsync(UInt256 hash)
     {
-      var sessionBlockDownload = new SessionBlockDownload(hash);
+      var sessionBlockDownload = new SessionBlockDownload(this, hash);
       await Network.ExecuteSessionAsync(sessionBlockDownload);
-      ValidateBlock(sessionBlockDownload.Block, hash, out List<TX> tXs);
-      return tXs;
+      return sessionBlockDownload.TXs;
     }
 
     public async Task NotifyBlockHeadersAsync(List<UInt256> hashes, INetworkChannel channel)
     {
       foreach(UInt256 hash in hashes)
       {
-        var sessionBlockDownload = new SessionBlockDownload(hash);
+        List<TX> tXs = await GetBlockTXsAsync(hash);
 
-        if (!await channel.TryExecuteSessionAsync(sessionBlockDownload, default(CancellationToken)))
-        {
-          await Network.ExecuteSessionAsync(sessionBlockDownload);
-        }
-
-        ValidatePayloadHash(sessionBlockDownload.Block, out List<TX> tXs);
         var uTXOTransaction = new UTXOTransaction(this, tXs, hash);
         await uTXOTransaction.InsertAsync();
       }
-
     }
 
     async Task<TX> ReadTXAsync(UInt256 tXHash, byte[] headerIndex)
@@ -138,19 +130,11 @@ namespace BToken.Accounting
 
     void ValidateBlock(NetworkBlock block, UInt256 hash, out List<TX> tXs)
     {
-      ValidateHeaderHash(block.Header, hash);
-      ValidatePayloadHash(block, out tXs);
-    }
-    void ValidateHeaderHash(NetworkHeader header, UInt256 hash)
-    {
-      UInt256 hashComputed = header.ComputeHeaderHash();
-      if (!hash.Equals(hashComputed))
+      if (!hash.Equals(block.Header.ComputeHeaderHash()))
       {
         throw new UTXOException("Unexpected header hash.");
       }
-    }
-    void ValidatePayloadHash(NetworkBlock block, out List<TX> tXs)
-    {
+
       tXs = PayloadParser.Parse(block.Payload, out UInt256 merkleRootHash);
       if (!merkleRootHash.Equals(block.Header.MerkleRoot))
       {

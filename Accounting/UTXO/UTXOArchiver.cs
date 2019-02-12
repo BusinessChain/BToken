@@ -54,7 +54,8 @@ namespace BToken.Accounting
 
       public void DeleteBlock(UInt256 hash)
       {
-
+        string filePath = CreateFilePath(hash);
+        File.Delete(filePath);
       }
 
       public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)

@@ -14,16 +14,18 @@ namespace BToken.Accounting
   {
     class SessionBlockDownload : INetworkSession
     {
-      INetworkChannel Channel;
-
+      UTXO UTXO;
+      public INetworkChannel Channel { get; private set; }
       UInt256 HeaderHash;
       public NetworkBlock Block { get; private set; }
+      public List<TX> TXs { get; private set; }
 
-      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
+      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 10;
 
 
-      public SessionBlockDownload(UInt256 hashHeader)
+      public SessionBlockDownload(UTXO uTXO, UInt256 hashHeader)
       {
+        UTXO = uTXO;
         HeaderHash = hashHeader;
       }
 
@@ -31,10 +33,10 @@ namespace BToken.Accounting
       {
         Channel = channel;
 
-        await DownloadBlockAsync();
+        TXs = await DownloadBlockTXsAsync();
       }
 
-      async Task<NetworkBlock> DownloadBlockAsync()
+      async Task<List<TX>> DownloadBlockTXsAsync()
       {
         try
         {
@@ -50,15 +52,9 @@ namespace BToken.Accounting
             if (networkMessage.Command == "block")
             {
               var blockMessage = new BlockMessage(networkMessage);
-              UInt256 hashReceived = blockMessage.NetworkBlock.Header.ComputeHeaderHash();
-              if (hashReceived.Equals(HeaderHash))
-              {
-                Block = blockMessage.NetworkBlock;
-              }
-              else
-              {
-                Console.WriteLine("Requested block '{0}' but received '{1}' on channel '{2}'", HeaderHash, hashReceived, Channel.GetIdentification());
-              }
+              Block = blockMessage.NetworkBlock;
+              UTXO.ValidateBlock(Block, HeaderHash, out List<TX> tXs);
+              return tXs;
             }
           }
         }
