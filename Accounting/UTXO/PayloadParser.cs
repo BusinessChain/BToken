@@ -10,7 +10,7 @@ namespace BToken.Accounting
 {
   class PayloadParser
   {
-    public List<TX> Parse(byte[] payload, out UInt256 merkleRootHash)
+    public List<TX> Parse(byte[] payload, bool isPrunned)
     {
       var tXs = new List<TX>();
 
@@ -20,21 +20,19 @@ namespace BToken.Accounting
         TX tX = TX.Parse(payload, ref startIndex);
         tXs.Add(tX);
       }
-
-      merkleRootHash = ComputeMerkleRootHash(tXs);
       return tXs;
     }
 
-    public UInt256 ComputeMerkleRootHash(List<TX> bitcoinTXs)
+    public UInt256 ComputeMerkleRootHash(List<TX> tXs, out List<byte[]> tXHashes)
     {
       const int HASH_BYTE_SIZE = 32;
 
-      List<byte[]> merkleList = bitcoinTXs.Select(tx =>
+      tXHashes = tXs.Select(tx =>
       {
         return SHA256d.Compute(tx.GetBytes());
       }).ToList();
 
-      return new UInt256(GetRoot(merkleList, HASH_BYTE_SIZE));
+      return new UInt256(GetRoot(tXHashes, HASH_BYTE_SIZE));
     }
     byte[] GetRoot(List<byte[]> merkleList, int hashByteSize)
     {

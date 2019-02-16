@@ -10,14 +10,14 @@ namespace BToken.Accounting
 {
   class TXInput
   {
-    public UInt256 TXIDOutput { get; private set; }
+    public byte[] TXIDOutput { get; private set; }
     public int IndexOutput { get; private set; }
     public byte[] UnlockingScript { get; private set; }
     UInt32 Sequence;
 
 
     public TXInput(
-      UInt256 tXIDOutput,
+      byte[] tXIDOutput,
       int indexOutput,
       byte[] unlockingScript,
       UInt32 sequence)
@@ -30,7 +30,7 @@ namespace BToken.Accounting
 
     public static TXInput Parse(byte[] byteStream, ref int startIndex)
     {
-      UInt256 tXIDOutput = new UInt256(byteStream, ref startIndex);
+      byte[] tXIDOutput = new UInt256(byteStream, ref startIndex).GetBytes();
 
       UInt32 indexOutput = BitConverter.ToUInt32(byteStream, startIndex);
       startIndex += 4;
@@ -54,7 +54,7 @@ namespace BToken.Accounting
     {
       List<byte> byteStream = new List<byte>();
 
-      byteStream.AddRange(TXIDOutput.GetBytes());
+      byteStream.AddRange(TXIDOutput);
       byteStream.AddRange(BitConverter.GetBytes(IndexOutput));
       byteStream.AddRange(VarInt.GetBytes(UnlockingScript.Length));
       byteStream.AddRange(UnlockingScript);

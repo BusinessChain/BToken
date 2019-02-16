@@ -14,8 +14,8 @@ namespace BToken.Accounting
     const byte FLAG_WITNESS_IS_PRESENT = 0x01;
 
     public UInt32 Version { get; private set; }
-    public List<TXInput> TXInputs { get; private set; }
-    public List<TXOutput> TXOutputs { get; private set; }
+    public List<TXInput> Inputs { get; private set; }
+    public List<TXOutput> Outputs { get; private set; }
     public List<TXWitness> TXWitnesses { get; private set; }
     public UInt32 LockTime { get; private set; }
 
@@ -29,8 +29,8 @@ namespace BToken.Accounting
       UInt32 lockTime)
     {
       Version = version;
-      TXInputs = tXInputs;
-      TXOutputs = tXOutputs;
+      Inputs = tXInputs;
+      Outputs = tXOutputs;
       TXWitnesses = tXWitnesses;
       LockTime = lockTime;
     }
@@ -96,14 +96,14 @@ namespace BToken.Accounting
         byteStream.Add(FLAG_WITNESS_IS_PRESENT);
       }
 
-      byteStream.AddRange(VarInt.GetBytes(TXInputs.Count));
-      foreach (TXInput tXInput in TXInputs)
+      byteStream.AddRange(VarInt.GetBytes(Inputs.Count));
+      foreach (TXInput tXInput in Inputs)
       {
         byteStream.AddRange(tXInput.GetBytes());
       }
 
-      byteStream.AddRange(VarInt.GetBytes(TXOutputs.Count));
-      foreach (TXOutput tXOutput in TXOutputs)
+      byteStream.AddRange(VarInt.GetBytes(Outputs.Count));
+      foreach (TXOutput tXOutput in Outputs)
       {
         byteStream.AddRange(tXOutput.GetBytes());
       }

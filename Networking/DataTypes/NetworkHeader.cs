@@ -78,7 +78,7 @@ namespace BToken.Networking
 
   public static class NetworkHeaderExtensionMethods
   {
-    public static UInt256 ComputeHeaderHash(this NetworkHeader header)
+    public static UInt256 ComputeHash(this NetworkHeader header)
     {
       return new UInt256(SHA256d.Compute(header.GetBytes()));
     }

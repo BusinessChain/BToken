@@ -89,7 +89,7 @@ namespace BToken.Chaining
         catch (ChainException ex)
         {
           Console.WriteLine(string.Format("Insertion of header with hash '{0}' raised ChainException '{1}'.",
-            header.ComputeHeaderHash(), 
+            header.ComputeHash(), 
             ex.Message));
 
           return headersInserted;
@@ -131,7 +131,7 @@ namespace BToken.Chaining
     }
     static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)
     {
-      headerHash = header.ComputeHeaderHash();
+      headerHash = header.ComputeHash();
 
       if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
       {

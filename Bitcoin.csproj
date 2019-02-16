@@ -75,6 +75,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Accounting\UTXO\Block.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\Script.cs" />
@@ -114,8 +115,8 @@
     <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\DataTypes\Inventory.cs" />
     <Compile Include="Networking\DataTypes\NetworkHeader.cs" />
-    <Compile Include="Networking\DataTypes\VarString.cs" />
-    <Compile Include="Networking\DataTypes\VarInt.cs" />
+    <Compile Include="DataTypes\VarString.cs" />
+    <Compile Include="DataTypes\VarInt.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
