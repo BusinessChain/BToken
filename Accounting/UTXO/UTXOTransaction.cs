@@ -274,6 +274,8 @@ namespace BToken.Accounting
       {
         for (int t = 1; t < TXs.Count; t++)
         {
+          TX tX = TXs[t];
+
           for (int i = 0; i < TXs[t].Inputs.Count; i++)
           {
             TXInput input = TXs[t].Inputs[i];
@@ -308,11 +310,7 @@ namespace BToken.Accounting
               SpendOutputBit(uTXOIndex, inputs[i].IndexOutput);
             }
 
-            if (AreAllOutputBitsSpent(uTXOIndex))
-            {
-              TXs[t] = null;
-            }
-            else
+            if (!AreAllOutputBitsSpent(uTXOIndex))
             {
               await InsertUTXOIndexAsync(uTXOIndex, TXHashes[t]);
             }

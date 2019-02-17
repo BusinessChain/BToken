@@ -84,7 +84,7 @@
     <Compile Include="Accounting\UTXO\TXOutputsSpentMap.cs" />
     <Compile Include="Accounting\UTXO\TXWitness.cs" />
     <Compile Include="Accounting\UTXO\UTXO.cs" />
-    <Compile Include="Accounting\UTXO\PayloadParser.cs" />
+    <Compile Include="Accounting\UTXO\UTXOParser.cs" />
     <Compile Include="Accounting\UTXO\GenesisBlock.cs" />
     <Compile Include="Accounting\UTXO\TX.cs" />
     <Compile Include="Accounting\UTXO\UTXOIndex.cs" />

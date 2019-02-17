@@ -13,7 +13,7 @@ namespace BToken.Accounting
   public partial class UTXO
   {
     Headerchain Headerchain;
-    PayloadParser PayloadParser;
+    UTXOParser Parser;
     UTXOArchiver Archiver;
     Network Network;
 
@@ -23,7 +23,7 @@ namespace BToken.Accounting
     public UTXO(Headerchain headerchain, Network network)
     {
       Headerchain = headerchain;
-      PayloadParser = new PayloadParser();
+      Parser = new UTXOParser();
       Archiver = new UTXOArchiver(this);
       Network = network;
 
@@ -68,23 +68,24 @@ namespace BToken.Accounting
     }
     async Task<Block> GetBlockAsync(UInt256 hash)
     {
-      //try
-      //{
-      //  NetworkBlock block = await Archiver.ReadBlockAsync(hash);
-      //  ValidateHeaderHash(block.Header, hash);
-      //  List<TX> tXs = PayloadParser.Parse(block.Payload, isPrunned: true);
-      //  ValidateMerkleRoot(block.Header.MerkleRoot, tXs);
-      //  return new Block(block.Header, hash, tXs);
-      //}
-      //catch (UTXOException)
-      //{
-      //  Archiver.DeleteBlock(hash);
-      //  return await DownloadBlockAsync(hash);
-      //}
-      //catch (IOException)
-      //{
-      return await DownloadBlockAsync(hash);
-      //}
+      try
+      {
+        NetworkBlock block = await Archiver.ReadBlockAsync(hash);
+        ValidateHeaderHash(block.Header, hash);
+               
+        List<TX> tXs = Parser.Parse(block.Payload);
+        ValidateMerkleRoot(block.Header.MerkleRoot, tXs, out List<byte[]> tXHashes);
+        return new Block(block.Header, hash, tXs, tXHashes);
+      }
+      catch (UTXOException)
+      {
+        Archiver.DeleteBlock(hash);
+        return await DownloadBlockAsync(hash);
+      }
+      catch (IOException)
+      {
+        return await DownloadBlockAsync(hash);
+      }
     }
     async Task<Block> DownloadBlockAsync(UInt256 hash)
     {
@@ -93,7 +94,7 @@ namespace BToken.Accounting
       NetworkBlock block = sessionBlockDownload.Block;
 
       ValidateHeaderHash(block.Header, hash);
-      List<TX> tXs = PayloadParser.Parse(block.Payload, isPrunned: false);
+      List<TX> tXs = Parser.Parse(block.Payload);
       ValidateMerkleRoot(block.Header.MerkleRoot, tXs, out List<byte[]> tXHashes);
       return new Block(block.Header, hash, tXs, tXHashes);
     }
@@ -143,7 +144,7 @@ namespace BToken.Accounting
     }
     void ValidateMerkleRoot(UInt256 merkleRoot, List<TX> tXs, out List<byte[]> tXHashes)
     {
-      if (!merkleRoot.Equals(PayloadParser.ComputeMerkleRootHash(tXs, out tXHashes)))
+      if (!merkleRoot.Equals(Parser.ComputeMerkleRootHash(tXs, out tXHashes)))
       {
         throw new UTXOException("Payload corrupted.");
       }
