@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
@@ -65,7 +64,6 @@ namespace BToken.Accounting
 
       public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
       {
-        // read cache
 
         string fileRootPath = CreateFileRootPath(hash);
         string filePath = Path.Combine(fileRootPath, hash.ToString());

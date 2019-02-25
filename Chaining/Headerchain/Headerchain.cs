@@ -17,7 +17,7 @@ namespace BToken.Chaining
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
     ChainHeader GenesisHeader;
-    List<ChainLocation> Checkpoints;
+    List<HeaderLocation> Checkpoints;
 
     Dictionary<byte[], List<ChainHeader>> HeaderIndex;
     int NumberHeaderIndexBytes = 4;
@@ -35,7 +35,7 @@ namespace BToken.Chaining
 
     public Headerchain(
       NetworkHeader genesisHeader,
-      List<ChainLocation> checkpoints)
+      List<HeaderLocation> checkpoints)
     {
       GenesisHeader = new ChainHeader(genesisHeader, null);
       Checkpoints = checkpoints;
@@ -52,18 +52,16 @@ namespace BToken.Chaining
       HeaderStream headerStreamer = new HeaderStream(this);
       var headers = new List<NetworkHeader>();
 
-      NetworkHeader header = headerStreamer.ReadHeader(out UInt256 hash, out uint height);
-      while (header != null
+      while (headerStreamer.TryReadHeader(out NetworkHeader header, out HeaderLocation chainLocation)
         && headers.Count < HEADERS_COUNT_MAX
-        && !headerLocator.Contains(hash))
+        && !headerLocator.Contains(chainLocation.Hash))
       {
-        if (hash.Equals(stopHash))
+        if (chainLocation.Hash.Equals(stopHash))
         {
           headers.Clear();
         }
 
         headers.Insert(0, header);
-        header = headerStreamer.ReadHeader(out hash, out height);
       }
 
       return headers;
@@ -198,9 +196,10 @@ namespace BToken.Chaining
         using (var archiveReader = new HeaderReader())
         {
           NetworkHeader header = archiveReader.GetNextHeader();
-
-          while (header != null)
+          int countHeader = 0;
+          while (header != null && countHeader < 50000)
           {
+            countHeader++;
             await InsertHeaderAsync(header);
             header = archiveReader.GetNextHeader();
           }

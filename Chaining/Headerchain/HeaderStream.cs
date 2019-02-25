@@ -22,22 +22,21 @@ namespace BToken.Chaining
         Probe = new ChainProbe(headerchain.MainChain);
       }
 
-      public NetworkHeader ReadHeader(out UInt256 hash, out uint height)
+      public bool TryReadHeader(out NetworkHeader header, out HeaderLocation chainLocation)
       {
         if (Probe.Header != GenesisHeader)
         {
-          hash = Probe.Hash;
-          height = Probe.GetHeight();
-          NetworkHeader header = Probe.Header.NetworkHeader;
+          chainLocation = new HeaderLocation(Probe.GetHeight(), Probe.Hash);
+          header = Probe.Header.NetworkHeader;
 
           Probe.Push();
 
-          return header;
+          return true;
         }
 
-        hash = null;
-        height = 0;
-        return null;
+        chainLocation = null;
+        header = null;
+        return false;
       }
 
     }

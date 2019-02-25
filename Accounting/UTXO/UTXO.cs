@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 
 using BToken.Chaining;
@@ -16,8 +14,11 @@ namespace BToken.Accounting
     UTXOParser Parser;
     UTXOArchiver Archiver;
     Network Network;
+    
+    static int CountIndexKeyBytesMin = 4;
+    static int CountHeaderIndexBytes = 4;
 
-    Dictionary<byte[], byte[]> UTXOTable;
+    Dictionary<byte[], byte[]> UTXOs;
 
 
     public UTXO(Headerchain headerchain, Network network)
@@ -27,50 +28,24 @@ namespace BToken.Accounting
       Archiver = new UTXOArchiver(this);
       Network = network;
 
-      UTXOTable = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
+      UTXOs = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
     }
     
     public async Task StartAsync()
     {
-      await BuildAsync();
-    }
+      var uTXOBuilder = new UTXOBuilder(
+        this,
+        new Headerchain.HeaderStream(Headerchain));
+      
+      await uTXOBuilder.BuildAsync();
+    }    
 
-    async Task BuildAsync()
-    {
-      try
-      {
-        var inputsUnfunded = new Dictionary<byte[], List<TXInput>>(new EqualityComparerByteArray());
-
-        var headerStreamer = new Headerchain.HeaderStream(Headerchain);
-        headerStreamer.ReadHeader(out UInt256 hash, out uint height);
-
-        while (hash != null)
-        {
-          Block block = await GetBlockAsync(hash);
-
-          Console.WriteLine("Building UTXO block: '{0}', height: '{1}'",
-            hash.ToString(),
-            height);
-          
-          var uTXOTransaction = new UTXOTransaction(this, block);
-          await uTXOTransaction.BuildAsync(inputsUnfunded);
-          await Archiver.ArchiveBlockAsync(block);
-
-          headerStreamer.ReadHeader(out hash, out height);
-        }
-
-        Console.WriteLine("UTXO build complete");
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine(ex.Message);
-      }
-    }
     async Task<Block> GetBlockAsync(UInt256 hash)
     {
       try
       {
         NetworkBlock block = await Archiver.ReadBlockAsync(hash);
+
         ValidateHeaderHash(block.Header, hash);
                
         List<TX> tXs = Parser.Parse(block.Payload);
@@ -80,6 +55,13 @@ namespace BToken.Accounting
       catch (UTXOException)
       {
         Archiver.DeleteBlock(hash);
+
+        return await DownloadBlockAsync(hash);
+      }
+      catch (ArgumentException)
+      {
+        Archiver.DeleteBlock(hash);
+
         return await DownloadBlockAsync(hash);
       }
       catch (IOException)
@@ -91,12 +73,29 @@ namespace BToken.Accounting
     {
       var sessionBlockDownload = new SessionBlockDownload(hash);
       await Network.ExecuteSessionAsync(sessionBlockDownload);
-      NetworkBlock block = sessionBlockDownload.Block;
+      NetworkBlock networkBlock = sessionBlockDownload.Block;
+      
+      ValidateHeaderHash(networkBlock.Header, hash);
+      List<TX> tXs = Parser.Parse(networkBlock.Payload);
+      ValidateMerkleRoot(networkBlock.Header.MerkleRoot, tXs, out List<byte[]> tXHashes);
 
-      ValidateHeaderHash(block.Header, hash);
-      List<TX> tXs = Parser.Parse(block.Payload);
-      ValidateMerkleRoot(block.Header.MerkleRoot, tXs, out List<byte[]> tXHashes);
-      return new Block(block.Header, hash, tXs, tXHashes);
+      Block archiverBlock = new Block(networkBlock.Header, hash, tXs, tXHashes);
+      await Archiver.ArchiveBlockAsync(archiverBlock);
+      return archiverBlock;
+    }
+    void ValidateHeaderHash(NetworkHeader header, UInt256 hash)
+    {
+      if (!hash.Equals(header.ComputeHash()))
+      {
+        throw new UTXOException("Unexpected header hash.");
+      }
+    }
+    void ValidateMerkleRoot(UInt256 merkleRoot, List<TX> tXs, out List<byte[]> tXHashes)
+    {
+      if (!merkleRoot.Equals(Parser.ComputeMerkleRootHash(tXs, out tXHashes)))
+      {
+        throw new UTXOException("Payload corrupted.");
+      }
     }
 
     public async Task NotifyBlockHeadersAsync(List<UInt256> hashes, INetworkChannel channel)
@@ -135,19 +134,5 @@ namespace BToken.Accounting
       return null;
     }
 
-    void ValidateHeaderHash(NetworkHeader header, UInt256 hash)
-    {
-      if (!hash.Equals(header.ComputeHash()))
-      {
-        throw new UTXOException("Unexpected header hash.");
-      }
-    }
-    void ValidateMerkleRoot(UInt256 merkleRoot, List<TX> tXs, out List<byte[]> tXHashes)
-    {
-      if (!merkleRoot.Equals(Parser.ComputeMerkleRootHash(tXs, out tXHashes)))
-      {
-        throw new UTXOException("Payload corrupted.");
-      }
-    }
   }
 }
