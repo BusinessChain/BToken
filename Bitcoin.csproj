@@ -76,6 +76,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Accounting\UTXO\Block.cs" />
+    <Compile Include="Accounting\UTXO\UTXOArchiver.cs" />
     <Compile Include="Accounting\UTXO\UTXOBuilder\UTXOBuilder.cs" />
     <Compile Include="Accounting\UTXO\UTXOBuilder\UTXOBuilderBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOBuilder\UTXOBuilderBatchMerger.cs" />
@@ -100,7 +101,7 @@
     <Compile Include="Chaining\Headerchain\HeaderLocation.cs" />
     <Compile Include="Chaining\Headerchain\ChainProbe.cs" />
     <Compile Include="Chaining\Headerchain\HeaderReader.cs" />
-    <Compile Include="Accounting\UTXO\UTXOArchiver.cs" />
+    <Compile Include="Accounting\UTXO\BlockArchiver.cs" />
     <Compile Include="Accounting\UTXO\SessionBlockDownload.cs" />
     <Compile Include="Node\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\ChainException.cs" />

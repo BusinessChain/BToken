@@ -48,15 +48,20 @@ namespace BToken.Accounting
             && location.Height > BLOCK_HEIGHT_START) { }
 
           List<HeaderLocation> headerLocations = GetHeaderLocationBatch();
-          
+          int batchIndex = 0;
 
           while (headerLocations.Any())
           {
             await AwaitNextBuildTaskASync();
 
-            var uTXOBuilderBatch = new UTXOBuilderBatch(UTXO, this, headerLocations);
+            var uTXOBuilderBatch = new UTXOBuilderBatch(
+              UTXO, 
+              this, 
+              headerLocations,
+              batchIndex);
             BuildTasks.Add(uTXOBuilderBatch.BuildAsync());
-            
+
+            batchIndex++;
             headerLocations = GetHeaderLocationBatch();
           }
 
@@ -97,32 +102,6 @@ namespace BToken.Accounting
       async Task MergeBatchAsync(UTXOBuilderBatch uTXOBuilderBatch)
       {
         await Merger.MergeBatchAsync(uTXOBuilderBatch);
-      }
-
-      static void SpendOutputBits(byte[] uTXO, List<TXInput> inputs)
-      {
-        for (int i = 0; i < inputs.Count; i++)
-        {
-          int byteIndex = inputs[i].IndexOutput / 8 + CountHeaderIndexBytes;
-          int bitIndex = inputs[i].IndexOutput % 8;
-
-          if((uTXO[byteIndex] & (byte)(0x01 << bitIndex)) != 0x00)
-          {
-            throw new UTXOException(string.Format("Output '{0}'-'{1}' already spent.",
-              new SoapHexBinary(inputs[i].TXIDOutput), 
-              inputs[i].IndexOutput));
-          }
-          uTXO[byteIndex] |= (byte)(0x01 << bitIndex);
-        }
-      }
-      static bool AreAllOutputBitsSpent(byte[] uTXOIndex)
-      {
-        for (int i = CountHeaderIndexBytes; i < uTXOIndex.Length; i++)
-        {
-          if (uTXOIndex[i] != 0xFF) { return false; }
-        }
-
-        return true;
       }
     }
   }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 using BToken.Chaining;
 using BToken.Networking;
@@ -12,7 +13,6 @@ namespace BToken.Accounting
   {
     Headerchain Headerchain;
     UTXOParser Parser;
-    UTXOArchiver Archiver;
     Network Network;
     
     static int CountIndexKeyBytesMin = 4;
@@ -25,7 +25,6 @@ namespace BToken.Accounting
     {
       Headerchain = headerchain;
       Parser = new UTXOParser();
-      Archiver = new UTXOArchiver(this);
       Network = network;
 
       UTXOs = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
@@ -44,7 +43,7 @@ namespace BToken.Accounting
     {
       try
       {
-        NetworkBlock block = await Archiver.ReadBlockAsync(hash);
+        NetworkBlock block = await BlockArchiver.ReadBlockAsync(hash);
 
         ValidateHeaderHash(block.Header, hash);
                
@@ -54,13 +53,13 @@ namespace BToken.Accounting
       }
       catch (UTXOException)
       {
-        Archiver.DeleteBlock(hash);
+        BlockArchiver.DeleteBlock(hash);
 
         return await DownloadBlockAsync(hash);
       }
       catch (ArgumentException)
       {
-        Archiver.DeleteBlock(hash);
+        BlockArchiver.DeleteBlock(hash);
 
         return await DownloadBlockAsync(hash);
       }
@@ -80,7 +79,7 @@ namespace BToken.Accounting
       ValidateMerkleRoot(networkBlock.Header.MerkleRoot, tXs, out List<byte[]> tXHashes);
 
       Block archiverBlock = new Block(networkBlock.Header, hash, tXs, tXHashes);
-      await Archiver.ArchiveBlockAsync(archiverBlock);
+      await BlockArchiver.ArchiveBlockAsync(archiverBlock);
       return archiverBlock;
     }
     void ValidateHeaderHash(NetworkHeader header, UInt256 hash)
@@ -105,7 +104,7 @@ namespace BToken.Accounting
         Block block = await GetBlockAsync(hash);
 
         var uTXOTransaction = new UTXOTransaction(this, block);
-        await uTXOTransaction.InsertAsync();
+        await uTXOTransaction.InsertAsync(UTXOs);
       }
     }
 
@@ -134,5 +133,34 @@ namespace BToken.Accounting
       return null;
     }
 
+    static void SpendOutputsBits(byte[] uTXO, List<TXInput> inputs)
+    {
+      for (int i = 0; i < inputs.Count; i++)
+      {
+        int byteIndex = inputs[i].IndexOutput / 8 + CountHeaderIndexBytes;
+        int bitIndex = inputs[i].IndexOutput % 8;
+
+        if ((uTXO[byteIndex] & (byte)(0x01 << bitIndex)) != 0x00)
+        {
+          throw new UTXOException(string.Format("Output '{0}'-'{1}' already spent.",
+            new SoapHexBinary(inputs[i].TXIDOutput),
+            inputs[i].IndexOutput));
+        }
+        uTXO[byteIndex] |= (byte)(0x01 << bitIndex);
+      }
+    }
+    static bool AreAllOutputBitsSpent(byte[] uTXO)
+    {
+      for (int i = CountHeaderIndexBytes; i < uTXO.Length; i++)
+      {
+        if (uTXO[i] != 0xFF) { return false; }
+      }
+
+      return true;
+    }
+    public static async Task<byte[]> ReadUTXOAsync(FileStream fileStream)
+    {
+      throw new NotImplementedException();
+    }
   }
 }

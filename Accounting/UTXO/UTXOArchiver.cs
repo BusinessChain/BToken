@@ -1,52 +1,34 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Remoting.Metadata.W3cXsd2001;
-using System.Threading.Tasks;
 using System.IO;
-
-using BToken.Networking;
+using System.Threading.Tasks;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    partial class UTXOArchiver
+    class UTXOArchiver
     {
-      static string ArchiveRootPath = "I:\\BlockArchive";
-      static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
-
-      UTXO UTXO;
+      static string PathUTXOArchive = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UTXOArchive");
+      const int PrefixBlockFolderBytes = 2;
 
 
-      public UTXOArchiver(UTXO uTXO)
+      public static async Task ArchiveUTXOAsync(byte[] tXHash, byte[] uTXO)
       {
-        UTXO = uTXO;
-      }
-
-      public async Task ArchiveBlockAsync(Block block)
-      {
-        // write cache
-
-        using (FileStream file = CreateFile(block.HeaderHash))
+        using (FileStream file = CreateFile(tXHash))
         {
-          byte[] headerBytes = block.Header.GetBytes();
-          byte[] txCount = VarInt.GetBytes(block.TXs.Count).ToArray();
+          byte[] outputsCount = VarInt.GetBytes(uTXO.Length - CountHeaderIndexBytes).ToArray();
 
-          await file.WriteAsync(headerBytes, 0, headerBytes.Length);
-          await file.WriteAsync(txCount, 0, txCount.Length);
-
-          for (int t = 0; t < block.TXs.Count; t++)
-          {
-            byte[] txBytes = block.TXs[t].GetBytes();
-            await file.WriteAsync(txBytes, 0, txBytes.Length);
-          }
+          await file.WriteAsync(tXHash, 0, tXHash.Length);
+          await file.WriteAsync(outputsCount, 0, outputsCount.Length);
         }
       }
-      FileStream CreateFile(UInt256 hash)
+      static FileStream CreateFile(byte[] tXHash)
       {
-        string fileRootPath = CreateFileRootPath(hash);
+        string filePath = CreateFilePath(tXHash, out string fileRootPath);
         Directory.CreateDirectory(fileRootPath);
-        string filePath = Path.Combine(fileRootPath, hash.ToString());
 
         return new FileStream(
           filePath,
@@ -55,34 +37,37 @@ namespace BToken.Accounting
           FileShare.None);
       }
 
-      public void DeleteBlock(UInt256 hash)
+      public static void DeleteUTXO(byte[] tXHash)
       {
-        string fileRootPath = CreateFileRootPath(hash);
-        string filePath = Path.Combine(fileRootPath, hash.ToString());
+        string filePath = CreateFilePath(tXHash, out string fileRootPath);
         File.Delete(filePath);
       }
 
-      public async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
+      public static async Task<byte[]> ReadUTXOAsync(byte[] tXHash)
       {
-
-        string fileRootPath = CreateFileRootPath(hash);
-        string filePath = Path.Combine(fileRootPath, hash.ToString());
-
+        string filePath = CreateFilePath(tXHash, out string fileRootPath);
+        
         using (FileStream fileStream = new FileStream(
           filePath,
           FileMode.Open,
           FileAccess.Read,
           FileShare.Read))
         {
-          return await NetworkBlock.ReadBlockAsync(fileStream);
+          return await UTXO.ReadUTXOAsync(fileStream);
         }
       }
-      string CreateFileRootPath(UInt256 blockHash)
+      static string CreateFilePath(byte[] tXHash, out string fileRootPath)
       {
-        byte[] lastTwoBytes = blockHash.GetBytes().Take(2).ToArray();
-        Array.Reverse(lastTwoBytes);
-        string blockHashIndex = new SoapHexBinary(lastTwoBytes).ToString();
-        return Path.Combine(RootDirectory.FullName, blockHashIndex);
+        byte[] prefixTXFolderBytes = tXHash.Take(PrefixBlockFolderBytes).ToArray();
+        Array.Reverse(prefixTXFolderBytes);
+        string tXHashIndex = new SoapHexBinary(prefixTXFolderBytes).ToString();
+        fileRootPath = Path.Combine(PathUTXOArchive, tXHashIndex);
+
+        Array.Reverse(tXHash);
+
+        return Path.Combine(
+          fileRootPath,
+          new SoapHexBinary(tXHash).ToString());
       }
     }
   }

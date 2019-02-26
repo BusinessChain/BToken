@@ -28,7 +28,11 @@ namespace BToken.Chaining
     ChainInserter Inserter;
 
     const int HEADERS_COUNT_MAX = 2000;
-    static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "HeaderArchive");
+
+    static string ArchiveRootPath = Path.Combine(
+      AppDomain.CurrentDomain.BaseDirectory, 
+      "HeaderArchive");
+
     static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
     static string FilePath = Path.Combine(RootDirectory.Name, "Headerchain");
 

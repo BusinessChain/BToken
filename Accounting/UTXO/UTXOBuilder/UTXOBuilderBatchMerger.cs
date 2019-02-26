@@ -37,7 +37,7 @@ namespace BToken.Accounting
             {
               if (UTXOBuilder.InputsUnfunded.TryGetValue(uTXO.Key, out List<TXInput> inputs))
               {
-                SpendOutputBits(uTXO.Value, inputs);
+                SpendOutputsBits(uTXO.Value, inputs);
                 UTXOBuilder.InputsUnfunded.Remove(uTXO.Key);
               }
 
@@ -46,6 +46,8 @@ namespace BToken.Accounting
                 try
                 {
                   UTXO.UTXOs.Add(uTXO.Key, uTXO.Value);
+
+                  await UTXOArchiver.ArchiveUTXOAsync(uTXO.Key, uTXO.Value);
                 }
                 catch (ArgumentException)
                 {
@@ -59,11 +61,12 @@ namespace BToken.Accounting
             {
               if (UTXO.UTXOs.TryGetValue(inputsBatch.Key, out byte[] uTXO))
               {
-                SpendOutputBits(uTXO, inputsBatch.Value);
+                SpendOutputsBits(uTXO, inputsBatch.Value);
 
                 if(AreAllOutputBitsSpent(uTXO))
                 {
                   UTXO.UTXOs.Remove(inputsBatch.Key);
+                  UTXOArchiver.DeleteUTXO(inputsBatch.Key);
                 }
 
                 continue;
@@ -79,7 +82,8 @@ namespace BToken.Accounting
               }
             }
 
-            Console.WriteLine("{0};{1}", 
+            Console.WriteLine("{0};{1};{2}",
+              uTXOBuilderBatch.BatchIndex,
               UTXOBuilder.InputsUnfunded.Count,
               UTXO.UTXOs.Count);
           }
