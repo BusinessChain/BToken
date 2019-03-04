@@ -17,11 +17,9 @@ namespace BToken.Accounting
         UTXO UTXO;
         UTXOBuilder UTXOBuilder;
 
-        readonly object IsDispatchedLOCK = new object();
+        readonly object DispatchLOCK = new object();
+        BufferBlock<int> SignalMergerAvailableForBatchIndex = new BufferBlock<int>();
         bool IsDispatched = false;
-        BufferBlock<bool> SignalMergerAvailable = new BufferBlock<bool>();
-
-        int BatchIndex;
 
         const int CountUTXOShards = 16;
         
@@ -30,17 +28,15 @@ namespace BToken.Accounting
         {
           UTXO = uTXO;
           UTXOBuilder = uTXOBuilder;
-          SignalMergerAvailable.Post(true);
-
-          BatchIndex = 0;
+          SignalMergerAvailableForBatchIndex.Post(0);
         }
 
         public async Task MergeBatchAsync(UTXOBuilderBatch uTXOBuilderBatch)
         {
           try
           {
-            await DispatchAsync();
-
+            await DispatchAsync(uTXOBuilderBatch.BatchIndex);
+            
             Console.WriteLine("Start merge batch '{0}'", uTXOBuilderBatch.BatchIndex);
 
             var uTXOShards = new Dictionary<byte[], byte[]>[CountUTXOShards];
@@ -61,8 +57,8 @@ namespace BToken.Accounting
                 }
                 catch (ArgumentException)
                 {
-                  Console.WriteLine("Ambiguous transaction '{0}' in batch",
-                    new SoapHexBinary(uTXO.Key));
+                  Console.WriteLine("Ambiguous transaction '{0}' in batch '{1}'",
+                    new SoapHexBinary(uTXO.Key), uTXOBuilderBatch.BatchIndex);
                 }
               }
             }
@@ -70,19 +66,6 @@ namespace BToken.Accounting
             foreach (KeyValuePair<byte[], List<TXInput>> inputsBatch 
               in uTXOBuilderBatch.InputsUnfunded)
             {
-              if (UTXO.UTXOs.TryGetValue(inputsBatch.Key, out byte[] uTXO))
-              {
-                SpendOutputsBits(uTXO, inputsBatch.Value);
-
-                if(AreAllOutputBitsSpent(uTXO))
-                {
-                  UTXO.UTXOs.Remove(inputsBatch.Key);
-                  await UTXOArchiver.DeleteUTXOAsync(inputsBatch.Key);
-                }
-
-                continue;
-              }
-
               if (UTXOBuilder.InputsUnfunded.TryGetValue(inputsBatch.Key, out List<TXInput> inputs))
               {
                 inputs.AddRange(inputsBatch.Value);
@@ -102,10 +85,11 @@ namespace BToken.Accounting
           }
           finally
           {
-            lock (IsDispatchedLOCK)
+            lock (DispatchLOCK)
             {
               IsDispatched = false;
-              SignalMergerAvailable.Post(true);
+              int nextBatchToMerge = uTXOBuilderBatch.BatchIndex + 1;
+              SignalMergerAvailableForBatchIndex.Post(nextBatchToMerge);
             }
           }
         }
@@ -124,9 +108,24 @@ namespace BToken.Accounting
         }
 
 
-        async Task DispatchAsync()
+        async Task DispatchAsync(int batchIndex)
         {
-          await SignalMergerAvailable.ReceiveAsync();
+          while(true)
+          {
+            int nextBatchToMerge = await SignalMergerAvailableForBatchIndex.ReceiveAsync();
+
+            if (batchIndex == nextBatchToMerge)
+            {
+              break;
+            }
+
+            Console.WriteLine("Merging of batch '{0}' out of sequence, awaiting batch '{1}' first",
+              batchIndex, nextBatchToMerge);
+
+            SignalMergerAvailableForBatchIndex.Post(nextBatchToMerge);
+
+            await Task.Delay(TimeSpan.FromSeconds(3));
+          }
 
           if (!TryDispatch())
           {
@@ -136,7 +135,7 @@ namespace BToken.Accounting
 
         public bool TryDispatch()
         {
-          lock (IsDispatchedLOCK)
+          lock (DispatchLOCK)
           {
             if (IsDispatched)
             {

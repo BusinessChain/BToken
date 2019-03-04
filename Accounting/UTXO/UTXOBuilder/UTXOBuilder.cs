@@ -21,11 +21,11 @@ namespace BToken.Accounting
 
       UTXOBuilderBatchMerger Merger;
 
-      int COUNT_BUILD_TASKS_MAX = 1;
+      int COUNT_BUILD_TASKS_MAX = 4;
       List<Task> BuildTasks;
 
       int BLOCK_HEIGHT_START = 50000;
-      int BATCH_COUNT = 200;
+      int BATCH_COUNT = 100;
 
 
       public UTXOBuilder(UTXO uTXO, Headerchain.HeaderStream headerStreamer)
@@ -48,7 +48,7 @@ namespace BToken.Accounting
           //  && location.Height > BLOCK_HEIGHT_START) { }
 
           List<HeaderLocation> headerLocations = GetHeaderLocationBatch();
-          int batchIndex = 1;
+          int batchIndex = 0;
 
           while (headerLocations.Any())
           {

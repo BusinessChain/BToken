@@ -42,7 +42,8 @@ namespace BToken.Accounting
           {
             Block block = await UTXO.GetBlockAsync(headerLocation.Hash);
 
-            Console.WriteLine("Start building block '{0}' - '{1}'",
+            Console.WriteLine("Batch '{0}' starts building block '{1}' - '{2}'",
+              BatchIndex,
               headerLocation.Hash,
               headerLocation.Height);
 

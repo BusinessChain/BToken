@@ -12,72 +12,53 @@ namespace BToken.Accounting
     static class UTXOArchiver
     {
       static string PathUTXOArchive = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UTXOArchive");
-      
+
 
       public static async Task ArchiveUTXOShardsAsync(Dictionary<byte[], byte[]>[] uTXOShards)
       {
+        var archiveUTXOShardsTasks = new List<Task>();
+
         for(int i = 0; i < uTXOShards.Length; i++)
         {
-          if(uTXOShards[i] == null)
+          if(uTXOShards[i] != null)
           {
-            continue;
+            archiveUTXOShardsTasks.Add(ArchiveUTXOShardAsync(uTXOShards[i], i));
           }
+        }
 
-          Console.WriteLine("shard index: " + i);
+        await Task.WhenAll(archiveUTXOShardsTasks);
+      }
+      static async Task ArchiveUTXOShardAsync(Dictionary<byte[], byte[]> uTXOShard, int shardIndex)
+      {
+        Console.WriteLine("archive shard index: " + shardIndex);
 
-          string fileName = new SoapHexBinary(new byte[] { (byte)i }).ToString();
-          string filePath = Path.Combine(PathUTXOArchive, fileName);
-          Directory.CreateDirectory(PathUTXOArchive);
+        string fileName = new SoapHexBinary(new byte[] { (byte)shardIndex }).ToString();
+        string filePath = Path.Combine(PathUTXOArchive, fileName);
+        Directory.CreateDirectory(PathUTXOArchive);
 
-          try
+        try
+        {
+          using (FileStream shardStream = new FileStream(
+           filePath,
+           FileMode.Append,
+           FileAccess.Write,
+           FileShare.None,
+           bufferSize: 4096,
+           useAsync: true))
           {
-            using (FileStream shardStreamNew = new FileStream(
-             filePath + "_archiving",
-             FileMode.Create,
-             FileAccess.ReadWrite,
-             FileShare.None,
-             bufferSize: 8192,
-             useAsync: true))
+            foreach (KeyValuePair<byte[], byte[]> uTXO in uTXOShard)
             {
-              if (File.Exists(filePath))
-              {
-                using (FileStream shardStreamExisting = new FileStream(
-                 filePath,
-                 FileMode.Open,
-                 FileAccess.Read,
-                 FileShare.Read,
-                 bufferSize: 8192,
-                 useAsync: true))
-                {
-                  KeyValuePair<byte[], byte[]> uTXO = await ParseUTXOIndexAsync(shardStreamExisting);
-                  while (uTXO.Key != null)
-                  {
-                    await shardStreamNew.WriteAsync(uTXO.Key, 0, uTXO.Key.Length);
-                    await shardStreamNew.WriteAsync(uTXO.Value, 0, uTXO.Value.Length);
+              byte[] uTXOLength = VarInt.GetBytes(uTXO.Value.Length).ToArray();
 
-                    uTXO = await ParseUTXOIndexAsync(shardStreamExisting);
-                  }
-                }
-              }
-
-              foreach(KeyValuePair<byte[], byte[]> uTXO in uTXOShards[i])
-              {
-                byte[] uTXOLength = VarInt.GetBytes(uTXO.Value.Length).ToArray();
-                
-                await shardStreamNew.WriteAsync(uTXO.Key, 0, uTXO.Key.Length);
-                await shardStreamNew.WriteAsync(uTXOLength, 0, uTXOLength.Length);
-                await shardStreamNew.WriteAsync(uTXO.Value, 0, uTXO.Value.Length);
-              }
+              await shardStream.WriteAsync(uTXO.Key, 0, uTXO.Key.Length);
+              await shardStream.WriteAsync(uTXOLength, 0, uTXOLength.Length);
+              await shardStream.WriteAsync(uTXO.Value, 0, uTXO.Value.Length);
             }
           }
-          catch (Exception ex)
-          {
-            Console.WriteLine("UTXO BatchArchiver threw exception: " + ex.Message);
-          }
-
-          File.Delete(filePath);
-          File.Move(filePath + "_archiving", filePath);
-
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine("UTXO BatchArchiver threw exception: " + ex.Message);
         }
       }
 
