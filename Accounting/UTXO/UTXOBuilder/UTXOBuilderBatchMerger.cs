@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
@@ -19,12 +21,18 @@ namespace BToken.Accounting
         bool IsDispatched = false;
         BufferBlock<bool> SignalMergerAvailable = new BufferBlock<bool>();
 
+        int BatchIndex;
+
+        const int CountUTXOShards = 16;
+        
 
         public UTXOBuilderBatchMerger(UTXO uTXO, UTXOBuilder uTXOBuilder)
         {
           UTXO = uTXO;
           UTXOBuilder = uTXOBuilder;
           SignalMergerAvailable.Post(true);
+
+          BatchIndex = 0;
         }
 
         public async Task MergeBatchAsync(UTXOBuilderBatch uTXOBuilderBatch)
@@ -33,6 +41,9 @@ namespace BToken.Accounting
           {
             await DispatchAsync();
 
+            Console.WriteLine("Start merge batch '{0}'", uTXOBuilderBatch.BatchIndex);
+
+            var uTXOShards = new Dictionary<byte[], byte[]>[CountUTXOShards];
             foreach (KeyValuePair<byte[], byte[]> uTXO in uTXOBuilderBatch.UTXOs)
             {
               if (UTXOBuilder.InputsUnfunded.TryGetValue(uTXO.Key, out List<TXInput> inputs))
@@ -46,8 +57,7 @@ namespace BToken.Accounting
                 try
                 {
                   UTXO.UTXOs.Add(uTXO.Key, uTXO.Value);
-
-                  await UTXOArchiver.ArchiveUTXOAsync(uTXO.Key, uTXO.Value);
+                  InsertUTXOInShard(uTXO, uTXOShards);
                 }
                 catch (ArgumentException)
                 {
@@ -57,7 +67,8 @@ namespace BToken.Accounting
               }
             }
 
-            foreach (KeyValuePair<byte[], List<TXInput>> inputsBatch in uTXOBuilderBatch.InputsUnfunded)
+            foreach (KeyValuePair<byte[], List<TXInput>> inputsBatch 
+              in uTXOBuilderBatch.InputsUnfunded)
             {
               if (UTXO.UTXOs.TryGetValue(inputsBatch.Key, out byte[] uTXO))
               {
@@ -66,7 +77,7 @@ namespace BToken.Accounting
                 if(AreAllOutputBitsSpent(uTXO))
                 {
                   UTXO.UTXOs.Remove(inputsBatch.Key);
-                  UTXOArchiver.DeleteUTXO(inputsBatch.Key);
+                  await UTXOArchiver.DeleteUTXOAsync(inputsBatch.Key);
                 }
 
                 continue;
@@ -82,6 +93,8 @@ namespace BToken.Accounting
               }
             }
 
+            await UTXOArchiver.ArchiveUTXOShardsAsync(uTXOShards); 
+
             Console.WriteLine("{0};{1};{2}",
               uTXOBuilderBatch.BatchIndex,
               UTXOBuilder.InputsUnfunded.Count,
@@ -95,6 +108,19 @@ namespace BToken.Accounting
               SignalMergerAvailable.Post(true);
             }
           }
+        }
+        void InsertUTXOInShard(
+          KeyValuePair<byte[], byte[]> uTXO, 
+          Dictionary<byte[], byte[]>[] uTXOShards)
+        {
+          int shardIndex = uTXO.Key[0] % CountUTXOShards;
+
+          if(uTXOShards[shardIndex] == null)
+          {
+            uTXOShards[shardIndex] = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
+          }
+
+          uTXOShards[shardIndex].Add(uTXO.Key, uTXO.Value);
         }
 
 

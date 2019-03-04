@@ -28,8 +28,13 @@ namespace BToken.Chaining
           FileStream fs = null;
           try
           {
-            fs = new FileStream(fullPath, fileMode, fileAccess, fileShare);
-            return fs;
+            return new FileStream(
+              fullPath, 
+              fileMode, 
+              fileAccess,
+              fileShare,
+              bufferSize: 4096,
+              useAsync: true);
           }
           catch (IOException)
           {

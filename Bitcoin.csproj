@@ -111,14 +111,14 @@
     <Compile Include="Hashing\SHA256d.cs" />
     <Compile Include="Chaining\Headerchain\ChainHeader.cs" />
     <Compile Include="Chaining\Headerchain\TargetManager.cs" />
-    <Compile Include="Networking\DataTypes\NetworkAddress.cs" />
+    <Compile Include="Networking\NetworkAddress.cs" />
     <Compile Include="Networking\INetworkChannel.cs" />
     <Compile Include="Networking\INetworkSession.cs" />
     <Compile Include="Networking\Messages\AddressMessage.cs" />
     <Compile Include="Networking\Messages\FeeFilterMessage.cs" />
     <Compile Include="Networking\NetworkAddressPool.cs" />
-    <Compile Include="Networking\DataTypes\Inventory.cs" />
-    <Compile Include="Networking\DataTypes\NetworkHeader.cs" />
+    <Compile Include="Networking\Inventory.cs" />
+    <Compile Include="Networking\NetworkHeader.cs" />
     <Compile Include="DataTypes\VarString.cs" />
     <Compile Include="DataTypes\VarInt.cs" />
     <Compile Include="Form1.cs">
@@ -127,7 +127,7 @@
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
-    <Compile Include="Networking\DataTypes\NetworkBlock.cs" />
+    <Compile Include="Networking\NetworkBlock.cs" />
     <Compile Include="Chaining\Headerchain\Headerchain.cs" />
     <Compile Include="Networking\MessageStreamer.cs" />
     <Compile Include="Node\Messages\GetHeadersMessage.cs" />

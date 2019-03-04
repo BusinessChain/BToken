@@ -36,7 +36,7 @@ namespace BToken.Accounting
             byte[] uTXO = CreateUTXO(HeaderHash, TXs[i].Outputs.Count);
             uTXOs.Add(TXHashes[i], uTXO);
 
-            await UTXOArchiver.ArchiveUTXOAsync(TXHashes[i], uTXO);
+            //await UTXOArchiver.ArchiveUTXOAsync(TXHashes[i], uTXO);
           }
           catch (UTXOException ex)
           {
@@ -49,7 +49,7 @@ namespace BToken.Accounting
         {
           try
           {
-            SpendUTXOsAsync(TXs[i], TXHashes[i], uTXOs);
+            await SpendUTXOsAsync(TXs[i], TXHashes[i], uTXOs);
           }
           catch (Exception ex)
           {
@@ -59,7 +59,7 @@ namespace BToken.Accounting
           }
         }
       }
-      void SpendUTXOsAsync(TX tX, byte[] tXHash, Dictionary<byte[], byte[]> uTXOs)
+      async Task SpendUTXOsAsync(TX tX, byte[] tXHash, Dictionary<byte[], byte[]> uTXOs)
       {
         foreach (TXInput tXInput in tX.Inputs)
         {
@@ -71,7 +71,7 @@ namespace BToken.Accounting
             {
               uTXOs.Remove(tXInput.TXIDOutput);
 
-              UTXOArchiver.DeleteUTXO(tXInput.TXIDOutput);
+              await UTXOArchiver.DeleteUTXOAsync(tXInput.TXIDOutput);
             }
           }
           else
@@ -287,15 +287,20 @@ namespace BToken.Accounting
       static byte[] CreateUTXO(UInt256 headerHash, int outputsCount)
       {
         byte[] uTXOIndex = new byte[CountHeaderIndexBytes + (outputsCount + 7) / 8];
-        SpendExcessBits(uTXOIndex, outputsCount % 8);
+
+        int numberOfRemainderBits = outputsCount % 8;
+        if(numberOfRemainderBits > 0)
+        {
+          SpendExcessBits(uTXOIndex, numberOfRemainderBits);
+        }
         
         Array.Copy(headerHash.GetBytes(), uTXOIndex, CountHeaderIndexBytes);
 
         return uTXOIndex;
       }
-      static void SpendExcessBits(byte[] uTXOIndex, int numberOfBitsRemainder)
+      static void SpendExcessBits(byte[] uTXOIndex, int numberOfRemainderBits)
       {
-        for (int i = numberOfBitsRemainder; i < 8; i++)
+        for (int i = numberOfRemainderBits; i < 8; i++)
         {
           uTXOIndex[uTXOIndex.Length - 1] |= (byte)(0x01 << i);
         }
@@ -373,7 +378,7 @@ namespace BToken.Accounting
           if (inputsExisting.Any(tu => tu.IndexOutput == input.IndexOutput))
           {
             throw new UTXOException(string.Format("Double spent output. TX = '{0}', index = '{1}'.",
-              new SoapHexBinary(input.TXIDOutput),
+              Bytes2HexStringReversed(input.TXIDOutput),
               input.IndexOutput));
           }
           else
@@ -395,10 +400,20 @@ namespace BToken.Accounting
         Dictionary<byte[], byte[]> uTXOs)
       {
         byte[] uTXO = CreateUTXO(headerHash, tX.Outputs.Count);
-
+        
         if (inputsUnfunded.TryGetValue(tXHash, out List<TXInput> inputs))
         {
-          SpendOutputsBits(uTXO, inputs);
+          try
+          {
+            SpendOutputsBits(uTXO, inputs);
+          }
+          catch(Exception ex)
+          {
+            Console.WriteLine("Spend '{0}' inputsUnfunded on tXOutputs threw exception '{1}'.",
+              inputs.Count,
+              ex.Message);
+          }
+
           inputsUnfunded.Remove(tXHash);
         }
 

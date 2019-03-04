@@ -15,7 +15,7 @@ namespace BToken.Accounting
 
     public BlockMessage(NetworkMessage message) : base("block", message.Payload)
     {
-      NetworkBlock = NetworkBlock.ParseBlock(Payload);
+      NetworkBlock = NetworkBlock.ReadBlock(Payload);
     }
   }
 }

@@ -21,11 +21,11 @@ namespace BToken.Accounting
 
       UTXOBuilderBatchMerger Merger;
 
-      int COUNT_BUILD_TASKS_MAX = 5;
+      int COUNT_BUILD_TASKS_MAX = 1;
       List<Task> BuildTasks;
 
-      int BLOCK_HEIGHT_START = 10000;
-      int BATCH_COUNT = 100;
+      int BLOCK_HEIGHT_START = 50000;
+      int BATCH_COUNT = 200;
 
 
       public UTXOBuilder(UTXO uTXO, Headerchain.HeaderStream headerStreamer)
@@ -44,25 +44,31 @@ namespace BToken.Accounting
         try
         {
           // Go To Block (debug)
-          while (HeaderStreamer.TryReadHeader(out NetworkHeader header, out HeaderLocation location)
-            && location.Height > BLOCK_HEIGHT_START) { }
+          //while (HeaderStreamer.TryReadHeader(out NetworkHeader header, out HeaderLocation location)
+          //  && location.Height > BLOCK_HEIGHT_START) { }
 
           List<HeaderLocation> headerLocations = GetHeaderLocationBatch();
-          int batchIndex = 0;
+          int batchIndex = 1;
 
           while (headerLocations.Any())
           {
             await AwaitNextBuildTaskASync();
+
+            Console.WriteLine("Start build batch '{0}', headerLocation '{1}' - '{2}'", 
+              batchIndex,
+              headerLocations.First().Height,
+              headerLocations.Last().Height);
 
             var uTXOBuilderBatch = new UTXOBuilderBatch(
               UTXO, 
               this, 
               headerLocations,
               batchIndex);
+
             BuildTasks.Add(uTXOBuilderBatch.BuildAsync());
 
-            batchIndex++;
             headerLocations = GetHeaderLocationBatch();
+            batchIndex++;
           }
 
           await Task.WhenAll(BuildTasks);
@@ -72,6 +78,17 @@ namespace BToken.Accounting
         {
           Console.WriteLine(ex.Message);
         }
+      }
+      async Task AwaitNextBuildTaskASync()
+      {
+        if (BuildTasks.Count < COUNT_BUILD_TASKS_MAX)
+        {
+          return;
+        }
+
+        Task buildTaskCompleted = await Task.WhenAny(BuildTasks);
+
+        BuildTasks.Remove(buildTaskCompleted);
       }
       List<HeaderLocation> GetHeaderLocationBatch()
       {
@@ -89,17 +106,8 @@ namespace BToken.Accounting
 
         return headerLocations;
       }
-      async Task AwaitNextBuildTaskASync()
-      {
-        if (BuildTasks.Count < COUNT_BUILD_TASKS_MAX)
-        {
-          return;
-        }
 
-        BuildTasks.Remove(await Task.WhenAny(BuildTasks));
-      }
-
-      async Task MergeBatchAsync(UTXOBuilderBatch uTXOBuilderBatch)
+      public async Task MergeBatchAsync(UTXOBuilderBatch uTXOBuilderBatch)
       {
         await Merger.MergeBatchAsync(uTXOBuilderBatch);
       }

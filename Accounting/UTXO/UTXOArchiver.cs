@@ -9,65 +9,196 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class UTXOArchiver
+    static class UTXOArchiver
     {
       static string PathUTXOArchive = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UTXOArchive");
-      const int PrefixBlockFolderBytes = 2;
+      
 
-
-      public static async Task ArchiveUTXOAsync(byte[] tXHash, byte[] uTXO)
+      public static async Task ArchiveUTXOShardsAsync(Dictionary<byte[], byte[]>[] uTXOShards)
       {
-        using (FileStream file = CreateFile(tXHash))
+        for(int i = 0; i < uTXOShards.Length; i++)
         {
-          byte[] outputsCount = VarInt.GetBytes(uTXO.Length - CountHeaderIndexBytes).ToArray();
+          if(uTXOShards[i] == null)
+          {
+            continue;
+          }
 
-          await file.WriteAsync(tXHash, 0, tXHash.Length);
-          await file.WriteAsync(outputsCount, 0, outputsCount.Length);
+          Console.WriteLine("shard index: " + i);
+
+          string fileName = new SoapHexBinary(new byte[] { (byte)i }).ToString();
+          string filePath = Path.Combine(PathUTXOArchive, fileName);
+          Directory.CreateDirectory(PathUTXOArchive);
+
+          try
+          {
+            using (FileStream shardStreamNew = new FileStream(
+             filePath + "_archiving",
+             FileMode.Create,
+             FileAccess.ReadWrite,
+             FileShare.None,
+             bufferSize: 8192,
+             useAsync: true))
+            {
+              if (File.Exists(filePath))
+              {
+                using (FileStream shardStreamExisting = new FileStream(
+                 filePath,
+                 FileMode.Open,
+                 FileAccess.Read,
+                 FileShare.Read,
+                 bufferSize: 8192,
+                 useAsync: true))
+                {
+                  KeyValuePair<byte[], byte[]> uTXO = await ParseUTXOIndexAsync(shardStreamExisting);
+                  while (uTXO.Key != null)
+                  {
+                    await shardStreamNew.WriteAsync(uTXO.Key, 0, uTXO.Key.Length);
+                    await shardStreamNew.WriteAsync(uTXO.Value, 0, uTXO.Value.Length);
+
+                    uTXO = await ParseUTXOIndexAsync(shardStreamExisting);
+                  }
+                }
+              }
+
+              foreach(KeyValuePair<byte[], byte[]> uTXO in uTXOShards[i])
+              {
+                byte[] uTXOLength = VarInt.GetBytes(uTXO.Value.Length).ToArray();
+                
+                await shardStreamNew.WriteAsync(uTXO.Key, 0, uTXO.Key.Length);
+                await shardStreamNew.WriteAsync(uTXOLength, 0, uTXOLength.Length);
+                await shardStreamNew.WriteAsync(uTXO.Value, 0, uTXO.Value.Length);
+              }
+            }
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine("UTXO BatchArchiver threw exception: " + ex.Message);
+          }
+
+          File.Delete(filePath);
+          File.Move(filePath + "_archiving", filePath);
+
         }
       }
-      static FileStream CreateFile(byte[] tXHash)
-      {
-        string filePath = CreateFilePath(tXHash, out string fileRootPath);
-        Directory.CreateDirectory(fileRootPath);
 
-        return new FileStream(
-          filePath,
-          FileMode.Create,
-          FileAccess.Write,
-          FileShare.None);
-      }
-
-      public static void DeleteUTXO(byte[] tXHash)
+      public static async Task DeleteUTXOAsync(byte[] tXHash)
       {
-        string filePath = CreateFilePath(tXHash, out string fileRootPath);
-        File.Delete(filePath);
-      }
+        string fileName = new SoapHexBinary(new byte[] { tXHash[0] }).ToString();
+        string filePath = Path.Combine(PathUTXOArchive, fileName);
 
-      public static async Task<byte[]> ReadUTXOAsync(byte[] tXHash)
-      {
-        string filePath = CreateFilePath(tXHash, out string fileRootPath);
-        
-        using (FileStream fileStream = new FileStream(
+        if(!File.Exists(filePath))
+        {
+          return;
+        }
+
+        var uTXOsNotToBeDeletedKeys = new List<byte[]>();
+        var uTXOsNotToBeDeletedValues = new List<byte[]>();
+        bool anyDeletion = false;
+        using (FileStream file = new FileStream(
           filePath,
           FileMode.Open,
-          FileAccess.Read,
-          FileShare.Read))
+          FileAccess.ReadWrite,
+          FileShare.None))
         {
-          return await UTXO.ReadUTXOAsync(fileStream);
+          KeyValuePair<byte[], byte[]> uTXO = await ParseUTXOIndexAsync(file);
+          while (uTXO.Key != null)
+          {
+            if(!EqualityComparerByteArray.IsEqual(uTXO.Key, tXHash))
+            {
+              uTXOsNotToBeDeletedKeys.Add(uTXO.Key);
+              uTXOsNotToBeDeletedValues.Add(uTXO.Value);
+            }
+            else
+            {
+              anyDeletion = true;
+            }
+          }
+        }
+
+        if (anyDeletion)
+        {
+          File.Delete(filePath);
+
+          if(uTXOsNotToBeDeletedKeys.Any())
+          {
+            using (FileStream file = new FileStream(
+              filePath,
+              FileMode.OpenOrCreate,
+              FileAccess.Write,
+              FileShare.None))
+            {
+              for(int i = 0; i < uTXOsNotToBeDeletedKeys.Count; i++)
+              {
+                await file.WriteAsync(uTXOsNotToBeDeletedKeys[i], 0, uTXOsNotToBeDeletedKeys[i].Length);
+                await file.WriteAsync(uTXOsNotToBeDeletedValues[i], 0, uTXOsNotToBeDeletedValues[i].Length);
+              }
+            }
+          }
         }
       }
-      static string CreateFilePath(byte[] tXHash, out string fileRootPath)
+
+      static async Task<KeyValuePair<byte[], byte[]>> ParseUTXOIndexAsync(FileStream fileStream)
       {
-        byte[] prefixTXFolderBytes = tXHash.Take(PrefixBlockFolderBytes).ToArray();
-        Array.Reverse(prefixTXFolderBytes);
-        string tXHashIndex = new SoapHexBinary(prefixTXFolderBytes).ToString();
-        fileRootPath = Path.Combine(PathUTXOArchive, tXHashIndex);
+        if(fileStream.Position == fileStream.Length)
+        {
+          return new KeyValuePair<byte[], byte[]>(null, null);
+        }
 
-        Array.Reverse(tXHash);
+        try
+        {
+          if (fileStream.Position > fileStream.Length - 32)
+          {
+            Console.WriteLine("Not enough bytes in stream '{0}' to read uTXOHash (32 bytes)",
+              fileStream.Length - fileStream.Position);
+          }
+          byte[] uTXOHash = await ReadBytesAsync(fileStream, 32);
 
-        return Path.Combine(
-          fileRootPath,
-          new SoapHexBinary(tXHash).ToString());
+          int uTXOLength = (int)VarInt.ParseVarInt(fileStream, out int lengthVarInt);
+          fileStream.Position -= lengthVarInt;
+          if (uTXOLength > 500)
+          {
+            Console.WriteLine("Bad VarInt '{0}' parsing", uTXOLength);
+          }
+
+          if (fileStream.Position > (fileStream.Length - lengthVarInt - uTXOLength))
+          {
+            Console.WriteLine("Not enough bytes in stream '{0}' to read uTXO ('{1}' bytes)",
+              fileStream.Length - fileStream.Position,
+              lengthVarInt + uTXOLength);
+          }
+          byte[] uTXOSerialized = await ReadBytesAsync(fileStream, lengthVarInt + uTXOLength);
+
+          return new KeyValuePair<byte[], byte[]>(uTXOHash, uTXOSerialized);
+        }
+        catch (IndexOutOfRangeException)
+        {
+          Console.WriteLine("Corrupted UTXO file, should fix that.");
+          return new KeyValuePair<byte[], byte[]>(null, null);
+        }
+        catch (ArgumentException)
+        {
+          return new KeyValuePair<byte[], byte[]>(null, null);
+        }
+      }
+
+      static async Task<byte[]> ReadBytesAsync(FileStream fileStream, long bytesToRead)
+      {
+        var buffer = new byte[bytesToRead];
+        int offset = 0;
+        while (bytesToRead > 0)
+        {
+          int chunkSize = await fileStream.ReadAsync(buffer, offset, (int)bytesToRead);
+
+          if(chunkSize == 0)
+          {
+            Console.WriteLine("chunksize == 0, bytes to read '{0}'", bytesToRead);
+          }
+          
+          offset += chunkSize;
+          bytesToRead -= chunkSize;
+        }
+
+        return buffer;
       }
     }
   }

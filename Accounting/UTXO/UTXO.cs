@@ -70,6 +70,7 @@ namespace BToken.Accounting
     }
     async Task<Block> DownloadBlockAsync(UInt256 hash)
     {
+      Console.WriteLine("Download block '{0}'", hash);
       var sessionBlockDownload = new SessionBlockDownload(hash);
       await Network.ExecuteSessionAsync(sessionBlockDownload);
       NetworkBlock networkBlock = sessionBlockDownload.Block;
@@ -140,13 +141,14 @@ namespace BToken.Accounting
         int byteIndex = inputs[i].IndexOutput / 8 + CountHeaderIndexBytes;
         int bitIndex = inputs[i].IndexOutput % 8;
 
-        if ((uTXO[byteIndex] & (byte)(0x01 << bitIndex)) != 0x00)
+        var bitMask = (byte)(0x01 << bitIndex);
+        if ((uTXO[byteIndex] & bitMask) != 0x00)
         {
           throw new UTXOException(string.Format("Output '{0}'-'{1}' already spent.",
-            new SoapHexBinary(inputs[i].TXIDOutput),
-            inputs[i].IndexOutput));
+          Bytes2HexStringReversed(inputs[i].TXIDOutput),
+          inputs[i].IndexOutput));
         }
-        uTXO[byteIndex] |= (byte)(0x01 << bitIndex);
+        uTXO[byteIndex] |= bitMask;
       }
     }
     static bool AreAllOutputBitsSpent(byte[] uTXO)
@@ -158,9 +160,13 @@ namespace BToken.Accounting
 
       return true;
     }
-    public static async Task<byte[]> ReadUTXOAsync(FileStream fileStream)
+
+    static string Bytes2HexStringReversed(byte[] bytes)
     {
-      throw new NotImplementedException();
+      var bytesReversed = new byte[bytes.Length];
+      bytes.CopyTo(bytesReversed, 0);
+      Array.Reverse(bytesReversed);
+      return new SoapHexBinary(bytesReversed).ToString();
     }
   }
 }

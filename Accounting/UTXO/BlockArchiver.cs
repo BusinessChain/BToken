@@ -43,7 +43,9 @@ namespace BToken.Accounting
         filePath,
         FileMode.Create,
         FileAccess.Write,
-        FileShare.None);
+        FileShare.None,
+        bufferSize: 8192,
+        useAsync: true);
     }
 
     public static void DeleteBlock(UInt256 hash)
@@ -62,9 +64,12 @@ namespace BToken.Accounting
         filePath,
         FileMode.Open,
         FileAccess.Read,
-        FileShare.Read))
+        FileShare.Read,
+        bufferSize: 8192,
+        useAsync: true))
       {
-        return await NetworkBlock.ReadBlockAsync(fileStream);
+        byte[] blockBytes = await ReadBytesAsync(fileStream);
+        return NetworkBlock.ReadBlock(blockBytes);
       }
     }
     static string CreateFileRootPath(UInt256 blockHash)
@@ -73,6 +78,23 @@ namespace BToken.Accounting
       Array.Reverse(prefixBlockFolderBytes);
       string blockHashIndex = new SoapHexBinary(prefixBlockFolderBytes).ToString();
       return Path.Combine(PathBlockArchive, blockHashIndex);
+    }
+       
+    static async Task<byte[]> ReadBytesAsync(Stream stream)
+    {
+      var buffer = new byte[stream.Length];
+
+      int bytesToRead = buffer.Length;
+      int offset = 0;
+      while (bytesToRead > 0)
+      {
+        int chunkSize = await stream.ReadAsync(buffer, offset, bytesToRead);
+        
+        offset += chunkSize;
+        bytesToRead -= chunkSize;
+      }
+
+      return buffer;
     }
   }
 }

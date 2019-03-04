@@ -200,13 +200,20 @@ namespace BToken.Chaining
         using (var archiveReader = new HeaderReader())
         {
           NetworkHeader header = archiveReader.GetNextHeader();
-          int countHeader = 0;
-          while (header != null && countHeader < 50000)
+          
+          while (header != null)
           {
-            countHeader++;
             await InsertHeaderAsync(header);
             header = archiveReader.GetNextHeader();
           }
+
+          //int countHeader = 0;
+          //while (header != null && countHeader < 50000)
+          //{
+          //  countHeader++;
+          //  await InsertHeaderAsync(header);
+          //  header = archiveReader.GetNextHeader();
+          //}
         }
       }
       catch (Exception ex)
