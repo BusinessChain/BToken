@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
@@ -37,12 +38,15 @@ namespace BToken.Accounting
           {
             await DispatchAsync(uTXOBuilderBatch.BatchIndex);
             
-            Console.WriteLine("Start merge batch '{0}'", uTXOBuilderBatch.BatchIndex);
+            //Console.WriteLine("Start merge batch '{0}', height '{1} - {2}'", 
+            //  uTXOBuilderBatch.BatchIndex,
+            //  uTXOBuilderBatch.HeaderLocations.First().Height,
+            //  uTXOBuilderBatch.HeaderLocations.Last().Height);
 
             var uTXOShards = new Dictionary<byte[], byte[]>[CountUTXOShards];
             foreach (KeyValuePair<byte[], byte[]> uTXO in uTXOBuilderBatch.UTXOs)
             {
-              if (UTXOBuilder.InputsUnfunded.TryGetValue(uTXO.Key, out List<TXInput> inputs))
+              if (UTXOBuilder.InputsUnfunded.TryGetValue(uTXO.Key, out List<int> inputs))
               {
                 SpendOutputsBits(uTXO.Value, inputs);
                 UTXOBuilder.InputsUnfunded.Remove(uTXO.Key);
@@ -63,12 +67,11 @@ namespace BToken.Accounting
               }
             }
 
-            foreach (KeyValuePair<byte[], List<TXInput>> inputsBatch 
-              in uTXOBuilderBatch.InputsUnfunded)
+            foreach (KeyValuePair<byte[], List<int>> inputsBatch in uTXOBuilderBatch.InputsUnfunded)
             {
-              if (UTXOBuilder.InputsUnfunded.TryGetValue(inputsBatch.Key, out List<TXInput> inputs))
+              if (UTXOBuilder.InputsUnfunded.TryGetValue(inputsBatch.Key, out List<int> outputIndexes))
               {
-                inputs.AddRange(inputsBatch.Value);
+                outputIndexes.AddRange(inputsBatch.Value);
               }
               else
               {
@@ -97,7 +100,7 @@ namespace BToken.Accounting
           KeyValuePair<byte[], byte[]> uTXO, 
           Dictionary<byte[], byte[]>[] uTXOShards)
         {
-          int shardIndex = uTXO.Key[0] % CountUTXOShards;
+          int shardIndex = uTXO.Key[1] % CountUTXOShards;
 
           if(uTXOShards[shardIndex] == null)
           {
@@ -119,11 +122,7 @@ namespace BToken.Accounting
               break;
             }
 
-            Console.WriteLine("Merging of batch '{0}' out of sequence, awaiting batch '{1}' first",
-              batchIndex, nextBatchToMerge);
-
             SignalMergerAvailableForBatchIndex.Post(nextBatchToMerge);
-
             await Task.Delay(TimeSpan.FromSeconds(3));
           }
 

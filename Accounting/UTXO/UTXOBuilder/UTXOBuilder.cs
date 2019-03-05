@@ -17,7 +17,7 @@ namespace BToken.Accounting
       UTXO UTXO;
       Headerchain.HeaderStream HeaderStreamer;
 
-      Dictionary<byte[], List<TXInput>> InputsUnfunded;
+      Dictionary<byte[], List<int>> InputsUnfunded;
 
       UTXOBuilderBatchMerger Merger;
 
@@ -25,7 +25,7 @@ namespace BToken.Accounting
       List<Task> BuildTasks;
 
       int BLOCK_HEIGHT_START = 50000;
-      int BATCH_COUNT = 100;
+      int BATCH_COUNT = 30;
 
 
       public UTXOBuilder(UTXO uTXO, Headerchain.HeaderStream headerStreamer)
@@ -35,7 +35,7 @@ namespace BToken.Accounting
 
         Merger = new UTXOBuilderBatchMerger(UTXO, this);
 
-        InputsUnfunded = new Dictionary<byte[], List<TXInput>>(new EqualityComparerByteArray());
+        InputsUnfunded = new Dictionary<byte[], List<int>>(new EqualityComparerByteArray());
         BuildTasks = new List<Task>();
       }
 
@@ -53,11 +53,6 @@ namespace BToken.Accounting
           while (headerLocations.Any())
           {
             await AwaitNextBuildTaskASync();
-
-            Console.WriteLine("Start build batch '{0}', headerLocation '{1}' - '{2}'", 
-              batchIndex,
-              headerLocations.First().Height,
-              headerLocations.Last().Height);
 
             var uTXOBuilderBatch = new UTXOBuilderBatch(
               UTXO, 

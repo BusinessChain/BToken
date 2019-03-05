@@ -65,7 +65,7 @@ namespace BToken.Accounting
         {
           if(uTXOs.TryGetValue(tXInput.TXIDOutput, out byte[] uTXO))
           {
-            SpendOutputsBits(uTXO, new List<TXInput> { tXInput });
+            SpendOutputsBits(uTXO, new List<int> { tXInput.IndexOutput });
 
             if (AreAllOutputBitsSpent(uTXO))
             {
@@ -209,7 +209,7 @@ namespace BToken.Accounting
         {
           if (Script.Evaluate(tXOutputTuple.tXOutput.LockingScript, tXInput.UnlockingScript))
           {
-            SpendOutputsBits(tXOutputTuple.uTXOIndex, new List<TXInput> { tXInput });
+            SpendOutputsBits(tXOutputTuple.uTXOIndex, new List<int> { tXInput.IndexOutput });
 
             if (AreAllOutputBitsSpent(tXOutputTuple.uTXOIndex))
             {
@@ -345,7 +345,7 @@ namespace BToken.Accounting
 
       public static void BuildBlock(
         Block block, 
-        Dictionary<byte[], List<TXInput>> inputsUnfunded,
+        Dictionary<byte[], List<int>> inputsUnfunded,
         Dictionary<byte[], byte[]> uTXOs)
       {
         List<TX> tXs = block.TXs;
@@ -371,11 +371,11 @@ namespace BToken.Accounting
         }
       }
 
-      static void InsertInput(TXInput input, Dictionary<byte[], List<TXInput>> inputs)
+      static void InsertInput(TXInput input, Dictionary<byte[], List<int>> inputs)
       {
-        if (inputs.TryGetValue(input.TXIDOutput, out List<TXInput> inputsExisting))
+        if (inputs.TryGetValue(input.TXIDOutput, out List<int> inputsExisting))
         {
-          if (inputsExisting.Any(tu => tu.IndexOutput == input.IndexOutput))
+          if (inputsExisting.Any(i => i == input.IndexOutput))
           {
             throw new UTXOException(string.Format("Double spent output. TX = '{0}', index = '{1}'.",
               Bytes2HexStringReversed(input.TXIDOutput),
@@ -383,12 +383,12 @@ namespace BToken.Accounting
           }
           else
           {
-            inputsExisting.Add(input);
+            inputsExisting.Add(input.IndexOutput);
           }
         }
         else
         {
-          inputs.Add(input.TXIDOutput, new List<TXInput> { input });
+          inputs.Add(input.TXIDOutput, new List<int> { input.IndexOutput });
         }
       }
 
@@ -396,21 +396,21 @@ namespace BToken.Accounting
         UInt256 headerHash, 
         TX tX, 
         byte[] tXHash, 
-        Dictionary<byte[], List<TXInput>> inputsUnfunded,
+        Dictionary<byte[], List<int>> inputsUnfunded,
         Dictionary<byte[], byte[]> uTXOs)
       {
         byte[] uTXO = CreateUTXO(headerHash, tX.Outputs.Count);
         
-        if (inputsUnfunded.TryGetValue(tXHash, out List<TXInput> inputs))
+        if (inputsUnfunded.TryGetValue(tXHash, out List<int> outputIndexes))
         {
           try
           {
-            SpendOutputsBits(uTXO, inputs);
+            SpendOutputsBits(uTXO, outputIndexes);
           }
           catch(Exception ex)
           {
             Console.WriteLine("Spend '{0}' inputsUnfunded on tXOutputs threw exception '{1}'.",
-              inputs.Count,
+              outputIndexes.Count,
               ex.Message);
           }
 
@@ -421,7 +421,7 @@ namespace BToken.Accounting
         {
           try
           {
-            uTXOs.Add(tXHash, uTXO);
+            uTXOs.Add(tXHash.Take(6).ToArray(), uTXO);
           }
           catch (ArgumentException)
           {

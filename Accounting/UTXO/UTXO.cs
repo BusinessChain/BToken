@@ -134,19 +134,18 @@ namespace BToken.Accounting
       return null;
     }
 
-    static void SpendOutputsBits(byte[] uTXO, List<TXInput> inputs)
+    static void SpendOutputsBits(byte[] uTXO, List<int> outputIndexes)
     {
-      for (int i = 0; i < inputs.Count; i++)
+      for (int i = 0; i < outputIndexes.Count; i++)
       {
-        int byteIndex = inputs[i].IndexOutput / 8 + CountHeaderIndexBytes;
-        int bitIndex = inputs[i].IndexOutput % 8;
+        int byteIndex = outputIndexes[i] / 8 + CountHeaderIndexBytes;
+        int bitIndex = outputIndexes[i] % 8;
 
         var bitMask = (byte)(0x01 << bitIndex);
         if ((uTXO[byteIndex] & bitMask) != 0x00)
         {
-          throw new UTXOException(string.Format("Output '{0}'-'{1}' already spent.",
-          Bytes2HexStringReversed(inputs[i].TXIDOutput),
-          inputs[i].IndexOutput));
+          throw new UTXOException(string.Format("Output index '{0}' already spent.",
+          outputIndexes[i]));
         }
         uTXO[byteIndex] |= bitMask;
       }

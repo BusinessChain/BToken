@@ -30,8 +30,6 @@ namespace BToken.Accounting
       }
       static async Task ArchiveUTXOShardAsync(Dictionary<byte[], byte[]> uTXOShard, int shardIndex)
       {
-        Console.WriteLine("archive shard index: " + shardIndex);
-
         string fileName = new SoapHexBinary(new byte[] { (byte)shardIndex }).ToString();
         string filePath = Path.Combine(PathUTXOArchive, fileName);
         Directory.CreateDirectory(PathUTXOArchive);
@@ -42,17 +40,17 @@ namespace BToken.Accounting
            filePath,
            FileMode.Append,
            FileAccess.Write,
-           FileShare.None,
-           bufferSize: 4096,
-           useAsync: true))
+           FileShare.None))
           {
             foreach (KeyValuePair<byte[], byte[]> uTXO in uTXOShard)
             {
+              byte[] uTXOKeyLength = VarInt.GetBytes(uTXO.Key.Length).ToArray();
               byte[] uTXOLength = VarInt.GetBytes(uTXO.Value.Length).ToArray();
 
-              await shardStream.WriteAsync(uTXO.Key, 0, uTXO.Key.Length);
-              await shardStream.WriteAsync(uTXOLength, 0, uTXOLength.Length);
-              await shardStream.WriteAsync(uTXO.Value, 0, uTXO.Value.Length);
+              shardStream.Write(uTXOKeyLength, 0, uTXOKeyLength.Length);
+              shardStream.Write(uTXO.Key, 0, uTXO.Key.Length);
+              shardStream.Write(uTXOLength, 0, uTXOLength.Length);
+              shardStream.Write(uTXO.Value, 0, uTXO.Value.Length);
             }
           }
         }

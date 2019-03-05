@@ -15,8 +15,8 @@ namespace BToken.Accounting
       UTXO UTXO;
       UTXOBuilder UTXOBuilder;
 
-      List<HeaderLocation> HeaderLocations;
-      public Dictionary<byte[], List<TXInput>> InputsUnfunded;
+      public List<HeaderLocation> HeaderLocations;
+      public Dictionary<byte[], List<int>> InputsUnfunded;
       public Dictionary<byte[], byte[]> UTXOs;
       public int BatchIndex;
 
@@ -29,7 +29,7 @@ namespace BToken.Accounting
         UTXO = uTXO;
         UTXOBuilder = uTXOBuilder;
         HeaderLocations = headerLocations;
-        InputsUnfunded = new Dictionary<byte[], List<TXInput>>(new EqualityComparerByteArray());
+        InputsUnfunded = new Dictionary<byte[], List<int>>(new EqualityComparerByteArray());
         UTXOs = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
         BatchIndex = batchIndex;
       }
@@ -42,16 +42,15 @@ namespace BToken.Accounting
           {
             Block block = await UTXO.GetBlockAsync(headerLocation.Hash);
 
-            Console.WriteLine("Batch '{0}' starts building block '{1}' - '{2}'",
-              BatchIndex,
-              headerLocation.Hash,
-              headerLocation.Height);
+            //Console.WriteLine("Batch '{0}' starts building block '{1}' - '{2}'",
+            //  BatchIndex,
+            //  headerLocation.Hash,
+            //  headerLocation.Height);
 
             UTXOTransaction.BuildBlock(block, InputsUnfunded, UTXOs);
           }
 
           await UTXOBuilder.MergeBatchAsync(this);
-          Console.WriteLine("Build Task batch '{0}' finished", BatchIndex);
         }
         catch (UTXOException ex)
         {
