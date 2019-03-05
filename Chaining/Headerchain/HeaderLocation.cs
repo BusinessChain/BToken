@@ -6,12 +6,12 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public class ChainLocation
+  public class HeaderLocation
   {
     public uint Height;
     public UInt256 Hash;
 
-    public ChainLocation(uint height, UInt256 hash)
+    public HeaderLocation(uint height, UInt256 hash)
     {
       Height = height;
       Hash = hash;

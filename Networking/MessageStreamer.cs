@@ -62,38 +62,38 @@ namespace BToken.Networking
         byte[] payloadLength = BitConverter.GetBytes(networkMessage.Payload.Length);
         Stream.Write(payloadLength, 0, LengthSize);
         
-        byte[] checksum = createChecksum(networkMessage.Payload);
+        byte[] checksum = CreateChecksum(networkMessage.Payload);
         Stream.Write(checksum, 0, ChecksumSize);
 
         await Stream.WriteAsync(networkMessage.Payload, 0, networkMessage.Payload.Length);
       }
 
-      byte[] createChecksum(byte[] payload)
+      byte[] CreateChecksum(byte[] payload)
       {
         return SHA256d.Compute(payload).Take(ChecksumSize).ToArray();
       }
 
       public async Task<NetworkMessage> ReadAsync(CancellationToken cancellationToken)
       {
-        await syncStreamToMagicAsync(cancellationToken).ConfigureAwait(false);
+        await SyncStreamToMagicAsync(cancellationToken).ConfigureAwait(false);
 
-        await readBytesAsync(Header, cancellationToken).ConfigureAwait(false);
-        getCommand();
-        getPayloadLength();
+        await ReadBytesAsync(Header, cancellationToken).ConfigureAwait(false);
+        GetCommand();
+        GetPayloadLength();
 
-        await parseMessagePayload(cancellationToken).ConfigureAwait(false);
-        verifyChecksum();
+        await ParseMessagePayload(cancellationToken).ConfigureAwait(false);
+        VerifyChecksum();
 
         return new NetworkMessage(Command, Payload);
       }
-      async Task syncStreamToMagicAsync(CancellationToken cancellationToken)
+      async Task SyncStreamToMagicAsync(CancellationToken cancellationToken)
       {
         byte[] singleByte = new byte[1];
         for (int i = 0; i < MagicBytes.Length; i++)
         {
           byte expectedByte = MagicBytes[i];
 
-          await readBytesAsync(singleByte, cancellationToken).ConfigureAwait(false);
+          await ReadBytesAsync(singleByte, cancellationToken).ConfigureAwait(false);
           byte receivedByte = singleByte[0];
           if (expectedByte != receivedByte)
           {
@@ -101,12 +101,12 @@ namespace BToken.Networking
           }
         }
       }
-      void getCommand()
+      void GetCommand()
       {
         byte[] commandBytes = Header.Take(CommandSize).ToArray();
         Command = Encoding.ASCII.GetString(commandBytes).TrimEnd('\0');
       }
-      void getPayloadLength()
+      void GetPayloadLength()
       {
         PayloadLength = BitConverter.ToUInt32(Header, CommandSize);
 
@@ -115,22 +115,22 @@ namespace BToken.Networking
           throw new NetworkException("Message payload too big (over 32MB)");
         }
       }
-      async Task parseMessagePayload(CancellationToken cancellationToken)
+      async Task ParseMessagePayload(CancellationToken cancellationToken)
       {
         Payload = new byte[(int)PayloadLength];
-        await readBytesAsync(Payload, cancellationToken).ConfigureAwait(false);
+        await ReadBytesAsync(Payload, cancellationToken).ConfigureAwait(false);
       }
-      void verifyChecksum()
+      void VerifyChecksum()
       {
         uint checksumMessage = BitConverter.ToUInt32(Header, CommandSize + LengthSize);
-        uint checksumCalculated = BitConverter.ToUInt32(createChecksum(Payload), 0);
+        uint checksumCalculated = BitConverter.ToUInt32(CreateChecksum(Payload), 0);
 
         if (checksumMessage != checksumCalculated)
         {
           throw new NetworkException("Invalid Message checksum.");
         }
       }
-      async Task readBytesAsync(byte[] buffer, CancellationToken cancellationToken)
+      async Task ReadBytesAsync(byte[] buffer, CancellationToken cancellationToken)
       {
         int bytesToRead = buffer.Length;
         int offset = 0;

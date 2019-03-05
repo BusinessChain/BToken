@@ -16,11 +16,11 @@ namespace BToken
     Wallet Wallet;
 
     GenesisBlock GenesisBlock = new GenesisBlock();
-    List<ChainLocation> Checkpoints = new List<ChainLocation>()
+    List<HeaderLocation> Checkpoints = new List<HeaderLocation>()
       {
-        new ChainLocation(height : 11111, hash : new UInt256("0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d")),
-        new ChainLocation(height : 250000, hash : new UInt256("000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214")),
-        new ChainLocation(height : 535419, hash : new UInt256("000000000000000000209ecbacceb3e7b8ec520ed7f1cfafbe149dd2b9007d39"))
+        new HeaderLocation(height : 11111, hash : new UInt256("0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d")),
+        new HeaderLocation(height : 250000, hash : new UInt256("000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214")),
+        new HeaderLocation(height : 535419, hash : new UInt256("000000000000000000209ecbacceb3e7b8ec520ed7f1cfafbe149dd2b9007d39"))
       };
 
     public BitcoinNode()
@@ -34,17 +34,16 @@ namespace BToken
     public async Task StartAsync()
     {
       Network.Start();
-      
+
       await Headerchain.LoadFromArchiveAsync();
       Console.WriteLine("Loaded headerchain from archive, height '{0}'", Headerchain.GetHeight());
 
       await Network.ExecuteSessionAsync(new SessionHeaderDownload(Headerchain));
       Console.WriteLine("downloaded headerchain from network, height '{0}'", Headerchain.GetHeight());
 
-      //await UTXO.StartAsync();
+      await UTXO.StartAsync();
 
       Task listenerTask = StartNetworkListenerAsync();
-
 
       Wallet.GeneratePublicKey();
     }
@@ -54,38 +53,48 @@ namespace BToken
       while (true)
       {
         using (INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync())
-        {
-          List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
-
-          foreach (NetworkMessage inboundMessage in inboundMessages)
+        {          
+          try
           {
-            switch (inboundMessage.Command)
+            List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
+
+            foreach (NetworkMessage inboundMessage in inboundMessages)
             {
-              case "inv":
-                //await ProcessInventoryMessageAsync(invMessage);
-                break;
+              switch (inboundMessage.Command)
+              {
+                case "inv":
+                  //await ProcessInventoryMessageAsync(invMessage);
+                  break;
 
-              case "getheaders":
-                var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-                var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
-                await channel.SendMessageAsync(new HeadersMessage(headers));
-                break;
+                case "getheaders":
+                  var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                  var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
+                  await channel.SendMessageAsync(new HeadersMessage(headers));
+                  break;
 
-              case "headers":
-                var headersMessage = new HeadersMessage(inboundMessage);
-                List<UInt256> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
-                await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
-                break;
+                case "headers":
+                  var headersMessage = new HeadersMessage(inboundMessage);
+                  List<UInt256> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
+                  await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
+                  break;
 
-              case "block":
-                break;
+                case "block":
+                  break;
 
-              default:
-                break;
+                default:
+                  break;
+              }
             }
           }
-        }
+          catch (Exception ex)
+          {
+            Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
+              channel.GetIdentification(),
+              ex.Message);
 
+            Network.RemoveChannel(channel);
+          }
+        }
       }
     }
   }

@@ -97,7 +97,6 @@ namespace BToken.Networking
         {
           NetworkMessage message = await NetworkMessageStreamer.ReadAsync(default(CancellationToken)).ConfigureAwait(false);
 
-
           switch (message.Command)
           {
             case "version":

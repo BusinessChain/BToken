@@ -17,7 +17,7 @@ namespace BToken.Chaining
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
     ChainHeader GenesisHeader;
-    List<ChainLocation> Checkpoints;
+    List<HeaderLocation> Checkpoints;
 
     Dictionary<byte[], List<ChainHeader>> HeaderIndex;
     int NumberHeaderIndexBytes = 4;
@@ -28,14 +28,18 @@ namespace BToken.Chaining
     ChainInserter Inserter;
 
     const int HEADERS_COUNT_MAX = 2000;
-    static string ArchiveRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "HeaderArchive");
+
+    static string ArchiveRootPath = Path.Combine(
+      AppDomain.CurrentDomain.BaseDirectory, 
+      "HeaderArchive");
+
     static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
     static string FilePath = Path.Combine(RootDirectory.Name, "Headerchain");
 
 
     public Headerchain(
       NetworkHeader genesisHeader,
-      List<ChainLocation> checkpoints)
+      List<HeaderLocation> checkpoints)
     {
       GenesisHeader = new ChainHeader(genesisHeader, null);
       Checkpoints = checkpoints;
@@ -52,18 +56,16 @@ namespace BToken.Chaining
       HeaderStream headerStreamer = new HeaderStream(this);
       var headers = new List<NetworkHeader>();
 
-      NetworkHeader header = headerStreamer.ReadHeader(out ChainLocation headerLocation);
-      while (header != null
+      while (headerStreamer.TryReadHeader(out NetworkHeader header, out HeaderLocation chainLocation)
         && headers.Count < HEADERS_COUNT_MAX
-        && !headerLocator.Contains(headerLocation.Hash))
+        && !headerLocator.Contains(chainLocation.Hash))
       {
-        if (headerLocation.Hash.Equals(stopHash))
+        if (chainLocation.Hash.Equals(stopHash))
         {
           headers.Clear();
         }
 
         headers.Insert(0, header);
-        header = headerStreamer.ReadHeader(out headerLocation);
       }
 
       return headers;
@@ -89,7 +91,7 @@ namespace BToken.Chaining
         catch (ChainException ex)
         {
           Console.WriteLine(string.Format("Insertion of header with hash '{0}' raised ChainException '{1}'.",
-            header.ComputeHeaderHash(), 
+            header.ComputeHash(), 
             ex.Message));
 
           return headersInserted;
@@ -131,7 +133,7 @@ namespace BToken.Chaining
     }
     static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)
     {
-      headerHash = header.ComputeHeaderHash();
+      headerHash = header.ComputeHash();
 
       if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
       {
@@ -198,12 +200,20 @@ namespace BToken.Chaining
         using (var archiveReader = new HeaderReader())
         {
           NetworkHeader header = archiveReader.GetNextHeader();
-
+          
           while (header != null)
           {
             await InsertHeaderAsync(header);
             header = archiveReader.GetNextHeader();
           }
+
+          //int countHeader = 0;
+          //while (header != null && countHeader < 50000)
+          //{
+          //  countHeader++;
+          //  await InsertHeaderAsync(header);
+          //  header = archiveReader.GetNextHeader();
+          //}
         }
       }
       catch (Exception ex)

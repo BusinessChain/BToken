@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
@@ -14,44 +13,43 @@ namespace BToken.Accounting
       UTXO UTXO;
       UInt256 HeaderHash;
       List<TX> TXs;
-      UInt256[] HashesTX;
+      List<byte[]> TXHashes;
 
-      int NumberIndexKeyBytesMin = 4;
-      int NumberHeaderIndexBytes = 4;
+      const int NumberIndexKeyBytesMin = 4;
+      const int NumberHeaderIndexBytes = 4;
 
 
-      public UTXOTransaction(UTXO uTXO, List<TX> tXs, UInt256 blockHeaderHash)
+      public UTXOTransaction(UTXO uTXO, Block block)
       {
         UTXO = uTXO;
-        HeaderHash = blockHeaderHash;
-        TXs = tXs;
-        HashesTX = new UInt256[TXs.Count];
+        HeaderHash = block.HeaderHash;
+        TXs = block.TXs;
+        TXHashes = block.TXHashes;
       }
 
-      public async Task InsertAsync()
+      public async Task InsertAsync(Dictionary<byte[], byte[]> uTXOs)
       {
-
         for (int i = 0; i < TXs.Count; i++)
         {
-          HashesTX[i] = TXs[i].GetTXHash();
-
           try
           {
-            await InsertNewTXOutputsAsync(TXs[i].TXOutputs.Count, HashesTX[i]);
+            byte[] uTXO = CreateUTXO(HeaderHash, TXs[i].Outputs.Count);
+            uTXOs.Add(TXHashes[i], uTXO);
+
+            //await UTXOArchiver.ArchiveUTXOAsync(TXHashes[i], uTXO);
           }
           catch (UTXOException ex)
           {
             await RemoveTXOutputIndexesAsync(stopTX: TXs[i]);
             throw ex;
           }
-
         }
 
         for (int i = 0; i < TXs.Count; i++)
         {
           try
           {
-            await SpendTXOutputsReferencedAsync(TXs[i], HashesTX[i]);
+            await SpendUTXOsAsync(TXs[i], TXHashes[i], uTXOs);
           }
           catch (Exception ex)
           {
@@ -61,62 +59,53 @@ namespace BToken.Accounting
           }
         }
       }
-      async Task<byte[]> GetUTXOKeyFreeAsync(UInt256 tXHash)
+      async Task SpendUTXOsAsync(TX tX, byte[] tXHash, Dictionary<byte[], byte[]> uTXOs)
       {
-        byte[] tXHashBytes = tXHash.GetBytes();
-        int numberOfKeyBytes = NumberIndexKeyBytesMin;
-        byte[] uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
-
-        while (UTXO.UTXOTable.TryGetValue(uTXOKey, out byte[] UTXOIndex))
+        foreach (TXInput tXInput in tX.Inputs)
         {
-          if (numberOfKeyBytes == tXHashBytes.Length)
+          if(uTXOs.TryGetValue(tXInput.TXIDOutput, out byte[] uTXO))
           {
-            throw new UTXOException(
-              string.Format("Ambiguous transaction '{0}' in block '{1}'", tXHash, HeaderHash));
-          }
+            SpendOutputsBits(uTXO, new List<int> { tXInput.IndexOutput });
 
-          byte[] headerIndex = new ArraySegment<byte>(UTXOIndex, 0, NumberHeaderIndexBytes).Array;
-          if (await UTXO.ReadTXAsync(tXHash, headerIndex) != null)
+            if (AreAllOutputBitsSpent(uTXO))
+            {
+              uTXOs.Remove(tXInput.TXIDOutput);
+
+              await UTXOArchiver.DeleteUTXOAsync(tXInput.TXIDOutput);
+            }
+          }
+          else
           {
-            throw new UTXOException(
-              string.Format("Ambiguous transaction '{0}' in block '{1}' and block header index '{2}'",
-              tXHash,
-              HeaderHash,
-              new SoapHexBinary(headerIndex)));
+            throw new UTXOException(string.Format("TXInput references nonexistant TX: '{0}'", tXInput.TXIDOutput));
           }
-
-          numberOfKeyBytes++;
-          uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
         }
-
-        return uTXOKey;
       }
+      
       async Task RemoveTXOutputIndexesAsync(TX stopTX)
       {
         int i = 0;
         while(TXs[i] != stopTX)
         {
-          await RemoveTXOutputIndexAsync(HashesTX[i]);
+          await RemoveTXOutputIndexAsync(TXHashes[i]);
           i++;
         }
       }
-      async Task RemoveTXOutputIndexAsync(UInt256 tXHash)
+      async Task RemoveTXOutputIndexAsync(byte[] tXHash)
       {
-        byte[] tXHashBytes = tXHash.GetBytes();
         int numberOfKeyBytes = NumberIndexKeyBytesMin;
-        byte[] uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
+        byte[] uTXOKey = tXHash.Take(numberOfKeyBytes).ToArray();
 
-        while (UTXO.UTXOTable.TryGetValue(uTXOKey, out byte[] UTXOIndex))
+        while (UTXO.UTXOs.TryGetValue(uTXOKey, out byte[] UTXOIndex))
         {
           byte[] headerIndex = new ArraySegment<byte>(UTXOIndex, 0, NumberHeaderIndexBytes).Array;
           if (await UTXO.ReadTXAsync(tXHash, headerIndex) != null)
           {
-            UTXO.UTXOTable.Remove(uTXOKey);
+            UTXO.UTXOs.Remove(uTXOKey);
             return;
           }
 
           numberOfKeyBytes++;
-          uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
+          uTXOKey = tXHash.Take(numberOfKeyBytes).ToArray();
         }
       }
       async Task UnspendTXOutputsReferencedUntilTX(TX stopTX)
@@ -124,7 +113,7 @@ namespace BToken.Accounting
         int i = 0;
         while (TXs[i] != stopTX)
         {
-          await UnspendTXOutputsReferencedAsync(TXs[i].TXInputs);
+          await UnspendTXOutputsReferencedAsync(TXs[i].Inputs);
           i++;
         }
       }
@@ -148,9 +137,9 @@ namespace BToken.Accounting
             }
             catch(IndexOutOfRangeException)
             {
-              UTXO.UTXOTable.Remove(tXOutputTuple.uTXOKey);
+              UTXO.UTXOs.Remove(tXOutputTuple.uTXOKey);
 
-              byte[] uTXOIndexNEW = CreateUTXOIndex(tXInput.IndexOutput);
+              byte[] uTXOIndexNEW = CreateUTXO(HeaderHash, tXInput.IndexOutput);
               bitMapTXOutputsSpent.CopyTo(uTXOIndexNEW, NumberHeaderIndexBytes);
               
               for(int i = bitMapTXOutputsSpent.Length; i < uTXOIndexNEW.Length - 1; i++)
@@ -160,12 +149,12 @@ namespace BToken.Accounting
 
               uTXOIndexNEW[byteIndex] = (byte)~(0x01 << bitIndex);
 
-              UTXO.UTXOTable.Add(tXOutputTuple.uTXOKey, uTXOIndexNEW);
+              UTXO.UTXOs.Add(tXOutputTuple.uTXOKey, uTXOIndexNEW);
             }
           }
           catch (UTXOException)
           {
-            byte[] uTXOIndexNEW = CreateUTXOIndex(tXInput.IndexOutput);
+            byte[] uTXOIndexNEW = CreateUTXO(HeaderHash, tXInput.IndexOutput);
 
             for (int i = NumberHeaderIndexBytes; i < uTXOIndexNEW.Length - 1; i++)
             {
@@ -175,9 +164,8 @@ namespace BToken.Accounting
             uTXOIndexNEW[byteIndex] = (byte)~(0x01 << bitIndex);
 
             byte[] uTXOKey = await GetUTXOKeyFreeAsync(tXInput.TXIDOutput);
-            UTXO.UTXOTable.Add(uTXOKey, uTXOIndexNEW);
+            UTXO.UTXOs.Add(uTXOKey, uTXOIndexNEW);
           }
-
         }
       }
       byte[] GetBitMapFromUTXOIndex(byte[] uTXOIndex)
@@ -187,11 +175,11 @@ namespace BToken.Accounting
             NumberHeaderIndexBytes,
             uTXOIndex.Length - NumberHeaderIndexBytes).Array;
       }
-      async Task SpendTXOutputsReferencedAsync(TX tX, UInt256 tXHash)
+      async Task SpendTXOutputsReferencedAsync(TX tX, byte[] tXHash)
       {
-        for (int index = 0; index < tX.TXInputs.Count; index++)
+        for (int index = 0; index < tX.Inputs.Count; index++)
         {
-          TXInput tXInput = tX.TXInputs[index];
+          TXInput tXInput = tX.Inputs[index];
 
           try
           {
@@ -201,35 +189,10 @@ namespace BToken.Accounting
           {
             throw new UTXOException(
               string.Format("Spending output referenced in tXInput '{0}' in transaction '{1}' in block '{2}' threw exception.",
-              index, tXHash, HeaderHash),
+              index, new SoapHexBinary(tXHash), HeaderHash),
               ex);
           }
         }
-      }
-      async Task<(byte[] uTXOKey, byte[] uTXOIndex, TXOutput tXOutput)>
-        GetTXOutputTupleAsync(TXInput tXInput)
-      {
-        byte[] tXHashBytes = tXInput.TXIDOutput.GetBytes();
-        int numberOfKeyBytes = NumberIndexKeyBytesMin;
-        byte[] uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
-
-        while (UTXO.UTXOTable.TryGetValue(uTXOKey, out byte[] uTXOIndex))
-        {
-          byte[] headerIndex = new ArraySegment<byte>(uTXOIndex, 0, NumberHeaderIndexBytes).Array;
-          TX tX = await UTXO.ReadTXAsync(tXInput.TXIDOutput, headerIndex);
-          if (tX == null)
-          {
-            numberOfKeyBytes++;
-            uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
-            continue;
-          }
-          else
-          {
-            return (uTXOKey, uTXOIndex, tX.TXOutputs[tXInput.IndexOutput]);
-          }
-        }
-
-        throw new UTXOException(string.Format("TXInput references nonexistant TX: '{0}'", tXInput.TXIDOutput));
       }
       async Task SpendTXOutputAsync(TXInput tXInput)
       {
@@ -246,11 +209,11 @@ namespace BToken.Accounting
         {
           if (Script.Evaluate(tXOutputTuple.tXOutput.LockingScript, tXInput.UnlockingScript))
           {
-            SpendTXOutputBit(tXOutputTuple.uTXOIndex, tXInput.IndexOutput);
+            SpendOutputsBits(tXOutputTuple.uTXOIndex, new List<int> { tXInput.IndexOutput });
 
             if (AreAllOutputBitsSpent(tXOutputTuple.uTXOIndex))
             {
-              UTXO.UTXOTable.Remove(tXOutputTuple.uTXOKey);
+              UTXO.UTXOs.Remove(tXOutputTuple.uTXOKey);
               FillGapInUTXO(tXOutputTuple.uTXOKey);
             }
           }
@@ -261,7 +224,31 @@ namespace BToken.Accounting
               new SoapHexBinary(tXOutputTuple.tXOutput.LockingScript)));
           }
         }
+      }
+      async Task<(byte[] uTXOKey, byte[] uTXOIndex, TXOutput tXOutput)>
+        GetTXOutputTupleAsync(TXInput tXInput)
+      {
+        byte[] tXHashBytes = tXInput.TXIDOutput;
+        int numberOfKeyBytes = NumberIndexKeyBytesMin;
+        byte[] uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
 
+        while (UTXO.UTXOs.TryGetValue(uTXOKey, out byte[] uTXOIndex))
+        {
+          byte[] headerIndex = new ArraySegment<byte>(uTXOIndex, 0, NumberHeaderIndexBytes).Array;
+          TX tX = await UTXO.ReadTXAsync(tXInput.TXIDOutput, headerIndex);
+          if (tX == null)
+          {
+            numberOfKeyBytes++;
+            uTXOKey = tXHashBytes.Take(numberOfKeyBytes).ToArray();
+            continue;
+          }
+          else
+          {
+            return (uTXOKey, uTXOIndex, tX.Outputs[tXInput.IndexOutput]);
+          }
+        }
+
+        throw new UTXOException(string.Format("TXInput references nonexistant TX: '{0}'", tXInput.TXIDOutput));
       }
       bool IsOutputSpent(byte[] uTXOIndex, int index)
       {
@@ -278,15 +265,7 @@ namespace BToken.Accounting
           return true;
         }
       }
-      bool AreAllOutputBitsSpent(byte[] uTXOIndex)
-      {
-        for (int i = NumberHeaderIndexBytes; i < uTXOIndex.Length; i++)
-        {
-          if (uTXOIndex[i] != 0xFF) { return false; }
-        }
 
-        return true;
-      }
       void FillGapInUTXO(byte[] uTXOKeyGap)
       {
         byte[] uTXOKeyNext = new byte[uTXOKeyGap.Length + 1];
@@ -295,109 +274,161 @@ namespace BToken.Accounting
         for (int i = 0; i < 256; i++)
         {
           uTXOKeyNext[uTXOKeyGap.Length] = (byte)i;
-          if (UTXO.UTXOTable.TryGetValue(uTXOKeyNext, out byte[] uTXOIndexNext))
+          if (UTXO.UTXOs.TryGetValue(uTXOKeyNext, out byte[] uTXOIndexNext))
           {
-            UTXO.UTXOTable.Add(uTXOKeyGap, uTXOIndexNext);
-            UTXO.UTXOTable.Remove(uTXOKeyNext);
+            UTXO.UTXOs.Add(uTXOKeyGap, uTXOIndexNext);
+            UTXO.UTXOs.Remove(uTXOKeyNext);
             FillGapInUTXO(uTXOKeyNext);
             break;
           }
         }
       }
-
-      public async Task BuildAsync(Dictionary<UInt256, List<TXInput>> tXInputsUnfunded)
+      
+      static byte[] CreateUTXO(UInt256 headerHash, int outputsCount)
       {
-        InsertInputsUnfunded(tXInputsUnfunded);
-                        
-        for (int i = 0; i < TXs.Count; i++)
-        {
-          HashesTX[i] = TXs[i].GetTXHash();
-          await BuildTXOutputsAsync(TXs[i].TXOutputs.Count, HashesTX[i], tXInputsUnfunded);
-        }
-      }
-      void InsertInputsUnfunded(Dictionary<UInt256, List<TXInput>> txInputsUnfundedTotal)
-      {
-        for (int t = 1; t < TXs.Count; t++)
-        {
-          for (int i = 0; i < TXs[t].TXInputs.Count; i++)
-          {
-            TXInput tXInput = TXs[t].TXInputs[i];
-            if (txInputsUnfundedTotal.TryGetValue(tXInput.TXIDOutput, out List<TXInput> tXInputsUnfunded))
-            {
-              if (tXInputsUnfunded.Any(tu => tu.IndexOutput == tXInput.IndexOutput))
-              {
-                throw new UTXOException("Double spend detected during UTXO build.");
-              }
-              else
-              {
-                tXInputsUnfunded.Add(tXInput);
-              }
-            }
-            else
-            {
-              tXInputsUnfunded = new List<TXInput> { tXInput };
-              txInputsUnfundedTotal.Add(tXInput.TXIDOutput, tXInputsUnfunded);
-            }
-          }
-        }
-      }
-      async Task BuildTXOutputsAsync(int countTXOutputs, UInt256 hashTX, Dictionary<UInt256, List<TXInput>> tXInputsUnfunded)
-      {
-        if (tXInputsUnfunded.TryGetValue(hashTX, out List<TXInput> tXInputs))
-        {
-          byte[] uTXOIndex = CreateUTXOIndex(countTXOutputs);
+        byte[] uTXOIndex = new byte[CountHeaderIndexBytes + (outputsCount + 7) / 8];
 
-          for (int i = 0; i < tXInputs.Count; i++)
-          {
-            TXInput tXInput = tXInputs[i];
-            SpendTXOutputBit(uTXOIndex, tXInputs[i].IndexOutput);
-          }
-
-          await InsertUTXOIndexAsync(uTXOIndex, hashTX);
-          tXInputsUnfunded.Remove(hashTX);
-        }
-        else
+        int numberOfRemainderBits = outputsCount % 8;
+        if(numberOfRemainderBits > 0)
         {
-          await InsertNewTXOutputsAsync(countTXOutputs, hashTX);
+          SpendExcessBits(uTXOIndex, numberOfRemainderBits);
         }
-      }
-
-      byte[] CreateUTXOIndex(int tXOutputsCount)
-      {
-        byte[] uTXOIndex = new byte[NumberHeaderIndexBytes + (tXOutputsCount + 7) / 8];
-
-        int numberOfBitsRemainder = tXOutputsCount % 8;
-        if (numberOfBitsRemainder > 0)
-        {
-          SpendExcessBits(uTXOIndex, numberOfBitsRemainder);
-        }
-
-        Array.Copy(HeaderHash.GetBytes(), 0, uTXOIndex, 0, NumberHeaderIndexBytes);
+        
+        Array.Copy(headerHash.GetBytes(), uTXOIndex, CountHeaderIndexBytes);
 
         return uTXOIndex;
       }
-      void SpendExcessBits(byte[] uTXOIndex, int numberOfBitsRemainder)
+      static void SpendExcessBits(byte[] uTXOIndex, int numberOfRemainderBits)
       {
-        for (int i = numberOfBitsRemainder; i < 8; i++)
+        for (int i = numberOfRemainderBits; i < 8; i++)
         {
           uTXOIndex[uTXOIndex.Length - 1] |= (byte)(0x01 << i);
         }
       }
-      async Task InsertNewTXOutputsAsync(int countTXOutputs, UInt256 hashTX)
-      {
-        byte[] uTXOIndex = CreateUTXOIndex(countTXOutputs);
-        await InsertUTXOIndexAsync(uTXOIndex, hashTX);
-      }
-      async Task InsertUTXOIndexAsync(byte[] uTXOIndex, UInt256 hashTX)
+      async Task InsertUTXOAsync(byte[] uTXOIndex, byte[] hashTX)
       {
         byte[] uTXOKey = await GetUTXOKeyFreeAsync(hashTX);
-        UTXO.UTXOTable.Add(uTXOKey, uTXOIndex);
+        UTXO.UTXOs.Add(uTXOKey, uTXOIndex);
       }
-      void SpendTXOutputBit(byte[] uTXOIndex, int indexTXOutput)
+      async Task<byte[]> GetUTXOKeyFreeAsync(byte[] tXHash)
       {
-        int byteIndex = indexTXOutput / 8 + NumberHeaderIndexBytes;
-        int bitIndex = indexTXOutput % 8;
-        uTXOIndex[byteIndex] |= (byte)(0x01 << bitIndex);
+        int numberOfKeyBytes = NumberIndexKeyBytesMin;
+        byte[] uTXOKey = tXHash.Take(numberOfKeyBytes).ToArray();
+
+        while (UTXO.UTXOs.TryGetValue(uTXOKey, out byte[] UTXOIndex))
+        {
+          if (numberOfKeyBytes == tXHash.Length)
+          {
+            throw new UTXOException(
+              string.Format("Ambiguous transaction '{0}' in block '{1}'", 
+              new SoapHexBinary(tXHash), 
+              HeaderHash));
+          }
+
+          byte[] headerIndex = new ArraySegment<byte>(UTXOIndex, 0, NumberHeaderIndexBytes).Array;
+          if (await UTXO.ReadTXAsync(tXHash, headerIndex) != null)
+          {
+            throw new UTXOException(
+              string.Format("Ambiguous transaction '{0}' in block '{1}' and block header index '{2}'",
+              tXHash,
+              HeaderHash,
+              new SoapHexBinary(headerIndex)));
+          }
+
+          numberOfKeyBytes++;
+          uTXOKey = tXHash.Take(numberOfKeyBytes).ToArray();
+        }
+
+        return uTXOKey;
+      }
+      
+
+      public static void BuildBlock(
+        Block block, 
+        Dictionary<byte[], List<int>> inputsUnfunded,
+        Dictionary<byte[], byte[]> uTXOs)
+      {
+        List<TX> tXs = block.TXs;
+        List<byte[]> tXHashes = block.TXHashes;
+        UInt256 headerHash = block.HeaderHash;
+
+        for (int t = 1; t < tXs.Count; t++)
+        {
+          for (int i = 0; i < tXs[t].Inputs.Count; i++)
+          {
+            InsertInput(tXs[t].Inputs[i], inputsUnfunded);
+          }
+        }
+
+        for (int t = 0; t < tXs.Count; t++)
+        {
+          InsertTXOutputs(
+            headerHash, 
+            tXs[t], 
+            tXHashes[t],
+            inputsUnfunded,
+            uTXOs);
+        }
+      }
+
+      static void InsertInput(TXInput input, Dictionary<byte[], List<int>> inputs)
+      {
+        if (inputs.TryGetValue(input.TXIDOutput, out List<int> inputsExisting))
+        {
+          if (inputsExisting.Any(i => i == input.IndexOutput))
+          {
+            throw new UTXOException(string.Format("Double spent output. TX = '{0}', index = '{1}'.",
+              Bytes2HexStringReversed(input.TXIDOutput),
+              input.IndexOutput));
+          }
+          else
+          {
+            inputsExisting.Add(input.IndexOutput);
+          }
+        }
+        else
+        {
+          inputs.Add(input.TXIDOutput, new List<int> { input.IndexOutput });
+        }
+      }
+
+      static void InsertTXOutputs(
+        UInt256 headerHash, 
+        TX tX, 
+        byte[] tXHash, 
+        Dictionary<byte[], List<int>> inputsUnfunded,
+        Dictionary<byte[], byte[]> uTXOs)
+      {
+        byte[] uTXO = CreateUTXO(headerHash, tX.Outputs.Count);
+        
+        if (inputsUnfunded.TryGetValue(tXHash, out List<int> outputIndexes))
+        {
+          try
+          {
+            SpendOutputsBits(uTXO, outputIndexes);
+          }
+          catch(Exception ex)
+          {
+            Console.WriteLine("Spend '{0}' inputsUnfunded on tXOutputs threw exception '{1}'.",
+              outputIndexes.Count,
+              ex.Message);
+          }
+
+          inputsUnfunded.Remove(tXHash);
+        }
+
+        if (!AreAllOutputBitsSpent(uTXO))
+        {
+          try
+          {
+            uTXOs.Add(tXHash.Take(6).ToArray(), uTXO);
+          }
+          catch (ArgumentException)
+          {
+            Console.WriteLine("Ambiguous transaction '{0}' in block '{1}'",
+              new SoapHexBinary(tXHash), headerHash);
+          }
+        }
       }
     }
   }

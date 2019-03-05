@@ -71,7 +71,7 @@ namespace BToken.Chaining
         }
         else
         {
-          return header.NetworkHeader.ComputeHeaderHash();
+          return header.NetworkHeader.ComputeHash();
         }
       }
 

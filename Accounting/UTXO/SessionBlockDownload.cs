@@ -14,12 +14,11 @@ namespace BToken.Accounting
   {
     class SessionBlockDownload : INetworkSession
     {
-      INetworkChannel Channel;
-
+      public INetworkChannel Channel { get; private set; }
       UInt256 HeaderHash;
       public NetworkBlock Block { get; private set; }
 
-      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
+      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 10;
 
 
       public SessionBlockDownload(UInt256 hashHeader)
@@ -31,23 +30,9 @@ namespace BToken.Accounting
       {
         Channel = channel;
 
-        await DownloadBlockAsync();
-
-        Console.WriteLine("Channel '{0}' downloaded block: '{1}'", 
-          Channel.GetIdentification(), HeaderHash);
-      }
-      
-      async Task DownloadBlockAsync()
-      {
-        NetworkBlock block = await GetBlockAsync(HeaderHash);
-        ValidateHeaderHash(HeaderHash, block);
-        Block = block;
-      }
-      async Task<NetworkBlock> GetBlockAsync(UInt256 hashRequested)
-      {
         try
         {
-          var inventory = new Inventory(InventoryType.MSG_BLOCK, hashRequested);
+          var inventory = new Inventory(InventoryType.MSG_BLOCK, HeaderHash);
           await Channel.SendMessageAsync(new GetDataMessage(new List<Inventory>() { inventory }));
 
           var CancellationGetBlock = new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
@@ -59,22 +44,15 @@ namespace BToken.Accounting
             if (networkMessage.Command == "block")
             {
               var blockMessage = new BlockMessage(networkMessage);
-              UInt256 hashReceived = blockMessage.NetworkBlock.Header.ComputeHeaderHash();
-              if (hashReceived.Equals(hashRequested))
-              {
-                return blockMessage.NetworkBlock;
-              }
-              else
-              {
-                Console.WriteLine("Requested block '{0}' but received '{1}' on channel '{2}'", hashRequested, hashReceived, Channel.GetIdentification());
-              }
+              Block = new BlockMessage(networkMessage).NetworkBlock;
+              return;
             }
           }
         }
         catch (TaskCanceledException ex)
         {
           Console.WriteLine("Canceled download of block '{0}' from peer '{1}' due to timeout '{2}' seconds",
-            hashRequested,
+            HeaderHash,
             Channel.GetIdentification(),
             SECONDS_TIMEOUT_BLOCKDOWNLOAD);
 

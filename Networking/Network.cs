@@ -20,7 +20,7 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-    const int PEERS_COUNT_OUTBOUND = 8;
+    const int PEERS_COUNT_OUTBOUND = 1;
     const int PEERS_COUNT_INBOUND = 8;
 
     static UInt64 Nonce;
@@ -83,14 +83,20 @@ namespace BToken.Networking
       }
       catch
       {
-        if(IsPeerInbound(peer))
-        {
-          PeersInbound.Remove(peer);
-        }
-        else
-        {
-          ReplacePeerOutbound(peer);
-        }
+        RemoveChannel(peer);
+      }
+    }
+    public void RemoveChannel(INetworkChannel channel)
+    {
+      Peer peer = (Peer)channel;
+
+      if (IsPeerInbound(peer))
+      {
+        PeersInbound.Remove(peer);
+      }
+      else
+      {
+        ReplacePeerOutbound(peer);
       }
     }
     void ReplacePeerOutbound(Peer peer)
@@ -113,7 +119,6 @@ namespace BToken.Networking
     public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
       Peer peer;
-
       do
       {
         peer = await PeersRequestInbound.ReceiveAsync();
@@ -148,7 +153,7 @@ namespace BToken.Networking
             return;
           }
 
-          ReplacePeerOutbound(peer);
+          RemoveChannel(peer);
         }
       }
     }

@@ -108,7 +108,7 @@ namespace BToken.Chaining
       }
       bool ValidateBlockLocation(uint height, UInt256 hash)
       {
-        ChainLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
+        HeaderLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
         if (checkpoint != null)
         {
           return checkpoint.Hash.Equals(hash);
