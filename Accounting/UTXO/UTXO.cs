@@ -18,7 +18,8 @@ namespace BToken.Accounting
     static int CountIndexKeyBytesMin = 4;
     static int CountHeaderIndexBytes = 4;
 
-    Dictionary<byte[], byte[]> UTXOs;
+    Dictionary<int, byte[]> UTXOsPrimaryCache;
+    Dictionary<int[], byte[]> UTXOsSecondaryCache;
 
 
     public UTXO(Headerchain headerchain, Network network)
@@ -27,7 +28,7 @@ namespace BToken.Accounting
       Parser = new UTXOParser();
       Network = network;
 
-      UTXOs = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
+      UTXOsSecondaryCache = new Dictionary<int[], byte[]>(new EqualityComparerIntegerArray());
     }
     
     public async Task StartAsync()
@@ -83,7 +84,7 @@ namespace BToken.Accounting
       await BlockArchiver.ArchiveBlockAsync(archiverBlock);
       return archiverBlock;
     }
-    void ValidateHeaderHash(NetworkHeader header, UInt256 hash)
+    static void ValidateHeaderHash(NetworkHeader header, UInt256 hash)
     {
       if (!hash.Equals(header.ComputeHash()))
       {
@@ -105,7 +106,7 @@ namespace BToken.Accounting
         Block block = await GetBlockAsync(hash);
 
         var uTXOTransaction = new UTXOTransaction(this, block);
-        await uTXOTransaction.InsertAsync(UTXOs);
+        await uTXOTransaction.InsertAsync(UTXOsSecondaryCache);
       }
     }
 

@@ -81,6 +81,7 @@
     <Compile Include="Accounting\UTXO\UTXOBuilder\UTXOBuilderBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOBuilder\UTXOBuilderBatchMerger.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
+    <Compile Include="DataTypes\EqualityComparerIntegerArray.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\Script.cs" />
     <Compile Include="Accounting\UTXO\TXInput.cs" />

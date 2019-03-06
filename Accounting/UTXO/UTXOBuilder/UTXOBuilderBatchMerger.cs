@@ -56,7 +56,7 @@ namespace BToken.Accounting
               {
                 try
                 {
-                  UTXO.UTXOs.Add(uTXO.Key, uTXO.Value);
+                  UTXO.UTXOsSecondaryCache.Add(uTXO.Key, uTXO.Value);
                   InsertUTXOInShard(uTXO, uTXOShards);
                 }
                 catch (ArgumentException)
@@ -84,7 +84,7 @@ namespace BToken.Accounting
             Console.WriteLine("{0};{1};{2}",
               uTXOBuilderBatch.BatchIndex,
               UTXOBuilder.InputsUnfunded.Count,
-              UTXO.UTXOs.Count);
+              UTXO.UTXOsSecondaryCache.Count);
           }
           finally
           {
