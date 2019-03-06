@@ -37,26 +37,21 @@ namespace BToken.Accounting
           try
           {
             await DispatchAsync(uTXOBuilderBatch.BatchIndex);
-            
-            //Console.WriteLine("Start merge batch '{0}', height '{1} - {2}'", 
-            //  uTXOBuilderBatch.BatchIndex,
-            //  uTXOBuilderBatch.HeaderLocations.First().Height,
-            //  uTXOBuilderBatch.HeaderLocations.Last().Height);
 
             var uTXOShards = new Dictionary<byte[], byte[]>[CountUTXOShards];
             foreach (KeyValuePair<byte[], byte[]> uTXO in uTXOBuilderBatch.UTXOs)
             {
-              if (UTXOBuilder.InputsUnfunded.TryGetValue(uTXO.Key, out List<int> inputs))
+              if (UTXOBuilder.TryGetInputUnfunded(uTXO.Key, out int[] inputs))
               {
                 SpendOutputsBits(uTXO.Value, inputs);
-                UTXOBuilder.InputsUnfunded.Remove(uTXO.Key);
+                UTXOBuilder.RemoveInput(uTXO.Key);
               }
 
               if (!AreAllOutputBitsSpent(uTXO.Value))
               {
                 try
                 {
-                  UTXO.UTXOsSecondaryCache.Add(uTXO.Key, uTXO.Value);
+                  UTXO.Write(uTXO.Key, uTXO.Value);
                   InsertUTXOInShard(uTXO, uTXOShards);
                 }
                 catch (ArgumentException)
@@ -67,24 +62,30 @@ namespace BToken.Accounting
               }
             }
 
-            foreach (KeyValuePair<byte[], List<int>> inputsBatch in uTXOBuilderBatch.InputsUnfunded)
+            foreach (KeyValuePair<byte[], int[]> inputsBatch in uTXOBuilderBatch.InputsUnfunded)
             {
-              if (UTXOBuilder.InputsUnfunded.TryGetValue(inputsBatch.Key, out List<int> outputIndexes))
+              if (UTXOBuilder.TryGetInputUnfunded(inputsBatch.Key, out int[] outputIndexes))
               {
-                outputIndexes.AddRange(inputsBatch.Value);
+                int[] temp = new int[outputIndexes.Length + inputsBatch.Value.Length];
+                outputIndexes.CopyTo(temp, 0);
+                inputsBatch.Value.CopyTo(temp, outputIndexes.Length);
+
+                outputIndexes = temp;
               }
               else
               {
-                UTXOBuilder.InputsUnfunded.Add(inputsBatch.Key, inputsBatch.Value);
+                UTXOBuilder.WriteInputUnfunded(inputsBatch.Key, inputsBatch.Value);
               }
             }
 
             await UTXOArchiver.ArchiveUTXOShardsAsync(uTXOShards); 
 
-            Console.WriteLine("{0};{1};{2}",
+            Console.WriteLine("{0};{1};{2};{3};{4}",
               uTXOBuilderBatch.BatchIndex,
-              UTXOBuilder.InputsUnfunded.Count,
-              UTXO.UTXOsSecondaryCache.Count);
+              UTXOBuilder.PrimaryInputsCache.Count,
+              UTXOBuilder.SecondaryInputsCache.Count,
+              UTXO.PrimaryCache.Count,
+              UTXO.SecondaryCache.Count);
           }
           finally
           {

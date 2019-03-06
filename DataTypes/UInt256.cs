@@ -59,16 +59,7 @@ namespace BToken
       Array.Resize(ref byteArray, BYTE_LENGTH);
       return byteArray;
     }
-    public int[] GetIntegers()
-    {
-      byte[] byteArray = Data.ToByteArray();
-      Array.Resize(ref byteArray, BYTE_LENGTH);
 
-      byte[] tXIDOutputBytes = new byte[TXIDOutput.Length * sizeof(int)];
-      Buffer.BlockCopy(TXIDOutput, 0, tXIDOutputBytes, 0, tXIDOutputBytes.Length);
-
-      return byteArray;
-    }
     public UInt32 GetCompact()
     {
       uint numberOfBytesUsed;

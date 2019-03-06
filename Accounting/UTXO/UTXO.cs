@@ -18,8 +18,13 @@ namespace BToken.Accounting
     static int CountIndexKeyBytesMin = 4;
     static int CountHeaderIndexBytes = 4;
 
-    Dictionary<int, byte[]> UTXOsPrimaryCache;
-    Dictionary<int[], byte[]> UTXOsSecondaryCache;
+    struct UTXOCacheItem
+    {
+      public byte[] Value;
+      public byte CountDuplicates;
+    }
+    Dictionary<int, UTXOCacheItem> PrimaryCache;
+    Dictionary<byte[], byte[]> SecondaryCache;
 
 
     public UTXO(Headerchain headerchain, Network network)
@@ -28,7 +33,8 @@ namespace BToken.Accounting
       Parser = new UTXOParser();
       Network = network;
 
-      UTXOsSecondaryCache = new Dictionary<int[], byte[]>(new EqualityComparerIntegerArray());
+      PrimaryCache = new Dictionary<int, UTXOCacheItem>();
+      SecondaryCache = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
     }
     
     public async Task StartAsync()
@@ -106,7 +112,7 @@ namespace BToken.Accounting
         Block block = await GetBlockAsync(hash);
 
         var uTXOTransaction = new UTXOTransaction(this, block);
-        await uTXOTransaction.InsertAsync(UTXOsSecondaryCache);
+        await uTXOTransaction.InsertAsync();
       }
     }
 
@@ -135,9 +141,9 @@ namespace BToken.Accounting
       return null;
     }
 
-    static void SpendOutputsBits(byte[] uTXO, List<int> outputIndexes)
+    static void SpendOutputsBits(byte[] uTXO, int[] outputIndexes)
     {
-      for (int i = 0; i < outputIndexes.Count; i++)
+      for (int i = 0; i < outputIndexes.Length; i++)
       {
         int byteIndex = outputIndexes[i] / 8 + CountHeaderIndexBytes;
         int bitIndex = outputIndexes[i] % 8;
@@ -167,6 +173,47 @@ namespace BToken.Accounting
       bytes.CopyTo(bytesReversed, 0);
       Array.Reverse(bytesReversed);
       return new SoapHexBinary(bytesReversed).ToString();
+    }
+
+    public void Write(byte[] key, byte[] value)
+    {
+      var item = new UTXOCacheItem
+      {
+        Value = value,
+        CountDuplicates = 0,
+      };
+
+      int primaryKey = BitConverter.ToInt32(key, 0);
+      if (PrimaryCache.TryGetValue(primaryKey, out UTXOCacheItem itemExisting))
+      {
+        itemExisting.CountDuplicates++;
+        SecondaryCache.Add(key, value);
+      }
+      else
+      {
+        PrimaryCache.Add(primaryKey, item);
+      }
+    }
+    public bool TryReadValue(byte[] key, out byte[] value)
+    {
+      int primaryKey = BitConverter.ToInt32(key, 0);
+
+      if (PrimaryCache.TryGetValue(primaryKey, out UTXOCacheItem itemExisting))
+      {
+        if (itemExisting.CountDuplicates > 0)
+        {
+          if (SecondaryCache.TryGetValue(key, out value))
+          {
+            return true;
+          }
+        }
+
+        value = itemExisting.Value;
+        return true;
+      }
+
+      value = null;
+      return false;
     }
   }
 }

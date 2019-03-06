@@ -17,14 +17,19 @@ namespace BToken.Accounting
       UTXO UTXO;
       Headerchain.HeaderStream HeaderStreamer;
 
-      Dictionary<byte[], List<int>> InputsUnfunded;
+      struct InputsCatcheItem
+      {
+        public int[] Value;
+        public byte CountDuplicates;
+      }
+      Dictionary<int, InputsCatcheItem> PrimaryInputsCache;
+      Dictionary<byte[], int[]> SecondaryInputsCache;
 
       UTXOBuilderBatchMerger Merger;
 
       int COUNT_BUILD_TASKS_MAX = 4;
-      List<Task> BuildTasks;
+      List<Task> BuildTasks = new List<Task>();
 
-      int BLOCK_HEIGHT_START = 50000;
       int BATCH_COUNT = 30;
 
 
@@ -35,18 +40,14 @@ namespace BToken.Accounting
 
         Merger = new UTXOBuilderBatchMerger(UTXO, this);
 
-        InputsUnfunded = new Dictionary<byte[], List<int>>(new EqualityComparerByteArray());
-        BuildTasks = new List<Task>();
+        PrimaryInputsCache = new Dictionary<int, InputsCatcheItem>();
+        SecondaryInputsCache = new Dictionary<byte[], int[]>(new EqualityComparerByteArray());
       }
 
       public async Task BuildAsync()
       {
         try
         {
-          // Go To Block (debug)
-          //while (HeaderStreamer.TryReadHeader(out NetworkHeader header, out HeaderLocation location)
-          //  && location.Height > BLOCK_HEIGHT_START) { }
-
           List<HeaderLocation> headerLocations = GetHeaderLocationBatch();
           int batchIndex = 0;
 
@@ -105,6 +106,80 @@ namespace BToken.Accounting
       public async Task MergeBatchAsync(UTXOBuilderBatch uTXOBuilderBatch)
       {
         await Merger.MergeBatchAsync(uTXOBuilderBatch);
+      }
+
+      public void WriteInputUnfunded(byte[] key, int[] value)
+      {
+        SecondaryInputsCache.Add(key, value);
+
+
+
+        //  var item = new InputsCatcheItem
+        //  {
+        //    Value = value,
+        //    CountDuplicates = 0,
+        //  };
+
+        //  int primaryKey = BitConverter.ToInt32(key, 0);
+        //  if (PrimaryInputsCache.TryGetValue(primaryKey, out InputsCatcheItem itemExisting))
+        //  {
+        //    itemExisting.CountDuplicates++;
+        //    SecondaryInputsCache.Add(key, value);
+        //  }
+        //  else
+        //  {
+        //    PrimaryInputsCache.Add(primaryKey, item);
+        //  }
+      }
+      public bool TryGetInputUnfunded(byte[] key, out int[] value)
+      {
+        if (SecondaryInputsCache.TryGetValue(key, out value))
+        {
+          return true;
+        }
+
+
+
+        //int primaryKey = BitConverter.ToInt32(key, 0);
+
+        //if (PrimaryInputsCache.TryGetValue(primaryKey, out InputsCatcheItem itemExisting))
+        //{
+        //  if (itemExisting.CountDuplicates > 0)
+        //  {
+        //    if (SecondaryInputsCache.TryGetValue(key, out value))
+        //    {
+        //      return true;
+        //    }
+        //  }
+
+        //  value = itemExisting.Value;
+        //  return true;
+        //}
+
+        value = null;
+        return false;
+      }
+      public void RemoveInput(byte[] key)
+      {
+        SecondaryInputsCache.Remove(key);
+
+
+
+        //int primaryKey = BitConverter.ToInt32(key, 0);
+
+        //if (PrimaryInputsCache.TryGetValue(primaryKey, out InputsCatcheItem itemExisting))
+        //{
+        //  if (itemExisting.CountDuplicates > 0)
+        //  {
+        //    if (SecondaryInputsCache.Remove(key))
+        //    {
+        //      return;
+        //    }
+        //  }
+
+        //  PrimaryInputsCache.Remove(primaryKey);
+        //}
+
       }
     }
   }
