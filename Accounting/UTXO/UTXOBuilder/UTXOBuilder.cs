@@ -27,10 +27,10 @@ namespace BToken.Accounting
 
       UTXOBuilderBatchMerger Merger;
 
-      int COUNT_BUILD_TASKS_MAX = 4;
+      int COUNT_BUILD_TASKS_MAX = 1;
       List<Task> BuildTasks = new List<Task>();
 
-      int BATCH_COUNT = 30;
+      int BATCH_COUNT = 1;
 
 
       public UTXOBuilder(UTXO uTXO, Headerchain.HeaderStream headerStreamer)
