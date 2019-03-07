@@ -403,7 +403,7 @@ namespace BToken.Accounting
         {
           try
           {
-            uTXOs.Add(tXHash, uTXO);
+            uTXOs.Add(tXHash.Take(6).ToArray(), uTXO);
           }
           catch (ArgumentException)
           {
