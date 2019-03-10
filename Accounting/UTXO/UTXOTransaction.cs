@@ -34,7 +34,7 @@ namespace BToken.Accounting
           try
           {
             byte[] uTXO = CreateUTXO(HeaderHash, TXs[i].Outputs.Count);
-            UTXO.Write(TXHashes[i], uTXO);
+            //UTXO.Write(TXHashes[i], uTXO);
 
             //await UTXOArchiver.ArchiveUTXOAsync(TXHashes[i], uTXO);
           }
@@ -65,7 +65,7 @@ namespace BToken.Accounting
         {
           if(uTXOs.TryGetValue(tXInput.TXIDOutput, out byte[] uTXO))
           {
-            SpendOutputsBits(uTXO, new int[1] { tXInput.IndexOutput });
+            SpendOutputs(uTXO, new int[1] { tXInput.IndexOutput });
 
             if (AreAllOutputBitsSpent(uTXO))
             {
@@ -209,7 +209,7 @@ namespace BToken.Accounting
         {
           if (Script.Evaluate(tXOutputTuple.tXOutput.LockingScript, tXInput.UnlockingScript))
           {
-            SpendOutputsBits(tXOutputTuple.uTXOIndex, new int[1] { tXInput.IndexOutput });
+            SpendOutputs(tXOutputTuple.uTXOIndex, new int[1] { tXInput.IndexOutput });
 
             if (AreAllOutputBitsSpent(tXOutputTuple.uTXOIndex))
             {
@@ -266,27 +266,6 @@ namespace BToken.Accounting
       }
 
 
-      static byte[] CreateUTXO(UInt256 headerHash, int outputsCount)
-      {
-        byte[] uTXOIndex = new byte[CountHeaderIndexBytes + (outputsCount + 7) / 8];
-
-        int numberOfRemainderBits = outputsCount % 8;
-        if(numberOfRemainderBits > 0)
-        {
-          SpendExcessBits(uTXOIndex, numberOfRemainderBits);
-        }
-        
-        Array.Copy(headerHash.GetBytes(), uTXOIndex, CountHeaderIndexBytes);
-
-        return uTXOIndex;
-      }
-      static void SpendExcessBits(byte[] uTXOIndex, int numberOfRemainderBits)
-      {
-        for (int i = numberOfRemainderBits; i < 8; i++)
-        {
-          uTXOIndex[uTXOIndex.Length - 1] |= (byte)(0x01 << i);
-        }
-      }
       async Task<byte[]> GetUTXOKeyFreeAsync(byte[] tXHash)
       {
         int numberOfKeyBytes = NumberIndexKeyBytesMin;
@@ -317,100 +296,6 @@ namespace BToken.Accounting
         }
 
         return uTXOKey;
-      }
-      
-
-      public static void BuildBlock(
-        Block block, 
-        Dictionary<byte[], int[]> inputsUnfunded,
-        Dictionary<byte[], byte[]> uTXOs)
-      {
-        List<TX> tXs = block.TXs;
-        List<byte[]> tXHashes = block.TXHashes;
-        UInt256 headerHash = block.HeaderHash;
-
-        for (int t = 1; t < tXs.Count; t++)
-        {
-          for (int i = 0; i < tXs[t].Inputs.Count; i++)
-          {
-            InsertInput(tXs[t].Inputs[i], inputsUnfunded);
-          }
-        }
-
-        for (int t = 0; t < tXs.Count; t++)
-        {
-          InsertTXOutputs(
-            headerHash, 
-            tXs[t], 
-            tXHashes[t],
-            inputsUnfunded,
-            uTXOs);
-        }
-      }
-
-      static void InsertInput(TXInput input, Dictionary<byte[], int[]> inputs)
-      {
-        if (inputs.TryGetValue(input.TXIDOutput, out int[] outputIndexes))
-        {
-          for (int i = 0; i < outputIndexes.Length; i++)
-          {
-            if (outputIndexes[i] == input.IndexOutput)
-            {
-              throw new UTXOException(string.Format("Double spent output. TX = '{0}', index = '{1}'.",
-                Bytes2HexStringReversed(input.TXIDOutput),
-                input.IndexOutput));
-            }
-          }
-
-          int[] temp = new int[outputIndexes.Length + 1];
-          outputIndexes.CopyTo(temp, 0);
-          temp[outputIndexes.Length] = input.IndexOutput;
-
-          outputIndexes = temp;
-        }
-        else
-        {
-          inputs.Add(input.TXIDOutput, new int[1] { input.IndexOutput });
-        }
-      }
-
-      static void InsertTXOutputs(
-        UInt256 headerHash, 
-        TX tX, 
-        byte[] tXHash, 
-        Dictionary<byte[], int[]> inputsUnfunded,
-        Dictionary<byte[], byte[]> uTXOs)
-      {
-        byte[] uTXO = CreateUTXO(headerHash, tX.Outputs.Count);
-        
-        if (inputsUnfunded.TryGetValue(tXHash, out int[] outputIndexes))
-        {
-          try
-          {
-            SpendOutputsBits(uTXO, outputIndexes);
-          }
-          catch(Exception ex)
-          {
-            Console.WriteLine("Spend '{0}' inputsUnfunded on tXOutputs threw exception '{1}'.",
-              outputIndexes.Length,
-              ex.Message);
-          }
-
-          inputsUnfunded.Remove(tXHash);
-        }
-
-        if (!AreAllOutputBitsSpent(uTXO))
-        {
-          try
-          {
-            uTXOs.Add(tXHash.Take(6).ToArray(), uTXO);
-          }
-          catch (ArgumentException)
-          {
-            Console.WriteLine("Ambiguous transaction '{0}' in block '{1}'",
-              new SoapHexBinary(tXHash), headerHash);
-          }
-        }
       }
     }
   }
