@@ -28,9 +28,6 @@ namespace BToken.Accounting
     Dictionary<byte[], byte[]> SecondaryCache;
     UTXOArchiver Archiver;
 
-    Dictionary<int, byte[]>[] UTXOPrimaryShards;
-    Dictionary<byte[], byte[]> UTXOSecondaryShard;
-
 
     public UTXO(Headerchain headerchain, Network network)
     {
@@ -41,10 +38,7 @@ namespace BToken.Accounting
       PrimaryCache = new Dictionary<int, UTXOCacheItem>();
       SecondaryCache = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
       Archiver = new UTXOArchiver();
-
-      UTXOPrimaryShards = new Dictionary<int, byte[]>[CountUTXOShards];
-      UTXOSecondaryShard = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
-    }
+}
 
     public async Task StartAsync()
     {
@@ -86,7 +80,6 @@ namespace BToken.Accounting
     }
     async Task<Block> DownloadBlockAsync(UInt256 hash)
     {
-      Console.WriteLine("Download block '{0}'", hash);
       var sessionBlockDownload = new SessionBlockDownload(hash);
       await Network.ExecuteSessionAsync(sessionBlockDownload);
       NetworkBlock networkBlock = sessionBlockDownload.Block;

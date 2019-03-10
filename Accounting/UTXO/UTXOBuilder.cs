@@ -19,8 +19,8 @@ namespace BToken.Accounting
 
       Dictionary<byte[], int[]> InputsUnfunded;
 
-      int BATCH_SIZE = 1;
-      int COUNT_TASKS_MAX = 1;
+      int BATCH_SIZE = 20;
+      int COUNT_TASKS_MAX = 4;
       List<Task<UTXOBatch>> GetBlocksTasks = new List<Task<UTXOBatch>>();
       int NextBatchIndexToMerge = 0;
       List<UTXOBatch> BatchesAwaitingMerge = new List<UTXOBatch>();
@@ -72,6 +72,12 @@ namespace BToken.Accounting
             {
               BuildBlock(block, batch.UTXOs);
             }
+
+            Console.WriteLine("{0},{1},{2},{3}", 
+              batch.BatchIndex,
+              InputsUnfunded.Count,
+              UTXO.PrimaryCache.Count,
+              UTXO.SecondaryCache.Count);
 
             BatchesAwaitingMerge.Remove(batch);
 
@@ -153,17 +159,27 @@ namespace BToken.Accounting
 
         for (int t = 0; t < tXs.Count; t++)
         {
-          byte[] uTXO = CreateUTXO(headerHash, tXs[t].Outputs.Count);
-
-          if (InputsUnfunded.TryGetValue(tXHashes[t], out int[] outputIndexes))
+          try
           {
-            SpendOutputs(uTXO, outputIndexes);
-            InputsUnfunded.Remove(tXHashes[t]);
+            byte[] uTXO = CreateUTXO(headerHash, tXs[t].Outputs.Count);
+
+            if (InputsUnfunded.TryGetValue(tXHashes[t], out int[] outputIndexes))
+            {
+              SpendOutputs(uTXO, outputIndexes);
+              InputsUnfunded.Remove(tXHashes[t]);
+            }
+
+            if (!AreAllOutputBitsSpent(uTXO))
+            {
+              UTXO.Write(new KeyValuePair<byte[], byte[]>(tXHashes[t], uTXO));
+            }
           }
-
-          if (!AreAllOutputBitsSpent(uTXO))
+          catch (Exception ex)
           {
-            UTXO.Write(new KeyValuePair<byte[], byte[]>(tXHashes[t], uTXO));
+            Console.WriteLine("insert outputs of tx '{0}', index '{1}', threw exception: '{2}'",
+              tXHashes[t],
+              t,
+              ex.Message);
           }
         }
       }

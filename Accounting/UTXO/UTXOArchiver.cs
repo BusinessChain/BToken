@@ -35,7 +35,7 @@ namespace BToken.Accounting
         }
         
         FileSecondaryShard = new FileStream(
-           Path.Combine(PathUTXOArchive, "SecondareyShard"),
+           Path.Combine(PathUTXOArchive, "SecondaryShard"),
            FileMode.OpenOrCreate,
            FileAccess.ReadWrite,
            FileShare.None);
@@ -43,7 +43,7 @@ namespace BToken.Accounting
 
       public void WriteUTXO(int primaryKey, byte[] uTXO)
       {
-        int shardIndex = primaryKey % CountUTXOShards;
+        int shardIndex = Math.Abs(primaryKey % CountUTXOShards);
         FileStream shard = FilePrimaryShards[shardIndex];
         
         byte[] uTXOLength = VarInt.GetBytes(uTXO.Length).ToArray();
