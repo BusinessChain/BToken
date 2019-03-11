@@ -18,6 +18,7 @@ namespace BToken.Accounting
         public List<HeaderLocation> HeaderLocations;
         public List<Block> Blocks = new List<Block>();
 
+        Dictionary<byte[], int[]> InputsUnfunded;
         public Dictionary<byte[], byte[]> UTXOs;
 
 
@@ -26,6 +27,7 @@ namespace BToken.Accounting
           BatchIndex = batchIndex;
           HeaderLocations = headerLocations;
 
+          InputsUnfunded = new Dictionary<byte[], int[]>(new EqualityComparerByteArray());
           UTXOs = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
         }
 

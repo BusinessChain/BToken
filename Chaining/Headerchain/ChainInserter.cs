@@ -45,8 +45,20 @@ namespace BToken.Chaining
 
         ValidateHeader(networkHeader, headerHash);
 
-        var chainHeader = new ChainHeader(networkHeader, Probe.Header);
-        Probe.Header.HeadersNext.Add(chainHeader);
+        var chainHeader = new ChainHeader(
+          networkHeader,
+          headerPrevious: Probe.Header);
+
+        if (Probe.Header.HeadersNext == null)
+        {
+          Probe.Header.HeadersNext = new ChainHeader[1] { chainHeader };
+        }
+        else
+        {
+          var temp = new ChainHeader[Probe.Header.HeadersNext.Length + 1];
+          Probe.Header.HeadersNext.CopyTo(temp, 0);
+          temp[Probe.Header.HeadersNext.Length] = chainHeader;
+        }
 
         Headerchain.UpdateHeaderIndex(chainHeader, headerHash);
 
@@ -66,7 +78,7 @@ namespace BToken.Chaining
         {
           Chain chainForked = ForkChain(headerHash);
           Headerchain.SecondaryChains.Add(chainForked);
-          return ForkChain(headerHash);
+          return chainForked;
         }
       }
       void FindPreviousHeader(NetworkHeader header)
@@ -133,7 +145,9 @@ namespace BToken.Chaining
       }
       void ValidateUniqueness(UInt256 hash)
       {
-        if (Probe.Header.HeadersNext.Select(h => Probe.GetHeaderHash(h)).Contains(hash))
+        if (
+          Probe.Header.HeadersNext != null &&
+          Probe.Header.HeadersNext.Select(h => Probe.GetHeaderHash(h)).Contains(hash))
         {
           throw new ChainException(ChainCode.DUPLICATE);
         }
@@ -161,12 +175,6 @@ namespace BToken.Chaining
         return timestampsPast[timestampsPast.Count / 2];
       }
 
-      ChainHeader ConnectHeader(NetworkHeader header)
-      {
-        var chainHeader = new ChainHeader(header, Probe.Header);
-        Probe.Header.HeadersNext.Add(chainHeader);
-        return chainHeader;
-      }
       Chain ForkChain(UInt256 headerHash)
       {
         ChainHeader header = Probe.Header.HeadersNext.Last();

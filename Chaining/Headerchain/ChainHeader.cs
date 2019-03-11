@@ -12,7 +12,7 @@ namespace BToken.Chaining
       public NetworkHeader NetworkHeader;
 
       public ChainHeader HeaderPrevious;
-      public List<ChainHeader> HeadersNext = new List<ChainHeader>();
+      public ChainHeader[] HeadersNext;
 
       public ChainHeader(
         UInt32 version,

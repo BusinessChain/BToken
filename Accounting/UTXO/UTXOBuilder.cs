@@ -20,7 +20,7 @@ namespace BToken.Accounting
       Dictionary<byte[], int[]> InputsUnfunded;
 
       int BATCH_SIZE = 20;
-      int COUNT_TASKS_MAX = 4;
+      int COUNT_TASKS_MAX = 1;
       List<Task<UTXOBatch>> GetBlocksTasks = new List<Task<UTXOBatch>>();
       int NextBatchIndexToMerge = 0;
       List<UTXOBatch> BatchesAwaitingMerge = new List<UTXOBatch>();

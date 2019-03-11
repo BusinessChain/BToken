@@ -45,7 +45,7 @@ namespace BToken.Accounting
             {
               var blockMessage = new BlockMessage(networkMessage);
               Block = new BlockMessage(networkMessage).NetworkBlock;
-              Console.WriteLine("'{0}' Downloaded block '{0}'", 
+              Console.WriteLine("'{0}' Downloaded block '{1}'", 
                 Channel.GetIdentification(), 
                 HeaderHash);
               return;

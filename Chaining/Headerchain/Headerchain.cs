@@ -106,9 +106,9 @@ namespace BToken.Chaining
     {
       ValidateHeader(header, out UInt256 headerHash);
 
-      using (Inserter = await DispatchInserterAsync())
+      using (var inserter = await DispatchInserterAsync())
       {
-        Chain rivalChain = Inserter.InsertHeader(header, headerHash);
+        Chain rivalChain = inserter.InsertHeader(header, headerHash);
 
         if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
         {
