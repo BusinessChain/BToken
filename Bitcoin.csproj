@@ -77,9 +77,8 @@
   <ItemGroup>
     <Compile Include="Accounting\UTXO\Block.cs" />
     <Compile Include="Accounting\UTXO\UTXOArchiver.cs" />
-    <Compile Include="Accounting\UTXO\UTXOBuilder\UTXOBuilder.cs" />
-    <Compile Include="Accounting\UTXO\UTXOBuilder\UTXOBuilderBatch.cs" />
-    <Compile Include="Accounting\UTXO\UTXOBuilder\UTXOBuilderBatchMerger.cs" />
+    <Compile Include="Accounting\UTXO\UTXOBatch.cs" />
+    <Compile Include="Accounting\UTXO\UTXOBuilder.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\Script.cs" />

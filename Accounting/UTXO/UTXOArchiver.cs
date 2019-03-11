@@ -9,57 +9,58 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    static class UTXOArchiver
+    class UTXOArchiver
     {
       static string PathUTXOArchive = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UTXOArchive");
+      const byte CountUTXOShards = 16;
+
+      FileStream[] FilePrimaryShards = new FileStream[CountUTXOShards];
+      FileStream FileSecondaryShard;
 
 
-      public static async Task ArchiveUTXOShardsAsync(Dictionary<byte[], byte[]>[] uTXOShards)
+      public UTXOArchiver()
       {
-        var archiveUTXOShardsTasks = new List<Task>();
-
-        for(int i = 0; i < uTXOShards.Length; i++)
-        {
-          if(uTXOShards[i] != null)
-          {
-            archiveUTXOShardsTasks.Add(ArchiveUTXOShardAsync(uTXOShards[i], i));
-          }
-        }
-
-        await Task.WhenAll(archiveUTXOShardsTasks);
-      }
-      static async Task ArchiveUTXOShardAsync(Dictionary<byte[], byte[]> uTXOShard, int shardIndex)
-      {
-        string fileName = new SoapHexBinary(new byte[] { (byte)shardIndex }).ToString();
-        string filePath = Path.Combine(PathUTXOArchive, fileName);
         Directory.CreateDirectory(PathUTXOArchive);
 
-        try
+        for (byte shardIndex = 0; shardIndex < CountUTXOShards; shardIndex++)
         {
-          using (FileStream shardStream = new FileStream(
-           filePath,
-           FileMode.Append,
-           FileAccess.Write,
-           FileShare.None))
-          {
-            foreach (KeyValuePair<byte[], byte[]> uTXO in uTXOShard)
-            {
-              byte[] uTXOKeyLength = VarInt.GetBytes(uTXO.Key.Length).ToArray();
-              byte[] uTXOLength = VarInt.GetBytes(uTXO.Value.Length).ToArray();
+          string fileName = new SoapHexBinary(new byte[] { shardIndex }).ToString();
+          string filePath = Path.Combine(PathUTXOArchive, fileName);
 
-              shardStream.Write(uTXOKeyLength, 0, uTXOKeyLength.Length);
-              shardStream.Write(uTXO.Key, 0, uTXO.Key.Length);
-              shardStream.Write(uTXOLength, 0, uTXOLength.Length);
-              shardStream.Write(uTXO.Value, 0, uTXO.Value.Length);
-            }
-          }
+          FilePrimaryShards[shardIndex] = new FileStream(
+           filePath,
+           FileMode.OpenOrCreate,
+           FileAccess.ReadWrite,
+           FileShare.None);
         }
-        catch (Exception ex)
-        {
-          Console.WriteLine("UTXO BatchArchiver threw exception: " + ex.Message);
-        }
+        
+        FileSecondaryShard = new FileStream(
+           Path.Combine(PathUTXOArchive, "SecondaryShard"),
+           FileMode.OpenOrCreate,
+           FileAccess.ReadWrite,
+           FileShare.None);
       }
 
+      public void WriteUTXO(int primaryKey, byte[] uTXO)
+      {
+        int shardIndex = Math.Abs(primaryKey % CountUTXOShards);
+        FileStream shard = FilePrimaryShards[shardIndex];
+        
+        byte[] uTXOLength = VarInt.GetBytes(uTXO.Length).ToArray();
+
+        byte key = (byte)(primaryKey & 0xFF);
+        shard.WriteByte(key);
+        shard.Write(uTXOLength, 0, uTXOLength.Length);
+        shard.Write(uTXO, 0, uTXO.Length);
+      }
+      public void WriteUTXO(KeyValuePair<byte[], byte[]> uTXO)
+      {
+        byte[] uTXOLength = VarInt.GetBytes(uTXO.Value.Length).ToArray();
+
+        FileSecondaryShard.Write(uTXO.Key, 0, uTXO.Key.Length);
+        FileSecondaryShard.Write(uTXOLength, 0, uTXOLength.Length);
+        FileSecondaryShard.Write(uTXO.Value, 0, uTXO.Value.Length);
+      }
       public static async Task DeleteUTXOAsync(byte[] tXHash)
       {
         string fileName = new SoapHexBinary(new byte[] { tXHash[0] }).ToString();
@@ -159,7 +160,7 @@ namespace BToken.Accounting
           return new KeyValuePair<byte[], byte[]>(null, null);
         }
       }
-
+      
       static async Task<byte[]> ReadBytesAsync(FileStream fileStream, long bytesToRead)
       {
         var buffer = new byte[bytesToRead];

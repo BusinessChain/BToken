@@ -59,6 +59,7 @@ namespace BToken
       Array.Resize(ref byteArray, BYTE_LENGTH);
       return byteArray;
     }
+
     public UInt32 GetCompact()
     {
       uint numberOfBytesUsed;

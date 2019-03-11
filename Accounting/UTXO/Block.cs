@@ -15,7 +15,11 @@ namespace BToken.Accounting
     public List<TX> TXs;
     public List<byte[]> TXHashes;
 
-    public Block(NetworkHeader header, UInt256 headerHash, List<TX> tXs, List<byte[]> tXHashes)
+    public Block(
+      NetworkHeader header,
+      UInt256 headerHash, 
+      List<TX> tXs, 
+      List<byte[]> tXHashes)
     {
       Header = header;
       HeaderHash = headerHash;

@@ -52,15 +52,15 @@ namespace BToken.Accounting
 
     public byte[] GetBytes()
     {
-      List<byte> byteStream = new List<byte>();
+      List<byte> bytes = new List<byte>();
 
-      byteStream.AddRange(TXIDOutput);
-      byteStream.AddRange(BitConverter.GetBytes(IndexOutput));
-      byteStream.AddRange(VarInt.GetBytes(UnlockingScript.Length));
-      byteStream.AddRange(UnlockingScript);
-      byteStream.AddRange(BitConverter.GetBytes(Sequence));
+      bytes.AddRange(TXIDOutput);
+      bytes.AddRange(BitConverter.GetBytes(IndexOutput));
+      bytes.AddRange(VarInt.GetBytes(UnlockingScript.Length));
+      bytes.AddRange(UnlockingScript);
+      bytes.AddRange(BitConverter.GetBytes(Sequence));
 
-      return byteStream.ToArray();
+      return bytes.ToArray();
     }
 
   }
