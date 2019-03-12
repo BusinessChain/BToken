@@ -56,17 +56,17 @@ namespace BToken.Chaining
       HeaderStream headerStreamer = new HeaderStream(this);
       var headers = new List<NetworkHeader>();
 
-      while (headerStreamer.TryReadHeader(out NetworkHeader header, out HeaderLocation chainLocation)
-        && headers.Count < HEADERS_COUNT_MAX
-        && !headerLocator.Contains(chainLocation.Hash))
-      {
-        if (chainLocation.Hash.Equals(stopHash))
-        {
-          headers.Clear();
-        }
+      //while (headerStreamer.TryReadHeader(out NetworkHeader header, out HeaderLocation chainLocation)
+      //  && headers.Count < HEADERS_COUNT_MAX
+      //  && !headerLocator.Contains(chainLocation.Hash))
+      //{
+      //  if (chainLocation.Hash.Equals(stopHash))
+      //  {
+      //    headers.Clear();
+      //  }
 
-        headers.Insert(0, header);
-      }
+      //  headers.Insert(0, header);
+      //}
 
       return headers;
     }

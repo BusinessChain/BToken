@@ -17,10 +17,8 @@ namespace BToken.Accounting
       UTXO UTXO;
       Headerchain.HeaderStream HeaderStreamer;
 
-      Dictionary<byte[], int[]> InputsUnfunded;
-
-      int BATCH_SIZE = 20;
-      int COUNT_TASKS_MAX = 1;
+      int BATCH_SIZE = 100;
+      int COUNT_TASKS_MAX = 4;
       List<Task<UTXOBatch>> GetBlocksTasks = new List<Task<UTXOBatch>>();
       int NextBatchIndexToMerge = 0;
       List<UTXOBatch> BatchesAwaitingMerge = new List<UTXOBatch>();
@@ -30,15 +28,14 @@ namespace BToken.Accounting
       {
         UTXO = uTXO;
         HeaderStreamer = headerStreamer;
-        InputsUnfunded = new Dictionary<byte[], int[]>(new EqualityComparerByteArray());
       }
       
       public async Task BuildAsync()
       {
         int batchIndex = 0;
-        List<HeaderLocation> headerLocations = GetHeaderLocations(BATCH_SIZE);
+        HeaderLocation[] headerLocations = HeaderStreamer.GetHeaderLocations(BATCH_SIZE);
 
-        while (headerLocations.Any())
+        while (headerLocations != null)
         {
           var batch = new UTXOBatch(batchIndex, headerLocations);
                    
@@ -49,7 +46,7 @@ namespace BToken.Accounting
 
           GetBlocksTasks.Add(GetBlocksAsync(batch));
           
-          headerLocations = GetHeaderLocations(BATCH_SIZE);
+          headerLocations = HeaderStreamer.GetHeaderLocations(BATCH_SIZE);
           batchIndex++;
         }
 
@@ -68,17 +65,8 @@ namespace BToken.Accounting
         {
           if (batch.BatchIndex == NextBatchIndexToMerge)
           {
-            foreach (Block block in batch.Blocks)
-            {
-              BuildBlock(block, batch.UTXOs);
-            }
-
-            Console.WriteLine("{0},{1},{2},{3}", 
-              batch.BatchIndex,
-              InputsUnfunded.Count,
-              UTXO.PrimaryCache.Count,
-              UTXO.SecondaryCache.Count);
-
+            MergeBatch(batch);
+            
             BatchesAwaitingMerge.Remove(batch);
 
             NextBatchIndexToMerge++;
@@ -97,30 +85,13 @@ namespace BToken.Accounting
         GetBlocksTasks.Remove(getBlockTaskCompleted);
         return await getBlockTaskCompleted;
       }
-      List<HeaderLocation> GetHeaderLocations(int batchCount)
-      {
-        var headerLocations = new List<HeaderLocation>();
-
-        while (headerLocations.Count < batchCount)
-        {
-          if (!HeaderStreamer.TryReadHeader(out NetworkHeader header, out HeaderLocation chainLocation))
-          {
-            break;
-          }
-
-          headerLocations.Add(chainLocation);
-        }
-
-        return headerLocations;
-      }
       async Task<UTXOBatch> GetBlocksAsync(UTXOBatch batch)
       {
         try
         {
-          foreach (HeaderLocation headerLocation in batch.HeaderLocations)
+          for(int i = 0; i < BATCH_SIZE; i++)
           {
-            Block block = await UTXO.GetBlockAsync(headerLocation.Hash);
-            batch.Blocks.Add(block);
+            batch.Blocks[i] = await UTXO.GetBlockAsync(batch.HeaderLocations[i].Hash);
           }
 
           return batch;
@@ -140,74 +111,34 @@ namespace BToken.Accounting
           return null;
         }
       }
-
-      void BuildBlock(
-        Block block,
-        Dictionary<byte[], byte[]> uTXOs)
+      
+      void MergeBatch(UTXOBatch batch)
       {
-        List<TX> tXs = block.TXs;
-        List<byte[]> tXHashes = block.TXHashes;
-        UInt256 headerHash = block.HeaderHash;
-
-        for (int t = 1; t < tXs.Count; t++)
+        foreach (Block block in batch.Blocks)
         {
-          for (int i = 0; i < tXs[t].Inputs.Count; i++)
-          {
-            InsertInput(tXs[t].Inputs[i]);
-          }
-        }
+          List<TX> tXs = block.TXs;
+          List<byte[]> tXHashes = block.TXHashes;
+          UInt256 headerHash = block.HeaderHash;
 
-        for (int t = 0; t < tXs.Count; t++)
-        {
-          try
+          for (int t = 0; t < tXs.Count; t++)
           {
             byte[] uTXO = CreateUTXO(headerHash, tXs[t].Outputs.Count);
-
-            if (InputsUnfunded.TryGetValue(tXHashes[t], out int[] outputIndexes))
-            {
-              SpendOutputs(uTXO, outputIndexes);
-              InputsUnfunded.Remove(tXHashes[t]);
-            }
-
-            if (!AreAllOutputBitsSpent(uTXO))
-            {
-              UTXO.Write(new KeyValuePair<byte[], byte[]>(tXHashes[t], uTXO));
-            }
+            UTXO.Write(tXHashes[t], uTXO);
           }
-          catch (Exception ex)
+
+          for (int t = 1; t < tXs.Count; t++)
           {
-            Console.WriteLine("insert outputs of tx '{0}', index '{1}', threw exception: '{2}'",
-              tXHashes[t],
-              t,
-              ex.Message);
-          }
-        }
-      }
-
-      void InsertInput(TXInput input)
-      {
-        if (InputsUnfunded.TryGetValue(input.TXIDOutput, out int[] outputIndexes))
-        {
-          for (int i = 0; i < outputIndexes.Length; i++)
-          {
-            if (outputIndexes[i] == input.IndexOutput)
+            for (int i = 0; i < tXs[t].Inputs.Count; i++)
             {
-              throw new UTXOException(string.Format("Double spent output. TX = '{0}', index = '{1}'.",
-                Bytes2HexStringReversed(input.TXIDOutput),
-                input.IndexOutput));
+              UTXO.SpendUTXO(tXs[t].Inputs[i]);
             }
           }
-
-          int[] temp = new int[outputIndexes.Length + 1];
-          outputIndexes.CopyTo(temp, 0);
-          temp[outputIndexes.Length] = input.IndexOutput;
-
-          outputIndexes = temp;
         }
-        else
-        {
-          InputsUnfunded.Add(input.TXIDOutput, new int[1] { input.IndexOutput });
-        }
+
+        Console.WriteLine("{0},{1},{2}",
+          batch.BatchIndex,
+          UTXO.PrimaryCache.Count,
+          UTXO.SecondaryCache.Count);
       }
 
     }

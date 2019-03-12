@@ -142,7 +142,108 @@ namespace BToken.Accounting
 
       return null;
     }
+    void SpendUTXO(TXInput input)
+    {
+      int primaryKey = BitConverter.ToInt32(input.TXIDOutput, 0);
 
+      if (PrimaryCache.TryGetValue(primaryKey, out UTXOCacheItem itemExisting))
+      {
+        if (itemExisting.CountDuplicates > 0)
+        {
+          if(SecondaryCache.TryGetValue(input.TXIDOutput, out byte[] uTXO))
+          {
+            SpendUTXOBit(input.IndexOutput, uTXO);
+
+            if (AreAllOutputBitsSpent(uTXO))
+            {
+              SecondaryCache.Remove(input.TXIDOutput);
+            }
+
+            return;
+          }
+          
+          SpendUTXOBit(input.IndexOutput, itemExisting.Value);
+
+          if (AreAllOutputBitsSpent(itemExisting.Value))
+          {
+            PrimaryCache.Remove(primaryKey);
+
+            foreach(byte[] tXHash in SecondaryCache.Keys)
+            {
+              if(primaryKey == BitConverter.ToInt32(tXHash, 0))
+              {
+                SecondaryCache.TryGetValue(tXHash, out uTXO);
+                SecondaryCache.Remove(tXHash);
+                PrimaryCache.Add(primaryKey, itemExisting);
+              }
+            }
+
+            itemExisting.Value = uTXO;
+            itemExisting.CountDuplicates--;
+          }
+
+          return;
+        }
+
+        SpendUTXOBit(input.IndexOutput, itemExisting.Value);
+        if (AreAllOutputBitsSpent(itemExisting.Value))
+        {
+          PrimaryCache.Remove(primaryKey);
+        }
+      }
+      else
+      {
+        throw new UTXOException(
+          "TXInput references spent or nonexistant TX: '{0}'");
+      }
+    }
+
+    public bool TryGetUTXO(byte[] tXHash, out byte[] utxo)
+    {
+      int primaryKey = BitConverter.ToInt32(tXHash, 0);
+
+      if (PrimaryCache.TryGetValue(primaryKey, out UTXOCacheItem itemExisting))
+      {
+        if (itemExisting.CountDuplicates > 0)
+        {
+          if (SecondaryCache.TryGetValue(tXHash, out utxo))
+          {
+            return true;
+          }
+        }
+
+        utxo = itemExisting.Value;
+        return true;
+      }
+      
+      utxo = null;
+      return false;
+    }
+    
+    void Remove(byte[] tXHash)
+    {
+      int primaryKey = BitConverter.ToInt32(tXHash, 0);
+
+      if (PrimaryCache.Remove(primaryKey))
+      {
+        SecondaryCache.Remove(tXHash);
+      }
+    }
+
+    static void SpendUTXOBit(int outputIndex, byte[] uTXO)
+    {
+      int byteIndex = outputIndex / 8 + CountHeaderIndexBytes;
+      int bitIndex = outputIndex % 8;
+
+      var bitMask = (byte)(0x01 << bitIndex);
+      if ((uTXO[byteIndex] & bitMask) != 0x00)
+      {
+        throw new UTXOException(string.Format(
+          "Output index '{0}' already spent.", outputIndex));
+      }
+
+      uTXO[byteIndex] |= bitMask;
+    }
     static void SpendOutputs(byte[] uTXO, int[] outputIndexes)
     {
       try
@@ -186,49 +287,27 @@ namespace BToken.Accounting
       return new SoapHexBinary(bytesReversed).ToString();
     }
 
-    public void Write(KeyValuePair<byte[], byte[]> uTXO)
+    public void Write(byte[] key, byte[] uTXO)
     {
-      int primaryKey = BitConverter.ToInt32(uTXO.Key, 0);
+      int primaryKey = BitConverter.ToInt32(key, 0);
       if (PrimaryCache.TryGetValue(primaryKey, out UTXOCacheItem itemExisting))
       {
-        SecondaryCache.Add(uTXO.Key, uTXO.Value);
+        SecondaryCache.Add(key, uTXO);
         itemExisting.CountDuplicates++;
-        Archiver.WriteUTXO(uTXO);
+        //Archiver.WriteUTXO(uTXO);
       }
       else
       {
         var item = new UTXOCacheItem
         {
-          Value = uTXO.Value,
+          Value = uTXO,
           CountDuplicates = 0,
         };
 
         PrimaryCache.Add(primaryKey, item);
-        Archiver.WriteUTXO(primaryKey, item.Value);
+        //Archiver.WriteUTXO(primaryKey, item.Value);
       }
     }
-    public bool TryReadValue(byte[] key, out byte[] value)
-    {
-      int primaryKey = BitConverter.ToInt32(key, 0);
-
-      if (PrimaryCache.TryGetValue(primaryKey, out UTXOCacheItem itemExisting))
-      {
-        if (itemExisting.CountDuplicates > 0)
-        {
-          if (SecondaryCache.TryGetValue(key, out value))
-          {
-            return true;
-          }
-        }
-
-        value = itemExisting.Value;
-        return true;
-      }
-
-      value = null;
-      return false;
-    }
-    
     static byte[] CreateUTXO(UInt256 headerHash, int outputsCount)
     {
       byte[] uTXOIndex = new byte[CountHeaderIndexBytes + (outputsCount + 7) / 8];

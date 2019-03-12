@@ -76,8 +76,13 @@ namespace BToken.Chaining
         }
         else
         {
-          Chain chainForked = ForkChain(headerHash);
+          Chain chainForked = new Chain(
+            headerRoot: chainHeader,
+            height: Probe.GetHeight() + 1,
+            accumulatedDifficultyPrevious: AccumulatedDifficulty);
+
           Headerchain.SecondaryChains.Add(chainForked);
+
           return chainForked;
         }
       }
@@ -174,18 +179,7 @@ namespace BToken.Chaining
 
         return timestampsPast[timestampsPast.Count / 2];
       }
-
-      Chain ForkChain(UInt256 headerHash)
-      {
-        ChainHeader header = Probe.Header.HeadersNext.Last();
-        uint height = Probe.GetHeight() + 1;
-
-        return new Chain(
-          headerRoot: Probe.Header,
-          height: height,
-          accumulatedDifficultyPrevious: AccumulatedDifficulty);
-      }
-
+      
       public bool TryDispatch()
       {
         lock (IsDispatchedLOCK)
