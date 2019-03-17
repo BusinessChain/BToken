@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
-using System.Threading.Tasks.Dataflow;
 
 using BToken.Chaining;
 using BToken.Networking;
@@ -15,30 +14,44 @@ namespace BToken.Accounting
     Headerchain Headerchain;
     UTXOParser Parser;
     Network Network;
-
-    const int CountUTXOShards = 16;
-    static int CountHeaderIndexBytes = 4;
-
-    struct UTXOCacheItem
-    {
-      public byte[] Value;
-      public byte CountDuplicates;
-    }
-    Dictionary<int, UTXOCacheItem> PrimaryCache;
-    Dictionary<byte[], byte[]> SecondaryCache;
     UTXOArchiver Archiver;
 
+    Dictionary<int, uint> PrimaryCacheCompressed;
+    Dictionary<byte[], uint> SecondaryCacheCompressed;
+    Dictionary<int, byte[]> PrimaryCache;
+    Dictionary<byte[], byte[]> SecondaryCache;
 
+    const int COUNT_INTEGER_BITS = sizeof(int) * 8;
+    const int COUNT_HEADERINDEX_BITS = 8;
+    const int COUNT_COLLISION_BITS = 8;
+
+    static readonly uint CountCollisionsMax = uint.MaxValue >> (COUNT_INTEGER_BITS - COUNT_COLLISION_BITS);
+    static readonly int CountNonHeaderBits = COUNT_INTEGER_BITS - COUNT_HEADERINDEX_BITS;
+    static readonly int CountNonCollisionBits = COUNT_INTEGER_BITS - COUNT_COLLISION_BITS;
+    static readonly int CountOutputAndExcessBits = COUNT_INTEGER_BITS - COUNT_COLLISION_BITS - COUNT_HEADERINDEX_BITS;
+    static readonly int CountHeaderIndexBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
+    static readonly byte MaskHeaderTailBits = byte.MaxValue << (COUNT_HEADERINDEX_BITS % 8);
+    static readonly int CountTrailingBitsOfCollisionBitsInByte = 8 - COUNT_HEADERINDEX_BITS % 8 + COUNT_COLLISION_BITS;
+    static readonly int CountNonCollisionBitsInByte = 8 - COUNT_COLLISION_BITS;
+    
     public UTXO(Headerchain headerchain, Network network)
     {
+      if (8 < COUNT_HEADERINDEX_BITS % 8 + COUNT_COLLISION_BITS)
+      {
+        throw new InvalidOperationException("Collision bits should not byte overflow (including preceding tail header bits).");
+      }
+
       Headerchain = headerchain;
       Parser = new UTXOParser();
       Network = network;
 
-      PrimaryCache = new Dictionary<int, UTXOCacheItem>();
+      PrimaryCacheCompressed = new Dictionary<int, uint>();
+      SecondaryCacheCompressed = new Dictionary<byte[], uint>(new EqualityComparerByteArray());
+      PrimaryCache = new Dictionary<int, byte[]>();
       SecondaryCache = new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
+
       Archiver = new UTXOArchiver();
-}
+    }
 
     public async Task StartAsync()
     {
@@ -142,98 +155,97 @@ namespace BToken.Accounting
 
       return null;
     }
-    void SpendUTXO(TXInput input)
+
+    void SpendUTXO(byte[] tXIDOutput, int outputIndex)
     {
-      int primaryKey = BitConverter.ToInt32(input.TXIDOutput, 0);
+      int primaryKey = BitConverter.ToInt32(tXIDOutput, 0);
 
-      if (PrimaryCache.TryGetValue(primaryKey, out UTXOCacheItem itemExisting))
+      if (PrimaryCacheCompressed.TryGetValue(primaryKey, out uint uTXOExisting))
       {
-        if (itemExisting.CountDuplicates > 0)
+        uint countCollisions = GetCountCollisions(uTXOExisting);
+        if (countCollisions > 0)
         {
-          if(SecondaryCache.TryGetValue(input.TXIDOutput, out byte[] uTXO))
+          if (SecondaryCacheCompressed.TryGetValue(tXIDOutput, out uint uTXOSecondary))
           {
-            SpendUTXOBit(input.IndexOutput, uTXO);
+            SpendUTXOBit(outputIndex, ref uTXOSecondary);
 
-            if (AreAllOutputBitsSpent(uTXO))
+            if (AreAllOutputBitsSpent(uTXOSecondary))
             {
-              SecondaryCache.Remove(input.TXIDOutput);
+              SecondaryCacheCompressed.Remove(tXIDOutput);
+
+              if (countCollisions == CountCollisionsMax)
+              {
+                int countActualCollisions = 0;
+                foreach(byte[] key in SecondaryCacheCompressed.Keys)
+                {
+                  if(BitConverter.ToInt32(key, 0) == primaryKey)
+                  {
+                    countActualCollisions++;
+                    if(countActualCollisions == CountCollisionsMax)
+                    {
+                      return;
+                    }
+                  }
+                }
+              }
+
+              SetCountCollisions(ref uTXOExisting, --countCollisions);
+              PrimaryCacheCompressed[primaryKey] = uTXOExisting;
+              return;
             }
 
+            SecondaryCacheCompressed[tXIDOutput] = uTXOSecondary;
             return;
           }
-          
-          SpendUTXOBit(input.IndexOutput, itemExisting.Value);
 
-          if (AreAllOutputBitsSpent(itemExisting.Value))
+          SpendUTXOBit(outputIndex, ref uTXOExisting);
+
+          if (AreAllOutputBitsSpent(uTXOExisting))
           {
-            PrimaryCache.Remove(primaryKey);
+            PrimaryCacheCompressed.Remove(primaryKey);
 
-            foreach(byte[] tXHash in SecondaryCache.Keys)
+            foreach (KeyValuePair<byte[], uint> secondaryUTXOCompressed in SecondaryCacheCompressed)
             {
-              if(primaryKey == BitConverter.ToInt32(tXHash, 0))
+              if (primaryKey == BitConverter.ToInt32(secondaryUTXOCompressed.Key, 0))
               {
-                SecondaryCache.TryGetValue(tXHash, out uTXO);
-                SecondaryCache.Remove(tXHash);
-                PrimaryCache.Add(primaryKey, itemExisting);
+                SecondaryCacheCompressed.Remove(secondaryUTXOCompressed.Key);
+                uint secondaryUTXOCompressedValue = secondaryUTXOCompressed.Value;
+                SetCountCollisions(ref secondaryUTXOCompressedValue, --countCollisions);
+                PrimaryCacheCompressed.Add(primaryKey, secondaryUTXOCompressedValue);
+                break;
               }
             }
-
-            itemExisting.Value = uTXO;
-            itemExisting.CountDuplicates--;
           }
 
           return;
         }
 
-        SpendUTXOBit(input.IndexOutput, itemExisting.Value);
-        if (AreAllOutputBitsSpent(itemExisting.Value))
+        SpendUTXOBit(outputIndex, ref uTXOExisting);
+
+        if (AreAllOutputBitsSpent(uTXOExisting))
         {
-          PrimaryCache.Remove(primaryKey);
+          PrimaryCacheCompressed.Remove(primaryKey);
+        }
+        else
+        {
+          PrimaryCacheCompressed[primaryKey] = uTXOExisting;
         }
       }
       else
       {
         throw new UTXOException(
-          "TXInput references spent or nonexistant TX: '{0}'");
+          "TXInput references spent or nonexistant TX.");
       }
     }
-
-    public bool TryGetUTXO(byte[] tXHash, out byte[] utxo)
+    static void SpendUTXOBit(int outputIndex, ref uint uTXO)
     {
-      int primaryKey = BitConverter.ToInt32(tXHash, 0);
-
-      if (PrimaryCache.TryGetValue(primaryKey, out UTXOCacheItem itemExisting))
-      {
-        if (itemExisting.CountDuplicates > 0)
-        {
-          if (SecondaryCache.TryGetValue(tXHash, out utxo))
-          {
-            return true;
-          }
-        }
-
-        utxo = itemExisting.Value;
-        return true;
-      }
-      
-      utxo = null;
-      return false;
+      uint mask = ((uint)1 << (COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS + outputIndex));
+      uTXO |= mask;
     }
-    
-    void Remove(byte[] tXHash)
-    {
-      int primaryKey = BitConverter.ToInt32(tXHash, 0);
-
-      if (PrimaryCache.Remove(primaryKey))
-      {
-        SecondaryCache.Remove(tXHash);
-      }
-    }
-
     static void SpendUTXOBit(int outputIndex, byte[] uTXO)
     {
-      int byteIndex = outputIndex / 8 + CountHeaderIndexBytes;
-      int bitIndex = outputIndex % 8;
+      int byteIndex = (COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS + outputIndex) / 8;
+      int bitIndex = (COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS + outputIndex) % 8;
 
       var bitMask = (byte)(0x01 << bitIndex);
       if ((uTXO[byteIndex] & bitMask) != 0x00)
@@ -244,39 +256,84 @@ namespace BToken.Accounting
 
       uTXO[byteIndex] |= bitMask;
     }
-    static void SpendOutputs(byte[] uTXO, int[] outputIndexes)
-    {
-      try
-      {
-        for (int i = 0; i < outputIndexes.Length; i++)
-        {
-          int byteIndex = outputIndexes[i] / 8 + CountHeaderIndexBytes;
-          int bitIndex = outputIndexes[i] % 8;
 
-          var bitMask = (byte)(0x01 << bitIndex);
-          if ((uTXO[byteIndex] & bitMask) != 0x00)
-          {
-            throw new UTXOException(string.Format("Output index '{0}' already spent.",
-            outputIndexes[i]));
-          }
-          uTXO[byteIndex] |= bitMask;
-        }
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine("Spend '{0}' inputsUnfunded on tXOutputs threw exception '{1}'.",
-          outputIndexes.Length,
-          ex.Message);
-      }
+    static uint GetCountCollisions(uint uTXO)
+    {
+      return (uTXO << CountOutputAndExcessBits) >> CountNonCollisionBits;
+    }
+    static void SetCountCollisions(ref uint uTXO, uint countCollisions)
+    {
+      // einfach auf max setzen wenn zu gross
+      uint mask =  
+        (uint.MaxValue >> (COUNT_INTEGER_BITS - COUNT_COLLISION_BITS) 
+        << COUNT_HEADERINDEX_BITS);
+
+      uTXO &= ~mask;
+      uTXO |= (countCollisions << COUNT_HEADERINDEX_BITS);
+    }
+    static bool AreAllOutputBitsSpent(uint uTXO)
+    {
+      uint mask = uint.MaxValue >> (COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS);
+      mask <<= (COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS);
+
+      return (uTXO & mask) == mask;
     }
     static bool AreAllOutputBitsSpent(byte[] uTXO)
     {
-      for (int i = CountHeaderIndexBytes; i < uTXO.Length; i++)
+      var byteIndex = (COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS) / 8;
+      var countNonOutputsBitsTail = (COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS) % 8;
+      uint mask = uint.MaxValue >> countNonOutputsBitsTail;
+      mask <<= countNonOutputsBitsTail;
+      if ((uTXO[byteIndex ++] & mask) != mask)
       {
-        if (uTXO[i] != 0xFF) { return false; }
+        return false;
+      }
+
+      while (byteIndex < uTXO.Length)
+      {
+        if (uTXO[byteIndex ++] != 0xFF)
+        {
+          return false;
+        }
       }
 
       return true;
+    }
+
+    static bool TryIncrementCollisionBits(byte[] uTXO)
+    {
+
+
+      var countCollisions = 
+        (uTXO[CountHeaderIndexBytes] << CountTrailingBitsOfCollisionBitsInByte) 
+        >> CountNonCollisionBitsInByte;
+
+      if (CountCollisionsMax > countCollisions)
+      {
+        uTXO[CountHeaderIndexBytes] &=
+          (uint)(int.MinValue >> (CountOutputAndExcessBits - 1)) |
+          (uint.MaxValue >> (CountOutputAndExcessBits + COUNT_COLLISION_BITS));
+
+        uTXO |= ++countCollisions << COUNT_HEADERINDEX_BITS;
+        return true;
+      }
+
+      return false;
+    }
+    static bool TryIncrementCollisionBits(ref uint uTXO)
+    {
+      uint countCollisions = (uTXO << CountOutputAndExcessBits) >> CountNonCollisionBits;
+      if (CountCollisionsMax > countCollisions)
+      {
+        uTXO &= 
+          (uint)(int.MinValue >> (CountOutputAndExcessBits - 1)) | 
+          (uint.MaxValue >> (CountOutputAndExcessBits + COUNT_COLLISION_BITS));
+
+        uTXO |= ++countCollisions << COUNT_HEADERINDEX_BITS;
+        return true;
+      }
+
+      return false;
     }
 
     static string Bytes2HexStringReversed(byte[] bytes)
@@ -287,47 +344,104 @@ namespace BToken.Accounting
       return new SoapHexBinary(bytesReversed).ToString();
     }
 
-    public void Write(byte[] key, byte[] uTXO)
+    public void WriteUTXO(byte[] key, UInt256 headerHash, int outputsCount)
     {
+      var lengthUTXOBits = 
+        COUNT_HEADERINDEX_BITS + 
+        COUNT_COLLISION_BITS + 
+        outputsCount;
+
+      byte[] headerHashBytes = headerHash.GetBytes();
       int primaryKey = BitConverter.ToInt32(key, 0);
-      if (PrimaryCache.TryGetValue(primaryKey, out UTXOCacheItem itemExisting))
+
+      if (lengthUTXOBits <= COUNT_INTEGER_BITS)
       {
-        SecondaryCache.Add(key, uTXO);
-        itemExisting.CountDuplicates++;
-        //Archiver.WriteUTXO(uTXO);
+        uint uTXO = 0;
+
+        for(int i = 0; i < CountHeaderIndexBytes; i++)
+        {
+          uTXO |= headerHashBytes[i];
+          uTXO <<= 8;
+        }
+
+        uTXO <<= CountNonHeaderBits;
+        uTXO >>= CountNonHeaderBits;
+
+        uint maskSpendExcessOutputBits = (uint.MaxValue >> lengthUTXOBits) << lengthUTXOBits;
+        uTXO |= maskSpendExcessOutputBits;
+
+        if (PrimaryCacheCompressed.TryGetValue(primaryKey, out uint uTXOExisting))
+        {
+          if(TryIncrementCollisionBits(ref uTXOExisting))
+          {
+            PrimaryCacheCompressed[primaryKey] = uTXOExisting;
+          }
+
+          SecondaryCacheCompressed.Add(key, uTXO);
+          //Archiver.WriteUTXO(key, uTXO);
+        }
+        else
+        {
+          PrimaryCacheCompressed.Add(primaryKey, uTXO);
+          //Archiver.WriteUTXO(primaryKey, uTXOCompressedToInt);
+        }
       }
       else
       {
-        var item = new UTXOCacheItem
-        {
-          Value = uTXO,
-          CountDuplicates = 0,
-        };
+        byte[] uTXO = new byte[(lengthUTXOBits + 7) / 8];
 
-        PrimaryCache.Add(primaryKey, item);
-        //Archiver.WriteUTXO(primaryKey, item.Value);
+        Array.Copy(headerHashBytes, uTXO, CountHeaderIndexBytes);
+        uTXO[CountHeaderIndexBytes] &= MaskHeaderTailBits;
+
+        var numberOfUTXOTailBits = lengthUTXOBits % 8;
+        if (numberOfUTXOTailBits > 0)
+        {
+          uTXO[uTXO.Length - 1] |= (byte)(byte.MaxValue << (8 - lengthUTXOBits % 8));
+        }
+
+        if (PrimaryCache.TryGetValue(primaryKey, out byte[] uTXOExisting))
+        {
+          SecondaryCache.Add(key, uTXO);
+          if (TryIncrementCollisionBits(uTXOExisting))
+          {
+            PrimaryCache[primaryKey] = uTXOExisting;
+          }
+          //Archiver.WriteUTXO(key, uTXO);
+        }
+        else
+        {
+          PrimaryCache.Add(primaryKey, uTXO);
+          //Archiver.WriteUTXO(primaryKey, uTXOCompressedToInt);
+        }
       }
     }
     static byte[] CreateUTXO(UInt256 headerHash, int outputsCount)
     {
-      byte[] uTXOIndex = new byte[CountHeaderIndexBytes + (outputsCount + 7) / 8];
-
-      int numberOfRemainderBits = outputsCount % 8;
-      if (numberOfRemainderBits > 0)
+      var lengthUTXOBits = COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS + outputsCount;
+      byte[] uTXOIndex;
+      if (lengthUTXOBits <= COUNT_INTEGER_BITS)
       {
-        SpendExcessBits(uTXOIndex, numberOfRemainderBits);
+        uTXOIndex = new byte[sizeof(uint)];
+      }
+      else
+      {
+        uTXOIndex = new byte[(lengthUTXOBits + 7) / 8];
       }
 
-      Array.Copy(headerHash.GetBytes(), uTXOIndex, CountHeaderIndexBytes);
+      var lengthHeaderIndexBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
+      Array.Copy(headerHash.GetBytes(), uTXOIndex, lengthHeaderIndexBytes);
+                 
+      var numberOfHeaderTailBits = lengthHeaderIndexBytes % 8;
+      if (numberOfHeaderTailBits > 0)
+      {
+        for (int i = numberOfHeaderTailBits; i < 8; i++)
+        {
+          uTXOIndex[lengthHeaderIndexBytes] &= (byte)~(1 << i);
+        }
+      }
+
 
       return uTXOIndex;
-    }
-    static void SpendExcessBits(byte[] uTXOIndex, int numberOfRemainderBits)
-    {
-      for (int i = numberOfRemainderBits; i < 8; i++)
-      {
-        uTXOIndex[uTXOIndex.Length - 1] |= (byte)(0x01 << i);
-      }
     }
   }
 }
