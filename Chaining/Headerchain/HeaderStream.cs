@@ -12,33 +12,48 @@ namespace BToken.Chaining
   {
     public class HeaderStream
     {
-      ChainHeader GenesisHeader;
-      ChainProbe Probe;
+      ChainHeader Header;
+      uint Height;
+      UInt256 Hash;
 
 
       public HeaderStream(Headerchain headerchain)
       {
-        GenesisHeader = headerchain.GenesisHeader;
-        Probe = new ChainProbe(headerchain.MainChain);
-      }
+        Header = headerchain.GenesisHeader;
+        Height = 0;
 
-      public bool TryReadHeader(out NetworkHeader header, out HeaderLocation chainLocation)
-      {
-        if (Probe.Header != GenesisHeader)
+        if (!TryGetHeaderHash(Header, out Hash))
         {
-          chainLocation = new HeaderLocation(Probe.GetHeight(), Probe.Hash);
-          header = Probe.Header.NetworkHeader;
-
-          Probe.Push();
-
-          return true;
+          Hash = Header.NetworkHeader.ComputeHash();
         }
 
-        chainLocation = null;
-        header = null;
-        return false;
       }
 
+      public HeaderLocation[] GetHeaderLocations(int batchSize)
+      {
+        if (Header == null)
+        {
+          return null;
+        }
+
+        var headerLocations = new HeaderLocation[batchSize];
+
+        for (int i = 0; i < batchSize; i++)
+        {
+          headerLocations[i] = new HeaderLocation(Height, Hash);
+
+          Header = Header.HeadersNext == null ? null : Header.HeadersNext[0];
+
+          if (!TryGetHeaderHash(Header, out Hash))
+          {
+            Hash = Header.NetworkHeader.ComputeHash();
+          }
+
+          Height++;
+        }
+
+        return headerLocations;
+      }
     }
   }
 }

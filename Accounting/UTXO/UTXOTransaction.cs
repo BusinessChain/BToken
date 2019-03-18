@@ -59,28 +59,7 @@ namespace BToken.Accounting
           }
         }
       }
-      async Task SpendUTXOsAsync(TX tX, byte[] tXHash, Dictionary<byte[], byte[]> uTXOs)
-      {
-        foreach (TXInput tXInput in tX.Inputs)
-        {
-          if(uTXOs.TryGetValue(tXInput.TXIDOutput, out byte[] uTXO))
-          {
-            SpendOutputs(uTXO, new int[1] { tXInput.IndexOutput });
 
-            if (AreAllOutputBitsSpent(uTXO))
-            {
-              uTXOs.Remove(tXInput.TXIDOutput);
-
-              await UTXOArchiver.DeleteUTXOAsync(tXInput.TXIDOutput);
-            }
-          }
-          else
-          {
-            throw new UTXOException(string.Format("TXInput references nonexistant TX: '{0}'", tXInput.TXIDOutput));
-          }
-        }
-      }
-      
       async Task RemoveTXOutputIndexesAsync(TX stopTX)
       {
         int i = 0;
@@ -174,55 +153,6 @@ namespace BToken.Accounting
             uTXOIndex,
             NumberHeaderIndexBytes,
             uTXOIndex.Length - NumberHeaderIndexBytes).Array;
-      }
-      async Task SpendTXOutputsReferencedAsync(TX tX, byte[] tXHash)
-      {
-        for (int index = 0; index < tX.Inputs.Count; index++)
-        {
-          TXInput tXInput = tX.Inputs[index];
-
-          try
-          {
-            await SpendTXOutputAsync(tXInput);
-          }
-          catch (UTXOException ex)
-          {
-            throw new UTXOException(
-              string.Format("Spending output referenced in tXInput '{0}' in transaction '{1}' in block '{2}' threw exception.",
-              index, new SoapHexBinary(tXHash), HeaderHash),
-              ex);
-          }
-        }
-      }
-      async Task SpendTXOutputAsync(TXInput tXInput)
-      {
-        var tXOutputTuple = await GetTXOutputTupleAsync(tXInput);
-
-        if (IsOutputSpent(tXOutputTuple.uTXOIndex, tXInput.IndexOutput))
-        {
-          throw new UTXOException(string.Format("TXOutput '{0}', index: '{1}', block index: '{2}' already spent.",
-            tXInput.TXIDOutput,
-            tXInput.IndexOutput,
-            new SoapHexBinary(tXOutputTuple.uTXOKey)));
-        }
-        else
-        {
-          if (Script.Evaluate(tXOutputTuple.tXOutput.LockingScript, tXInput.UnlockingScript))
-          {
-            SpendOutputs(tXOutputTuple.uTXOIndex, new int[1] { tXInput.IndexOutput });
-
-            if (AreAllOutputBitsSpent(tXOutputTuple.uTXOIndex))
-            {
-              UTXO.SecondaryCache.Remove(tXOutputTuple.uTXOKey);
-            }
-          }
-          else
-          {
-            throw new UTXOException(string.Format("Input script '{0}' failed to unlock output script '{1}'",
-              new SoapHexBinary(tXInput.UnlockingScript),
-              new SoapHexBinary(tXOutputTuple.tXOutput.LockingScript)));
-          }
-        }
       }
       async Task<(byte[] uTXOKey, byte[] uTXOIndex, TXOutput tXOutput)>
         GetTXOutputTupleAsync(TXInput tXInput)

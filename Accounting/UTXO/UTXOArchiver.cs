@@ -31,14 +31,15 @@ namespace BToken.Accounting
            filePath,
            FileMode.OpenOrCreate,
            FileAccess.ReadWrite,
-           FileShare.None);
+           FileShare.Read);
         }
         
         FileSecondaryShard = new FileStream(
            Path.Combine(PathUTXOArchive, "SecondaryShard"),
            FileMode.OpenOrCreate,
            FileAccess.ReadWrite,
-           FileShare.None);
+           FileShare.Read,
+           bufferSize: 16);
       }
 
       public void WriteUTXO(int primaryKey, byte[] uTXO)
@@ -53,13 +54,13 @@ namespace BToken.Accounting
         shard.Write(uTXOLength, 0, uTXOLength.Length);
         shard.Write(uTXO, 0, uTXO.Length);
       }
-      public void WriteUTXO(KeyValuePair<byte[], byte[]> uTXO)
+      public void WriteUTXO(byte[] key, byte[] uTXO)
       {
-        byte[] uTXOLength = VarInt.GetBytes(uTXO.Value.Length).ToArray();
+        byte[] uTXOLength = VarInt.GetBytes(uTXO.Length).ToArray();
 
-        FileSecondaryShard.Write(uTXO.Key, 0, uTXO.Key.Length);
+        FileSecondaryShard.Write(key, 0, key.Length);
         FileSecondaryShard.Write(uTXOLength, 0, uTXOLength.Length);
-        FileSecondaryShard.Write(uTXO.Value, 0, uTXO.Value.Length);
+        FileSecondaryShard.Write(uTXO, 0, uTXO.Length);
       }
       public static async Task DeleteUTXOAsync(byte[] tXHash)
       {
