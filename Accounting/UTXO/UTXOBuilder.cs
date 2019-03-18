@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -16,7 +17,7 @@ namespace BToken.Accounting
       UTXO UTXO;
       Headerchain.HeaderStream HeaderStreamer;
 
-      int BLOCK_BATCH_SIZE = 50;
+      int BLOCK_BATCH_SIZE = 100;
       int COUNT_TASKS_MAX = 4;
       List<Task<UTXOBatch>> GetBlocksTasks = new List<Task<UTXOBatch>>();
       int NextBatchIndexToMerge;
@@ -84,6 +85,23 @@ namespace BToken.Accounting
 
             for (int t = 0; t < tXs.Count; t++)
             {
+              // debug
+
+              byte[] outputTXHash = new byte[tXHashes[t].Length];
+              tXHashes[t].CopyTo(outputTXHash, 0);
+              Array.Reverse(outputTXHash);
+              if (new SoapHexBinary(outputTXHash).ToString() == "656BA41AD763B63FD5882696D4D190DC8A05CA7E1F5042F2C687118F62A526EC")
+              {
+                byte[] inputTXHash = new byte[tXHashes[t].Length];
+                tXHashes[t].CopyTo(inputTXHash, 0);
+                Array.Reverse(inputTXHash);
+
+                Console.WriteLine("Write outputs of TX '{0}' to UTXO",
+                  new SoapHexBinary(outputTXHash));
+              }
+
+              // end debug
+
               UTXO.WriteUTXO(tXHashes[t], headerHash, tXs[t].Outputs.Count);
             }
 
@@ -93,6 +111,31 @@ namespace BToken.Accounting
               {
                 try
                 {
+                  // debug
+
+                  byte[] outputTXHash = new byte[tXHashes[t].Length];
+                  tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
+                  Array.Reverse(outputTXHash);
+                  string outputTXHashString = new SoapHexBinary(outputTXHash).ToString();
+
+                  if (outputTXHashString == "656BA41AD763B63FD5882696D4D190DC8A05CA7E1F5042F2C687118F62A526EC")
+                  {
+                    byte[] inputTXHash = new byte[tXHashes[t].Length];
+                    tXHashes[t].CopyTo(inputTXHash, 0);
+                    Array.Reverse(inputTXHash);
+
+                    Console.WriteLine("Input '{0}' in TX '{1}' \n attempts to spend " +
+                      "output '{2}' in TX '{3}'.",
+                      i,
+                      new SoapHexBinary(inputTXHash),
+                      tXs[t].Inputs[i].IndexOutput,
+                      new SoapHexBinary(outputTXHash));
+                  }
+
+                  // end debug
+
+
+
                   UTXO.SpendUTXO(
                     tXs[t].Inputs[i].TXIDOutput, 
                     tXs[t].Inputs[i].IndexOutput);
@@ -107,13 +150,13 @@ namespace BToken.Accounting
                   tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
                   Array.Reverse(outputTXHash);
 
-                  //Console.WriteLine("Input '{0}' in TX '{1}' \n failed to spend " +
-                  //  "output '{2}' in TX '{3}': \n'{4}'.",
-                  //  i,
-                  //  new SoapHexBinary(inputTXHash),
-                  //  tXs[t].Inputs[i].IndexOutput,
-                  //  new SoapHexBinary(outputTXHash),
-                  //  ex.Message);
+                  Console.WriteLine("Input '{0}' in TX '{1}' \n failed to spend " +
+                    "output '{2}' in TX '{3}': \n'{4}'.",
+                    i,
+                    new SoapHexBinary(inputTXHash),
+                    tXs[t].Inputs[i].IndexOutput,
+                    new SoapHexBinary(outputTXHash),
+                    ex.Message);
                 }
               }
             }
