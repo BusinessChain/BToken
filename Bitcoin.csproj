@@ -15,6 +15,7 @@
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
     <TargetFrameworkProfile />
+    <IsWebBootstrapper>false</IsWebBootstrapper>
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -27,7 +28,6 @@
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
-    <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
   </PropertyGroup>
@@ -79,6 +79,9 @@
     <Compile Include="Accounting\UTXO\UTXOArchiver.cs" />
     <Compile Include="Accounting\UTXO\UTXOBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOBuilder.cs" />
+    <Compile Include="Accounting\UTXO\UTXOCache.cs" />
+    <Compile Include="Accounting\UTXO\UTXOCacheByteArray.cs" />
+    <Compile Include="Accounting\UTXO\UTXOCacheUInt32.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\Script.cs" />
@@ -91,7 +94,6 @@
     <Compile Include="Accounting\UTXO\GenesisBlock.cs" />
     <Compile Include="Accounting\UTXO\TX.cs" />
     <Compile Include="Accounting\UTXO\UTXOIndex.cs" />
-    <Compile Include="Accounting\UTXO\UTXOTransaction.cs" />
     <Compile Include="Accounting\UTXO\UTXOException.cs" />
     <Compile Include="Accounting\Wallet\Wallet.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />

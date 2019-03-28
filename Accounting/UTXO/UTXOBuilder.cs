@@ -81,7 +81,7 @@ namespace BToken.Accounting
             Block block = batch.Blocks[b];
             List<TX> tXs = block.TXs;
             List<byte[]> tXHashes = block.TXHashes;
-            UInt256 headerHash = block.HeaderHash;
+            byte[] headerHashBytes = block.HeaderHash.GetBytes();
 
             for (int t = 0; t < tXs.Count; t++)
             {
@@ -90,7 +90,7 @@ namespace BToken.Accounting
               byte[] outputTXHash = new byte[tXHashes[t].Length];
               tXHashes[t].CopyTo(outputTXHash, 0);
               Array.Reverse(outputTXHash);
-              if (new SoapHexBinary(outputTXHash).ToString() == "656BA41AD763B63FD5882696D4D190DC8A05CA7E1F5042F2C687118F62A526EC")
+              if (new SoapHexBinary(outputTXHash).ToString() == "C02D4826DEE0F0A810E9DC3DB49A484CDF90832C56991F0EBA88418B80C7EC29")
               {
                 byte[] inputTXHash = new byte[tXHashes[t].Length];
                 tXHashes[t].CopyTo(inputTXHash, 0);
@@ -102,7 +102,7 @@ namespace BToken.Accounting
 
               // end debug
 
-              UTXO.WriteUTXO(tXHashes[t], headerHash, tXs[t].Outputs.Count);
+              UTXO.InsertUTXO(tXHashes[t], headerHashBytes, tXs[t].Outputs.Count);
             }
 
             for (int t = 1; t < tXs.Count; t++)
@@ -118,7 +118,7 @@ namespace BToken.Accounting
                   Array.Reverse(outputTXHash);
                   string outputTXHashString = new SoapHexBinary(outputTXHash).ToString();
 
-                  if (outputTXHashString == "656BA41AD763B63FD5882696D4D190DC8A05CA7E1F5042F2C687118F62A526EC")
+                  if (outputTXHashString == "C02D4826DEE0F0A810E9DC3DB49A484CDF90832C56991F0EBA88418B80C7EC29")
                   {
                     byte[] inputTXHash = new byte[tXHashes[t].Length];
                     tXHashes[t].CopyTo(inputTXHash, 0);
@@ -133,7 +133,6 @@ namespace BToken.Accounting
                   }
 
                   // end debug
-
 
 
                   UTXO.SpendUTXO(
@@ -166,10 +165,10 @@ namespace BToken.Accounting
 
           Console.WriteLine("{0},{1},{2},{3},{4},{5}",
             batch.BatchIndex,
-            UTXO.PrimaryCacheCompressed.Count,
-            UTXO.SecondaryCacheCompressed.Count,
-            UTXO.PrimaryCache.Count,
-            UTXO.SecondaryCache.Count,
+            UTXO.GetCountPrimaryCacheItemsUInt32(),
+            UTXO.GetCountSecondaryCacheItemsUInt32(),
+            UTXO.GetCountPrimaryCacheItemsByteArray(),
+            UTXO.GetCountSecondaryCacheItemsByteArray(),
             StopWatchMergeBatch.ElapsedMilliseconds);
 
           NextBatchIndexToMerge++;
