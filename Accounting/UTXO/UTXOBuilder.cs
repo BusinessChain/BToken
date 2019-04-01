@@ -17,12 +17,12 @@ namespace BToken.Accounting
       UTXO UTXO;
       Headerchain.HeaderStream HeaderStreamer;
 
-      int BLOCK_BATCH_SIZE = 100;
-      int COUNT_TASKS_MAX = 4;
+      int BLOCK_BATCH_SIZE = 500;
       List<Task<UTXOBatch>> GetBlocksTasks = new List<Task<UTXOBatch>>();
       int NextBatchIndexToMerge;
       List<UTXOBatch> BatchesAwaitingMerge = new List<UTXOBatch>();
 
+      Stopwatch StopWatchBuild= new Stopwatch();
       Stopwatch StopWatchMergeBatch = new Stopwatch();
       Stopwatch StopWatchGetBlocks = new Stopwatch();
 
@@ -35,6 +35,8 @@ namespace BToken.Accounting
       
       public async Task BuildAsync()
       {
+        StopWatchBuild.Start();
+
         Console.WriteLine(
           "BatchIndex," +
           "PrimaryCacheCompressed," +
@@ -48,6 +50,13 @@ namespace BToken.Accounting
         
         while (headerLocations != null)
         {
+          // Debug
+          if(batchIndex == 100)
+          {
+            break;
+          }
+          // Debug end
+
           var batch = new UTXOBatch(batchIndex, headerLocations);
                    
           if (GetBlocksTasks.Count >= COUNT_TASKS_MAX)
@@ -56,7 +65,8 @@ namespace BToken.Accounting
             MergeBatches(batchesBlockTaskCompleted);
           }
 
-          GetBlocksTasks.Add(GetBlocksAsync(batch));
+          Task<UTXOBatch> getBlocksTask = GetBlocksAsync(batch);
+          GetBlocksTasks.Add(getBlocksTask);
           
           headerLocations = HeaderStreamer.GetHeaderLocations(BLOCK_BATCH_SIZE);
           batchIndex++;
@@ -68,7 +78,8 @@ namespace BToken.Accounting
           MergeBatches(batchesBlockTaskCompleted);
         }
 
-        Console.WriteLine("UTXO build complete");
+        StopWatchBuild.Stop();
+        Console.WriteLine("UTXO build complete, time: '{0}'", StopWatchBuild.Elapsed);
       }
       void MergeBatches(List<UTXOBatch> batches)
       {
@@ -206,14 +217,18 @@ namespace BToken.Accounting
       {
         try
         {
+          Console.WriteLine("Start loading blocks for batch '{0}'", batch.BatchIndex);
+
           StopWatchGetBlocks.Restart();
 
-          for (int i = 0; i < BLOCK_BATCH_SIZE; i++)
-          {
-            batch.Blocks[i] = await UTXO.GetBlockAsync(batch.HeaderLocations[i].Hash);
-          }
+          UInt256[] hashes = batch.HeaderLocations.Select(h => h.Hash).ToArray();
+          batch.Blocks = await UTXO.GetBlocksAsync(hashes);
 
           StopWatchGetBlocks.Stop();
+
+          Console.WriteLine("Finished loading blocks for batch '{0}', time: '{1}'", 
+            batch.BatchIndex,
+            StopWatchGetBlocks.Elapsed);
 
           return batch;
         }

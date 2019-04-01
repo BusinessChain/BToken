@@ -75,7 +75,7 @@ namespace BToken
                 case "headers":
                   var headersMessage = new HeadersMessage(inboundMessage);
                   List<UInt256> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
-                  await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
+                  //await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
                   break;
 
                 case "block":

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics;
+using System;
 using System.Linq;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
@@ -10,7 +11,10 @@ namespace BToken.Accounting
 {
   partial class BlockArchiver
   {
-    static string PathBlockArchive = "I:\\BlockArchive";
+    static string[] ShardPaths = {
+    "J:\\BlockArchive",
+    "I:\\BlockArchive"
+    };
     const int PrefixBlockFolderBytes = 2;
 
 
@@ -59,14 +63,14 @@ namespace BToken.Accounting
     {
       string fileRootPath = CreateFileRootPath(hash);
       string filePath = Path.Combine(fileRootPath, hash.ToString());
-
+      
       using (FileStream fileStream = new FileStream(
         filePath,
         FileMode.Open,
         FileAccess.Read,
         FileShare.Read,
         bufferSize: 8192,
-        useAsync: true))
+        useAsync: false))
       {
         byte[] blockBytes = await ReadBytesAsync(fileStream);
         return NetworkBlock.ReadBlock(blockBytes);
@@ -77,9 +81,16 @@ namespace BToken.Accounting
       byte[] prefixBlockFolderBytes = blockHash.GetBytes().Take(PrefixBlockFolderBytes).ToArray();
       Array.Reverse(prefixBlockFolderBytes);
       string blockHashIndex = new SoapHexBinary(prefixBlockFolderBytes).ToString();
-      return Path.Combine(PathBlockArchive, blockHashIndex);
+      byte byteID = prefixBlockFolderBytes.First();
+      string shardPath = GetShardPath(byteID);
+      return Path.Combine(GetShardPath(byteID), blockHashIndex);
     }
-       
+    static string GetShardPath(byte byteID)
+    {
+      var shardIndex = byteID % 2;
+      return ShardPaths[shardIndex];
+    }
+
     static async Task<byte[]> ReadBytesAsync(Stream stream)
     {
       var buffer = new byte[stream.Length];

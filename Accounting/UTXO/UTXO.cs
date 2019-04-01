@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
@@ -44,7 +45,9 @@ namespace BToken.Accounting
     static readonly int OutputBitsByteIndex = CountHeaderPlusCollisionBits / 8;
     static readonly int CountNonOutputsBitsInByte = CountHeaderPlusCollisionBits % 8;
     static readonly byte MaskAllOutputsBitsInByte = (byte)(byte.MaxValue << CountNonOutputsBitsInByte);
-
+    
+    Stopwatch StopWatchGetBlock = new Stopwatch();
+    TimeSpan AccumulatedLoadTime;
 
     public UTXO(Headerchain headerchain, Network network)
     {
@@ -71,7 +74,21 @@ namespace BToken.Accounting
       await uTXOBuilder.BuildAsync();
     }
 
-    async Task<Block> GetBlockAsync(UInt256 hash)
+    async Task<Block[]> GetBlocksAsync(UInt256[] hashes)
+    {
+      var blocks = new Block[hashes.Length];
+      var getBlockTasks = new Task[hashes.Length];
+
+      Parallel.For(0, hashes.Length,
+                    i => {
+                      getBlockTasks[i] = GetBlockAsync(i, hashes[i], blocks);
+                    });
+      
+      await Task.WhenAll(getBlockTasks);
+
+      return blocks;
+    }
+    async Task GetBlockAsync(int i, UInt256 hash, Block[] blocks)
     {
       try
       {
@@ -81,23 +98,23 @@ namespace BToken.Accounting
 
         List<TX> tXs = Parser.Parse(block.Payload);
         ValidateMerkleRoot(block.Header.MerkleRoot, tXs, out List<byte[]> tXHashes);
-        return new Block(block.Header, hash, tXs, tXHashes);
+        blocks[i] = new Block(block.Header, hash, tXs, tXHashes);
       }
       catch (UTXOException)
       {
         BlockArchiver.DeleteBlock(hash);
 
-        return await DownloadBlockAsync(hash);
+        blocks[i] = await DownloadBlockAsync(hash);
       }
       catch (ArgumentException)
       {
         BlockArchiver.DeleteBlock(hash);
 
-        return await DownloadBlockAsync(hash);
+        blocks[i] = await DownloadBlockAsync(hash);
       }
       catch (IOException)
       {
-        return await DownloadBlockAsync(hash);
+        blocks[i] = await DownloadBlockAsync(hash);
       }
     }
     async Task<Block> DownloadBlockAsync(UInt256 hash)
@@ -128,40 +145,7 @@ namespace BToken.Accounting
         throw new UTXOException("Payload corrupted.");
       }
     }
-
-    public async Task NotifyBlockHeadersAsync(List<UInt256> hashes, INetworkChannel channel)
-    {
-      foreach (UInt256 hash in hashes)
-      {
-        Block block = await GetBlockAsync(hash);
-      }
-    }
-
-    async Task<TX> ReadTXAsync(byte[] tXHash, byte[] headerIndex)
-    {
-      List<Headerchain.ChainHeader> headers = Headerchain.ReadHeaders(headerIndex);
-
-      foreach (var header in headers)
-      {
-        if (!Headerchain.TryGetHeaderHash(header, out UInt256 hash))
-        {
-          hash = header.NetworkHeader.ComputeHash();
-        }
-
-        Block block = await GetBlockAsync(hash);
-
-        for (int t = 0; t < block.TXs.Count; t++)
-        {
-          if (new UInt256(block.TXHashes[t]).Equals(new UInt256(tXHash)))
-          {
-            return block.TXs[t];
-          }
-        }
-      }
-
-      return null;
-    }
-
+        
     void SpendUTXO(byte[] tXIDOutput, int outputIndex)
     {
       int primaryKey = BitConverter.ToInt32(tXIDOutput, 0);
