@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics;
+using System;
 using System.Linq;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
@@ -10,7 +11,12 @@ namespace BToken.Accounting
 {
   partial class BlockArchiver
   {
-    static string PathBlockArchive = "I:\\BlockArchive";
+    static string[] ShardPaths = {
+    "I:\\BlockArchive",
+    "J:\\BlockArchive",
+    "D:\\BlockArchive",
+    "C:\\BlockArchive"
+    };
     const int PrefixBlockFolderBytes = 2;
 
 
@@ -54,19 +60,22 @@ namespace BToken.Accounting
       string filePath = Path.Combine(fileRootPath, hash.ToString());
       File.Delete(filePath);
     }
-
-    public static async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
+    public static bool Exists(UInt256 hash, out string filePath)
     {
       string fileRootPath = CreateFileRootPath(hash);
-      string filePath = Path.Combine(fileRootPath, hash.ToString());
+      filePath = Path.Combine(fileRootPath, hash.ToString());
 
+      return File.Exists(filePath);
+    }
+    public static async Task<NetworkBlock> ReadBlockAsync(string filePath)
+    {      
       using (FileStream fileStream = new FileStream(
         filePath,
         FileMode.Open,
         FileAccess.Read,
         FileShare.Read,
         bufferSize: 8192,
-        useAsync: true))
+        useAsync: false))
       {
         byte[] blockBytes = await ReadBytesAsync(fileStream);
         return NetworkBlock.ReadBlock(blockBytes);
@@ -77,9 +86,15 @@ namespace BToken.Accounting
       byte[] prefixBlockFolderBytes = blockHash.GetBytes().Take(PrefixBlockFolderBytes).ToArray();
       Array.Reverse(prefixBlockFolderBytes);
       string blockHashIndex = new SoapHexBinary(prefixBlockFolderBytes).ToString();
-      return Path.Combine(PathBlockArchive, blockHashIndex);
+      byte byteID = prefixBlockFolderBytes.First();
+      string shardPath = GetShardPath(byteID);
+      return Path.Combine(GetShardPath(byteID), blockHashIndex);
     }
-       
+    static string GetShardPath(byte byteID)
+    {
+      return ShardPaths[byteID % ShardPaths.Length];
+    }
+
     static async Task<byte[]> ReadBytesAsync(Stream stream)
     {
       var buffer = new byte[stream.Length];
