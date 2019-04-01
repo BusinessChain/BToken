@@ -12,8 +12,10 @@ namespace BToken.Accounting
   partial class BlockArchiver
   {
     static string[] ShardPaths = {
+    "I:\\BlockArchive",
     "J:\\BlockArchive",
-    "I:\\BlockArchive"
+    "D:\\BlockArchive",
+    "C:\\BlockArchive"
     };
     const int PrefixBlockFolderBytes = 2;
 
@@ -58,12 +60,15 @@ namespace BToken.Accounting
       string filePath = Path.Combine(fileRootPath, hash.ToString());
       File.Delete(filePath);
     }
-
-    public static async Task<NetworkBlock> ReadBlockAsync(UInt256 hash)
+    public static bool Exists(UInt256 hash, out string filePath)
     {
       string fileRootPath = CreateFileRootPath(hash);
-      string filePath = Path.Combine(fileRootPath, hash.ToString());
-      
+      filePath = Path.Combine(fileRootPath, hash.ToString());
+
+      return File.Exists(filePath);
+    }
+    public static async Task<NetworkBlock> ReadBlockAsync(string filePath)
+    {      
       using (FileStream fileStream = new FileStream(
         filePath,
         FileMode.Open,
@@ -87,8 +92,7 @@ namespace BToken.Accounting
     }
     static string GetShardPath(byte byteID)
     {
-      var shardIndex = byteID % 2;
-      return ShardPaths[shardIndex];
+      return ShardPaths[byteID % ShardPaths.Length];
     }
 
     static async Task<byte[]> ReadBytesAsync(Stream stream)

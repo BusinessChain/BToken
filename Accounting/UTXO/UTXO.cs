@@ -92,13 +92,21 @@ namespace BToken.Accounting
     {
       try
       {
-        NetworkBlock block = await BlockArchiver.ReadBlockAsync(hash);
+        if (BlockArchiver.Exists(hash, out string filePath))
+        {
+          NetworkBlock networkBlock = await BlockArchiver.ReadBlockAsync(filePath);
 
-        ValidateHeaderHash(block.Header, hash);
+          ValidateNetworkBlock(
+            networkBlock,
+            hash,
+            out Block block);
 
-        List<TX> tXs = Parser.Parse(block.Payload);
-        ValidateMerkleRoot(block.Header.MerkleRoot, tXs, out List<byte[]> tXHashes);
-        blocks[i] = new Block(block.Header, hash, tXs, tXHashes);
+          blocks[i] = block;
+        }
+        else
+        {
+          blocks[i] = await DownloadBlockAsync(hash);
+        }
       }
       catch (UTXOException)
       {
@@ -106,30 +114,39 @@ namespace BToken.Accounting
 
         blocks[i] = await DownloadBlockAsync(hash);
       }
-      catch (ArgumentException)
-      {
-        BlockArchiver.DeleteBlock(hash);
+    }
 
-        blocks[i] = await DownloadBlockAsync(hash);
-      }
-      catch (IOException)
+    void ValidateNetworkBlock(
+      NetworkBlock networkBlock, 
+      UInt256 hash,
+      out Block block)
+    {
+      if (!hash.Equals(networkBlock.Header.ComputeHash()))
       {
-        blocks[i] = await DownloadBlockAsync(hash);
+        throw new UTXOException("Unexpected header hash.");
       }
+
+      List<TX> tXs = Parser.Parse(networkBlock.Payload);
+      if (!networkBlock.Header.MerkleRoot.Equals(Parser.ComputeMerkleRootHash(tXs, out List<byte[]> tXHashes)))
+      {
+        throw new UTXOException("Payload corrupted.");
+      }
+
+      block = new Block(networkBlock.Header, hash, tXs, tXHashes);
     }
     async Task<Block> DownloadBlockAsync(UInt256 hash)
     {
       var sessionBlockDownload = new SessionBlockDownload(hash);
       await Network.ExecuteSessionAsync(sessionBlockDownload);
-      NetworkBlock networkBlock = sessionBlockDownload.Block;
 
-      ValidateHeaderHash(networkBlock.Header, hash);
-      List<TX> tXs = Parser.Parse(networkBlock.Payload);
-      ValidateMerkleRoot(networkBlock.Header.MerkleRoot, tXs, out List<byte[]> tXHashes);
+      ValidateNetworkBlock(
+        sessionBlockDownload.Block,
+        hash,
+        out Block block);
 
-      Block archiverBlock = new Block(networkBlock.Header, hash, tXs, tXHashes);
-      await BlockArchiver.ArchiveBlockAsync(archiverBlock);
-      return archiverBlock;
+      await BlockArchiver.ArchiveBlockAsync(block);
+
+      return block;
     }
     static void ValidateHeaderHash(NetworkHeader header, UInt256 hash)
     {

@@ -77,7 +77,6 @@
   <ItemGroup>
     <Compile Include="Accounting\UTXO\Block.cs" />
     <Compile Include="Accounting\UTXO\UTXOArchiver.cs" />
-    <Compile Include="Accounting\UTXO\UTXOBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOBuilder.cs" />
     <Compile Include="Accounting\UTXO\UTXOCache.cs" />
     <Compile Include="Accounting\UTXO\UTXOCacheByteArray.cs" />
