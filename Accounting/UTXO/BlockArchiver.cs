@@ -67,18 +67,24 @@ namespace BToken.Accounting
 
       return File.Exists(filePath);
     }
-    public static async Task<NetworkBlock> ReadBlockAsync(string filePath)
-    {      
+    public static bool Exists(int batchIndex, out string filePath)
+    {
+      string shardPath = ShardPaths[batchIndex % ShardPaths.Length];
+      filePath = Path.Combine(shardPath, batchIndex.ToString());
+
+      return File.Exists(filePath);
+    }
+    public static async Task<byte[]> ReadBlockBatchAsync(string filePath)
+    {
       using (FileStream fileStream = new FileStream(
         filePath,
         FileMode.Open,
         FileAccess.Read,
         FileShare.Read,
         bufferSize: 8192,
-        useAsync: false))
+        useAsync: true))
       {
-        byte[] blockBytes = await ReadBytesAsync(fileStream);
-        return NetworkBlock.ReadBlock(blockBytes);
+        return await ReadBytesAsync(fileStream); ;
       }
     }
     static string CreateFileRootPath(UInt256 blockHash)

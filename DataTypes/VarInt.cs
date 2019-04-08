@@ -52,7 +52,33 @@ namespace BToken
         length = 9;
       }
     }
+    public static Int32 ParseVarInt32(byte[] buffer, ref int index)
+    {
+      byte[] value = new byte[4];
+      int prefix = buffer[index++];
 
+      if (prefix == 0xfd)
+      {
+        Array.Copy(buffer, index, value, 0, 2);
+        index += 2;
+      }
+      else if (prefix == 0xfe)
+      {
+        Array.Copy(buffer, index, value, 0, 4);
+        index += 4;
+      }
+      else if (prefix == 0xff)
+      {
+        throw new ArgumentException(string.Format(
+          "The VarInt in buffer at index {0} is not Int32 because it has prefix 0xFF which is Int64", index));
+      }
+      else
+      {
+        value[0] = (byte)prefix;
+      }
+
+      return BitConverter.ToInt32(value, 0);
+    }
     public static UInt64 ParseVarInt(Stream stream, out int lengthVarInt)
     {
       byte[] value = new byte[8];
