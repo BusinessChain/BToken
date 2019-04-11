@@ -37,19 +37,6 @@ namespace BToken.Networking
     }
 
 
-    public static bool TryReadBlock(
-      byte[] blockBytes, 
-      ref int index, 
-      out NetworkBlock networkBlock)
-    {
-      NetworkHeader header = NetworkHeader.ParseHeader(
-        blockBytes, 
-        out int txCount, 
-        ref index);
-
-      return new NetworkBlock(header, txCount, blockBytes);
-    }
-
     public static NetworkBlock ReadBlock(byte[] blockBytes)
     {
       int index = 0;

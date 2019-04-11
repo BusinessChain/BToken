@@ -12,14 +12,14 @@ namespace BToken.Accounting
   {
     public UInt256 HeaderHash;
     public NetworkHeader Header;
-    public List<TX> TXs;
-    public List<byte[]> TXHashes;
+    public TX[] TXs;
+    public byte[][] TXHashes;
 
     public Block(
       NetworkHeader header,
       UInt256 headerHash, 
-      List<TX> tXs, 
-      List<byte[]> tXHashes)
+      TX[] tXs,
+      byte[][] tXHashes)
     {
       Header = header;
       HeaderHash = headerHash;

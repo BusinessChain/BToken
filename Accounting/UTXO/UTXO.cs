@@ -2,13 +2,13 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 using BToken.Chaining;
 using BToken.Networking;
+using BToken.Hashing;
 
 namespace BToken.Accounting
 {
@@ -18,6 +18,7 @@ namespace BToken.Accounting
     UTXOParser Parser;
     Network Network;
     UTXOArchiver Archiver;
+    UTXOBuilder Builder;
 
     UTXOCache[] Caches;
 
@@ -49,11 +50,10 @@ namespace BToken.Accounting
     Stopwatch StopWatchGetBlock = new Stopwatch();
     TimeSpan AccumulatedLoadTime;
 
-    const int SIZE_BATCH_BLOCKS = 8;
     const int COUNT_BATCHES_PARALLEL = 4;
     byte[][] QueueMergeBlockBatches = new byte[COUNT_BATCHES_PARALLEL][];
     readonly object BatchIndexLOCK = new object();
-    int BatchIndex = 0;
+    int BatchIndexIteration = 0;
 
     public UTXO(Headerchain headerchain, Network network)
     {
@@ -83,11 +83,6 @@ namespace BToken.Accounting
     }
     async Task BuildAsync()
     {
-      var stopWatchBuild = new Stopwatch();
-      var stopWatchGetBlocks = new Stopwatch();
-
-      stopWatchBuild.Start();
-
       Console.WriteLine(
         "BatchIndex," +
         "PrimaryCacheCompressed," +
@@ -96,241 +91,252 @@ namespace BToken.Accounting
         "SecondaryCache," +
         "Merge time");
 
-      var headerHashesBatches = new UInt256[COUNT_BATCHES_PARALLEL][];
+      var headerStream = new Headerchain.HeaderStream(Headerchain);
       int batchIndexOffset = 0;
+      bool parallelBatchesExistInArchive = true;
       do
       {
-        Console.WriteLine("Start merging blocks for batch '{0}'", batchIndexOffset);
-        stopWatchGetBlocks.Restart();
-
-        Parallel.For(0, COUNT_BATCHES_PARALLEL,
-          async i => {
-            byte[] blocks = await GetBlockBatchAsync(batchIndexOffset + i);
-            
-            MergeBatch(i, blocks);
-          });
-
-        stopWatchGetBlocks.Stop();
-        Console.WriteLine("Finished merging blocks for batchOffset '{0}', time: '{1}'",
-          batchIndexOffset,
-          stopWatchGetBlocks.Elapsed);
-
-        batchIndexOffset += COUNT_BATCHES_PARALLEL;
-      } while (!headerHashesBatches.Any(h => h == null));
-
-    }
-
-    void MergeBatch(int batchIndex, byte[] blockBatchBytes)
-    {
-      lock (BatchIndexLOCK)
-      {
-        if (BatchIndex != batchIndex)
+        Parallel.For(0, COUNT_BATCHES_PARALLEL, async i =>
         {
-          QueueMergeBlockBatches[batchIndex] = blockBatchBytes;
-          return;
-        }
-      }
-
-      var stopWatchMergeBatch = new Stopwatch();
-      while (true)
-      {
-        stopWatchMergeBatch.Restart();
-        
-        int startIndex = 0;
-
-        var block = Block.TryReadBlock(blockBatchBytes, ref startIndex);
-
-        for (int b = 0; b < SIZE_BATCH_BLOCKS; b++)
-        {
-          List<TX> tXs = block.TXs;
-          List<byte[]> tXHashes = block.TXHashes;
-          byte[] headerHashBytes = block.HeaderHash.GetBytes();
-
-          for (int t = 0; t < tXs.Count; t++)
+          if (BlockArchiver.Exists(batchIndexOffset + i, out string filePath))
           {
-            // debug
+            byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
 
-            byte[] outputTXHash = new byte[tXHashes[t].Length];
-            tXHashes[t].CopyTo(outputTXHash, 0);
-            Array.Reverse(outputTXHash);
-            if (new SoapHexBinary(outputTXHash).ToString() == "C02D4826DEE0F0A810E9DC3DB49A484CDF90832C56991F0EBA88418B80C7EC29")
+            lock (BatchIndexLOCK)
             {
-              byte[] inputTXHash = new byte[tXHashes[t].Length];
-              tXHashes[t].CopyTo(inputTXHash, 0);
-              Array.Reverse(inputTXHash);
-
-              Console.WriteLine("Write outputs of TX '{0}' to UTXO",
-                new SoapHexBinary(outputTXHash));
+              if (BatchIndexIteration != i)
+              {
+                QueueMergeBlockBatches[i] = blockBatchBytes;
+                return;
+              }
             }
 
-            // end debug
-
-            UTXO.InsertUTXO(tXHashes[t], headerHashBytes, tXs[t].Outputs.Count);
-          }
-
-          for (int t = 1; t < tXs.Count; t++)
-          {
-            for (int i = 0; i < tXs[t].Inputs.Count; i++)
+            while (true)
             {
-              try
+              MergeBatch(blockBatchBytes, headerStream);
+
+              lock (BatchIndexLOCK)
               {
-                // debug
+                BatchIndexIteration = (BatchIndexIteration + 1) % COUNT_BATCHES_PARALLEL;
 
-                byte[] outputTXHash = new byte[tXHashes[t].Length];
-                tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
-                Array.Reverse(outputTXHash);
-                string outputTXHashString = new SoapHexBinary(outputTXHash).ToString();
-
-                if (outputTXHashString == "C02D4826DEE0F0A810E9DC3DB49A484CDF90832C56991F0EBA88418B80C7EC29")
+                if (QueueMergeBlockBatches[BatchIndexIteration] == null)
                 {
-                  byte[] inputTXHash = new byte[tXHashes[t].Length];
-                  tXHashes[t].CopyTo(inputTXHash, 0);
-                  Array.Reverse(inputTXHash);
-
-                  Console.WriteLine("Input '{0}' in TX '{1}' \n attempts to spend " +
-                    "output '{2}' in TX '{3}'.",
-                    i,
-                    new SoapHexBinary(inputTXHash),
-                    tXs[t].Inputs[i].IndexOutput,
-                    new SoapHexBinary(outputTXHash));
+                  return;
                 }
 
-                // end debug
-
-
-                UTXO.SpendUTXO(
-                  tXs[t].Inputs[i].TXIDOutput,
-                  tXs[t].Inputs[i].IndexOutput);
-              }
-              catch (UTXOException ex)
-              {
-                byte[] inputTXHash = new byte[tXHashes[t].Length];
-                tXHashes[t].CopyTo(inputTXHash, 0);
-                Array.Reverse(inputTXHash);
-
-                byte[] outputTXHash = new byte[tXHashes[t].Length];
-                tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
-                Array.Reverse(outputTXHash);
-
-                Console.WriteLine("Input '{0}' in TX '{1}' \n failed to spend " +
-                  "output '{2}' in TX '{3}': \n'{4}'.",
-                  i,
-                  new SoapHexBinary(inputTXHash),
-                  tXs[t].Inputs[i].IndexOutput,
-                  new SoapHexBinary(outputTXHash),
-                  ex.Message);
+                blockBatchBytes = QueueMergeBlockBatches[BatchIndexIteration];
+                QueueMergeBlockBatches[BatchIndexIteration] = null;
               }
             }
           }
+          else
+          {
+            parallelBatchesExistInArchive = false;
+          }
+        });
+
+        batchIndexOffset += COUNT_BATCHES_PARALLEL;
+      } while (parallelBatchesExistInArchive);
+
+      int batchIndex = batchIndexOffset - COUNT_BATCHES_PARALLEL + BatchIndexIteration;
+      HeaderLocation[] headerLocations = headerStream.GetHeaderLocations(16);
+      //Download blocks parallel, use height to synchronize merging of individual blocks
+      // Write downloaded blocks with BatchWriter to archive.
+      //
+      int indexHeaderLocation = 0;
+      while()
+      {
+        byte[] blockBatchBytes = await BlockArchiver.LoadBlockBatchAsync(headerLocations, batchIndex);
+      }
+
+    }
+
+    void MergeBatch(byte[] blockBatchBytes, Headerchain.HeaderStream headerStream)
+    {
+      var stopWatchMergeBatch = new Stopwatch();
+      stopWatchMergeBatch.Restart();
+
+      int startIndex = 0;
+      while (startIndex < blockBatchBytes.Length)
+      {
+        NetworkHeader header = NetworkHeader.ParseHeader(
+          blockBatchBytes, 
+          out int tXCount, 
+          ref startIndex);
+
+        UInt256 headerHash = header.ComputeHash(out byte[] headerHashBytes);
+
+        UInt256 hash = headerStream.GetHeaderLocation().Hash;
+        if (!hash.Equals(headerHash))
+        {
+          throw new UTXOException("Unexpected header hash.");
         }
 
-        stopWatchMergeBatch.Stop();
-
-        Console.WriteLine("{0},{1},{2},{3},{4}",
-          ((UTXOCacheUInt32)Caches[IndexCacheUInt32]).GetCountPrimaryCacheItems(),
-          ((UTXOCacheUInt32)Caches[IndexCacheUInt32]).GetCountSecondaryCacheItems(),
-          ((UTXOCacheByteArray)Caches[IndexCacheByteArray]).GetCountPrimaryCacheItems(),
-          ((UTXOCacheByteArray)Caches[IndexCacheByteArray]).GetCountSecondaryCacheItems(),
-          stopWatchMergeBatch.ElapsedMilliseconds);
-
-        lock (BatchIndexLOCK)
+        TX[] tXs = ParseBlock(blockBatchBytes, ref startIndex, tXCount);
+        byte[] merkleRootHash = ComputeMerkleRootHash(tXs, out byte[][] tXHashes);
+        if (!EqualityComparerByteArray.IsEqual(header.MerkleRoot, merkleRootHash))
         {
-          BatchIndex = (BatchIndex + 1) % COUNT_BATCHES_PARALLEL;
-          blockBatchBytes = QueueMergeBlockBatches[BatchIndex];
+          throw new UTXOException("Payload corrupted.");
+        }
 
-          if (blockBatchBytes == null)
+        Merge(tXs, tXHashes, headerHashBytes);
+      }
+
+      stopWatchMergeBatch.Stop();
+
+      Console.WriteLine("{0},{1},{2},{3},{4}",
+        ((UTXOCacheUInt32)Caches[IndexCacheUInt32]).GetCountPrimaryCacheItems(),
+        ((UTXOCacheUInt32)Caches[IndexCacheUInt32]).GetCountSecondaryCacheItems(),
+        ((UTXOCacheByteArray)Caches[IndexCacheByteArray]).GetCountPrimaryCacheItems(),
+        ((UTXOCacheByteArray)Caches[IndexCacheByteArray]).GetCountSecondaryCacheItems(),
+        stopWatchMergeBatch.ElapsedMilliseconds);
+    }
+    void Merge(TX[] tXs, byte[][] tXHashes, byte[] headerHashBytes)
+    {
+      for (int t = 0; t < tXs.Length; t++)
+      {
+        InsertUTXO(tXHashes[t], headerHashBytes, tXs[t].Outputs.Count);
+      }
+
+      for (int t = 1; t < tXs.Length; t++)
+      {
+        for (int i = 0; i < tXs[t].Inputs.Count; i++)
+        {
+          try
           {
-            return;
+            SpendUTXO(
+              tXs[t].Inputs[i].TXIDOutput,
+              tXs[t].Inputs[i].IndexOutput);
           }
+          catch (UTXOException ex)
+          {
+            byte[] inputTXHash = new byte[tXHashes[t].Length];
+            tXHashes[t].CopyTo(inputTXHash, 0);
+            Array.Reverse(inputTXHash);
 
-          QueueMergeBlockBatches[BatchIndex] = null;
+            byte[] outputTXHash = new byte[tXHashes[t].Length];
+            tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
+            Array.Reverse(outputTXHash);
+
+            Console.WriteLine("Input '{0}' in TX '{1}' \n failed to spend " +
+              "output '{2}' in TX '{3}': \n'{4}'.",
+              i,
+              new SoapHexBinary(inputTXHash),
+              tXs[t].Inputs[i].IndexOutput,
+              new SoapHexBinary(outputTXHash),
+              ex.Message);
+          }
         }
       }
     }
-
-    async Task<byte[]> GetBlockBatchAsync(int batchIndex)
+    byte[] ComputeMerkleRootHash(TX[] tXs, out byte[][] tXHashes)
     {
-      try
+      if (tXs.Length % 2 == 0)
       {
-        if (BlockArchiver.Exists(batchIndex, out string filePath))
+        tXHashes = new byte[tXs.Length][];
+
+        for (int t = 0; t < tXs.Length; t++)
         {
-          byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
-          int batchByteIndex = 0;
+          tXHashes[t] = SHA256d.Compute(tXs[t].GetBytes());
+        }
+      }
+      else
+      {
+        tXHashes = new byte[tXs.Length + 1][];
 
-          int countBlocks = VarInt.ParseVarInt32(blockBatchBytes, ref batchByteIndex);
-          var networkBlocks = new NetworkBlock[countBlocks];
-          var blocks = new Block[countBlocks];
+        for (int t = 0; t < tXs.Length; t++)
+        {
+          tXHashes[t] = SHA256d.Compute(tXs[t].GetBytes());
+        }
 
-          for (int i = 0; i < countBlocks; i++)
-          {
-            networkBlocks[i] = NetworkBlock.ReadBlock(blockBatchBytes, ref batchByteIndex);
+        tXHashes[tXHashes.Length - 1] = tXHashes[tXHashes.Length - 2];
+      }
 
-            ValidateNetworkBlock(
-              networkBlock,
-              hash,
-              out Block block);
-
-            blocks[i] = new Block(networkBlock.Header, hash, tXs, tXHashes);
-          }
+      return GetRoot(tXHashes);
+    }
+    byte[] GetRoot(byte[][] merkleList)
+    {
+      while (merkleList.Length > 1)
+      {
+        byte[][] merkleListNext;
+        int lengthMerkleListNext = merkleList.Length / 2;
+        if (lengthMerkleListNext % 2 == 0)
+        {
+          merkleListNext = ComputeNextMerkleList(merkleList, lengthMerkleListNext);
         }
         else
         {
-          blocks[i] = await DownloadBlockAsync(hash);
-        }
-      }
-      catch (UTXOException)
-      {
-        BlockArchiver.DeleteBlock(hash);
+          lengthMerkleListNext++;
 
-        blocks[i] = await DownloadBlockAsync(hash);
+          merkleListNext = ComputeNextMerkleList(merkleList, lengthMerkleListNext);
+
+          merkleListNext[merkleListNext.Length - 1] = merkleListNext[merkleListNext.Length - 2];
+        }
+
+        merkleList = merkleListNext;
       }
+
+      return merkleList[0];
+    }
+    byte[][] ComputeNextMerkleList(byte[][] merkleList, int lengthMerkleListNext)
+    {
+      var merkleListNext = new byte[lengthMerkleListNext][];
+
+      for (int i = 0; i < merkleList[i].Length; i += 2)
+      {
+        const int HASH_BYTE_SIZE = 32;
+        var leafPairHashesConcat = new byte[2 * HASH_BYTE_SIZE];
+        merkleList[i].CopyTo(leafPairHashesConcat, 0);
+        merkleList[i + 1].CopyTo(leafPairHashesConcat, HASH_BYTE_SIZE);
+
+        merkleListNext[i / 2] = SHA256d.Compute(leafPairHashesConcat);
+      }
+
+      return merkleListNext;
+    }
+
+    TX[] ParseBlock(byte[] buffer, ref int startIndex, int tXCount)
+    {
+      var tXs = new TX[tXCount];
+      for (int i = 0; i < tXCount; i++)
+      {
+        UInt32 version = BitConverter.ToUInt32(buffer, startIndex);
+
+        tXs[i] = TX.Parse(buffer, ref startIndex);
+      }
+
+      return tXs;
     }
 
     void ValidateNetworkBlock(
       NetworkBlock networkBlock, 
       UInt256 hash)
     {
-      if (!hash.Equals(networkBlock.Header.ComputeHash()))
-      {
-        throw new UTXOException("Unexpected header hash.");
-      }
+      //if (!hash.Equals(networkBlock.Header.ComputeHash()))
+      //{
+      //  throw new UTXOException("Unexpected header hash.");
+      //}
 
-      List<TX> tXs = Parser.Parse(networkBlock.Payload);
-      if (!networkBlock.Header.MerkleRoot.Equals(Parser.ComputeMerkleRootHash(tXs, out List<byte[]> tXHashes)))
-      {
-        throw new UTXOException("Payload corrupted.");
-      }
+      //List<TX> tXs = Parser.Parse(networkBlock.Payload);
+      //if (!networkBlock.Header.MerkleRoot.Equals(Parser.ComputeMerkleRootHash(tXs, out List<byte[]> tXHashes)))
+      //{
+      //  throw new UTXOException("Payload corrupted.");
+      //}
     }
-    async Task<Block> DownloadBlockAsync(UInt256 hash)
-    {
-      var sessionBlockDownload = new SessionBlockDownload(hash);
-      await Network.ExecuteSessionAsync(sessionBlockDownload);
+    //async Task<Block> DownloadBlockAsync(UInt256 hash)
+    //{
+      //var sessionBlockDownload = new SessionBlockDownload(hash);
+      //await Network.ExecuteSessionAsync(sessionBlockDownload);
 
-      ValidateNetworkBlock(
-        sessionBlockDownload.Block,
-        hash,
-        out Block block);
+      //ValidateNetworkBlock(
+      //  sessionBlockDownload.Block,
+      //  hash,
+      //  out Block block);
 
-      await BlockArchiver.ArchiveBlockAsync(block);
+      //await BlockArchiver.ArchiveBlockAsync(block);
 
-      return block;
-    }
-    static void ValidateHeaderHash(NetworkHeader header, UInt256 hash)
-    {
-      if (!hash.Equals(header.ComputeHash()))
-      {
-        throw new UTXOException("Unexpected header hash.");
-      }
-    }
-    void ValidateMerkleRoot(UInt256 merkleRoot, List<TX> tXs, out List<byte[]> tXHashes)
-    {
-      if (!merkleRoot.Equals(Parser.ComputeMerkleRootHash(tXs, out tXHashes)))
-      {
-        throw new UTXOException("Payload corrupted.");
-      }
-    }
-        
-
+      //return block;
+    //}
 
     void SpendUTXO(byte[] tXIDOutput, int outputIndex)
     {

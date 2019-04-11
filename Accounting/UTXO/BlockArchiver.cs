@@ -27,12 +27,12 @@ namespace BToken.Accounting
       using (FileStream file = CreateFile(block.HeaderHash))
       {
         byte[] headerBytes = block.Header.GetBytes();
-        byte[] txCount = VarInt.GetBytes(block.TXs.Count).ToArray();
+        byte[] txCount = VarInt.GetBytes(block.TXs.Length).ToArray();
 
         await file.WriteAsync(headerBytes, 0, headerBytes.Length);
         await file.WriteAsync(txCount, 0, txCount.Length);
 
-        for (int t = 0; t < block.TXs.Count; t++)
+        for (int t = 0; t < block.TXs.Length; t++)
         {
           byte[] txBytes = block.TXs[t].GetBytes();
           await file.WriteAsync(txBytes, 0, txBytes.Length);
@@ -81,10 +81,10 @@ namespace BToken.Accounting
         FileMode.Open,
         FileAccess.Read,
         FileShare.Read,
-        bufferSize: 8192,
+        bufferSize: 4096,
         useAsync: true))
       {
-        return await ReadBytesAsync(fileStream); ;
+        return await ReadBytesAsync(fileStream);
       }
     }
     static string CreateFileRootPath(UInt256 blockHash)

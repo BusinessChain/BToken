@@ -34,7 +34,7 @@ namespace BToken.Accounting
         UTXO = uTXO;
         HeaderStreamer = headerStreamer;
       }
-      
+
       public async Task BuildAsync()
       {
         StopWatchBuild.Start();
@@ -66,15 +66,15 @@ namespace BToken.Accounting
             async i => {
               if (headerHashesBatches[i] != null)
               {
-                Block[] blocks = await UTXO.GetBlockBatchAsync(
-                  batchIndexOffset + i,
-                  headerHashesBatches[i]);
+                //Block[] blocks = await UTXO.GetBlockBatchAsync(
+                //  batchIndexOffset + i,
+                //  headerHashesBatches[i]);
 
                 //Validieren
 
                 // In HeaderArray suchen und Hash abgleichen
                 
-                MergeBatch(i, blocks);
+                //MergeBatch(i, blocks);
               }
             });
 
@@ -89,119 +89,119 @@ namespace BToken.Accounting
       }
       void MergeBatch(int batchIndex, Block[] blocks)
       {
-        lock (BatchIndexLOCK)
-        {
-          QueueMergeBlocks[batchIndex] = blocks;
+        //lock (BatchIndexLOCK)
+        //{
+        //  QueueMergeBlocks[batchIndex] = blocks;
 
-          if (BatchIndex != batchIndex)
-          {
-            return;
-          }
-        }
+        //  if (BatchIndex != batchIndex)
+        //  {
+        //    return;
+        //  }
+        //}
 
-        while (true)
-        {
-          StopWatchMergeBatch.Restart();
+        //while (true)
+        //{
+        //  StopWatchMergeBatch.Restart();
 
-          for (int b = 0; b < SIZE_BATCH_BLOCKS; b++)
-          {
-            Block block = QueueMergeBlocks[BatchIndex][b];
-            List<TX> tXs = block.TXs;
-            List<byte[]> tXHashes = block.TXHashes;
-            byte[] headerHashBytes = block.HeaderHash.GetBytes();
+        //  for (int b = 0; b < SIZE_BATCH_BLOCKS; b++)
+        //  {
+        //    Block block = QueueMergeBlocks[BatchIndex][b];
+        //    List<TX> tXs = block.TXs;
+        //    List<byte[]> tXHashes = block.TXHashes;
+        //    byte[] headerHashBytes = block.HeaderHash.GetBytes();
 
-            for (int t = 0; t < tXs.Count; t++)
-            {
-              // debug
+        //    for (int t = 0; t < tXs.Count; t++)
+        //    {
+        //      // debug
 
-              byte[] outputTXHash = new byte[tXHashes[t].Length];
-              tXHashes[t].CopyTo(outputTXHash, 0);
-              Array.Reverse(outputTXHash);
-              if (new SoapHexBinary(outputTXHash).ToString() == "C02D4826DEE0F0A810E9DC3DB49A484CDF90832C56991F0EBA88418B80C7EC29")
-              {
-                byte[] inputTXHash = new byte[tXHashes[t].Length];
-                tXHashes[t].CopyTo(inputTXHash, 0);
-                Array.Reverse(inputTXHash);
+        //      byte[] outputTXHash = new byte[tXHashes[t].Length];
+        //      tXHashes[t].CopyTo(outputTXHash, 0);
+        //      Array.Reverse(outputTXHash);
+        //      if (new SoapHexBinary(outputTXHash).ToString() == "C02D4826DEE0F0A810E9DC3DB49A484CDF90832C56991F0EBA88418B80C7EC29")
+        //      {
+        //        byte[] inputTXHash = new byte[tXHashes[t].Length];
+        //        tXHashes[t].CopyTo(inputTXHash, 0);
+        //        Array.Reverse(inputTXHash);
 
-                Console.WriteLine("Write outputs of TX '{0}' to UTXO",
-                  new SoapHexBinary(outputTXHash));
-              }
+        //        Console.WriteLine("Write outputs of TX '{0}' to UTXO",
+        //          new SoapHexBinary(outputTXHash));
+        //      }
 
-              // end debug
+        //      // end debug
 
-              UTXO.InsertUTXO(tXHashes[t], headerHashBytes, tXs[t].Outputs.Count);
-            }
+        //      UTXO.InsertUTXO(tXHashes[t], headerHashBytes, tXs[t].Outputs.Count);
+        //    }
 
-            for (int t = 1; t < tXs.Count; t++)
-            {
-              for (int i = 0; i < tXs[t].Inputs.Count; i++)
-              {
-                try
-                {
-                  // debug
+        //    for (int t = 1; t < tXs.Count; t++)
+        //    {
+        //      for (int i = 0; i < tXs[t].Inputs.Count; i++)
+        //      {
+        //        try
+        //        {
+        //          // debug
 
-                  byte[] outputTXHash = new byte[tXHashes[t].Length];
-                  tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
-                  Array.Reverse(outputTXHash);
-                  string outputTXHashString = new SoapHexBinary(outputTXHash).ToString();
+        //          byte[] outputTXHash = new byte[tXHashes[t].Length];
+        //          tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
+        //          Array.Reverse(outputTXHash);
+        //          string outputTXHashString = new SoapHexBinary(outputTXHash).ToString();
 
-                  if (outputTXHashString == "C02D4826DEE0F0A810E9DC3DB49A484CDF90832C56991F0EBA88418B80C7EC29")
-                  {
-                    byte[] inputTXHash = new byte[tXHashes[t].Length];
-                    tXHashes[t].CopyTo(inputTXHash, 0);
-                    Array.Reverse(inputTXHash);
+        //          if (outputTXHashString == "C02D4826DEE0F0A810E9DC3DB49A484CDF90832C56991F0EBA88418B80C7EC29")
+        //          {
+        //            byte[] inputTXHash = new byte[tXHashes[t].Length];
+        //            tXHashes[t].CopyTo(inputTXHash, 0);
+        //            Array.Reverse(inputTXHash);
 
-                    Console.WriteLine("Input '{0}' in TX '{1}' \n attempts to spend " +
-                      "output '{2}' in TX '{3}'.",
-                      i,
-                      new SoapHexBinary(inputTXHash),
-                      tXs[t].Inputs[i].IndexOutput,
-                      new SoapHexBinary(outputTXHash));
-                  }
+        //            Console.WriteLine("Input '{0}' in TX '{1}' \n attempts to spend " +
+        //              "output '{2}' in TX '{3}'.",
+        //              i,
+        //              new SoapHexBinary(inputTXHash),
+        //              tXs[t].Inputs[i].IndexOutput,
+        //              new SoapHexBinary(outputTXHash));
+        //          }
 
-                  // end debug
+        //          // end debug
 
 
-                  UTXO.SpendUTXO(
-                    tXs[t].Inputs[i].TXIDOutput,
-                    tXs[t].Inputs[i].IndexOutput);
-                }
-                catch (UTXOException ex)
-                {
-                  byte[] inputTXHash = new byte[tXHashes[t].Length];
-                  tXHashes[t].CopyTo(inputTXHash, 0);
-                  Array.Reverse(inputTXHash);
+        //          UTXO.SpendUTXO(
+        //            tXs[t].Inputs[i].TXIDOutput,
+        //            tXs[t].Inputs[i].IndexOutput);
+        //        }
+        //        catch (UTXOException ex)
+        //        {
+        //          byte[] inputTXHash = new byte[tXHashes[t].Length];
+        //          tXHashes[t].CopyTo(inputTXHash, 0);
+        //          Array.Reverse(inputTXHash);
 
-                  byte[] outputTXHash = new byte[tXHashes[t].Length];
-                  tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
-                  Array.Reverse(outputTXHash);
+        //          byte[] outputTXHash = new byte[tXHashes[t].Length];
+        //          tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
+        //          Array.Reverse(outputTXHash);
 
-                  Console.WriteLine("Input '{0}' in TX '{1}' \n failed to spend " +
-                    "output '{2}' in TX '{3}': \n'{4}'.",
-                    i,
-                    new SoapHexBinary(inputTXHash),
-                    tXs[t].Inputs[i].IndexOutput,
-                    new SoapHexBinary(outputTXHash),
-                    ex.Message);
-                }
-              }
-            }
-          }
+        //          Console.WriteLine("Input '{0}' in TX '{1}' \n failed to spend " +
+        //            "output '{2}' in TX '{3}': \n'{4}'.",
+        //            i,
+        //            new SoapHexBinary(inputTXHash),
+        //            tXs[t].Inputs[i].IndexOutput,
+        //            new SoapHexBinary(outputTXHash),
+        //            ex.Message);
+        //        }
+        //      }
+        //    }
+        //  }
 
-          StopWatchMergeBatch.Stop();
+        //  StopWatchMergeBatch.Stop();
 
-          QueueMergeBlocks[BatchIndex] = null;
+        //  QueueMergeBlocks[BatchIndex] = null;
 
-          lock (BatchIndexLOCK)
-          {
-            BatchIndex = (BatchIndex + 1) % COUNT_BATCHES_PARALLEL;
+        //  lock (BatchIndexLOCK)
+        //  {
+        //    BatchIndex = (BatchIndex + 1) % COUNT_BATCHES_PARALLEL;
 
-            if (QueueMergeBlocks[BatchIndex] == null)
-            {
-              return;
-            }
-          }
-        }
+        //    if (QueueMergeBlocks[BatchIndex] == null)
+        //    {
+        //      return;
+        //    }
+        //  }
+        //}
       }
 
     }

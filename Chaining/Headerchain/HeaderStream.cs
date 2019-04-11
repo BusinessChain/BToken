@@ -28,7 +28,10 @@ namespace BToken.Chaining
         }
 
       }
-
+      public HeaderLocation GetHeaderLocation()
+      {
+        return GetHeaderLocations(1)[0];
+      }
       public HeaderLocation[] GetHeaderLocations(int batchSize)
       {
         if (Header == null)
