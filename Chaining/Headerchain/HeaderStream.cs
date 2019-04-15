@@ -13,7 +13,7 @@ namespace BToken.Chaining
     public class HeaderStream
     {
       ChainHeader Header;
-      uint Height;
+      public int Height { get; private set; }
       UInt256 Hash;
 
 
@@ -30,32 +30,40 @@ namespace BToken.Chaining
       }
       public HeaderLocation GetHeaderLocation()
       {
-        return GetHeaderLocations(1)[0];
+        TryGetHeaderLocations(1, out HeaderLocation[] headerLocations);
+        return headerLocations[0];
       }
-      public HeaderLocation[] GetHeaderLocations(int batchSize)
+      public bool TryGetHeaderLocations(int batchSize, out HeaderLocation[] headerLocations)
       {
-        if (Header == null)
+        if (Header != null || batchSize > 0)
         {
-          return null;
-        }
-
-        var headerLocations = new HeaderLocation[batchSize];
-
-        for (int i = 0; i < batchSize; i++)
-        {
-          headerLocations[i] = new HeaderLocation(Height, Hash);
-
-          Header = Header.HeadersNext == null ? null : Header.HeadersNext[0];
-
-          if (!TryGetHeaderHash(Header, out Hash))
+          headerLocations = new HeaderLocation[batchSize];
+          for (int i = 0; i < batchSize; i++)
           {
-            Hash = Header.NetworkHeader.ComputeHash();
+            headerLocations[i] = new HeaderLocation(Height, Hash);
+
+            if (Header.HeadersNext == null)
+            {
+              Header = null;
+              Array.Resize(ref headerLocations, batchSize + 1);
+              break;
+            }
+            else
+            {
+              Header = Header.HeadersNext[0];
+              if (!TryGetHeaderHash(Header, out Hash))
+              {
+                Hash = Header.NetworkHeader.ComputeHash();
+              }
+              Height++;
+            }
           }
 
-          Height++;
+          return true;
         }
 
-        return headerLocations;
+        headerLocations = null;
+        return false;
       }
     }
   }

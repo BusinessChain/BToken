@@ -222,7 +222,7 @@ namespace BToken.Chaining
       }
     }
 
-    public uint GetHeight()
+    public int GetHeight()
     {
       return MainChain.Height;
     }

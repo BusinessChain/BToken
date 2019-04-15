@@ -41,6 +41,7 @@ namespace BToken.Networking
       headerSerialized.AddRange(BitConverter.GetBytes(UnixTimeSeconds));
       headerSerialized.AddRange(BitConverter.GetBytes(NBits));
       headerSerialized.AddRange(BitConverter.GetBytes(Nonce));
+      headerSerialized.Add(0);
 
       return headerSerialized.ToArray();
     }
@@ -76,7 +77,6 @@ namespace BToken.Networking
         nBits, 
         nonce);
     }
-
   }
 
   public static class NetworkHeaderExtensionMethods
@@ -87,6 +87,11 @@ namespace BToken.Networking
     {
       headerHashBytes = header.GetBytes();
       return new UInt256(SHA256d.Compute(headerHashBytes));
+    }
+    public static UInt256 ComputeHash(
+      this NetworkHeader header)
+    {
+      return new UInt256(SHA256d.Compute(header.GetBytes()));
     }
   }
 }

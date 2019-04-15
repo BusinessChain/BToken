@@ -210,7 +210,8 @@ namespace BToken.Networking
         await NetworkMessageStreamer.WriteAsync(networkMessage);
       }
 
-      public async Task<NetworkMessage> ReceiveSessionMessageAsync(CancellationToken cancellationToken) => await SessionMessages.ReceiveAsync(cancellationToken);
+      public async Task<NetworkMessage> ReceiveSessionMessageAsync(CancellationToken cancellationToken) 
+        => await SessionMessages.ReceiveAsync(cancellationToken);
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 

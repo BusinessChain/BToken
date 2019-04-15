@@ -108,9 +108,9 @@ namespace BToken.Chaining
       }
       void ValidateCheckpoint(UInt256 headerHash)
       {
-        uint nextHeaderHeight = Probe.GetHeight() + 1;
+        int nextHeaderHeight = Probe.GetHeight() + 1;
 
-        uint highestCheckpointHight = Headerchain.Checkpoints.Max(x => x.Height);
+        int highestCheckpointHight = Headerchain.Checkpoints.Max(x => x.Height);
         bool mainChainLongerThanHighestCheckpoint = highestCheckpointHight <= Headerchain.MainChain.Height;
         bool nextHeightBelowHighestCheckpoint = nextHeaderHeight <= highestCheckpointHight;
         if (mainChainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
@@ -123,7 +123,7 @@ namespace BToken.Chaining
           throw new ChainException(ChainCode.INVALID);
         }
       }
-      bool ValidateBlockLocation(uint height, UInt256 hash)
+      bool ValidateBlockLocation(int height, UInt256 hash)
       {
         HeaderLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
         if (checkpoint != null)
@@ -135,8 +135,8 @@ namespace BToken.Chaining
       }
       void ValidateProofOfWork(uint nBits, UInt256 headerHash)
       {
-        uint nextHeight = Probe.GetHeight() + 1;
-        if (nBits != TargetManager.GetNextTargetBits(Probe.Header, nextHeight))
+        int nextHeight = Probe.GetHeight() + 1;
+        if (nBits != TargetManager.GetNextTargetBits(Probe.Header, (uint)nextHeight))
         {
           throw new ChainException(ChainCode.INVALID);
         }
