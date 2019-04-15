@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.IO;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 using BToken.Networking;
 
@@ -133,6 +134,7 @@ namespace BToken.Chaining
     }
     static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)
     {
+      string merkleRoot = new SoapHexBinary(header.MerkleRoot).ToString();
       headerHash = header.ComputeHash();
 
       if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))

@@ -41,7 +41,6 @@ namespace BToken.Networking
       headerSerialized.AddRange(BitConverter.GetBytes(UnixTimeSeconds));
       headerSerialized.AddRange(BitConverter.GetBytes(NBits));
       headerSerialized.AddRange(BitConverter.GetBytes(Nonce));
-      headerSerialized.Add(0);
 
       return headerSerialized.ToArray();
     }
