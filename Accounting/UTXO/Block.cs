@@ -14,17 +14,20 @@ namespace BToken.Accounting
     public TX[] TXs;
     public byte[][] TXHashes;
     public byte[] BlockBytes;
+    public int Height;
 
     public Block(
       byte[] headerHashBytes, 
       TX[] tXs,
       byte[][] tXHashes,
-      byte[] blockBytes)
+      byte[] blockBytes,
+      int height)
     {
       HeaderHashBytes = headerHashBytes;
       TXs = tXs;
       TXHashes = tXHashes;
       BlockBytes = blockBytes;
+      Height = height;
     }
   }
 }

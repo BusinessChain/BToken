@@ -83,7 +83,8 @@ namespace BToken.Accounting
                 headerHashBytes, 
                 tXs, 
                 tXHashes, 
-                blockBytes);
+                blockBytes,
+                HeaderLocations[IndexBlockReceived].Height);
 
               Console.WriteLine("'{0}' Downloaded block '{1}'", 
                 Channel.GetIdentification(),

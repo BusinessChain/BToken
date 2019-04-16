@@ -26,6 +26,7 @@ namespace BToken
       foreach(NetworkHeader header in Headers)
       {
         payload.AddRange(header.GetBytes());
+        payload.Add(0);
       }
 
       Payload = payload.ToArray();

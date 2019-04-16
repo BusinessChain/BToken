@@ -51,11 +51,10 @@ namespace BToken.Networking
       startIndex += 4;
 
       UInt256 previousHeaderHash = new UInt256(buffer, ref startIndex);
-
-
+      
       byte[] merkleRootHash = new byte[32];
       Array.Copy(buffer, startIndex, merkleRootHash, 0, 32);
-      startIndex = +32;
+      startIndex += 32;
 
       UInt32 unixTimeSeconds = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;

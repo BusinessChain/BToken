@@ -61,7 +61,7 @@ namespace BToken.Chaining
 
       public UInt256 GetHeaderHash(ChainHeader header)
       {
-        if (header.HeadersNext.Any())
+        if (header.HeadersNext != null)
         {
           return header.HeadersNext[0].NetworkHeader.HashPrevious;
         }

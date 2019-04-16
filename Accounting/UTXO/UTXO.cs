@@ -56,7 +56,7 @@ namespace BToken.Accounting
     int FilePartitionIndex = 0;
     List<Block> BlocksPartitioned = new List<Block>();
     int CountTXsPartitioned = 0;
-    const int MAX_COUNT_TXS_IN_PARTITION = 20000;
+    const int MAX_COUNT_TXS_IN_PARTITION = 8;
 
     public UTXO(Headerchain headerchain, Network network)
     {
@@ -146,8 +146,8 @@ namespace BToken.Accounting
       MergeBatchIndex += batchIndexOffset;
       int indexBatchDownload = MergeBatchIndex;
       FilePartitionIndex = MergeBatchIndex;
-      const int COUNT_BLOCK_DOWNLOAD_BATCH = 8;
-      const int COUNT_DOWNLOAD_TASKS = 8;
+      const int COUNT_BLOCK_DOWNLOAD_BATCH = 4;
+      const int COUNT_DOWNLOAD_TASKS = 3;
       var blockDownloadTasks = new List<Task>();
       
       while(headerStream.TryGetHeaderLocations(
@@ -252,6 +252,13 @@ namespace BToken.Accounting
     }
     byte[] ComputeMerkleRootHash(TX[] tXs, out byte[][] tXHashes)
     {
+      if(tXs.Length == 1)
+      {
+        tXHashes = new byte[1][];
+        tXHashes[0] = SHA256d.Compute(tXs[0].GetBytes());
+        return tXHashes[0];
+      }
+
       if (tXs.Length % 2 == 0)
       {
         tXHashes = new byte[tXs.Length][];
@@ -277,10 +284,16 @@ namespace BToken.Accounting
     }
     byte[] GetRoot(byte[][] merkleList)
     {
-      while (merkleList.Length > 1)
+      byte[][] merkleListNext;
+
+      while (true)
       {
-        byte[][] merkleListNext;
         int lengthMerkleListNext = merkleList.Length / 2;
+
+        if(lengthMerkleListNext == 1)
+        {
+          return ComputeNextMerkleList(merkleList, lengthMerkleListNext)[0];
+        }
         if (lengthMerkleListNext % 2 == 0)
         {
           merkleListNext = ComputeNextMerkleList(merkleList, lengthMerkleListNext);
@@ -296,14 +309,12 @@ namespace BToken.Accounting
 
         merkleList = merkleListNext;
       }
-
-      return merkleList[0];
     }
     byte[][] ComputeNextMerkleList(byte[][] merkleList, int lengthMerkleListNext)
     {
       var merkleListNext = new byte[lengthMerkleListNext][];
 
-      for (int i = 0; i < merkleList[i].Length; i += 2)
+      for (int i = 0; i < merkleList.Length; i += 2)
       {
         const int HASH_BYTE_SIZE = 32;
         var leafPairHashesConcat = new byte[2 * HASH_BYTE_SIZE];

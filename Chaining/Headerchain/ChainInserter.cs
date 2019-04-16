@@ -89,7 +89,8 @@ namespace BToken.Chaining
       void FindPreviousHeader(NetworkHeader header)
       {
         Probe.Chain = Headerchain.MainChain;
-        if (Probe.GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot)) { return; }
+        if (Probe.GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot))
+        { return; }
 
         foreach (Chain chain in Headerchain.SecondaryChains)
         {

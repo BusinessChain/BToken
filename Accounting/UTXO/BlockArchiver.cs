@@ -12,7 +12,7 @@ namespace BToken.Accounting
   partial class BlockArchiver
   {
     static string[] ShardPaths = {
-    "I:\\BlockArchive",
+    "I:\\BlockArchivePartitioned",
     //"J:\\BlockArchive",
     //"D:\\BlockArchive",
     //"C:\\BlockArchive"
