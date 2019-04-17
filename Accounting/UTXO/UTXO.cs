@@ -48,7 +48,7 @@ namespace BToken.Accounting
     
     Stopwatch StopWatchGetBlock = new Stopwatch();
 
-    const int COUNT_BATCHES_PARALLEL = 4;
+    const int COUNT_BATCHES_PARALLEL = 2;
     byte[][] QueueMergeBlockBatches = new byte[COUNT_BATCHES_PARALLEL][];
     Dictionary<int, Block[]> QueueMergeBlocks = new Dictionary<int, Block[]>();
     readonly object MergeLOCK = new object();
@@ -56,7 +56,7 @@ namespace BToken.Accounting
     int FilePartitionIndex = 0;
     List<Block> BlocksPartitioned = new List<Block>();
     int CountTXsPartitioned = 0;
-    const int MAX_COUNT_TXS_IN_PARTITION = 8;
+    const int MAX_COUNT_TXS_IN_PARTITION = 50;
 
     public UTXO(Headerchain headerchain, Network network)
     {
@@ -95,14 +95,16 @@ namespace BToken.Accounting
       {
         Parallel.For(0, COUNT_BATCHES_PARALLEL, async i =>
         {
+          Console.WriteLine("Start batch {0} block archive load.", i);
           if (BlockArchiver.Exists(batchIndexOffset + i, out string filePath))
           {
             byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
 
             lock (MergeLOCK)
             {
-              if (MergeBatchIndex != i)
+              if (MergeBatchIndex != i) // Batch index nicht zyklisch machen, sondern mit height durchlaufen
               {
+                Console.WriteLine("Postpone merge of Batch {0}, awaiting batch {1}", i, MergeBatchIndex);
                 QueueMergeBlockBatches[i] = blockBatchBytes;
                 return;
               }
@@ -111,6 +113,8 @@ namespace BToken.Accounting
             while (true)
             {
               MergeBatch(blockBatchBytes, headerStream);
+
+              Console.WriteLine("Successfully merged batch {0}", i);
 
               lock (MergeLOCK)
               {
@@ -121,6 +125,7 @@ namespace BToken.Accounting
                   return;
                 }
 
+                Console.WriteLine("Follow-up batch to merge {0}", MergeBatchIndex);
                 blockBatchBytes = QueueMergeBlockBatches[MergeBatchIndex];
                 QueueMergeBlockBatches[MergeBatchIndex] = null;
               }
@@ -145,10 +150,11 @@ namespace BToken.Accounting
 
       MergeBatchIndex += batchIndexOffset;
       int indexBatchDownload = MergeBatchIndex;
+      int blockDownloadTaskIndex = 0;
       FilePartitionIndex = MergeBatchIndex;
-      const int COUNT_BLOCK_DOWNLOAD_BATCH = 4;
-      const int COUNT_DOWNLOAD_TASKS = 3;
-      var blockDownloadTasks = new List<Task>();
+      const int COUNT_BLOCK_DOWNLOAD_BATCH = 50;
+      const int COUNT_DOWNLOAD_TASKS = 8;
+      var blockDownloadTasks = new Task[COUNT_DOWNLOAD_TASKS];
       
       while(headerStream.TryGetHeaderLocations(
         COUNT_BLOCK_DOWNLOAD_BATCH,
@@ -159,17 +165,24 @@ namespace BToken.Accounting
           headerLocations, 
           indexBatchDownload);
 
-        blockDownloadTasks.Add(Network.ExecuteSessionAsync(sessionBlockDownload));
+        Task sessionBlockDownloadTask = Network.ExecuteSessionAsync(sessionBlockDownload);
+        blockDownloadTasks[blockDownloadTaskIndex] = sessionBlockDownloadTask;
 
-        if (blockDownloadTasks.Count > COUNT_DOWNLOAD_TASKS - 1)
+        if (blockDownloadTaskIndex == COUNT_DOWNLOAD_TASKS - 1)
         {
-          blockDownloadTasks.Remove(
-            await Task.WhenAny(blockDownloadTasks));
+          await Task.WhenAll(blockDownloadTasks);
+          blockDownloadTaskIndex = 0;
         }
 
+        blockDownloadTaskIndex++;
         indexBatchDownload++;
       }
-
+      if(blockDownloadTaskIndex == 0)
+      {
+        return;
+      }
+      Task[] finalBlockDownloadTasks = new Task[blockDownloadTaskIndex];
+      Array.Copy(blockDownloadTasks, finalBlockDownloadTasks, blockDownloadTaskIndex);
       await Task.WhenAll(blockDownloadTasks);
     }
 

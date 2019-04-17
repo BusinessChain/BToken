@@ -37,6 +37,8 @@ namespace BToken.Accounting
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
       {
+        Console.WriteLine("Start session {0}", BatchIndex);
+
         Channel = channel;
 
         try
@@ -98,10 +100,13 @@ namespace BToken.Accounting
           {
             if (UTXO.MergeBatchIndex != BatchIndex)
             {
+              Console.WriteLine("Postpone merge of batch {0}, merge index: {1}", BatchIndex, UTXO.MergeBatchIndex);
               UTXO.QueueMergeBlocks.Add(BatchIndex, BlocksReceived);
               return;
             }
           }
+
+          Console.WriteLine("Merge batch {0}", BatchIndex);
 
           while (true)
           {
@@ -128,13 +133,15 @@ namespace BToken.Accounting
               }
 
             }
-
+            
             lock (UTXO.MergeLOCK)
             {
+              Console.WriteLine("Successfully merged batch {0}", UTXO.MergeBatchIndex);
               UTXO.MergeBatchIndex++;
 
               if (UTXO.QueueMergeBlocks.TryGetValue(UTXO.MergeBatchIndex, out BlocksReceived))
               {
+                Console.WriteLine("Follow-up batch to merge {0}", UTXO.MergeBatchIndex);
                 UTXO.QueueMergeBlocks.Remove(UTXO.MergeBatchIndex);
               }
               else

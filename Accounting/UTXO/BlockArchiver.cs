@@ -47,7 +47,7 @@ namespace BToken.Accounting
     public static bool Exists(int batchIndex, out string filePath)
     {
       string shardPath = ShardPaths[batchIndex % ShardPaths.Length];
-      filePath = Path.Combine(shardPath, batchIndex.ToString());
+      filePath = Path.Combine(shardPath, "p" + batchIndex.ToString());
 
       return File.Exists(filePath);
     }
