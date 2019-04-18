@@ -24,6 +24,7 @@ namespace BToken.Accounting
       public INetworkChannel Channel { get; private set; }
 
       const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 7;
+      const int MAX_COUNT_TXS_IN_PARTITION = 100;
 
 
       public SessionBlockDownload(UTXO uTXO, HeaderLocation[] headerLocations, int batchIndex)
@@ -117,7 +118,10 @@ namespace BToken.Accounting
                 BlocksReceived[i].TXHashes,
                 BlocksReceived[i].HeaderHashBytes);
 
-              if(UTXO.CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
+              UTXO.BlocksPartitioned.Add(BlocksReceived[i]);
+              UTXO.CountTXsPartitioned += BlocksReceived[i].TXs.Length;
+
+              if (UTXO.CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
               {
                 Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
                   UTXO.BlocksPartitioned, 
@@ -125,11 +129,6 @@ namespace BToken.Accounting
 
                 UTXO.BlocksPartitioned = new List<Block>();
                 UTXO.CountTXsPartitioned = 0;
-              }
-              else
-              {
-                UTXO.BlocksPartitioned.Add(BlocksReceived[i]);
-                UTXO.CountTXsPartitioned += BlocksReceived[i].TXs.Length;
               }
 
             }

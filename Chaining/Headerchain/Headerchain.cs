@@ -183,7 +183,7 @@ namespace BToken.Chaining
 
     public static bool TryGetHeaderHash(ChainHeader header, out UInt256 headerHash)
     {
-      if (header.HeadersNext.Any())
+      if (header.HeadersNext != null)
       {
         headerHash = header.HeadersNext[0].NetworkHeader.HashPrevious;
         return true;
@@ -202,20 +202,20 @@ namespace BToken.Chaining
         using (var archiveReader = new HeaderReader())
         {
           NetworkHeader header = archiveReader.GetNextHeader();
-          
-          //while (header != null)
-          //{
-          //  await InsertHeaderAsync(header);
-          //  header = archiveReader.GetNextHeader();
-          //}
 
-          int countHeader = 0;
-          while (header != null && countHeader < 50000)
+          while (header != null)
           {
-            countHeader++;
             await InsertHeaderAsync(header);
             header = archiveReader.GetNextHeader();
           }
+
+          //int countHeader = 0;
+          //while (header != null && countHeader < 50000)
+          //{
+          //  countHeader++;
+          //  await InsertHeaderAsync(header);
+          //  header = archiveReader.GetNextHeader();
+          //}
         }
       }
       catch (Exception ex)

@@ -48,7 +48,8 @@ namespace BToken.Accounting
     
     Stopwatch StopWatchGetBlock = new Stopwatch();
 
-    const int COUNT_BATCHES_PARALLEL = 2;
+    const int COUNT_BATCHES_PARALLEL = 4;
+    bool ParallelBatchesExistInArchive = true;
     byte[][] QueueMergeBlockBatches = new byte[COUNT_BATCHES_PARALLEL][];
     Dictionary<int, Block[]> QueueMergeBlocks = new Dictionary<int, Block[]>();
     readonly object MergeLOCK = new object();
@@ -56,7 +57,6 @@ namespace BToken.Accounting
     int FilePartitionIndex = 0;
     List<Block> BlocksPartitioned = new List<Block>();
     int CountTXsPartitioned = 0;
-    const int MAX_COUNT_TXS_IN_PARTITION = 50;
 
     public UTXO(Headerchain headerchain, Network network)
     {
@@ -78,66 +78,95 @@ namespace BToken.Accounting
     {
       await BuildAsync();
     }
+    async Task LoadAsync(int batchIndex, int queueIndex, Headerchain.HeaderStream headerStream)
+    {
+      if (BlockArchiver.Exists(batchIndex, out string filePath))
+      {
+        Console.WriteLine("Start reading batch BatchBytes {0}", batchIndex);
+
+        byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
+
+        Console.WriteLine("Stop reading batch BatchBytes {0}", batchIndex);
+
+        lock (MergeLOCK)
+        {
+          if (MergeBatchIndex != batchIndex)
+          {
+            Console.WriteLine("Postpone merge of batch {0}, queueIndex: {1}, awaiting batch {2}",
+              batchIndex,
+              queueIndex,
+              MergeBatchIndex);
+
+            QueueMergeBlockBatches[queueIndex] = blockBatchBytes;
+            return;
+          }
+        }
+
+        while (true)
+        {
+          MergeBatch(blockBatchBytes, headerStream, batchIndex);
+
+          Console.WriteLine("Successfully merged batch {0}, queueIndex: {1}",
+            batchIndex,
+            queueIndex);
+
+          lock (MergeLOCK)
+          {
+            MergeBatchIndex++;
+            queueIndex++;
+            batchIndex++;
+
+            if (queueIndex == COUNT_BATCHES_PARALLEL ||
+              QueueMergeBlockBatches[queueIndex] == null)
+            {
+              return;
+            }
+
+            Console.WriteLine("Follow-up batch {0} to merge, queueIndex: {1}",
+              MergeBatchIndex,
+              queueIndex);
+
+            blockBatchBytes = QueueMergeBlockBatches[queueIndex];
+            QueueMergeBlockBatches[queueIndex] = null;
+          }
+        }
+      }
+      else
+      {
+        ParallelBatchesExistInArchive = false;
+      }
+    }
     async Task BuildAsync()
     {
-      Console.WriteLine(
-        "BatchIndex," +
-        "PrimaryCacheCompressed," +
-        "SecondaryCacheCompressed," +
-        "PrimaryCache," +
-        "SecondaryCache," +
-        "Merge time");
+      //Console.WriteLine(
+      //  "BatchIndex," +
+      //  "PrimaryCacheCompressed," +
+      //  "SecondaryCacheCompressed," +
+      //  "PrimaryCache," +
+      //  "SecondaryCache," +
+      //  "Merge time");
+
+      Console.WriteLine("Start block archive load.");
+
+      Task[] loadTasks = new Task[COUNT_BATCHES_PARALLEL];
+
 
       var headerStream = new Headerchain.HeaderStream(Headerchain);
       int batchIndexOffset = 0;
-      bool parallelBatchesExistInArchive = true;
       do
       {
-        Parallel.For(0, COUNT_BATCHES_PARALLEL, async i =>
+        ParallelBatchesExistInArchive = true;
+
+        Parallel.For(0, COUNT_BATCHES_PARALLEL, i => 
         {
-          Console.WriteLine("Start batch {0} block archive load.", i);
-          if (BlockArchiver.Exists(batchIndexOffset + i, out string filePath))
-          {
-            byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
-
-            lock (MergeLOCK)
-            {
-              if (MergeBatchIndex != i) // Batch index nicht zyklisch machen, sondern mit height durchlaufen
-              {
-                Console.WriteLine("Postpone merge of Batch {0}, awaiting batch {1}", i, MergeBatchIndex);
-                QueueMergeBlockBatches[i] = blockBatchBytes;
-                return;
-              }
-            }
-
-            while (true)
-            {
-              MergeBatch(blockBatchBytes, headerStream);
-
-              Console.WriteLine("Successfully merged batch {0}", i);
-
-              lock (MergeLOCK)
-              {
-                MergeBatchIndex = (MergeBatchIndex + 1) % COUNT_BATCHES_PARALLEL;
-
-                if (QueueMergeBlockBatches[MergeBatchIndex] == null)
-                {
-                  return;
-                }
-
-                Console.WriteLine("Follow-up batch to merge {0}", MergeBatchIndex);
-                blockBatchBytes = QueueMergeBlockBatches[MergeBatchIndex];
-                QueueMergeBlockBatches[MergeBatchIndex] = null;
-              }
-            }
-          }
-          else
-          {
-            parallelBatchesExistInArchive = false;
-          }
+          loadTasks[i] = LoadAsync(batchIndexOffset + i, i, headerStream);
         });
 
-        if (parallelBatchesExistInArchive)
+        await Task.WhenAll(loadTasks);
+
+        Console.WriteLine("Do loop");
+
+        if (ParallelBatchesExistInArchive)
         {
           batchIndexOffset += COUNT_BATCHES_PARALLEL;
         }
@@ -186,8 +215,9 @@ namespace BToken.Accounting
       await Task.WhenAll(blockDownloadTasks);
     }
 
-    void MergeBatch(byte[] blockBytes, Headerchain.HeaderStream headerStream)
+    void MergeBatch(byte[] blockBytes, Headerchain.HeaderStream headerStream, int batchIndex)
     {
+      Console.WriteLine("Merge batch {0}", batchIndex);
       var stopWatchMergeBatch = new Stopwatch();
       stopWatchMergeBatch.Restart();
 
@@ -199,12 +229,20 @@ namespace BToken.Accounting
           out int tXCount, 
           ref startIndex);
 
+
         UInt256 headerHash = header.ComputeHash(out byte[] headerHashBytes);
-        UInt256 hash = headerStream.GetHeaderLocation().Hash;
+        HeaderLocation headerLocation = headerStream.GetHeaderLocation();
+        UInt256 hash = headerLocation.Hash;
+
         if (!hash.Equals(headerHash))
         {
           throw new UTXOException("Unexpected header hash.");
         }
+
+        Console.WriteLine("parsed header {0}, height {1} in batchIndex {2}",
+          headerHash,
+          headerLocation.Height,
+          batchIndex);
 
         TX[] tXs = ParseBlock(blockBytes, ref startIndex, tXCount);
         byte[] merkleRootHash = ComputeMerkleRootHash(tXs, out byte[][] tXHashes);
