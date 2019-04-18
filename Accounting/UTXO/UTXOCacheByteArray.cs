@@ -118,7 +118,7 @@ namespace BToken.Accounting
         if ((uTXO[ByteIndexCollisionBits] & mask) != 0x00)
         {
           throw new UTXOException(string.Format(
-            "Output index '{0}' already spent.", outputIndex));
+            "Output index {0} already spent.", outputIndex));
         }
         uTXO[ByteIndexCollisionBits] |= mask;
 

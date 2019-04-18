@@ -24,7 +24,6 @@ namespace BToken.Accounting
       public INetworkChannel Channel { get; private set; }
 
       const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 7;
-      const int MAX_COUNT_TXS_IN_PARTITION = 100;
 
 
       public SessionBlockDownload(UTXO uTXO, HeaderLocation[] headerLocations, int batchIndex)

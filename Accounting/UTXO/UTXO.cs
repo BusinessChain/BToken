@@ -57,6 +57,7 @@ namespace BToken.Accounting
     int FilePartitionIndex = 0;
     List<Block> BlocksPartitioned = new List<Block>();
     int CountTXsPartitioned = 0;
+    const int MAX_COUNT_TXS_IN_PARTITION = 20000;
 
     public UTXO(Headerchain headerchain, Network network)
     {
@@ -82,19 +83,16 @@ namespace BToken.Accounting
     {
       if (BlockArchiver.Exists(batchIndex, out string filePath))
       {
-        Console.WriteLine("Start reading batch BatchBytes {0}", batchIndex);
-
         byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
 
-        Console.WriteLine("Stop reading batch BatchBytes {0}", batchIndex);
+        Console.WriteLine("Read batch BatchBytes {0}", batchIndex);
 
         lock (MergeLOCK)
         {
           if (MergeBatchIndex != batchIndex)
           {
-            Console.WriteLine("Postpone merge of batch {0}, queueIndex: {1}, awaiting batch {2}",
+            Console.WriteLine("Postpone merge of batch {0}, awaiting batch {1}",
               batchIndex,
-              queueIndex,
               MergeBatchIndex);
 
             QueueMergeBlockBatches[queueIndex] = blockBatchBytes;
@@ -106,7 +104,7 @@ namespace BToken.Accounting
         {
           MergeBatch(blockBatchBytes, headerStream, batchIndex);
 
-          Console.WriteLine("Successfully merged batch {0}, queueIndex: {1}",
+          Console.WriteLine("Successfully merged batch {0}",
             batchIndex,
             queueIndex);
 
@@ -121,11 +119,7 @@ namespace BToken.Accounting
             {
               return;
             }
-
-            Console.WriteLine("Follow-up batch {0} to merge, queueIndex: {1}",
-              MergeBatchIndex,
-              queueIndex);
-
+            
             blockBatchBytes = QueueMergeBlockBatches[queueIndex];
             QueueMergeBlockBatches[queueIndex] = null;
           }
@@ -163,8 +157,6 @@ namespace BToken.Accounting
         });
 
         await Task.WhenAll(loadTasks);
-
-        Console.WriteLine("Do loop");
 
         if (ParallelBatchesExistInArchive)
         {
@@ -239,11 +231,6 @@ namespace BToken.Accounting
           throw new UTXOException("Unexpected header hash.");
         }
 
-        Console.WriteLine("parsed header {0}, height {1} in batchIndex {2}",
-          headerHash,
-          headerLocation.Height,
-          batchIndex);
-
         TX[] tXs = ParseBlock(blockBytes, ref startIndex, tXCount);
         byte[] merkleRootHash = ComputeMerkleRootHash(tXs, out byte[][] tXHashes);
         if (!EqualityComparerByteArray.IsEqual(header.MerkleRoot, merkleRootHash))
@@ -290,8 +277,8 @@ namespace BToken.Accounting
             tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
             Array.Reverse(outputTXHash);
 
-            Console.WriteLine("Input '{0}' in TX '{1}' \n failed to spend " +
-              "output '{2}' in TX '{3}': \n'{4}'.",
+            Console.WriteLine("Input {0} in TX {1} \n failed to spend output " +
+              "{2} in TX {3}: \n{4}.",
               i,
               new SoapHexBinary(inputTXHash),
               tXs[t].Inputs[i].IndexOutput,
