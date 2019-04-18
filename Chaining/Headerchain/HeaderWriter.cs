@@ -52,7 +52,7 @@ namespace BToken.Chaining
       public void StoreHeader(NetworkHeader header)
       {
         byte[] headerBytes = header.GetBytes();
-        FileStream.Write(headerBytes, 0, headerBytes.Length);
+        FileStream.Write(headerBytes, 0, headerBytes.Length - 1);
       }
 
       public void Dispose()

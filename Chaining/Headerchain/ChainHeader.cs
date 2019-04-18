@@ -17,7 +17,7 @@ namespace BToken.Chaining
       public ChainHeader(
         UInt32 version,
         UInt256 hashPrevious,
-        UInt256 payloadHash,
+        byte[] payloadHash,
         UInt32 unixTimeSeconds,
         UInt32 nBits,
         UInt32 nonce)

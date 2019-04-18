@@ -16,7 +16,7 @@ namespace BToken.Chaining
 
       public ChainHeader Header;
       public UInt256 Hash;
-      public uint Depth;
+      public int Depth;
 
 
       public ChainProbe(Chain chain)
@@ -61,7 +61,7 @@ namespace BToken.Chaining
 
       public UInt256 GetHeaderHash(ChainHeader header)
       {
-        if (header.HeadersNext.Any())
+        if (header.HeadersNext != null)
         {
           return header.HeadersNext[0].NetworkHeader.HashPrevious;
         }
@@ -76,7 +76,7 @@ namespace BToken.Chaining
       }
 
       public bool IsTip() => Header == Chain.HeaderTip;
-      public uint GetHeight() => Chain.Height - Depth;
+      public int GetHeight() => Chain.Height - Depth;
     }
   }
 }

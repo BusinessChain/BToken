@@ -9,7 +9,7 @@ namespace BToken.Networking
   {
     public UInt32 Version { get; private set; }
     public UInt256 HashPrevious { get; private set; }
-    public UInt256 MerkleRoot { get; private set; }
+    public byte[] MerkleRoot { get; private set; }
     public UInt32 UnixTimeSeconds { get; private set; }
     public UInt32 NBits { get; private set; }
     public UInt32 Nonce { get; private set; }
@@ -18,7 +18,7 @@ namespace BToken.Networking
     public NetworkHeader(
       UInt32 version, 
       UInt256 hashPrevious,
-      UInt256 merkleRootHash,
+      byte[] merkleRootHash,
       UInt32 unixTimeSeconds,
       UInt32 nBits,
       UInt32 nonce)
@@ -37,7 +37,7 @@ namespace BToken.Networking
 
       headerSerialized.AddRange(BitConverter.GetBytes(Version));
       headerSerialized.AddRange(HashPrevious.GetBytes());
-      headerSerialized.AddRange(MerkleRoot.GetBytes());
+      headerSerialized.AddRange(MerkleRoot);
       headerSerialized.AddRange(BitConverter.GetBytes(UnixTimeSeconds));
       headerSerialized.AddRange(BitConverter.GetBytes(NBits));
       headerSerialized.AddRange(BitConverter.GetBytes(Nonce));
@@ -51,8 +51,10 @@ namespace BToken.Networking
       startIndex += 4;
 
       UInt256 previousHeaderHash = new UInt256(buffer, ref startIndex);
-
-      UInt256 merkleRootHash = new UInt256(buffer, ref startIndex);
+      
+      byte[] merkleRootHash = new byte[32];
+      Array.Copy(buffer, startIndex, merkleRootHash, 0, 32);
+      startIndex += 32;
 
       UInt32 unixTimeSeconds = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
@@ -73,12 +75,19 @@ namespace BToken.Networking
         nBits, 
         nonce);
     }
-
   }
 
   public static class NetworkHeaderExtensionMethods
   {
-    public static UInt256 ComputeHash(this NetworkHeader header)
+    public static UInt256 ComputeHash(
+      this NetworkHeader header, 
+      out byte[] headerHashBytes)
+    {
+      headerHashBytes = header.GetBytes();
+      return new UInt256(SHA256d.Compute(headerHashBytes));
+    }
+    public static UInt256 ComputeHash(
+      this NetworkHeader header)
     {
       return new UInt256(SHA256d.Compute(header.GetBytes()));
     }

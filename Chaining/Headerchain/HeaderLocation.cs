@@ -8,10 +8,10 @@ namespace BToken.Chaining
 {
   public class HeaderLocation
   {
-    public uint Height;
+    public int Height;
     public UInt256 Hash;
 
-    public HeaderLocation(uint height, UInt256 hash)
+    public HeaderLocation(int height, UInt256 hash)
     {
       Height = height;
       Hash = hash;

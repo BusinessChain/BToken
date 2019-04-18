@@ -10,21 +10,24 @@ namespace BToken.Accounting
 {
   class Block
   {
-    public UInt256 HeaderHash;
-    public NetworkHeader Header;
-    public List<TX> TXs;
-    public List<byte[]> TXHashes;
+    public byte[] HeaderHashBytes;
+    public TX[] TXs;
+    public byte[][] TXHashes;
+    public byte[] BlockBytes;
+    public int Height;
 
     public Block(
-      NetworkHeader header,
-      UInt256 headerHash, 
-      List<TX> tXs, 
-      List<byte[]> tXHashes)
+      byte[] headerHashBytes, 
+      TX[] tXs,
+      byte[][] tXHashes,
+      byte[] blockBytes,
+      int height)
     {
-      Header = header;
-      HeaderHash = headerHash;
+      HeaderHashBytes = headerHashBytes;
       TXs = tXs;
       TXHashes = tXHashes;
+      BlockBytes = blockBytes;
+      Height = height;
     }
   }
 }

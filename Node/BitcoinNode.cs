@@ -38,7 +38,7 @@ namespace BToken
       await Headerchain.LoadFromArchiveAsync();
       //Console.WriteLine("Loaded headerchain from archive, height '{0}'", Headerchain.GetHeight());
 
-      await Network.ExecuteSessionAsync(new SessionHeaderDownload(Headerchain));
+      //await Network.ExecuteSessionAsync(new SessionHeaderDownload(Headerchain));
       //Console.WriteLine("downloaded headerchain from network, height '{0}'", Headerchain.GetHeight());
 
       await UTXO.StartAsync();

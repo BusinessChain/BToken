@@ -12,14 +12,14 @@ namespace BToken.Chaining
     {
       public ChainHeader HeaderTip { get; private set; }
       public UInt256 HeaderTipHash { get; private set; }
-      public uint Height { get; private set; }
+      public int Height { get; private set; }
       public double AccumulatedDifficulty { get; private set; }
       public ChainHeader HeaderRoot { get; private set; }
 
 
       public Chain(
         ChainHeader headerRoot,
-        uint height,
+        int height,
         double accumulatedDifficultyPrevious)
       {
         HeaderTip = headerRoot;

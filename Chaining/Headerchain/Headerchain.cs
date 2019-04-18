@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.IO;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 using BToken.Networking;
 
@@ -133,6 +134,7 @@ namespace BToken.Chaining
     }
     static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)
     {
+      string merkleRoot = new SoapHexBinary(header.MerkleRoot).ToString();
       headerHash = header.ComputeHash();
 
       if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
@@ -181,7 +183,7 @@ namespace BToken.Chaining
 
     public static bool TryGetHeaderHash(ChainHeader header, out UInt256 headerHash)
     {
-      if (header.HeadersNext.Any())
+      if (header.HeadersNext != null)
       {
         headerHash = header.HeadersNext[0].NetworkHeader.HashPrevious;
         return true;
@@ -200,7 +202,7 @@ namespace BToken.Chaining
         using (var archiveReader = new HeaderReader())
         {
           NetworkHeader header = archiveReader.GetNextHeader();
-          
+
           while (header != null)
           {
             await InsertHeaderAsync(header);
@@ -222,7 +224,7 @@ namespace BToken.Chaining
       }
     }
 
-    public uint GetHeight()
+    public int GetHeight()
     {
       return MainChain.Height;
     }

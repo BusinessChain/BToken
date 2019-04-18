@@ -23,7 +23,7 @@ namespace BToken.Chaining
       public void Reorganize()
       {
         UInt256 hash = Headerchain.MainChain.HeaderTipHash;
-        uint height = Headerchain.MainChain.Height;
+        int height = Headerchain.MainChain.Height;
 
         BlockLocations = new List<HeaderLocation>() { new HeaderLocation(height, hash) };
 
@@ -53,7 +53,7 @@ namespace BToken.Chaining
 
       public void Update()
       {
-        uint height = Headerchain.MainChain.Height;
+        int height = Headerchain.MainChain.Height;
         UInt256 hash = Headerchain.MainChain.HeaderTipHash;
 
         AddLocation(height, hash);
@@ -63,7 +63,7 @@ namespace BToken.Chaining
         return BlockLocations.Select(b => b.Hash).ToList();
       }
 
-      void AddLocation(uint height, UInt256 hash)
+      void AddLocation(int height, UInt256 hash)
       {
         BlockLocations.Insert(0, new HeaderLocation(height, hash));
 
@@ -77,8 +77,8 @@ namespace BToken.Chaining
           return;
         }
 
-        uint depthFromPrior = BlockLocations[startIndex - 1].Height - BlockLocations[startIndex].Height;
-        uint heightFromNext = BlockLocations[startIndex].Height - BlockLocations[startIndex + 2].Height;
+        int depthFromPrior = BlockLocations[startIndex - 1].Height - BlockLocations[startIndex].Height;
+        int heightFromNext = BlockLocations[startIndex].Height - BlockLocations[startIndex + 2].Height;
 
         if (heightFromNext <= 2 * depthFromPrior)
         {

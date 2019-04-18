@@ -11,24 +11,40 @@ namespace BToken.Networking
     public NetworkHeader Header { get; private set; }
     public int TXCount { get; private set; }
     public byte[] Payload { get; private set; }
+    public byte[] BlockBytes { get; private set; }
 
 
-    public NetworkBlock(NetworkHeader networkHeader, int txCount, byte[] payload)
+    public NetworkBlock(
+      NetworkHeader networkHeader,
+      int txCount,
+      byte[] blockBytes)
+    {
+      Header = networkHeader;
+      TXCount = txCount;
+      BlockBytes = blockBytes;
+    }
+
+    public NetworkBlock(
+      NetworkHeader networkHeader, 
+      int txCount, 
+      byte[] payload, 
+      byte[] blockBytes)
     {
       Header = networkHeader;
       TXCount = txCount;
       Payload = payload;
+      BlockBytes = blockBytes;
     }
 
 
     public static NetworkBlock ReadBlock(byte[] blockBytes)
     {
-      int startIndex = 0;
+      int index = 0;
 
-      NetworkHeader header = NetworkHeader.ParseHeader(blockBytes, out int txCount, ref startIndex);
-      byte[] payload = blockBytes.Skip(startIndex).ToArray();
+      NetworkHeader header = NetworkHeader.ParseHeader(blockBytes, out int txCount, ref index);
+      byte[] payload = blockBytes.Skip(index).ToArray(); // increase performance by skipping that, instead keep an index in the object pointing to the start  of the block payload.
 
-      return new NetworkBlock(header, txCount, payload);
+      return new NetworkBlock(header, txCount, payload, blockBytes);
     }
   }
 }

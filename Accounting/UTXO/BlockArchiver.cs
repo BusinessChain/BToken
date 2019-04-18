@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Generic;
 using System;
 using System.Linq;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
@@ -12,38 +12,28 @@ namespace BToken.Accounting
   partial class BlockArchiver
   {
     static string[] ShardPaths = {
-    "I:\\BlockArchive",
-    "J:\\BlockArchive",
-    "D:\\BlockArchive",
-    "C:\\BlockArchive"
+    "I:\\BlockArchivePartitioned",
+    //"J:\\BlockArchive",
+    //"D:\\BlockArchive",
+    //"C:\\BlockArchive"
     };
     const int PrefixBlockFolderBytes = 2;
 
-
-    public static async Task ArchiveBlockAsync(Block block)
+    public static async Task ArchiveBlocksAsync(List<Block> blocks, int filePartitionIndex)
     {
-      // write cache
-
-      using (FileStream file = CreateFile(block.HeaderHash))
+      using (FileStream file = CreateFile(filePartitionIndex))
       {
-        byte[] headerBytes = block.Header.GetBytes();
-        byte[] txCount = VarInt.GetBytes(block.TXs.Count).ToArray();
-
-        await file.WriteAsync(headerBytes, 0, headerBytes.Length);
-        await file.WriteAsync(txCount, 0, txCount.Length);
-
-        for (int t = 0; t < block.TXs.Count; t++)
+        foreach(Block block in blocks)
         {
-          byte[] txBytes = block.TXs[t].GetBytes();
-          await file.WriteAsync(txBytes, 0, txBytes.Length);
+          await file.WriteAsync(block.BlockBytes, 0, block.BlockBytes.Length);
         }
       }
     }
-    static FileStream CreateFile(UInt256 hash)
+    static FileStream CreateFile(int filePartitionIndex)
     {
-      string fileRootPath = CreateFileRootPath(hash);
-      Directory.CreateDirectory(fileRootPath);
-      string filePath = Path.Combine(fileRootPath, hash.ToString());
+      string shardRootPath = ShardPaths[filePartitionIndex % ShardPaths.Length];
+      Directory.CreateDirectory(shardRootPath);
+      string filePath = Path.Combine(shardRootPath, "p" + filePartitionIndex.ToString());
 
       return new FileStream(
         filePath,
@@ -54,45 +44,25 @@ namespace BToken.Accounting
         useAsync: true);
     }
 
-    public static void DeleteBlock(UInt256 hash)
+    public static bool Exists(int batchIndex, out string filePath)
     {
-      string fileRootPath = CreateFileRootPath(hash);
-      string filePath = Path.Combine(fileRootPath, hash.ToString());
-      File.Delete(filePath);
-    }
-    public static bool Exists(UInt256 hash, out string filePath)
-    {
-      string fileRootPath = CreateFileRootPath(hash);
-      filePath = Path.Combine(fileRootPath, hash.ToString());
+      string shardPath = ShardPaths[batchIndex % ShardPaths.Length];
+      filePath = Path.Combine(shardPath, "p" + batchIndex.ToString());
 
       return File.Exists(filePath);
     }
-    public static async Task<NetworkBlock> ReadBlockAsync(string filePath)
-    {      
+    public static async Task<byte[]> ReadBlockBatchAsync(string filePath)
+    {
       using (FileStream fileStream = new FileStream(
         filePath,
         FileMode.Open,
         FileAccess.Read,
         FileShare.Read,
-        bufferSize: 8192,
-        useAsync: false))
+        bufferSize: 4096,
+        useAsync: true))
       {
-        byte[] blockBytes = await ReadBytesAsync(fileStream);
-        return NetworkBlock.ReadBlock(blockBytes);
+        return await ReadBytesAsync(fileStream);
       }
-    }
-    static string CreateFileRootPath(UInt256 blockHash)
-    {
-      byte[] prefixBlockFolderBytes = blockHash.GetBytes().Take(PrefixBlockFolderBytes).ToArray();
-      Array.Reverse(prefixBlockFolderBytes);
-      string blockHashIndex = new SoapHexBinary(prefixBlockFolderBytes).ToString();
-      byte byteID = prefixBlockFolderBytes.First();
-      string shardPath = GetShardPath(byteID);
-      return Path.Combine(GetShardPath(byteID), blockHashIndex);
-    }
-    static string GetShardPath(byte byteID)
-    {
-      return ShardPaths[byteID % ShardPaths.Length];
     }
 
     static async Task<byte[]> ReadBytesAsync(Stream stream)
