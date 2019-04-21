@@ -139,7 +139,6 @@ namespace BToken.Accounting
 
               if (UTXO.QueueMergeBlocks.TryGetValue(UTXO.MergeBatchIndex, out BlocksReceived))
               {
-                Console.WriteLine("Follow-up batch to merge {0}", UTXO.MergeBatchIndex);
                 UTXO.QueueMergeBlocks.Remove(UTXO.MergeBatchIndex);
               }
               else

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace BToken.Accounting
 {
@@ -10,18 +9,78 @@ namespace BToken.Accounting
   {
     abstract class UTXOCache
     {
-      UTXOCache[] Caches;
+      UTXOCache NextCache;
 
+      protected int Address;
       protected int PrimaryKey;
-      protected int CollisionCacheIndex;
 
 
-      public UTXOCache(UTXOCache[] caches)
+      public UTXOCache(int address, UTXOCache nextCache)
       {
-        Caches = caches;
+        Address = address;
+        NextCache = nextCache;
+      }
+      
+      protected abstract bool TryInsertUTXO(int primaryKey, byte[] tXIDHash, byte[] headerHashBytes, int lengthUTXOBits);
+
+      public void InsertUTXO(byte[] tXIDHash, byte[] headerHashBytes, int outputsCount)
+      {
+        int primaryKey = BitConverter.ToInt32(tXIDHash, 0);
+        int lengthUTXOBits = CountHeaderPlusCollisionBits + outputsCount;
+
+        if(TryInsertUTXO(primaryKey, tXIDHash, headerHashBytes, lengthUTXOBits))
+        {
+          return;
+        }
+        
+        if (NextCache != null
+          && NextCache.TryInsertUTXO(primaryKey, tXIDHash, headerHashBytes, lengthUTXOBits))
+        {
+          return;
+        }
+
+        var cache = NextCache.NextCache;
+        while (cache != null)
+        {
+          if (cache.TryInsertUTXO(primaryKey, tXIDHash, headerHashBytes, lengthUTXOBits))
+          {
+            return;
+          }
+
+          cache = cache.NextCache;
+        }
+
+        throw new UTXOException("UTXO could not be inserted attached Cache modules.");
       }
 
-      public abstract bool TrySetCollisionBit(int primaryKey, int collisionIndex);
+      public void SpendUTXO(byte[] tXIDOutput, int outputIndex)
+      {
+        int primaryKey = BitConverter.ToInt32(tXIDOutput, 0);
+
+        if(TrySpend(primaryKey, tXIDOutput, outputIndex))
+        {
+          return;
+        }
+
+        if(NextCache != null
+          && NextCache.TrySpend(primaryKey, tXIDOutput, outputIndex))
+        {
+          return;
+        }
+
+        var cache = NextCache.NextCache;
+        while(cache != null)
+        {
+          if (cache.TrySpend(primaryKey, tXIDOutput, outputIndex))
+          {
+            return;
+          }
+
+          cache = cache.NextCache;
+        }
+
+        throw new UTXOException("Referenced TXID not found in UTXO table.");
+      }
 
       public bool TrySpend(
         int primaryKey,
@@ -29,20 +88,24 @@ namespace BToken.Accounting
         int outputIndex)
       {
         PrimaryKey = primaryKey;
-        CollisionCacheIndex = 0;
-        uint collisionBits = 0;
         UTXOCache cacheCollision = null;
 
         if (TryGetValueInPrimaryCache(primaryKey))
         {
-          while (CollisionCacheIndex < Caches.Length)
-          {
-            if(IsCollision(CollisionCacheIndex))
-            {
-              collisionBits |= (uint)(1 << CollisionCacheIndex);
-              cacheCollision = Caches[CollisionCacheIndex];
+          uint collisionBits = 0;
+          var cache = this;
 
-              if (cacheCollision.TrySpendSecondary(
+          while (cache != null)
+          {
+            if (IsCollision(cache.Address))
+            {
+              if(cacheCollision == null)
+              {
+                cacheCollision = cache;
+              }
+              collisionBits |= (uint)(1 << cache.Address);
+
+              if (cache.TrySpendSecondary(
                 primaryKey,
                 tXIDOutput,
                 outputIndex,
@@ -52,7 +115,7 @@ namespace BToken.Accounting
               }
             }
 
-            CollisionCacheIndex++;
+            cache = cache.NextCache;
           }
 
           SpendPrimaryUTXO(outputIndex, out bool areAllOutputpsSpent);
@@ -76,7 +139,7 @@ namespace BToken.Accounting
       }
       protected abstract void SpendPrimaryUTXO(int outputIndex, out bool areAllOutputpsSpent);
       protected abstract bool TryGetValueInPrimaryCache(int primaryKey);
-      protected abstract bool IsCollision(int collisionCacheIndex);
+      protected abstract bool IsCollision(int cacheAddress);
       protected abstract void RemovePrimary(int primaryKey);
       protected abstract void ResolveCollision(int primaryKey, uint collisionBits);
       
@@ -96,7 +159,7 @@ namespace BToken.Accounting
 
             if (!hasMoreCollisions)
             {
-              primaryCache.ClearCollisionBit();
+              primaryCache.ClearCollisionBit(Address);
             }
           }
 
@@ -110,7 +173,7 @@ namespace BToken.Accounting
       protected abstract void SpendSecondaryUTXO(byte[] key, int outputIndex, out bool areAllOutputpsSpent);
       protected abstract bool TryGetValueInSecondaryCache(byte[] key);
       protected abstract void RemoveSecondary(int primaryKey, byte[] key, out bool hasMoreCollisions);
-      protected abstract void ClearCollisionBit();
+      protected abstract void ClearCollisionBit(int cacheAddress);
 
       public abstract int GetCountPrimaryCacheItems();
       public abstract int GetCountSecondaryCacheItems();

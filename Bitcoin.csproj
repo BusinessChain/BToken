@@ -105,7 +105,8 @@
     <Compile Include="Node\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Chaining\Headerchain\Chain.cs" />
-    <Compile Include="DataTypes\EqualityComparerByteArray.cs" />
+    <Compile Include="Utilities\ByteArray2HexString.cs" />
+    <Compile Include="Utilities\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\SHA256d.cs" />
     <Compile Include="Chaining\Headerchain\ChainHeader.cs" />
@@ -193,6 +194,7 @@
       <Install>false</Install>
     </BootstrapperPackage>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
