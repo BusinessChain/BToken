@@ -14,6 +14,7 @@ namespace BToken.Accounting
       Dictionary<byte[], byte[]> SecondaryCache =
         new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
 
+      byte[] UTXOIndex;
       byte[] UTXOPrimaryExisting;
       byte[] UTXOSecondaryExisting;
 
@@ -30,7 +31,7 @@ namespace BToken.Accounting
         : this(null)
       { }
       public UTXOCacheByteArray(UTXOCache nextCache) 
-        : base(1, nextCache)
+        : base(nextCache)
       { }
 
 
@@ -43,44 +44,44 @@ namespace BToken.Accounting
         return SecondaryCache.Count;
       }
 
-      protected override bool TryInsertUTXO(
-        int primaryKey,
-        byte[] tXIDHash,
-        byte[] headerHashBytes,
-        int lengthUTXOBits)
+      protected override bool IsUTXOTooLongForCache(int lengthUTXOBits)
       {
-        byte[] uTXO = CreateUTXOByteArray(headerHashBytes, lengthUTXOBits);
-
-        if (PrimaryCache.TryGetValue(primaryKey, out byte[] uTXOExisting))
-        {
-          uTXOExisting[ByteIndexCollisionBits] |= MasksCollision[Address];
-          SecondaryCache.Add(tXIDHash, uTXO);
-        }
-        else
-        {
-          PrimaryCache.Add(primaryKey, uTXO);
-        }
-
-        return true;
+        return false;
       }
-      static byte[] CreateUTXOByteArray(byte[] headerHashBytes, int lengthUTXOBits)
+      protected override void CreateUTXO(byte[] headerHashBytes, int lengthUTXOBits)
       {
         int lengthUTXOIndex = (lengthUTXOBits + 7) / 8;
-        byte[] uTXOIndex = new byte[lengthUTXOIndex];
+        UTXOIndex = new byte[lengthUTXOIndex];
 
-        Array.Copy(headerHashBytes, uTXOIndex, LENGTH_HEADER_INDEX_BYTES);
+        Array.Copy(headerHashBytes, UTXOIndex, LENGTH_HEADER_INDEX_BYTES);
 
         int i = LENGTH_HEADER_INDEX_BYTES - 1;
-        uTXOIndex[i] <<= COUNT_NON_HEADER_BITS_IN_BYTE;
-        uTXOIndex[i] >>= COUNT_NON_HEADER_BITS_IN_BYTE;
+        UTXOIndex[i] <<= COUNT_NON_HEADER_BITS_IN_BYTE;
+        UTXOIndex[i] >>= COUNT_NON_HEADER_BITS_IN_BYTE;
 
         int countUTXORemainderBits = lengthUTXOBits % 8;
-        if(countUTXORemainderBits > 0)
+        if (countUTXORemainderBits > 0)
         {
-          uTXOIndex[uTXOIndex.Length - 1] |= (byte)(byte.MaxValue << countUTXORemainderBits);
+          UTXOIndex[UTXOIndex.Length - 1] |= (byte)(byte.MaxValue << countUTXORemainderBits);
+        }
+      }
+      protected override bool TrySetCollisionBit(int primaryKey, int collisionAddress)
+      {
+        if (PrimaryCache.TryGetValue(primaryKey, out byte[] uTXOExisting))
+        {
+          uTXOExisting[ByteIndexCollisionBits] |= MasksCollision[collisionAddress];
+          return true;
         }
 
-        return uTXOIndex;
+        return false;
+      }
+      protected override void SecondaryCacheAddUTXO(byte[] tXIDHash)
+      {
+        SecondaryCache.Add(tXIDHash, UTXOIndex);
+      }
+      protected override void PrimaryCacheAddUTXO(int primaryKey)
+      {
+        PrimaryCache.Add(primaryKey, UTXOIndex);
       }
 
 
