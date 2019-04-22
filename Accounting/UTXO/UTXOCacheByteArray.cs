@@ -14,16 +14,24 @@ namespace BToken.Accounting
       Dictionary<byte[], byte[]> SecondaryCache =
         new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
 
+      byte[] UTXOIndex;
       byte[] UTXOPrimaryExisting;
       byte[] UTXOSecondaryExisting;
-      
-      byte[] MasksCollisionCaches = {
+
+      byte[] MasksCollision = {
         0x04,
         0x08,
-        0x10}; // make this parametric
+        0x10 };
 
+      const int LENGTH_HEADER_INDEX_BYTES = (COUNT_HEADERINDEX_BITS + 7) / 8;
+      const int COUNT_NON_HEADER_BITS_IN_BYTE = (8 - COUNT_HEADERINDEX_BITS % 8) % 8;
+      
 
-      public UTXOCacheByteArray(UTXOCache[] caches) : base(caches)
+      public UTXOCacheByteArray()
+        : this(null)
+      { }
+      public UTXOCacheByteArray(UTXOCache nextCache) 
+        : base(nextCache)
       { }
 
 
@@ -35,25 +43,47 @@ namespace BToken.Accounting
       {
         return SecondaryCache.Count;
       }
-      public override bool TrySetCollisionBit(int primaryKey, int collisionIndex)
+
+      protected override bool IsUTXOTooLongForCache(int lengthUTXOBits)
+      {
+        return false;
+      }
+      protected override void CreateUTXO(byte[] headerHashBytes, int lengthUTXOBits)
+      {
+        int lengthUTXOIndex = (lengthUTXOBits + 7) / 8;
+        UTXOIndex = new byte[lengthUTXOIndex];
+
+        Array.Copy(headerHashBytes, UTXOIndex, LENGTH_HEADER_INDEX_BYTES);
+
+        int i = LENGTH_HEADER_INDEX_BYTES - 1;
+        UTXOIndex[i] <<= COUNT_NON_HEADER_BITS_IN_BYTE;
+        UTXOIndex[i] >>= COUNT_NON_HEADER_BITS_IN_BYTE;
+
+        int countUTXORemainderBits = lengthUTXOBits % 8;
+        if (countUTXORemainderBits > 0)
+        {
+          UTXOIndex[UTXOIndex.Length - 1] |= (byte)(byte.MaxValue << countUTXORemainderBits);
+        }
+      }
+      protected override bool TrySetCollisionBit(int primaryKey, int collisionAddress)
       {
         if (PrimaryCache.TryGetValue(primaryKey, out byte[] uTXOExisting))
         {
-          uTXOExisting[ByteIndexCollisionBits] |= MasksCollisionCaches[collisionIndex];
-
+          uTXOExisting[ByteIndexCollisionBits] |= MasksCollision[collisionAddress];
           return true;
         }
 
         return false;
       }
-      public void Write(int primaryKey, byte[] uTXO)
+      protected override void SecondaryCacheAddUTXO(byte[] tXIDHash)
       {
-        PrimaryCache.Add(primaryKey, uTXO);
+        SecondaryCache.Add(tXIDHash, UTXOIndex);
       }
-      public void Write(byte[] tXIDHash, byte[] uTXO)
+      protected override void PrimaryCacheAddUTXO(int primaryKey)
       {
-        SecondaryCache.Add(tXIDHash, uTXO);
+        PrimaryCache.Add(primaryKey, UTXOIndex);
       }
+
 
       protected override void SpendPrimaryUTXO(int outputIndex, out bool areAllOutputpsSpent)
       {
@@ -63,10 +93,10 @@ namespace BToken.Accounting
       {
         return PrimaryCache.TryGetValue(primaryKey, out UTXOPrimaryExisting);
       }
-      protected override bool IsCollision(int collisionCacheIndex)
+      protected override bool IsCollision(int cacheAddress)
       {
         return 
-          (MasksCollisionCaches[collisionCacheIndex] & 
+          (MasksCollision[cacheAddress] & 
           UTXOPrimaryExisting[ByteIndexCollisionBits]) 
           != 0;
       }
@@ -107,20 +137,24 @@ namespace BToken.Accounting
         hasMoreCollisions = SecondaryCache.Keys
           .Any(k => BitConverter.ToInt32(k, 0) == primaryKey);
       }
-      protected override void ClearCollisionBit()
+      protected override void ClearCollisionBit(int cacheAddress)
       {
-        UTXOPrimaryExisting[ByteIndexCollisionBits] &= (byte)~MasksCollisionCaches[CollisionCacheIndex];
+        UTXOPrimaryExisting[ByteIndexCollisionBits] &= (byte)~MasksCollision[cacheAddress];
       }
 
       static void SpendUTXO(byte[] uTXO, int outputIndex, out bool areAllOutputpsSpent)
       {
-        byte mask = (byte)(1 << (CountHeaderBitsInByte + outputIndex));
-        if ((uTXO[ByteIndexCollisionBits] & mask) != 0x00)
+        int bitOffset = CountHeaderPlusCollisionBits + outputIndex;
+        int byteIndex = bitOffset / 8;
+        int bitIndex = bitOffset % 8;
+
+        byte mask = (byte)(1 << bitIndex);
+        if ((uTXO[byteIndex] & mask) != 0x00)
         {
           throw new UTXOException(string.Format(
             "Output index {0} already spent.", outputIndex));
         }
-        uTXO[ByteIndexCollisionBits] |= mask;
+        uTXO[byteIndex] |= mask;
 
         areAllOutputpsSpent = AreAllOutputBitsSpent(uTXO);
       }

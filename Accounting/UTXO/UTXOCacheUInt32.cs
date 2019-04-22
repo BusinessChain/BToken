@@ -14,16 +14,18 @@ namespace BToken.Accounting
       Dictionary<byte[], uint> SecondaryCache = 
         new Dictionary<byte[], uint>(new EqualityComparerByteArray());
 
+      uint UTXOIndex;
       uint UTXOPrimaryExisting;
       uint UTXOSecondaryExisting;
 
-      uint[] MasksCollisionCaches = {
+      uint[] MasksCollision = {
         0x04000000,
         0x08000000,
-        0x10000000};
+        0x10000000 };
 
 
-      public UTXOCacheUInt32(UTXOCache[] caches) : base(caches)
+      public UTXOCacheUInt32(UTXOCache nextCache) 
+        : base(nextCache)
       { }
 
 
@@ -36,27 +38,47 @@ namespace BToken.Accounting
         return SecondaryCache.Count;
       }
 
-      public override bool TrySetCollisionBit(int primaryKey, int collisionIndex)
+      protected override bool IsUTXOTooLongForCache(int lengthUTXOBits)
       {
-        if(PrimaryCache.ContainsKey(primaryKey))
-        {
-          PrimaryCache[primaryKey] |= MasksCollisionCaches[collisionIndex];
+        return COUNT_INTEGER_BITS < lengthUTXOBits;
+      }
+      protected override void CreateUTXO(byte[] headerHashBytes, int lengthUTXOBits)
+      {
+        UTXOIndex = 0;
 
+        for (int i = CountHeaderBytes; i > 0; i--)
+        {
+          UTXOIndex <<= 8;
+          UTXOIndex |= headerHashBytes[i - 1];
+        }
+        UTXOIndex <<= CountNonHeaderBits;
+        UTXOIndex >>= CountNonHeaderBits;
+
+        int countUTXORemainderBits = lengthUTXOBits % 8;
+        if (countUTXORemainderBits > 0)
+        {
+          UTXOIndex |= (uint.MaxValue << lengthUTXOBits);
+        }
+      }
+      protected override bool TrySetCollisionBit(int primaryKey, int collisionAddress)
+      {
+        if (PrimaryCache.ContainsKey(primaryKey))
+        {
+          PrimaryCache[primaryKey] |= MasksCollision[collisionAddress];
           return true;
         }
 
         return false;
       }
-
-      public void Write(int primaryKey, uint uTXO)
+      protected override void SecondaryCacheAddUTXO(byte[] tXIDHash)
       {
-        PrimaryCache.Add(primaryKey, uTXO);
+        SecondaryCache.Add(tXIDHash, UTXOIndex);
       }
-      public void Write(byte[] tXIDHash, uint uTXO)
+      protected override void PrimaryCacheAddUTXO(int primaryKey)
       {
-        SecondaryCache.Add(tXIDHash, uTXO);
+        PrimaryCache.Add(primaryKey, UTXOIndex);
       }
-
+           
       protected override void SpendPrimaryUTXO(int outputIndex, out bool areAllOutputpsSpent)
       {
         SpendUTXO(ref UTXOPrimaryExisting, outputIndex, out areAllOutputpsSpent);
@@ -66,9 +88,9 @@ namespace BToken.Accounting
       {
         return PrimaryCache.TryGetValue(primaryKey, out UTXOPrimaryExisting);
       }
-      protected override bool IsCollision(int collisionCacheIndex)
+      protected override bool IsCollision(int cacheAddress)
       {
-        return (MasksCollisionCaches[collisionCacheIndex] & UTXOPrimaryExisting) != 0;
+        return (MasksCollision[cacheAddress] & UTXOPrimaryExisting) != 0;
       }
       protected override void RemovePrimary(int primaryKey)
       {
@@ -107,10 +129,9 @@ namespace BToken.Accounting
         hasMoreCollisions = SecondaryCache.Keys
           .Any(k => BitConverter.ToInt32(k, 0) == primaryKey);
       }
-      protected override void ClearCollisionBit()
+      protected override void ClearCollisionBit(int cacheAddress)
       {
-        UTXOPrimaryExisting &= ~MasksCollisionCaches[CollisionCacheIndex];
-        PrimaryCache[PrimaryKey] = UTXOPrimaryExisting;
+        PrimaryCache[PrimaryKey] &= ~MasksCollision[cacheAddress];
       }
       
       static void SpendUTXO(ref uint uTXO, int outputIndex, out bool areAllOutputpsSpent)

@@ -23,7 +23,7 @@ namespace BToken.Accounting
 
       public INetworkChannel Channel { get; private set; }
 
-      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 7;
+      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
 
       public SessionBlockDownload(UTXO uTXO, HeaderLocation[] headerLocations, int batchIndex)
@@ -37,8 +37,6 @@ namespace BToken.Accounting
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
       {
-        Console.WriteLine("Start session {0}", BatchIndex);
-
         Channel = channel;
 
         try
@@ -88,9 +86,10 @@ namespace BToken.Accounting
                 blockBytes,
                 HeaderLocations[IndexBlockReceived].Height);
 
-              Console.WriteLine("'{0}' Downloaded block '{1}'", 
-                Channel.GetIdentification(),
-                hash);
+              //Console.WriteLine("'{0}' Downloaded block '{1}', height {2}", 
+              //  Channel.GetIdentification(),
+              //  hash,
+              //  HeaderLocations[IndexBlockReceived].Height);
 
               IndexBlockReceived++;
             }
@@ -106,7 +105,7 @@ namespace BToken.Accounting
             }
           }
 
-          Console.WriteLine("Merge batch {0}", BatchIndex);
+          Console.WriteLine("Merge batch {0}, block height {1}", BatchIndex, BlocksReceived[0].Height);
 
           while (true)
           {
@@ -129,17 +128,16 @@ namespace BToken.Accounting
                 UTXO.BlocksPartitioned = new List<Block>();
                 UTXO.CountTXsPartitioned = 0;
               }
-
             }
-            
+
+            Console.WriteLine("Successfully merged batch {0}", UTXO.MergeBatchIndex);
+
             lock (UTXO.MergeLOCK)
             {
-              Console.WriteLine("Successfully merged batch {0}", UTXO.MergeBatchIndex);
               UTXO.MergeBatchIndex++;
 
               if (UTXO.QueueMergeBlocks.TryGetValue(UTXO.MergeBatchIndex, out BlocksReceived))
               {
-                Console.WriteLine("Follow-up batch to merge {0}", UTXO.MergeBatchIndex);
                 UTXO.QueueMergeBlocks.Remove(UTXO.MergeBatchIndex);
               }
               else
@@ -157,6 +155,10 @@ namespace BToken.Accounting
             SECONDS_TIMEOUT_BLOCKDOWNLOAD);
 
           throw ex;
+        }
+        catch(Exception ex)
+        {
+          Console.WriteLine(ex.Message);
         }
       }
 

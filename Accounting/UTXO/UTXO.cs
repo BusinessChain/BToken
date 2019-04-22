@@ -19,16 +19,12 @@ namespace BToken.Accounting
     Network Network;
     UTXOArchiver Archiver;
 
-    UTXOCache[] Caches;
+    UTXOCache Cache;
 
     const int COUNT_INTEGER_BITS = sizeof(int) * 8;
     const int COUNT_HEADERINDEX_BITS = 26;
     const int COUNT_COLLISION_BITS = 3;
-
-    const uint MaskSecondaryCacheUInt32 = 0x04000000;
-    const uint MaskCollisionCacheUInt64 = 0x08000000;
-    const uint MaskCollisionCacheByteArray = 0x10000000;
-
+    
     const int IndexCacheUInt32 = 0;
     const int IndexCacheByteArray = 1;
 
@@ -37,7 +33,7 @@ namespace BToken.Accounting
 
     static readonly int CountHeaderPlusCollisionBits = COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS;
     static readonly int CountHeaderBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
-    static readonly int ByteIndexCollisionBits = (CountHeaderPlusCollisionBits + 7) / 8;
+    static readonly int ByteIndexCollisionBits = COUNT_HEADERINDEX_BITS / 8;
     static readonly int CountNonHeaderBitsInByte = 8 - COUNT_HEADERINDEX_BITS % 8;
     static readonly byte MaskHeaderTailBitsInByte = (byte)(byte.MaxValue >> CountNonHeaderBitsInByte);
     static readonly int CountHeaderBitsInByte = COUNT_HEADERINDEX_BITS % 8;
@@ -57,7 +53,7 @@ namespace BToken.Accounting
     int FilePartitionIndex = 0;
     List<Block> BlocksPartitioned = new List<Block>();
     int CountTXsPartitioned = 0;
-    const int MAX_COUNT_TXS_IN_PARTITION = 20000;
+    const int MAX_COUNT_TXS_IN_PARTITION = 10000;
 
     public UTXO(Headerchain headerchain, Network network)
     {
@@ -67,10 +63,10 @@ namespace BToken.Accounting
       Headerchain = headerchain;
       Parser = new UTXOParser();
       Network = network;
-
-      Caches = new UTXOCache[2];
-      Caches[IndexCacheUInt32] = new UTXOCacheUInt32(Caches);
-      Caches[IndexCacheByteArray] = new UTXOCacheByteArray(Caches);
+      
+      Cache = new UTXOCacheUInt32(
+        new UTXOCacheByteArray());
+      Cache.Initialize();
 
       Archiver = new UTXOArchiver();
     }
@@ -79,55 +75,65 @@ namespace BToken.Accounting
     {
       await BuildAsync();
     }
-    async Task LoadAsync(int batchIndex, int queueIndex, Headerchain.HeaderStream headerStream)
+    async Task LoadAsync(
+      int batchIndex, 
+      int queueIndex, 
+      Headerchain.HeaderStream headerStream)
     {
-      if (BlockArchiver.Exists(batchIndex, out string filePath))
+      try
       {
-        byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
-
-        Console.WriteLine("Read batch BatchBytes {0}", batchIndex);
-
-        lock (MergeLOCK)
+        if (BlockArchiver.Exists(batchIndex, out string filePath))
         {
-          if (MergeBatchIndex != batchIndex)
-          {
-            Console.WriteLine("Postpone merge of batch {0}, awaiting batch {1}",
-              batchIndex,
-              MergeBatchIndex);
+          byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
 
-            QueueMergeBlockBatches[queueIndex] = blockBatchBytes;
-            return;
-          }
-        }
-
-        while (true)
-        {
-          MergeBatch(blockBatchBytes, headerStream, batchIndex);
-
-          Console.WriteLine("Successfully merged batch {0}",
-            batchIndex,
-            queueIndex);
+          Console.WriteLine("Read batch BatchBytes {0}", batchIndex);
 
           lock (MergeLOCK)
           {
-            MergeBatchIndex++;
-            queueIndex++;
-            batchIndex++;
-
-            if (queueIndex == COUNT_BATCHES_PARALLEL ||
-              QueueMergeBlockBatches[queueIndex] == null)
+            if (MergeBatchIndex != batchIndex)
             {
+              Console.WriteLine("Postpone merge of batch {0}, awaiting batch {1}",
+                batchIndex,
+                MergeBatchIndex);
+
+              QueueMergeBlockBatches[queueIndex] = blockBatchBytes;
               return;
             }
-            
-            blockBatchBytes = QueueMergeBlockBatches[queueIndex];
-            QueueMergeBlockBatches[queueIndex] = null;
+          }
+
+          while (true)
+          {
+            MergeBatch(blockBatchBytes, headerStream, batchIndex);
+
+            Console.WriteLine("Successfully merged batch {0}",
+              batchIndex,
+              queueIndex);
+
+            lock (MergeLOCK)
+            {
+              MergeBatchIndex++;
+              queueIndex++;
+              batchIndex++;
+
+              if (queueIndex == COUNT_BATCHES_PARALLEL ||
+                QueueMergeBlockBatches[queueIndex] == null)
+              {
+                return;
+              }
+
+              blockBatchBytes = QueueMergeBlockBatches[queueIndex];
+              QueueMergeBlockBatches[queueIndex] = null;
+            }
           }
         }
+        else
+        {
+          ParallelBatchesExistInArchive = false;
+        }
       }
-      else
+      catch(Exception ex)
       {
-        ParallelBatchesExistInArchive = false;
+        Console.WriteLine(ex.Message);
       }
     }
     async Task BuildAsync()
@@ -151,7 +157,7 @@ namespace BToken.Accounting
       {
         ParallelBatchesExistInArchive = true;
 
-        Parallel.For(0, COUNT_BATCHES_PARALLEL, i => 
+        Parallel.For(0, COUNT_BATCHES_PARALLEL, i =>
         {
           loadTasks[i] = LoadAsync(batchIndexOffset + i, i, headerStream);
         });
@@ -169,11 +175,12 @@ namespace BToken.Accounting
 
       } while (true);
 
-      MergeBatchIndex += batchIndexOffset;
+      Console.WriteLine("Start downloading blocks from network...");
+
       int indexBatchDownload = MergeBatchIndex;
       int blockDownloadTaskIndex = 0;
       FilePartitionIndex = MergeBatchIndex;
-      const int COUNT_BLOCK_DOWNLOAD_BATCH = 50;
+      const int COUNT_BLOCK_DOWNLOAD_BATCH = 20;
       const int COUNT_DOWNLOAD_TASKS = 8;
       var blockDownloadTasks = new Task[COUNT_DOWNLOAD_TASKS];
       
@@ -209,7 +216,7 @@ namespace BToken.Accounting
 
     void MergeBatch(byte[] blockBytes, Headerchain.HeaderStream headerStream, int batchIndex)
     {
-      Console.WriteLine("Merge batch {0}", batchIndex);
+      Console.WriteLine("Merge batch {0}, header height {1}", batchIndex, headerStream.Height);
       var stopWatchMergeBatch = new Stopwatch();
       stopWatchMergeBatch.Restart();
 
@@ -243,18 +250,22 @@ namespace BToken.Accounting
 
       stopWatchMergeBatch.Stop();
 
-      Console.WriteLine("{0},{1},{2},{3},{4}",
-        ((UTXOCacheUInt32)Caches[IndexCacheUInt32]).GetCountPrimaryCacheItems(),
-        ((UTXOCacheUInt32)Caches[IndexCacheUInt32]).GetCountSecondaryCacheItems(),
-        ((UTXOCacheByteArray)Caches[IndexCacheByteArray]).GetCountPrimaryCacheItems(),
-        ((UTXOCacheByteArray)Caches[IndexCacheByteArray]).GetCountSecondaryCacheItems(),
-        stopWatchMergeBatch.ElapsedMilliseconds);
+      //Cache.ConsoleLog();
+      //Console.WriteLine("{0},{1},{2},{3},{4}",
+      //  ((UTXOCacheUInt32)Cache[IndexCacheUInt32]).GetCountPrimaryCacheItems(),
+      //  ((UTXOCacheUInt32)Cache[IndexCacheUInt32]).GetCountSecondaryCacheItems(),
+      //  ((UTXOCacheByteArray)Cache[IndexCacheByteArray]).GetCountPrimaryCacheItems(),
+      //  ((UTXOCacheByteArray)Cache[IndexCacheByteArray]).GetCountSecondaryCacheItems(),
+      //  stopWatchMergeBatch.ElapsedMilliseconds);
     }
     void Merge(TX[] tXs, byte[][] tXHashes, byte[] headerHashBytes)
     {
       for (int t = 0; t < tXs.Length; t++)
       {
-        InsertUTXO(tXHashes[t], headerHashBytes, tXs[t].Outputs.Count);
+        Cache.InsertUTXO(
+          tXHashes[t], 
+          headerHashBytes, 
+          tXs[t].Outputs.Count);
       }
 
       for (int t = 1; t < tXs.Length; t++)
@@ -263,7 +274,7 @@ namespace BToken.Accounting
         {
           try
           {
-            SpendUTXO(
+            Cache.SpendUTXO(
               tXs[t].Inputs[i].TXIDOutput,
               tXs[t].Inputs[i].IndexOutput);
           }
@@ -284,6 +295,8 @@ namespace BToken.Accounting
               tXs[t].Inputs[i].IndexOutput,
               new SoapHexBinary(outputTXHash),
               ex.Message);
+
+            throw ex;
           }
         }
       }
@@ -364,7 +377,6 @@ namespace BToken.Accounting
 
       return merkleListNext;
     }
-
     TX[] ParseBlock(byte[] buffer, ref int startIndex, int tXCount)
     {
       var tXs = new TX[tXCount];
@@ -377,119 +389,5 @@ namespace BToken.Accounting
 
       return tXs;
     }
-
-    void SpendUTXO(byte[] tXIDOutput, int outputIndex)
-    {
-      int primaryKey = BitConverter.ToInt32(tXIDOutput, 0);
-
-      for (int i = 0; i < Caches.Length; i++)
-      {
-        if (Caches[i].TrySpend(primaryKey, tXIDOutput, outputIndex))
-        {
-          return;
-        }
-      }
-
-      throw new UTXOException("Referenced TXID not found in UTXO table.");
-    }
-
-    static string Bytes2HexStringReversed(byte[] bytes)
-    {
-      var bytesReversed = new byte[bytes.Length];
-      bytes.CopyTo(bytesReversed, 0);
-      Array.Reverse(bytesReversed);
-      return new SoapHexBinary(bytesReversed).ToString();
-    }
-
-    bool TrySetCollisionBit(int primaryKey, int collisionIndex)
-    {
-      for (int i = 0; i < Caches.Length; i++)
-      {
-        if (Caches[i].TrySetCollisionBit(primaryKey, collisionIndex))
-        {
-          return true;
-        }
-      }
-      return false;
-    }
-    public void InsertUTXO(byte[] tXIDHash, byte[] headerHashBytes, int outputsCount)
-    {
-      int primaryKey = BitConverter.ToInt32(tXIDHash, 0);
-      int lengthUTXOBits = CountHeaderPlusCollisionBits + outputsCount;
-
-      if (lengthUTXOBits <= COUNT_INTEGER_BITS)
-      {
-        uint uTXO = CreateUTXOInt32(headerHashBytes, outputsCount, lengthUTXOBits);
-
-        if (TrySetCollisionBit(primaryKey, IndexCacheUInt32))
-        {
-          ((UTXOCacheUInt32)Caches[IndexCacheUInt32]).Write(tXIDHash, uTXO);
-        }
-        else
-        {
-          ((UTXOCacheUInt32)Caches[IndexCacheUInt32]).Write(primaryKey, uTXO);
-        }
-      }
-      else
-      {
-        byte[] uTXO = CreateUTXOByteArray(headerHashBytes, outputsCount, lengthUTXOBits);
-
-        if (TrySetCollisionBit(primaryKey, IndexCacheByteArray))
-        {
-          ((UTXOCacheByteArray)Caches[IndexCacheByteArray]).Write(tXIDHash, uTXO);
-        }
-        else
-        {
-          ((UTXOCacheByteArray)Caches[IndexCacheByteArray]).Write(primaryKey, uTXO);
-        }
-      }
-    }
-    static byte[] CreateUTXOByteArray(byte[] headerHashBytes, int outputsCount, int lengthUTXOBits)
-    {
-      byte[] uTXOIndex;
-      if (lengthUTXOBits <= COUNT_INTEGER_BITS)
-      {
-        uTXOIndex = new byte[sizeof(uint)];
-      }
-      else
-      {
-        uTXOIndex = new byte[(lengthUTXOBits + 7) / 8];
-      }
-
-      var lengthHeaderIndexBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
-      Array.Copy(headerHashBytes, uTXOIndex, lengthHeaderIndexBytes);
-
-      var numberOfHeaderTailBits = lengthHeaderIndexBytes % 8;
-      if (numberOfHeaderTailBits > 0)
-      {
-        for (int i = numberOfHeaderTailBits; i < 8; i++)
-        {
-          uTXOIndex[lengthHeaderIndexBytes] &= (byte)~(1 << i);
-        }
-      }
-
-      return uTXOIndex;
-    }
-    static uint CreateUTXOInt32(byte[] headerHashBytes, int outputsCount, int lengthUTXOBits)
-    {
-      uint uTXO = 0;
-
-      for (int i = CountHeaderBytes; i > 0; i--)
-      {
-        uTXO <<= 8;
-        uTXO |= headerHashBytes[i - 1];
-      }
-      uTXO <<= CountNonHeaderBits;
-      uTXO >>= CountNonHeaderBits;
-
-      if (lengthUTXOBits < COUNT_INTEGER_BITS)
-      {
-        uint maskSpendExcessOutputBits = uint.MaxValue << lengthUTXOBits;
-        uTXO |= maskSpendExcessOutputBits;
-      }
-
-      return uTXO;
-    }
-
   }
 }
