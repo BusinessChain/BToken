@@ -52,7 +52,31 @@ namespace BToken.Networking
 
         IPEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
       }
-      
+
+      public async Task<bool> TryStartAsync()
+      {
+        try
+        {
+          await ConnectAsync();
+
+          lock (IsDispatchedLOCK)
+          {
+            IsDispatched = false;
+          }
+
+          await ProcessNetworkMessagesAsync();
+
+          return true;
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine("Peer '{0}' threw exception: \n'{1}'",
+            IPEndPoint.Address.ToString(),
+            ex.Message);
+
+          return false;
+        }
+      }
       public async Task StartAsync()
       {
         try
@@ -80,18 +104,35 @@ namespace BToken.Networking
         }
       }
 
-      async Task ConnectAsync()
+      public async Task<bool> TryConnectAsync()
+      {
+        try
+        {
+
+          IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
+          IPEndPoint = new IPEndPoint(iPAddress, Port);
+          
+          await ConnectTCPAsync();
+          await HandshakeAsync();
+
+          Task processNetworkMessagesTask = ProcessNetworkMessagesAsync();
+          
+          return true;
+        }
+        catch
+        {
+          return false;
+        }
+      }
+      public async Task ConnectAsync()
       {
         IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
         IPEndPoint = new IPEndPoint(iPAddress, Port);
         await ConnectTCPAsync();
         await HandshakeAsync();
-
-        Console.WriteLine("Connected with peer '{0}'",
-            IPEndPoint.Address.ToString());
       }
 
-      async Task ProcessNetworkMessagesAsync()
+      public async Task ProcessNetworkMessagesAsync()
       {
         while (true)
         {
@@ -149,12 +190,9 @@ namespace BToken.Networking
           return true;
         }
       }
-      public void Dispose()
+      public void Release()
       {
-        lock (IsDispatchedLOCK)
-        {
-          IsDispatched = false;
-        }
+        IsDispatched = false;
       }
 
       public List<NetworkMessage> GetInboundRequestMessages()
@@ -232,7 +270,7 @@ namespace BToken.Networking
           return false;
         }
       }
-
+      
       public uint GetProtocolVersion()
       {
         return ProtocolVersion;

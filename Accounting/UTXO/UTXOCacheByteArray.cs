@@ -31,15 +31,18 @@ namespace BToken.Accounting
         : this(null)
       { }
       public UTXOCacheByteArray(UTXOCache nextCache) 
-        : base(nextCache)
+        : base(
+            nextCache,
+            "PrimaryCacheByteArray",
+            "SecondaryCacheByteArray")
       { }
 
 
-      public override int GetCountPrimaryCacheItems()
+      protected override int GetCountPrimaryCacheItems()
       {
         return PrimaryCache.Count;
       }
-      public override int GetCountSecondaryCacheItems()
+      protected override int GetCountSecondaryCacheItems()
       {
         return SecondaryCache.Count;
       }
@@ -112,7 +115,7 @@ namespace BToken.Accounting
 
         if (!SecondaryCache.Keys.Any(key => BitConverter.ToInt32(key, 0) == primaryKey))
         {
-          collisionBits &= ~((uint)1 << IndexCacheByteArray);
+          collisionBits &= ~((uint)1 << Address);
         }
 
         byte[] uTXO = secondaryCacheItem.Value;
