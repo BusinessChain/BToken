@@ -12,14 +12,22 @@ namespace BToken.Accounting
       UTXOCache MainCache;
       UTXOCache NextCache;
 
-      int Address;
+      protected string LabelPrimaryCache;
+      protected string LabelSecondaryCache;
+
+      protected int Address;
 
       protected int PrimaryKey;
 
 
-      protected UTXOCache(UTXOCache nextCache)
+      protected UTXOCache(
+        UTXOCache nextCache, 
+        string labelPrimaryCache, 
+        string labelSecondaryCache)
       {
         NextCache = nextCache;
+        LabelPrimaryCache = labelPrimaryCache;
+        LabelSecondaryCache = labelSecondaryCache;
       }
 
       public void Initialize()
@@ -211,8 +219,41 @@ namespace BToken.Accounting
       protected abstract void RemoveSecondary(int primaryKey, byte[] key, out bool hasMoreCollisions);
       protected abstract void ClearCollisionBit(int cacheAddress);
 
-      public abstract int GetCountPrimaryCacheItems();
-      public abstract int GetCountSecondaryCacheItems();
+      protected abstract int GetCountPrimaryCacheItems();
+      protected abstract int GetCountSecondaryCacheItems();
+
+      public string GetLabelsMetricsCSV()
+      {
+        UTXOCache cache = NextCache;
+        string labels = LabelPrimaryCache + "," + LabelSecondaryCache;
+
+        while (cache != null)
+        {
+          labels +=
+            "," + NextCache.LabelPrimaryCache +
+            "," + NextCache.LabelSecondaryCache;
+
+          cache = cache.NextCache;
+        }
+
+        return labels;
+      }
+      public string GetMetricsCSV()
+      {
+        UTXOCache cache = NextCache;
+        string metrics = GetCountPrimaryCacheItems() + "," + GetCountSecondaryCacheItems();
+
+        while(cache != null)
+        {
+          metrics +=
+            "," + NextCache.GetCountPrimaryCacheItems() +
+            "," + NextCache.GetCountSecondaryCacheItems();
+
+          cache = cache.NextCache;
+        }
+
+        return metrics;
+      }
     }
   }
 }

@@ -18,6 +18,9 @@ namespace BToken.Accounting
       uint UTXOPrimaryExisting;
       uint UTXOSecondaryExisting;
 
+      static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountHeaderPlusCollisionBits;
+      static readonly int CountNonHeaderBits = COUNT_INTEGER_BITS - COUNT_HEADERINDEX_BITS;
+
       uint[] MasksCollision = {
         0x04000000,
         0x08000000,
@@ -25,15 +28,19 @@ namespace BToken.Accounting
 
 
       public UTXOCacheUInt32(UTXOCache nextCache) 
-        : base(nextCache)
+        : base(
+            nextCache,
+            "PrimaryCacheUInt32",
+            "SecondaryCacheUInt32"
+            )
       { }
 
 
-      public override int GetCountPrimaryCacheItems()
+      protected override int GetCountPrimaryCacheItems()
       {
         return PrimaryCache.Count;
       }
-      public override int GetCountSecondaryCacheItems()
+      protected override int GetCountSecondaryCacheItems()
       {
         return SecondaryCache.Count;
       }
@@ -104,7 +111,7 @@ namespace BToken.Accounting
 
         if (!SecondaryCache.Keys.Any(key => BitConverter.ToInt32(key, 0) == primaryKey))
         {
-          collisionBits &= ~((uint)1 << IndexCacheUInt32);
+          collisionBits &= ~((uint)1 << Address);
         }
 
         uint uTXO = secondaryCacheItem.Value

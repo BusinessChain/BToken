@@ -2,6 +2,7 @@
 
 using System;
 using System.Linq;
+using System.IO;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,148 +21,152 @@ namespace BToken.Accounting
       int BatchIndex;
       Block[] BlocksReceived;
       int IndexBlockReceived;
+      StreamWriter BuildWriter;
 
       public INetworkChannel Channel { get; private set; }
 
       const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
 
-      public SessionBlockDownload(UTXO uTXO, HeaderLocation[] headerLocations, int batchIndex)
+      public SessionBlockDownload(
+        UTXO uTXO, 
+        HeaderLocation[] headerLocations, 
+        int batchIndex,
+        StreamWriter buildWriter)
       {
         UTXO = uTXO;
         HeaderLocations = headerLocations;
         BatchIndex = batchIndex;
         BlocksReceived = new Block[headerLocations.Length];
         IndexBlockReceived = 0;
+        BuildWriter = buildWriter;
       }
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
       {
         Channel = channel;
+        
+        List<Inventory> inventories = HeaderLocations
+          .Skip(IndexBlockReceived)
+          .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.Hash))
+          .ToList();
 
-        try
+        await Channel.SendMessageAsync(new GetDataMessage(inventories));
+
+        var CancellationGetBlock =
+          new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
+
+        while (IndexBlockReceived < HeaderLocations.Length)
         {
-          List<Inventory> inventories = HeaderLocations
-            .Skip(IndexBlockReceived)
-            .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.Hash))
-            .ToList();
+          NetworkMessage networkMessage = await Channel.ReceiveSessionMessageAsync(CancellationGetBlock.Token);
 
-          await Channel.SendMessageAsync(new GetDataMessage(inventories));
-                   
-          var CancellationGetBlock =
-            new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
-
-          while (IndexBlockReceived < HeaderLocations.Length)
+          if (networkMessage.Command == "block")
           {
-            NetworkMessage networkMessage = await Channel.ReceiveSessionMessageAsync(CancellationGetBlock.Token);
+            byte[] blockBytes = networkMessage.Payload;
 
-            if (networkMessage.Command == "block")
+            int startIndex = 0;
+            NetworkHeader header = NetworkHeader.ParseHeader(
+              blockBytes,
+              out int tXCount,
+              ref startIndex);
+
+            UInt256 headerHash = header.ComputeHash(out byte[] headerHashBytes);
+            UInt256 hash = HeaderLocations[IndexBlockReceived].Hash;
+            if (!hash.Equals(headerHash))
             {
-              byte[] blockBytes = networkMessage.Payload;
-
-              int startIndex = 0;
-              NetworkHeader header = NetworkHeader.ParseHeader(
-                blockBytes,
-                out int tXCount,
-                ref startIndex);
-
-              UInt256 headerHash = header.ComputeHash(out byte[] headerHashBytes);
-              UInt256 hash = HeaderLocations[IndexBlockReceived].Hash;
-              if (!hash.Equals(headerHash))
-              {
-                throw new UTXOException("Unexpected header hash.");
-              }
-
-              TX[] tXs = UTXO.ParseBlock(blockBytes, ref startIndex, tXCount);
-              byte[] merkleRootHash = UTXO.ComputeMerkleRootHash(tXs, out byte[][] tXHashes);
-              if (!EqualityComparerByteArray.IsEqual(header.MerkleRoot, merkleRootHash))
-              {
-                throw new UTXOException("Payload corrupted.");
-              }
-
-              BlocksReceived[IndexBlockReceived] = new Block(
-                headerHashBytes, 
-                tXs, 
-                tXHashes, 
-                blockBytes,
-                HeaderLocations[IndexBlockReceived].Height);
-
-              //Console.WriteLine("'{0}' Downloaded block '{1}', height {2}", 
-              //  Channel.GetIdentification(),
-              //  hash,
-              //  HeaderLocations[IndexBlockReceived].Height);
-
-              IndexBlockReceived++;
+              throw new UTXOException("Unexpected header hash.");
             }
+
+            TX[] tXs = UTXO.ParseBlock(blockBytes, ref startIndex, tXCount);
+            byte[] merkleRootHash = UTXO.ComputeMerkleRootHash(tXs, out byte[][] tXHashes);
+            if (!EqualityComparerByteArray.IsEqual(header.MerkleRoot, merkleRootHash))
+            {
+              throw new UTXOException("Payload corrupted.");
+            }
+
+            BlocksReceived[IndexBlockReceived] = new Block(
+              headerHashBytes,
+              tXs,
+              tXHashes,
+              blockBytes,
+              HeaderLocations[IndexBlockReceived].Height);
+
+            //Console.WriteLine("'{0}' Downloaded block '{1}', height {2}", 
+            //  Channel.GetIdentification(),
+            //  hash,
+            //  HeaderLocations[IndexBlockReceived].Height);
+
+            IndexBlockReceived++;
           }
-          
+        }
+        
+        lock (UTXO.MergeLOCK)
+        {
+          if (UTXO.MergeBatchIndex != BatchIndex)
+          {
+            UTXO.QueueMergeBlocks.Add(BatchIndex, BlocksReceived);
+            return;
+          }
+        }
+
+        long countBlockBytesDownloadedBatch = 0;
+        while (true)
+        {
+          for (int i = 0; i < BlocksReceived.Length; i++)
+          {
+            UTXO.Merge(
+              BlocksReceived[i].TXs,
+              BlocksReceived[i].TXHashes,
+              BlocksReceived[i].HeaderHashBytes);
+
+            UTXO.BlocksPartitioned.Add(BlocksReceived[i]);
+            UTXO.CountTXsPartitioned += BlocksReceived[i].TXs.Length;
+
+            if (UTXO.CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
+            {
+              Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
+                UTXO.BlocksPartitioned,
+                UTXO.FilePartitionIndex++);
+
+              UTXO.BlocksPartitioned = new List<Block>();
+              UTXO.CountTXsPartitioned = 0;
+            }
+
+            countBlockBytesDownloadedBatch += BlocksReceived[i].BlockBytes.Length;
+          }
+
+          UTXO.CountBlockBytesDownloadedTotal += countBlockBytesDownloadedBatch;
+
+          string metricsCSV = string.Format("{0},{1},{2},{3},{4}",
+            UTXO.MergeBatchIndex,
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
+            BlocksReceived.Last().Height,
+            UTXO.CountBlockBytesDownloadedTotal,
+            UTXO.Cache.GetMetricsCSV());
+
+          Console.WriteLine(metricsCSV);
+          BuildWriter.WriteLine(metricsCSV);
+
           lock (UTXO.MergeLOCK)
           {
-            if (UTXO.MergeBatchIndex != BatchIndex)
+            UTXO.MergeBatchIndex++;
+
+            if (UTXO.QueueMergeBlocks.TryGetValue(UTXO.MergeBatchIndex, out BlocksReceived))
             {
-              Console.WriteLine("Postpone merge of batch {0}, merge index: {1}", BatchIndex, UTXO.MergeBatchIndex);
-              UTXO.QueueMergeBlocks.Add(BatchIndex, BlocksReceived);
+              UTXO.QueueMergeBlocks.Remove(UTXO.MergeBatchIndex);
+            }
+            else
+            {
               return;
             }
           }
-
-          Console.WriteLine("Merge batch {0}, block height {1}", BatchIndex, BlocksReceived[0].Height);
-
-          while (true)
-          {
-            for(int i = 0; i < BlocksReceived.Length; i++)
-            {
-              UTXO.Merge(
-                BlocksReceived[i].TXs,
-                BlocksReceived[i].TXHashes,
-                BlocksReceived[i].HeaderHashBytes);
-
-              UTXO.BlocksPartitioned.Add(BlocksReceived[i]);
-              UTXO.CountTXsPartitioned += BlocksReceived[i].TXs.Length;
-
-              if (UTXO.CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
-              {
-                Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
-                  UTXO.BlocksPartitioned, 
-                  UTXO.FilePartitionIndex++);
-
-                UTXO.BlocksPartitioned = new List<Block>();
-                UTXO.CountTXsPartitioned = 0;
-              }
-            }
-
-            Console.WriteLine("Successfully merged batch {0}", UTXO.MergeBatchIndex);
-
-            lock (UTXO.MergeLOCK)
-            {
-              UTXO.MergeBatchIndex++;
-
-              if (UTXO.QueueMergeBlocks.TryGetValue(UTXO.MergeBatchIndex, out BlocksReceived))
-              {
-                UTXO.QueueMergeBlocks.Remove(UTXO.MergeBatchIndex);
-              }
-              else
-              {
-                return;
-              }
-            }
-          } 
-        }
-        catch (TaskCanceledException ex)
-        {
-          Console.WriteLine("Canceled download of block batch {0} from peer {1} due to timeout {2} seconds",
-            BatchIndex,
-            Channel.GetIdentification(),
-            SECONDS_TIMEOUT_BLOCKDOWNLOAD);
-
-          throw ex;
-        }
-        catch(Exception ex)
-        {
-          Console.WriteLine(ex.Message);
         }
       }
 
+      public string GetSessionID()
+      {
+        return BatchIndex.ToString();
+      }
     }
   }
 }

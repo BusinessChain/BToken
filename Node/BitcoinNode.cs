@@ -52,48 +52,46 @@ namespace BToken
     {
       while (true)
       {
-        using (INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync())
-        {          
-          try
+        INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync();
+        try
+        {
+          List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
+
+          foreach (NetworkMessage inboundMessage in inboundMessages)
           {
-            List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
-
-            foreach (NetworkMessage inboundMessage in inboundMessages)
+            switch (inboundMessage.Command)
             {
-              switch (inboundMessage.Command)
-              {
-                case "inv":
-                  //await ProcessInventoryMessageAsync(invMessage);
-                  break;
+              case "inv":
+                //await ProcessInventoryMessageAsync(invMessage);
+                break;
 
-                case "getheaders":
-                  var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-                  var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
-                  await channel.SendMessageAsync(new HeadersMessage(headers));
-                  break;
+              case "getheaders":
+                var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
+                await channel.SendMessageAsync(new HeadersMessage(headers));
+                break;
 
-                case "headers":
-                  var headersMessage = new HeadersMessage(inboundMessage);
-                  List<UInt256> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
-                  //await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
-                  break;
+              case "headers":
+                var headersMessage = new HeadersMessage(inboundMessage);
+                List<UInt256> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
+                //await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
+                break;
 
-                case "block":
-                  break;
+              case "block":
+                break;
 
-                default:
-                  break;
-              }
+              default:
+                break;
             }
           }
-          catch (Exception ex)
-          {
-            Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
-              channel.GetIdentification(),
-              ex.Message);
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
+            channel.GetIdentification(),
+            ex.Message);
 
-            Network.RemoveChannel(channel);
-          }
+          //Network.RemoveChannel(channel);
         }
       }
     }

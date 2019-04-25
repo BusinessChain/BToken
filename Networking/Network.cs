@@ -9,6 +9,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
+using BToken.Accounting;
+
 
 namespace BToken.Networking
 {
@@ -30,7 +32,7 @@ namespace BToken.Networking
 
 
     readonly object ListPeersOutboundLOCK = new object();
-    List<Peer> PeersOutbound = new List<Peer>();
+    BufferBlock<Peer> PeersOutboundAvailable = new BufferBlock<Peer>();
     List<Peer> PeersInbound = new List<Peer>();
     
     BufferBlock<Peer> PeersRequestInbound = new BufferBlock<Peer>();
@@ -57,71 +59,84 @@ namespace BToken.Networking
     {
       for (int i = 0; i < PEERS_COUNT_OUTBOUND; i++)
       {
-        var peer = new Peer(this);
-        PeersOutbound.Add(peer);
+        Task createPeerTask = CreatePeerAsync();
       }
+    }
+    async Task CreatePeerAsync()
+    {
+      Peer peer;
+
+      do
+      {
+        peer = new Peer(this);
+      } while (!await peer.TryConnectAsync());
+
+      PeersOutboundAvailable.Post(peer);
     }
 
     public void Start()
     {
-      StartPeers();
+      //Task peerInboundListenerTask = StartPeerInboundListenerAsync();
+    }
 
-      Task peerInboundListenerTask = StartPeerInboundListenerAsync();
-    }
-    void StartPeers()
+    public async Task ExecuteSessionAsync(INetworkSession session)
     {
-      PeersOutbound.Select(async peer =>
-      {
-        Task startPeerTask = StartPeerAsync(peer);
-      }).ToArray();
-    }
-    async Task StartPeerAsync(Peer peer)
-    {
-      try
-      {
-        await peer.StartAsync();
-      }
-      catch
-      {
-        RemoveChannel(peer);
-      }
-    }
-    public void RemoveChannel(INetworkChannel channel)
-    {
-      Peer peer = (Peer)channel;
+      Peer peer = PeersOutboundAvailable.Receive();
 
-      if (IsPeerInbound(peer))
+      while (true)
       {
-        PeersInbound.Remove(peer);
-      }
-      else
-      {
-        ReplacePeerOutbound(peer);
-      }
-    }
-    void ReplacePeerOutbound(Peer peer)
-    {
-      var peerNew = new Peer(this);
-
-      lock(ListPeersOutboundLOCK)
-      {
-        int indexPeer = PeersOutbound.FindIndex(p => p == peer);
-        if(indexPeer < 0)
+        if (await peer.TryExecuteSessionAsync(session, default(CancellationToken)))
         {
-          PeersOutbound.Add(peerNew);
+          await PeersOutboundAvailable.SendAsync(peer);
+          return;
         }
-        else
-        {
-          PeersOutbound[indexPeer] = peerNew;
-        }
-      }
 
-      Task startPeerTask = StartPeerAsync(peerNew);
+        do
+        {
+          peer = new Peer(this);
+        } while (!await peer.TryConnectAsync());
+
+      }
     }
-    bool IsPeerInbound(Peer peer)
-    {
-      return PeersInbound.Contains(peer);
-    }
+
+    //public void RemoveChannel(INetworkChannel channel)
+    //{
+    //  Peer peer = (Peer)channel;
+
+    //  if (IsPeerInbound(peer))
+    //  {
+    //    PeersInbound.Remove(peer);
+    //  }
+    //  else
+    //  {
+    //    ReplacePeerOutbound(peer);
+    //  }
+    //}
+    //Peer ReplacePeerOutbound(Peer peer)
+    //{
+    //  var peerNew = new Peer(this);
+
+    //  lock(ListPeersOutboundLOCK)
+    //  {
+    //    int indexPeer = PeersOutbound.FindIndex(p => p == peer);
+    //    if(indexPeer < 0)
+    //    {
+    //      PeersOutbound.Add(peerNew);
+    //    }
+    //    else
+    //    {
+    //      PeersOutbound[indexPeer] = peerNew;
+    //    }
+    //  }
+
+    //  Task startPeerTask = StartPeerAsync(peerNew);
+
+    //  return peerNew;
+    //}
+    //bool IsPeerInbound(Peer peer)
+    //{
+    //  return PeersInbound.Contains(peer);
+    //}
 
     public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
@@ -145,51 +160,15 @@ namespace BToken.Networking
         Peer peer = new Peer(client, this);
         PeersInbound.Add(peer);
 
-        Task startPeerTask = StartPeerAsync(peer);
+        Task startPeerTask = peer.StartAsync();
       }
     }
 
-    public async Task ExecuteSessionAsync(INetworkSession session)
-    {
-      while (true)
-      {
-        using (Peer peer = await DispatchPeerOutboundAsync(default(CancellationToken)))
-        {
-          if (await peer.TryExecuteSessionAsync(session, default(CancellationToken)))
-          {
-            return;
-          }
-
-          RemoveChannel(peer);
-        }
-      }
-    }
-
-    async Task<Peer> DispatchPeerOutboundAsync(CancellationToken cancellationToken)
-    {
-      while (true)
-      {
-        foreach (Peer peer in PeersOutbound)
-        {
-          if (peer.TryDispatch())
-          {
-            return peer;
-          }
-        }
-
-        // add additional peer if bottleneck here, e.g. if 3 times no dispatch then create new peer
-        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
-      }
-    }
 
     static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     public async Task PingAsync()
     {
-      foreach (Peer peer in PeersOutbound)
-      {
-        await peer.PingAsync().ConfigureAwait(false);
-      }
     }
     
     public uint GetProtocolVersion()

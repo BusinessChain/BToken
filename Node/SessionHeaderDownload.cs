@@ -65,6 +65,10 @@ namespace BToken
         }
       }
 
+      public string GetSessionID()
+      {
+        return "Header download session";
+      }
     }
   }
 }

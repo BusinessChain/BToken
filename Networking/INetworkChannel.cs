@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  public interface INetworkChannel : IDisposable
+  public interface INetworkChannel
   {
     List<NetworkMessage> GetInboundRequestMessages();
     Task<bool> TryExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken);
