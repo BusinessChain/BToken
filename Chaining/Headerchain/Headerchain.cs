@@ -20,8 +20,8 @@ namespace BToken.Chaining
     ChainHeader GenesisHeader;
     List<HeaderLocation> Checkpoints;
 
-    Dictionary<byte[], List<ChainHeader>> HeaderIndex;
-    int NumberHeaderIndexBytes = 4;
+    readonly object HeaderIndexLOCK = new object();
+    Dictionary<int, List<ChainHeader>> HeaderIndex;
 
     public HeaderLocator Locator { get; private set; }
 
@@ -46,7 +46,9 @@ namespace BToken.Chaining
       Checkpoints = checkpoints;
       MainChain = new Chain(GenesisHeader, 0, 0);
 
-      HeaderIndex = new Dictionary<byte[], List<ChainHeader>>(new EqualityComparerByteArray());
+      HeaderIndex = new Dictionary<int, List<ChainHeader>>();
+      UpdateHeaderIndex(GenesisHeader, GetHeaderHash(GenesisHeader));
+
       Locator = new HeaderLocator(this);
 
       Inserter = new ChainInserter(this);
@@ -56,19 +58,7 @@ namespace BToken.Chaining
     {
       HeaderStream headerStreamer = new HeaderStream(this);
       var headers = new List<NetworkHeader>();
-
-      //while (headerStreamer.TryReadHeader(out NetworkHeader header, out HeaderLocation chainLocation)
-      //  && headers.Count < HEADERS_COUNT_MAX
-      //  && !headerLocator.Contains(chainLocation.Hash))
-      //{
-      //  if (chainLocation.Hash.Equals(stopHash))
-      //  {
-      //    headers.Clear();
-      //  }
-
-      //  headers.Insert(0, header);
-      //}
-
+      
       return headers;
     }
 
@@ -158,41 +148,59 @@ namespace BToken.Chaining
       Locator.Reorganize();
     }
 
-    public List<ChainHeader> ReadHeaders(byte[] keyHeaderIndex)
+    public ChainHeader ReadHeader(UInt256 headerHash, byte[] headerHashBytes)
     {
-      if (HeaderIndex.TryGetValue(keyHeaderIndex, out List<ChainHeader> headers))
+      int key = BitConverter.ToInt32(headerHashBytes, 0);
+
+      lock (HeaderIndexLOCK)
       {
-        return headers;
+        if (HeaderIndex.TryGetValue(key, out List<ChainHeader> headers))
+        {
+          foreach (ChainHeader header in headers)
+          {
+            if (headerHash.Equals(GetHeaderHash(header)))
+            {
+              return header;
+            }
+          }
+        }
       }
-      else
+
+      throw new ChainException(string.Format("Header hash {0} not in chain.",
+        headerHash));
+    }
+    public bool TryReadHeaders(int keyHeaderIndex, out List<ChainHeader> headers)
+    {
+      lock(HeaderIndexLOCK)
       {
-        return new List<ChainHeader>();
+        return HeaderIndex.TryGetValue(keyHeaderIndex, out headers);
       }
     }
+
     void UpdateHeaderIndex(ChainHeader header, UInt256 headerHash)
     {
-      byte[] keyHeader = headerHash.GetBytes().Take(NumberHeaderIndexBytes).ToArray();
+      int keyHeader = BitConverter.ToInt32(headerHash.GetBytes(), 0);
 
-      if (!HeaderIndex.TryGetValue(keyHeader, out List<ChainHeader> headers))
+      lock (HeaderIndexLOCK)
       {
-        headers = new List<ChainHeader>();
-        HeaderIndex.Add(keyHeader, headers);
+        if (!HeaderIndex.TryGetValue(keyHeader, out List<ChainHeader> headers))
+        {
+          headers = new List<ChainHeader>();
+          HeaderIndex.Add(keyHeader, headers);
+        }
+
+        headers.Add(header);
       }
-      headers.Add(header);
     }
 
-    public static bool TryGetHeaderHash(ChainHeader header, out UInt256 headerHash)
+    public static UInt256 GetHeaderHash(ChainHeader header)
     {
       if (header.HeadersNext != null)
       {
-        headerHash = header.HeadersNext[0].NetworkHeader.HashPrevious;
-        return true;
+        return header.HeadersNext[0].NetworkHeader.HashPrevious;
       }
-      else
-      {
-        headerHash = null;
-        return false;
-      }
+
+      return header.NetworkHeader.ComputeHash();
     }
     
     public async Task LoadFromArchiveAsync()
@@ -203,19 +211,19 @@ namespace BToken.Chaining
         {
           NetworkHeader header = archiveReader.GetNextHeader();
 
-          while (header != null)
-          {
-            await InsertHeaderAsync(header);
-            header = archiveReader.GetNextHeader();
-          }
-
-          //int countHeader = 0;
-          //while (header != null && countHeader < 200000)
+          //while (header != null)
           //{
-          //  countHeader++;
           //  await InsertHeaderAsync(header);
           //  header = archiveReader.GetNextHeader();
           //}
+
+          int countHeader = 0;
+          while (header != null && countHeader < 200000)
+          {
+            countHeader++;
+            await InsertHeaderAsync(header);
+            header = archiveReader.GetNextHeader();
+          }
         }
       }
       catch (Exception ex)

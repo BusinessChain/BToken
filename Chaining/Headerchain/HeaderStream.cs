@@ -21,12 +21,7 @@ namespace BToken.Chaining
       {
         Header = headerchain.GenesisHeader;
         Height = 0;
-
-        if (!TryGetHeaderHash(Header, out Hash))
-        {
-          Hash = Header.NetworkHeader.ComputeHash();
-        }
-
+        Hash = GetHeaderHash(Header);
       }
       public HeaderLocation GetHeaderLocation()
       {
@@ -51,10 +46,7 @@ namespace BToken.Chaining
             else
             {
               Header = Header.HeadersNext[0];
-              if (!TryGetHeaderHash(Header, out Hash))
-              {
-                Hash = Header.NetworkHeader.ComputeHash();
-              }
+              Hash = GetHeaderHash(Header);
               Height++;
             }
           }

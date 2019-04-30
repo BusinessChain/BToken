@@ -20,6 +20,7 @@ namespace BToken.Accounting
 
       static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountHeaderPlusCollisionBits;
       static readonly int CountNonHeaderBits = COUNT_INTEGER_BITS - COUNT_HEADERINDEX_BITS;
+      static readonly int CountHeaderBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
 
       uint[] MasksCollision = {
         0x04000000,

@@ -86,6 +86,7 @@ namespace BToken.Networking
       headerHashBytes = SHA256d.Compute(header.GetBytes());
       return new UInt256(headerHashBytes);
     }
+
     public static UInt256 ComputeHash(
       this NetworkHeader header)
     {
