@@ -1,12 +1,13 @@
 ﻿using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.IO;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
+using System.Security.Cryptography;
 
 using BToken.Networking;
+using BToken.Hashing;
 
 
 namespace BToken.Chaining
@@ -47,31 +48,23 @@ namespace BToken.Chaining
       MainChain = new Chain(GenesisHeader, 0, 0);
 
       HeaderIndex = new Dictionary<int, List<ChainHeader>>();
-      UpdateHeaderIndex(GenesisHeader, GetHeaderHash(GenesisHeader));
+      UpdateHeaderIndex(GenesisHeader, GenesisHeader.GetHeaderHash());
 
       Locator = new HeaderLocator(this);
 
       Inserter = new ChainInserter(this);
     }
-
-    public List<NetworkHeader> GetHeaders(List<UInt256> headerLocator, UInt256 stopHash)
-    {
-      HeaderStream headerStreamer = new HeaderStream(this);
-      var headers = new List<NetworkHeader>();
-      
-      return headers;
-    }
-
-    public async Task<List<UInt256>> InsertHeadersAsync(List<NetworkHeader> headers)
+    
+    public async Task<List<byte[]>> InsertHeadersAsync(List<NetworkHeader> headers)
     {
       using (var archiveWriter = new HeaderWriter())
       {
         return await InsertHeadersAsync(archiveWriter, headers);
       }
     }
-    public async Task<List<UInt256>> InsertHeadersAsync(HeaderWriter archiveWriter, List<NetworkHeader> headers)
+    public async Task<List<byte[]>> InsertHeadersAsync(HeaderWriter archiveWriter, List<NetworkHeader> headers)
     {
-      var headersInserted = new List<UInt256>();
+      var headersInserted = new List<byte[]>();
 
       foreach (NetworkHeader header in headers)
       {
@@ -93,9 +86,9 @@ namespace BToken.Chaining
 
       return headersInserted;
     }
-    async Task<UInt256> InsertHeaderAsync(NetworkHeader header)
+    async Task<byte[]> InsertHeaderAsync(NetworkHeader header)
     {
-      ValidateHeader(header, out UInt256 headerHash);
+      ValidateHeader(header, out byte[] headerHash);
 
       using (var inserter = await DispatchInserterAsync())
       {
@@ -122,9 +115,8 @@ namespace BToken.Chaining
         throw new ChainException("Received signal available but could not dispatch inserter.");
       }
     }
-    static void ValidateHeader(NetworkHeader header, out UInt256 headerHash)
+    static void ValidateHeader(NetworkHeader header, out byte[] headerHash)
     {
-      string merkleRoot = new SoapHexBinary(header.MerkleRoot).ToString();
       headerHash = header.ComputeHash();
 
       if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
@@ -148,9 +140,9 @@ namespace BToken.Chaining
       Locator.Reorganize();
     }
 
-    public ChainHeader ReadHeader(UInt256 headerHash, byte[] headerHashBytes)
+    public ChainHeader ReadHeader(byte[] headerHash, SHA256 sHA256Generator)
     {
-      int key = BitConverter.ToInt32(headerHashBytes, 0);
+      int key = BitConverter.ToInt32(headerHash, 0);
 
       lock (HeaderIndexLOCK)
       {
@@ -158,7 +150,7 @@ namespace BToken.Chaining
         {
           foreach (ChainHeader header in headers)
           {
-            if (headerHash.Equals(GetHeaderHash(header)))
+            if (headerHash.IsEqual(header.GetHeaderHash(sHA256Generator)))
             {
               return header;
             }
@@ -167,7 +159,7 @@ namespace BToken.Chaining
       }
 
       throw new ChainException(string.Format("Header hash {0} not in chain.",
-        headerHash));
+        new SoapHexBinary(headerHash)));
     }
     public bool TryReadHeaders(int keyHeaderIndex, out List<ChainHeader> headers)
     {
@@ -177,9 +169,9 @@ namespace BToken.Chaining
       }
     }
 
-    void UpdateHeaderIndex(ChainHeader header, UInt256 headerHash)
+    void UpdateHeaderIndex(ChainHeader header, byte[] headerHash)
     {
-      int keyHeader = BitConverter.ToInt32(headerHash.GetBytes(), 0);
+      int keyHeader = BitConverter.ToInt32(headerHash, 0);
 
       lock (HeaderIndexLOCK)
       {
@@ -191,16 +183,6 @@ namespace BToken.Chaining
 
         headers.Add(header);
       }
-    }
-
-    public static UInt256 GetHeaderHash(ChainHeader header)
-    {
-      if (header.HeadersNext != null)
-      {
-        return header.HeadersNext[0].NetworkHeader.HashPrevious;
-      }
-
-      return header.NetworkHeader.ComputeHash();
     }
     
     public async Task LoadFromArchiveAsync()

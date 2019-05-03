@@ -70,26 +70,26 @@ namespace BToken.Accounting
               out int tXCount,
               ref startIndex);
 
-            UInt256 headerHash = header.ComputeHash(out byte[] headerHashBytes);
-            UInt256 hash = HeaderLocations[IndexBlockReceived].Hash;
+            byte[] headerHash = header.ComputeHash();
+            byte[] hash = HeaderLocations[IndexBlockReceived].Hash;
             if (!hash.Equals(headerHash))
             {
               throw new UTXOException("Unexpected header hash.");
             }
 
-            TX[] tXs = UTXO.ParseBlock(blockBytes, ref startIndex, tXCount);
-            byte[] merkleRootHash = UTXO.ComputeMerkleRootHash(tXs, out byte[][] tXHashes);
-            if (!EqualityComparerByteArray.IsEqual(header.MerkleRoot, merkleRootHash))
-            {
-              throw new UTXOException("Payload corrupted.");
-            }
+            TX[] tXs = ParseBlock(blockBytes, ref startIndex, tXCount);
+            //byte[] merkleRootHash = ComputeMerkleRootHash(tXs, out byte[][] tXHashes, null, null);
+            //if (!merkleRootHash.IsEqual(header.MerkleRoot))
+            //{
+            //  throw new UTXOException("Payload corrupted.");
+            //}
 
-            BlocksReceived[IndexBlockReceived] = new Block(
-              headerHashBytes,
-              tXs,
-              tXHashes,
-              blockBytes,
-              HeaderLocations[IndexBlockReceived].Height);
+            //BlocksReceived[IndexBlockReceived] = new Block(
+            //  headerHash,
+            //  tXs,
+            //  tXHashes,
+            //  blockBytes,
+            //  HeaderLocations[IndexBlockReceived].Height);
 
             //Console.WriteLine("'{0}' Downloaded block '{1}', height {2}", 
             //  Channel.GetIdentification(),
@@ -114,10 +114,10 @@ namespace BToken.Accounting
         {
           for (int i = 0; i < BlocksReceived.Length; i++)
           {
-            UTXO.Merge(
-              BlocksReceived[i].TXs,
-              BlocksReceived[i].TXHashes,
-              BlocksReceived[i].HeaderHashBytes);
+            //UTXO.Merge(
+            //  BlocksReceived[i].TXs,
+            //  BlocksReceived[i].TXHashes,
+            //  BlocksReceived[i].HeaderHashBytes);
 
             UTXO.BlocksPartitioned.Add(BlocksReceived[i]);
             UTXO.CountTXsPartitioned += BlocksReceived[i].TXs.Length;

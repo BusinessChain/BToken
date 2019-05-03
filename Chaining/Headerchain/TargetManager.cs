@@ -8,7 +8,7 @@ namespace BToken.Chaining
     static class TargetManager
     {
       const int RETARGETING_BLOCK_INTERVAL = 2016;
-      const ulong RETARGETING_TIMESPAN_INTERVAL = 14 * 24 * 60 * 60; // two weeks in seconds
+      const ulong RETARGETING_TIMESPAN_INTERVAL_SECONDS = 14 * 24 * 60 * 60;
 
       static readonly UInt256 DIFFICULTY_1_TARGET = new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000");
       const double MAX_TARGET = 2.695994666715064E67;
@@ -36,7 +36,7 @@ namespace BToken.Chaining
         ulong actualTimespan = Limit(header.NetworkHeader.UnixTimeSeconds - headerIntervalStart.NetworkHeader.UnixTimeSeconds);
         UInt256 targetOld = UInt256.ParseFromCompact(header.NetworkHeader.NBits);
 
-        UInt256 targetNew = targetOld.MultiplyBy(actualTimespan).DivideBy(RETARGETING_TIMESPAN_INTERVAL);
+        UInt256 targetNew = targetOld.MultiplyBy(actualTimespan).DivideBy(RETARGETING_TIMESPAN_INTERVAL_SECONDS);
 
         return UInt256.Min(DIFFICULTY_1_TARGET, targetNew);
       }
@@ -51,14 +51,14 @@ namespace BToken.Chaining
       }
       static ulong Limit(ulong actualTimespan)
       {
-        if (actualTimespan < RETARGETING_TIMESPAN_INTERVAL / 4)
+        if (actualTimespan < RETARGETING_TIMESPAN_INTERVAL_SECONDS / 4)
         {
-          return RETARGETING_TIMESPAN_INTERVAL / 4;
+          return RETARGETING_TIMESPAN_INTERVAL_SECONDS / 4;
         }
 
-        if (actualTimespan > RETARGETING_TIMESPAN_INTERVAL * 4)
+        if (actualTimespan > RETARGETING_TIMESPAN_INTERVAL_SECONDS * 4)
         {
-          return RETARGETING_TIMESPAN_INTERVAL * 4;
+          return RETARGETING_TIMESPAN_INTERVAL_SECONDS * 4;
         }
 
         return actualTimespan;

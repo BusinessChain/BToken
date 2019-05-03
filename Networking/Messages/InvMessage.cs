@@ -37,10 +37,9 @@ namespace BToken.Networking
 
       byte[] hashBytes = new byte[32];
       Array.Copy(buffer, startIndex, hashBytes, 0, 32);
-      UInt256 hash = new UInt256(hashBytes);
       startIndex += 32;
 
-      return new Inventory(type, hash);
+      return new Inventory(type, hashBytes);
     }
     
     public List<Inventory> GetBlockInventories()

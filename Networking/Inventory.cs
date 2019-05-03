@@ -19,9 +19,9 @@ namespace BToken.Networking
   {
 
     public InventoryType Type { get; private set; }
-    public UInt256 Hash { get; private set; }
+    public byte[] Hash { get; private set; }
 
-    public Inventory(InventoryType type, UInt256 hash)
+    public Inventory(InventoryType type, byte[] hash)
     {
       Type = type;
       Hash = hash;
@@ -31,8 +31,8 @@ namespace BToken.Networking
     {
       List<byte> bytes = new List<byte>();
 
-      bytes.AddRange(BitConverter.GetBytes((UInt32)Type));
-      bytes.AddRange(Hash.GetBytes());
+      bytes.AddRange(BitConverter.GetBytes((uint)Type));
+      bytes.AddRange(Hash);
 
       return bytes;
 

@@ -84,7 +84,7 @@ namespace BToken.Accounting
           KeyValuePair<byte[], byte[]> uTXO = await ParseUTXOIndexAsync(file);
           while (uTXO.Key != null)
           {
-            if(!EqualityComparerByteArray.IsEqual(uTXO.Key, tXHash))
+            if(!uTXO.Key.IsEqual(tXHash))
             {
               uTXOsNotToBeDeletedKeys.Add(uTXO.Key);
               uTXOsNotToBeDeletedValues.Add(uTXO.Value);

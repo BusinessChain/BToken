@@ -15,7 +15,7 @@ namespace BToken.Chaining
       public Chain Chain;
 
       public ChainHeader Header;
-      public UInt256 Hash;
+      public byte[] Hash;
       public int Depth;
 
 
@@ -33,13 +33,13 @@ namespace BToken.Chaining
         Depth = 0;
       }
 
-      public bool GoTo(UInt256 hash, ChainHeader stopHeader)
+      public bool GoTo(byte[] hash, ChainHeader stopHeader)
       {
         Initialize();
 
         while (true)
         {
-          if (Hash.Equals(hash))
+          if (Hash.IsEqual(hash))
           {
             return true;
           }
@@ -59,7 +59,7 @@ namespace BToken.Chaining
         Depth++;
       }
 
-      public UInt256 GetHeaderHash(ChainHeader header)
+      public byte[] GetHeaderHash(ChainHeader header)
       {
         if (header.HeadersNext != null)
         {
@@ -71,7 +71,7 @@ namespace BToken.Chaining
         }
         else
         {
-          return header.NetworkHeader.ComputeHash();
+          return header.GetHeaderHash();
         }
       }
 

@@ -11,10 +11,11 @@ namespace BToken
   class GetHeadersMessage : NetworkMessage
   {
     public UInt32 ProtocolVersion { get; private set; }
-    public List<UInt256> HeaderLocator { get; private set; }  = new List<UInt256>();
+    public List<byte[]> HeaderLocator { get; private set; } = new List<byte[]>();
     public UInt256 StopHash { get; private set; }
 
-    public GetHeadersMessage(List<UInt256> headerLocator, uint protocolVersion) : base("getheaders")
+    public GetHeadersMessage(List<byte[]> headerLocator, uint protocolVersion) 
+      : base("getheaders")
     {
       ProtocolVersion = protocolVersion;
       HeaderLocator = headerLocator;
@@ -31,7 +32,7 @@ namespace BToken
 
       for (int i = 0; i < HeaderLocator.Count(); i++)
       {
-        payload.AddRange(HeaderLocator.ElementAt(i).GetBytes());
+        payload.AddRange(HeaderLocator.ElementAt(i));
       }
 
       payload.AddRange(StopHash.GetBytes());
@@ -40,7 +41,8 @@ namespace BToken
     }
 
 
-    public GetHeadersMessage(NetworkMessage message) : base("getheaders", message.Payload)
+    public GetHeadersMessage(NetworkMessage message) 
+      : base("getheaders", message.Payload)
     {
       int startIndex = 0;
 
@@ -50,7 +52,9 @@ namespace BToken
       int headersCount = (int)VarInt.GetUInt64(Payload, ref startIndex);
       for (int i = 0; i < headersCount; i++)
       {
-        HeaderLocator.Add(new UInt256(Payload, ref startIndex));
+        byte[] hash = new byte[32];
+        Array.Copy(Payload, startIndex, hash, 0, 32);
+        startIndex += 32;
       }
 
       StopHash = new UInt256(Payload, ref startIndex);

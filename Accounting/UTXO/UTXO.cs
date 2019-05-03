@@ -16,7 +16,6 @@ namespace BToken.Accounting
   public partial class UTXO
   {
     Headerchain Headerchain;
-    UTXOParser Parser;
     Network Network;
     UTXOArchiver Archiver;
 
@@ -32,10 +31,7 @@ namespace BToken.Accounting
     static readonly int CountHeaderPlusCollisionBits = COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS;
 
     static long UTCTimeStartup;
-    Stopwatch StopWatchMerkle = new Stopwatch();
-
-    SHA256 SHA256Generator = SHA256.Create();
-    byte[] LeafPairHashesConcat = new byte[TWICE_HASH_BYTE_SIZE];
+    Stopwatch[] Stopwatchs = new Stopwatch[COUNT_BATCHES_PARALLEL];
 
     const int COUNT_BATCHES_PARALLEL = 4;
     bool ParallelBatchesExistInArchive = true;
@@ -50,13 +46,11 @@ namespace BToken.Accounting
     const int MAX_COUNT_TXS_IN_PARTITION = 10000;
 
     int BlockHeight = 0;
-    Headerchain.ChainHeader ChainHeader;
 
 
     public UTXO(Headerchain headerchain, Network network)
     {
       Headerchain = headerchain;
-      Parser = new UTXOParser();
       Network = network;
 
       Cache = new UTXOCacheUInt32(
@@ -64,11 +58,47 @@ namespace BToken.Accounting
       Cache.Initialize();
 
       Archiver = new UTXOArchiver();
+
+      for (int i = 0; i < Stopwatchs.Length; i++)
+      {
+        Stopwatchs[i] = new Stopwatch();
+      }
     }
 
     public async Task StartAsync()
     {
       await BuildAsync();
+    }
+    async Task BuildAsync()
+    {
+      DirectoryInfo directoryInfo = Directory.CreateDirectory("UTXOBuild");
+      string filePatch = Path.Combine(
+        directoryInfo.FullName,
+        "UTXOBuild-" + DateTime.Now.ToString("yyyyddM-HHmmss") + ".csv");
+
+      using (StreamWriter buildWriter = new StreamWriter(
+        new FileStream(
+          filePatch,
+          FileMode.Append,
+          FileAccess.Write,
+          FileShare.Read)))
+      {
+        string labelsCSV = string.Format(
+        "BatchIndex," +
+        "Merge time," +
+        "Block height," +
+        "Total block bytes loaded," +
+        Cache.GetLabelsMetricsCSV(),
+        "Merge time");
+
+        UTCTimeStartup = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        Console.WriteLine(labelsCSV);
+        buildWriter.WriteLine(labelsCSV);
+
+        await BuildFromArchive(buildWriter);
+        await BuildFromNetwork(buildWriter);
+      }
     }
 
     async Task BuildFromArchive(StreamWriter buildWriter)
@@ -82,7 +112,14 @@ namespace BToken.Accounting
       {
         Parallel.For(0, COUNT_BATCHES_PARALLEL, i =>
         {
-          loadTasks[i] = LoadAsync(batchIndexOffset + i, i, buildWriter);
+          UTXOLoader uTXOLoader = new UTXOLoader(
+            this,
+            batchIndexOffset + i,
+            i,
+            buildWriter,
+            Stopwatchs[i]);
+
+          loadTasks[i] = uTXOLoader.LoadAsync();
         });
 
         await Task.WhenAll(loadTasks);
@@ -122,166 +159,9 @@ namespace BToken.Accounting
 
       //await Task.WhenAll(blockDownloadTasks);
     }
-    async Task BuildAsync()
-    {
-      DirectoryInfo directoryInfo = Directory.CreateDirectory("UTXOBuild");
-      string filePatch = Path.Combine(
-        directoryInfo.FullName,
-        "UTXOBuild-" + DateTime.Now.ToString("yyyyddM-HHmmss") + ".csv");
 
-      using (StreamWriter buildWriter = new StreamWriter(
-        new FileStream(
-          filePatch,
-          FileMode.Append,
-          FileAccess.Write,
-          FileShare.Read)))
-      {
-        string labelsCSV = string.Format(
-        "BatchIndex," +
-        "Merge time," +
-        "Block height," +
-        "Total block bytes loaded," +
-        Cache.GetLabelsMetricsCSV(),
-        "Merge time");
 
-        UTCTimeStartup = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-        Console.WriteLine(labelsCSV);
-        buildWriter.WriteLine(labelsCSV);
-
-        await BuildFromArchive(buildWriter);
-        await BuildFromNetwork(buildWriter);
-      }
-    }
-
-    async Task LoadAsync(
-      int batchIndex,
-      int queueIndex,
-      StreamWriter buildWriter)
-    {
-      try
-      {
-        if (BlockArchiver.Exists(batchIndex, out string filePath))
-        {
-          byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
-
-          lock (MergeLOCK)
-          {
-            if (MergeBatchIndex != batchIndex)
-            {
-              QueueMergeBlockBatches[queueIndex] = blockBatchBytes;
-              return;
-            }
-          }
-
-          while (true)
-          {
-            Merge(blockBatchBytes);
-
-            string metricsCSV = string.Format("{0},{1},{2},{3},{4},{5}",
-              batchIndex,
-              DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
-              BlockHeight,
-              0,
-              Cache.GetMetricsCSV(),
-              StopWatchMerkle.ElapsedMilliseconds / 1000);
-
-            Console.WriteLine(metricsCSV);
-            buildWriter.WriteLine(metricsCSV);
-
-            lock (MergeLOCK)
-            {
-              MergeBatchIndex++;
-              queueIndex++;
-              batchIndex++;
-
-              if (queueIndex == COUNT_BATCHES_PARALLEL ||
-                QueueMergeBlockBatches[queueIndex] == null)
-              {
-                return;
-              }
-
-              blockBatchBytes = QueueMergeBlockBatches[queueIndex];
-              QueueMergeBlockBatches[queueIndex] = null;
-            }
-          }
-        }
-        else
-        {
-          ParallelBatchesExistInArchive = false;
-        }
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine(ex.Message);
-      }
-    }
-
-    void Merge(byte[] blockBytes)
-    {
-      int startIndex = 0;
-
-      while (startIndex < blockBytes.Length)
-      {
-        NetworkHeader header = NetworkHeader.ParseHeader(
-          blockBytes,
-          out int tXCount,
-          ref startIndex);
-
-        ValidateHeader(header, out byte[] headerHashBytes);
-
-        StopWatchMerkle.Start();
-
-        TX[] tXs = ParseBlock(
-          blockBytes,
-          ref startIndex,
-          tXCount);
-
-        ValidateBlock(tXs, header.MerkleRoot, out byte[][] tXHashes);
-
-        Merge(tXs, tXHashes, headerHashBytes);
-
-        StopWatchMerkle.Stop();
-
-        BlockHeight++;
-      }
-    }
-    void ValidateBlock(TX[] tXs, byte[] merkleRoot, out byte[][] tXHashes)
-    {
-      byte[] merkleRootHash = ComputeMerkleRootHash(tXs, out tXHashes);
-
-      if (!EqualityComparerByteArray.IsEqual(merkleRoot, merkleRootHash))
-      {
-        throw new UTXOException("Payload corrupted.");
-      }
-    }
-    void ValidateHeader(NetworkHeader header, out byte[] headerHashBytes)
-    {
-      UInt256 headerHash = header.ComputeHash(out headerHashBytes);
-      UInt256 headerHashInChain;
-
-      if (ChainHeader == null)
-      {
-        ChainHeader = Headerchain.ReadHeader(headerHash, headerHashBytes);
-      }
-
-      if (ChainHeader.HeadersNext == null)
-      {
-        headerHashInChain = ChainHeader.NetworkHeader.ComputeHash();
-      }
-      else
-      {
-        ChainHeader = ChainHeader.HeadersNext[0];
-        headerHashInChain = ChainHeader.NetworkHeader.HashPrevious;
-      }
-
-      if (!headerHash.Equals(headerHashInChain))
-      {
-        throw new UTXOException(string.Format("Unexpected header hash {0}",
-          headerHash));
-      }
-    }
-    TX[] ParseBlock(
+    static TX[] ParseBlock(
       byte[] buffer,
       ref int startIndex,
       int tXCount)
@@ -294,33 +174,137 @@ namespace BToken.Accounting
 
       return tXs;
     }
-    void Merge(TX[] tXs, byte[][] tXHashes, byte[] headerHashBytes)
+
+    static byte[] ComputeMerkleRootHash(
+    byte[] buffer,
+    ref int bufferIndex,
+    TX[] tXs,
+    SHA256 sHA256Generator,
+    Stopwatch stopwatch)
+    {
+      if(tXs.Length == 1)
+      {
+        tXs[0] = TX.Parse2(buffer, ref bufferIndex, sHA256Generator);
+        return tXs[0].Hash;
+      }
+
+      int tXsLengthMod2 = tXs.Length & 1;
+
+      var merkleList = new byte[tXs.Length + tXsLengthMod2][];
+
+      ComputeTXHashes(
+        buffer,
+        ref bufferIndex,
+        tXs,
+        merkleList,
+        sHA256Generator,
+        stopwatch);
+
+      if(tXsLengthMod2 != 0)
+      {
+        merkleList[tXs.Length] = merkleList[tXs.Length - 1];
+      }
+
+      return GetRoot(merkleList, sHA256Generator, stopwatch);
+    }
+
+    static void ComputeTXHashes(
+      byte[] buffer,
+      ref int bufferIndex,
+      TX[] tXs,
+      byte[][] merkleList,
+      SHA256 sHA256Generator,
+      Stopwatch stopwatch)
+    {
+      stopwatch.Start();
+
+      for (int t = 0; t < tXs.Length; t++)
+      {
+        tXs[t] = TX.Parse2(buffer, ref bufferIndex, sHA256Generator);
+        merkleList[t] = tXs[t].Hash;
+      }
+
+      stopwatch.Stop();
+    }
+
+    static byte[] GetRoot(
+      byte[][] merkleList,
+      SHA256 sHA256Generator,
+      Stopwatch stopwatch)
+    {
+      int merkleIndex = merkleList.Length;
+
+      while (true)
+      {
+        merkleIndex >>= 1;
+
+        if (merkleIndex == 1)
+        {
+          return ComputeNextMerkleList(merkleList, merkleIndex, sHA256Generator, stopwatch)[0];
+        }
+
+        merkleList = ComputeNextMerkleList(merkleList, merkleIndex, sHA256Generator, stopwatch);
+
+        if ((merkleIndex & 1) != 0)
+        {
+          merkleList[merkleIndex] = merkleList[merkleIndex - 1];
+          merkleIndex++;
+        }
+      }
+
+    }
+    static byte[][] ComputeNextMerkleList(
+      byte[][] merkleList,
+      int merkleIndex,
+      SHA256 sHA256Generator,
+      Stopwatch stopwatch)
+    {
+      byte[] leafPair = new byte[TWICE_HASH_BYTE_SIZE];
+
+      for (int i = 0; i < merkleIndex; i++)
+      {
+        int i2 = i << 1;
+        merkleList[i2].CopyTo(leafPair, 0);
+        merkleList[i2 + 1].CopyTo(leafPair, HASH_BYTE_SIZE);
+
+        merkleList[i] = sHA256Generator.ComputeHash(
+          sHA256Generator.ComputeHash(
+            leafPair));
+      }
+
+      return merkleList;
+    }
+    
+    void Merge(
+      byte[] blockBytes,
+      TX[] tXs,
+      byte[] headerHashBytes)
     {
       for (int t = 0; t < tXs.Length; t++)
       {
         Cache.InsertUTXO(
-          tXHashes[t],
+          tXs[t].Hash,
           headerHashBytes,
-          tXs[t].Outputs.Count);
+          tXs[t].Outputs2.Length);
       }
 
       for (int t = 1; t < tXs.Length; t++)
       {
-        for (int i = 0; i < tXs[t].Inputs.Count; i++)
+        for (int i = 0; i < tXs[t].Inputs2.Length; i++)
         {
           try
           {
             Cache.SpendUTXO(
-              tXs[t].Inputs[i].TXIDOutput,
-              tXs[t].Inputs[i].IndexOutput);
+              tXs[t].Inputs2[i].TXIDOutput,
+              tXs[t].Inputs2[i].IndexOutput);
           }
           catch (UTXOException ex)
           {
-            byte[] inputTXHash = new byte[tXHashes[t].Length];
-            tXHashes[t].CopyTo(inputTXHash, 0);
+            byte[] inputTXHash = new byte[HASH_BYTE_SIZE];
+            tXs[t].Hash.CopyTo(inputTXHash, 0);
             Array.Reverse(inputTXHash);
 
-            byte[] outputTXHash = new byte[tXHashes[t].Length];
+            byte[] outputTXHash = new byte[HASH_BYTE_SIZE];
             tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
             Array.Reverse(outputTXHash);
 
@@ -336,84 +320,10 @@ namespace BToken.Accounting
           }
         }
       }
+
+      BlockHeight++;
     }
 
-    byte[] ComputeMerkleRootHash(TX[] tXs, out byte[][] tXHashes)
-    {
-      tXHashes = new byte[tXs.Length][];
 
-      if (tXs.Length == 1)
-      {
-        tXHashes[0] = SHA256d.Compute(tXs[0].GetBytes());
-        return tXHashes[0];
-      }
-           
-      if ((tXs.Length & 1) == 0)
-      {
-        var merkleList = new byte[tXs.Length][];
-
-        for (int t = 0; t < tXs.Length; t++)
-        {
-          var hash = SHA256d.Compute(tXs[t].GetBytes());
-          tXHashes[t] = hash;
-          merkleList[t] = hash;
-        }
-
-        return GetRoot(merkleList);
-      }
-      else
-      {
-        var merkleList = new byte[tXs.Length + 1][];
-
-        for (int t = 0; t < tXs.Length; t++)
-        {
-          var hash = SHA256d.Compute(tXs[t].GetBytes());
-          tXHashes[t] = hash;
-          merkleList[t] = hash;
-        }
-
-        merkleList[tXs.Length] = merkleList[tXs.Length - 1];
-
-        return GetRoot(merkleList);
-      }
-
-    }
-    byte[] GetRoot(byte[][] merkleList)
-    {
-      int merkleIndex = merkleList.Length;
-
-      while (true)
-      {
-        merkleIndex >>= 1;
-
-        if (merkleIndex == 1)
-        {
-          return ComputeNextMerkleList(merkleList, merkleIndex)[0];
-        }
-
-        merkleList = ComputeNextMerkleList(merkleList, merkleIndex);
-
-        if ((merkleIndex & 1) != 0)
-        {
-          merkleList[merkleIndex] = merkleList[merkleIndex - 1];
-          merkleIndex++;
-        }
-      }
-    }
-    byte[][] ComputeNextMerkleList(byte[][] merkleList, int merkleIndex)
-    {
-      for (int i = 0; i < merkleIndex; i++)
-      {
-        int i2 = i << 1;
-        merkleList[i2].CopyTo(LeafPairHashesConcat, 0);
-        merkleList[i2 + 1].CopyTo(LeafPairHashesConcat, HASH_BYTE_SIZE);
-
-        merkleList[i] = SHA256Generator.ComputeHash(
-          SHA256Generator.ComputeHash(
-            LeafPairHashesConcat));
-      }
-
-      return merkleList;
-    }
   }
 }

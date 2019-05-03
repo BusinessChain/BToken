@@ -11,7 +11,7 @@ namespace BToken.Chaining
     class Chain
     {
       public ChainHeader HeaderTip { get; private set; }
-      public UInt256 HeaderTipHash { get; private set; }
+      public byte[] HeaderTipHash { get; private set; }
       public int Height { get; private set; }
       public double AccumulatedDifficulty { get; private set; }
       public ChainHeader HeaderRoot { get; private set; }
@@ -23,13 +23,13 @@ namespace BToken.Chaining
         double accumulatedDifficultyPrevious)
       {
         HeaderTip = headerRoot;
-        HeaderTipHash = headerRoot.NetworkHeader.ComputeHash();
+        HeaderTipHash = headerRoot.GetHeaderHash();
         Height = height;
         HeaderRoot = headerRoot;
         AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerRoot.NetworkHeader.NBits);
       }
 
-      public void ExtendChain(ChainHeader header, UInt256 headerHash)
+      public void ExtendChain(ChainHeader header, byte[] headerHash)
       {
         HeaderTip = header;
         HeaderTipHash = headerHash;
