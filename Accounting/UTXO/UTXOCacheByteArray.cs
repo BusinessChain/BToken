@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -25,17 +27,22 @@ namespace BToken.Accounting
 
       const int LENGTH_HEADER_INDEX_BYTES = (COUNT_HEADERINDEX_BITS + 7) / 8;
       const int COUNT_NON_HEADER_BITS_IN_BYTE = (8 - COUNT_HEADERINDEX_BITS % 8) % 8;
-      
+      static readonly byte MaskAllOutputsBitsInByte = (byte)(byte.MaxValue << CountNonOutputsBitsInByte);
+      static readonly int CountNonOutputsBitsInByte = CountHeaderPlusCollisionBits % 8;
+      static readonly int OutputBitsByteIndex = CountHeaderPlusCollisionBits / 8;
+      static readonly int ByteIndexCollisionBits = COUNT_HEADERINDEX_BITS / 8;
+      static readonly int CountHeaderBitsInByte = COUNT_HEADERINDEX_BITS % 8;
 
-      public UTXOCacheByteArray()
-        : this(null)
-      { }
-      public UTXOCacheByteArray(UTXOCache nextCache) 
+
+      public UTXOCacheByteArray() 
         : base(
-            nextCache,
+            null,
             "PrimaryCacheByteArray",
             "SecondaryCacheByteArray")
-      { }
+      {
+        Debug.Assert(COUNT_HEADERINDEX_BITS % 8 + COUNT_COLLISION_BITS <= 8,
+          "Collision bits should not byte overflow, otherwise utxo parsing errors will occur.");
+      }
 
 
       protected override int GetCountPrimaryCacheItems()

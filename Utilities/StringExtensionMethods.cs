@@ -7,13 +7,13 @@ using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 namespace BToken
 {
-  static class ByteArray2HexString
+  static class StringExtensionMethods
   {
-    public static string ToHexString(this byte[] array)
+    public static byte[] ToBinary(this string hexString)
     {
-      byte[] temp = (byte[])array.Clone();
-      Array.Reverse(temp);
-      return new SoapHexBinary(temp).ToString();
+      byte[] binary = SoapHexBinary.Parse(hexString).Value;
+      Array.Reverse(binary);
+      return binary;
     }
   }
 }

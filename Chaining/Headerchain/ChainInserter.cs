@@ -39,7 +39,7 @@ namespace BToken.Chaining
         AccumulatedDifficulty -= TargetManager.GetDifficulty(Probe.Header.NetworkHeader.NBits);
       }
 
-      public Chain InsertHeader(NetworkHeader networkHeader, UInt256 headerHash)
+      public Chain InsertHeader(NetworkHeader networkHeader, byte[] headerHash)
       {
         FindPreviousHeader(networkHeader);
 
@@ -100,14 +100,14 @@ namespace BToken.Chaining
 
         throw new ChainException(ChainCode.ORPHAN);
       }
-      void ValidateHeader(NetworkHeader header, UInt256 headerHash)
+      void ValidateHeader(NetworkHeader header, byte[] headerHash)
       {
         ValidateTimeStamp(header.UnixTimeSeconds);
         ValidateCheckpoint(headerHash);
         ValidateUniqueness(headerHash);
-        ValidateProofOfWork(header.NBits, headerHash);
+        ValidateProofOfWork(header.NBits);
       }
-      void ValidateCheckpoint(UInt256 headerHash)
+      void ValidateCheckpoint(byte[] headerHash)
       {
         int nextHeaderHeight = Probe.GetHeight() + 1;
 
@@ -124,17 +124,17 @@ namespace BToken.Chaining
           throw new ChainException(ChainCode.INVALID);
         }
       }
-      bool ValidateBlockLocation(int height, UInt256 hash)
+      bool ValidateBlockLocation(int height, byte[] hash)
       {
         HeaderLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
         if (checkpoint != null)
         {
-          return checkpoint.Hash.Equals(hash);
+          return checkpoint.Hash.IsEqual(hash);
         }
 
         return true;
       }
-      void ValidateProofOfWork(uint nBits, UInt256 headerHash)
+      void ValidateProofOfWork(uint nBits)
       {
         int nextHeight = Probe.GetHeight() + 1;
         if (nBits != TargetManager.GetNextTargetBits(Probe.Header, (uint)nextHeight))
@@ -149,11 +149,11 @@ namespace BToken.Chaining
           throw new ChainException(ChainCode.INVALID);
         }
       }
-      void ValidateUniqueness(UInt256 hash)
+      void ValidateUniqueness(byte[] hash)
       {
         if (
           Probe.Header.HeadersNext != null &&
-          Probe.Header.HeadersNext.Select(h => Probe.GetHeaderHash(h)).Contains(hash))
+          Probe.Header.HeadersNext.Select(h => Probe.GetHeaderHash(h)).Contains(hash, new EqualityComparerByteArray()))
         {
           throw new ChainException(ChainCode.DUPLICATE);
         }

@@ -41,7 +41,7 @@ namespace BToken
           }
         }
       }
-      async Task<List<NetworkHeader>> GetHeadersAsync(List<UInt256> headerLocator)
+      async Task<List<NetworkHeader>> GetHeadersAsync(List<byte[]> headerLocator)
       {
         await Channel.SendMessageAsync(new GetHeadersMessage(headerLocator, Channel.GetProtocolVersion()));
 

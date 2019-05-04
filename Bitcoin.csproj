@@ -80,6 +80,7 @@
     <Compile Include="Accounting\UTXO\UTXOCache.cs" />
     <Compile Include="Accounting\UTXO\UTXOCacheByteArray.cs" />
     <Compile Include="Accounting\UTXO\UTXOCacheUInt32.cs" />
+    <Compile Include="Accounting\UTXO\UTXOLoader.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\Script.cs" />
@@ -88,14 +89,12 @@
     <Compile Include="Accounting\UTXO\TXOutputsSpentMap.cs" />
     <Compile Include="Accounting\UTXO\TXWitness.cs" />
     <Compile Include="Accounting\UTXO\UTXO.cs" />
-    <Compile Include="Accounting\UTXO\UTXOParser.cs" />
     <Compile Include="Accounting\UTXO\GenesisBlock.cs" />
     <Compile Include="Accounting\UTXO\TX.cs" />
     <Compile Include="Accounting\UTXO\UTXOIndex.cs" />
     <Compile Include="Accounting\UTXO\UTXOException.cs" />
     <Compile Include="Accounting\Wallet\Wallet.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderStream.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocator.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocation.cs" />
     <Compile Include="Chaining\Headerchain\ChainProbe.cs" />
@@ -105,7 +104,7 @@
     <Compile Include="Node\SessionHeaderDownload.cs" />
     <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Chaining\Headerchain\Chain.cs" />
-    <Compile Include="Utilities\ByteArray2HexString.cs" />
+    <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
     <Compile Include="Hashing\SHA256d.cs" />
@@ -152,6 +151,7 @@
     <Compile Include="Networking\ServiceFlags.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utilities\StringExtensionMethods.cs" />
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>

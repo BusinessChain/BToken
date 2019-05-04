@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 using BToken.Hashing;
 using BToken.Networking;
@@ -11,7 +11,11 @@ namespace BToken.Accounting
 {
   class TX
   {
-    const byte FLAG_WITNESS_IS_PRESENT = 0x01;
+    public byte[] Hash;
+    public TXInput[] Inputs2;
+    public TXOutput[] Outputs2;
+    public TXWitness[] Witnesses2;
+    public int Length;
 
     public UInt32 Version { get; private set; }
     public List<TXInput> Inputs { get; private set; }
@@ -19,7 +23,20 @@ namespace BToken.Accounting
     public List<TXWitness> TXWitnesses { get; private set; }
     public UInt32 LockTime { get; private set; }
 
+    const byte FLAG_WITNESS_IS_PRESENT = 0x01;
 
+
+    TX(
+      byte[] hash,
+      TXInput[] inputs2,
+      TXOutput[] outputs2,
+      TXWitness[] witnesses2)
+    {
+      Hash = hash;
+      Inputs2 = inputs2;
+      Outputs2 = outputs2;
+      Witnesses2 = witnesses2;
+    }
 
     TX(
       UInt32 version,
@@ -35,33 +52,79 @@ namespace BToken.Accounting
       LockTime = lockTime;
     }
 
-    public static TX Parse(byte[] byteStream, ref int startIndex)
+    public static TX Parse2(byte[] buffer, ref int bufferIndex, SHA256 sHA256Generator)
     {
-      UInt32 version = BitConverter.ToUInt32(byteStream, startIndex);
+      int indexTXStart = bufferIndex;
+
+      bufferIndex += 4; // version
+      
+      bool isWitnessFlagPresent = buffer[bufferIndex] == 0x00;
+      if (isWitnessFlagPresent)
+      {
+        bufferIndex += 2;
+      }
+
+      int tXInputsCount = (int)VarInt.GetUInt64(buffer, ref bufferIndex);
+      var inputs2 = new TXInput[tXInputsCount];
+      for (int i = 0; i < tXInputsCount; i += 1)
+      {
+        inputs2[i] = TXInput.Parse(buffer, ref bufferIndex);
+      }
+
+      int tXOutputsCount = (int)VarInt.GetUInt64(buffer, ref bufferIndex);
+      var outputs2 = new TXOutput[tXOutputsCount];
+      for (int i = 0; i < tXOutputsCount; i += 1)
+      {
+        outputs2[i] = TXOutput.Parse(buffer, ref bufferIndex);
+      }
+
+      var witnesses2 = new TXWitness[tXInputsCount];
+      for (int i = 0; i < tXInputsCount; i += 1)
+      {
+        witnesses2[i] = TXWitness.Parse(buffer, ref bufferIndex);
+      }
+
+      bufferIndex += 4; // Lock time
+      
+      byte[] hash = sHA256Generator.ComputeHash(
+       sHA256Generator.ComputeHash(
+         buffer,
+         indexTXStart,
+         bufferIndex - indexTXStart));
+      
+      return new TX(
+        hash,
+        inputs2,
+        outputs2,
+        witnesses2); ;
+    }
+    public static TX Parse(byte[] buffer, ref int startIndex)
+    {
+      UInt32 version = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
 
       byte witnessFlag = 0x00;
-      bool isWitnessFlagPresent = byteStream[startIndex] == 0x00;
+      bool isWitnessFlagPresent = buffer[startIndex] == 0x00;
       if (isWitnessFlagPresent)
       {
         startIndex += 1;
 
-        witnessFlag = byteStream[startIndex];
+        witnessFlag = buffer[startIndex];
         startIndex += 1;
       }
 
-      int tXInputsCount = (int)VarInt.GetUInt64(byteStream, ref startIndex);
+      int tXInputsCount = (int)VarInt.GetUInt64(buffer, ref startIndex);
       var tXInputs = new List<TXInput>();
       for (int i = 0; i < tXInputsCount; i++)
       {
-        tXInputs.Add(TXInput.Parse(byteStream, ref startIndex));
+        tXInputs.Add(TXInput.Parse(buffer, ref startIndex));
       }
 
-      int tXOutputsCount = (int)VarInt.GetUInt64(byteStream, ref startIndex);
+      int tXOutputsCount = (int)VarInt.GetUInt64(buffer, ref startIndex);
       var tXOutputs = new List<TXOutput>();
       for (int i = 0; i < tXOutputsCount; i++)
       {
-        tXOutputs.Add(TXOutput.Parse(byteStream, ref startIndex));
+        tXOutputs.Add(TXOutput.Parse(buffer, ref startIndex));
       }
 
       var tXWitnesses = new List<TXWitness>();
@@ -69,11 +132,11 @@ namespace BToken.Accounting
       {
         for (int i = 0; i < tXInputsCount; i++)
         {
-          tXWitnesses.Add(TXWitness.Parse(byteStream, ref startIndex));
+          tXWitnesses.Add(TXWitness.Parse(buffer, ref startIndex));
         }
       }
 
-      UInt32 lockTime = BitConverter.ToUInt32(byteStream, startIndex);
+      UInt32 lockTime = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
 
       return new TX(
@@ -116,14 +179,6 @@ namespace BToken.Accounting
       byteStream.AddRange(BitConverter.GetBytes(LockTime));
 
       return byteStream.ToArray();
-    }
-  }
-
-  static class BitcoinTXExtensionMethods
-  {
-    public static UInt256 GetTXHash(this TX bitcoinTX)
-    {
-      return new UInt256(SHA256d.Compute(bitcoinTX.GetBytes()));
     }
   }
 }
