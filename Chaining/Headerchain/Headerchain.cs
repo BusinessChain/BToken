@@ -119,7 +119,7 @@ namespace BToken.Chaining
     {
       headerHash = header.ComputeHash();
 
-      if (headerHash.IsGreaterThan(UInt256.ParseFromCompact(header.NBits)))
+      if (headerHash.IsGreaterThan(header.NBits))
       {
         throw new ChainException(ChainCode.INVALID);
       }

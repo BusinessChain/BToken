@@ -90,6 +90,11 @@ namespace BToken
         {
           return true;
         }
+
+        if (array1[i] < array2[i])
+        {
+          return false;
+        }
       }
 
       return false;
