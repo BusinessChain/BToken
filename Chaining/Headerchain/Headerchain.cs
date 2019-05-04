@@ -159,7 +159,7 @@ namespace BToken.Chaining
       }
 
       throw new ChainException(string.Format("Header hash {0} not in chain.",
-        new SoapHexBinary(headerHash)));
+        headerHash.ToHexString()));
     }
     public bool TryReadHeaders(int keyHeaderIndex, out List<ChainHeader> headers)
     {
@@ -218,5 +218,6 @@ namespace BToken.Chaining
     {
       return MainChain.Height;
     }
+
   }
 }

@@ -35,14 +35,10 @@ namespace BToken.Accounting
 
     const int COUNT_BATCHES_PARALLEL = 4;
     bool ParallelBatchesExistInArchive = true;
-    byte[][] QueueMergeBlockBatches = new byte[COUNT_BATCHES_PARALLEL][];
-    Dictionary<int, Block[]> QueueMergeBlocks = new Dictionary<int, Block[]>();
+    Dictionary<int, List<Block>> QueueBlocksMerge = new Dictionary<int, List<Block>>();
     readonly object MergeLOCK = new object();
-    int MergeBatchIndex = 0;
-    long CountBlockBytesDownloadedTotal = 0;
-    int FilePartitionIndex = 0;
+    int IndexBatchMerge = 0;
     List<Block> BlocksPartitioned = new List<Block>();
-    int CountTXsPartitioned = 0;
     const int MAX_COUNT_TXS_IN_PARTITION = 10000;
 
     int BlockHeight = 0;
@@ -275,53 +271,53 @@ namespace BToken.Accounting
       return merkleList;
     }
     
-    void Merge(
-      byte[] blockBytes,
-      TX[] tXs,
-      byte[] headerHashBytes)
+    void Merge(List<Block> blocks)
     {
-      for (int t = 0; t < tXs.Length; t++)
+      foreach(Block block in blocks)
       {
-        Cache.InsertUTXO(
-          tXs[t].Hash,
-          headerHashBytes,
-          tXs[t].Outputs2.Length);
-      }
-
-      for (int t = 1; t < tXs.Length; t++)
-      {
-        for (int i = 0; i < tXs[t].Inputs2.Length; i++)
+        for (int t = 0; t < block.TXs.Length; t++)
         {
-          try
+          Cache.InsertUTXO(
+            block.TXs[t].Hash,
+            block.HeaderHash,
+            block.TXs[t].Outputs2.Length);
+        }
+
+        for (int t = 1; t < block.TXs.Length; t++)
+        {
+          for (int i = 0; i < block.TXs[t].Inputs2.Length; i++)
           {
-            Cache.SpendUTXO(
-              tXs[t].Inputs2[i].TXIDOutput,
-              tXs[t].Inputs2[i].IndexOutput);
-          }
-          catch (UTXOException ex)
-          {
-            byte[] inputTXHash = new byte[HASH_BYTE_SIZE];
-            tXs[t].Hash.CopyTo(inputTXHash, 0);
-            Array.Reverse(inputTXHash);
+            try
+            {
+              Cache.SpendUTXO(
+                block.TXs[t].Inputs2[i].TXIDOutput,
+                block.TXs[t].Inputs2[i].IndexOutput);
+            }
+            catch (UTXOException ex)
+            {
+              byte[] inputTXHash = new byte[HASH_BYTE_SIZE];
+              block.TXs[t].Hash.CopyTo(inputTXHash, 0);
+              Array.Reverse(inputTXHash);
 
-            byte[] outputTXHash = new byte[HASH_BYTE_SIZE];
-            tXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
-            Array.Reverse(outputTXHash);
+              byte[] outputTXHash = new byte[HASH_BYTE_SIZE];
+              block.TXs[t].Inputs[i].TXIDOutput.CopyTo(outputTXHash, 0);
+              Array.Reverse(outputTXHash);
 
-            Console.WriteLine("Input {0} in TX {1} \n failed to spend output " +
-              "{2} in TX {3}: \n{4}.",
-              i,
-              new SoapHexBinary(inputTXHash),
-              tXs[t].Inputs[i].IndexOutput,
-              new SoapHexBinary(outputTXHash),
-              ex.Message);
+              Console.WriteLine("Input {0} in TX {1} \n failed to spend output " +
+                "{2} in TX {3}: \n{4}.",
+                i,
+                new SoapHexBinary(inputTXHash),
+                block.TXs[t].Inputs[i].IndexOutput,
+                new SoapHexBinary(outputTXHash),
+                ex.Message);
 
-            throw ex;
+              throw ex;
+            }
           }
         }
-      }
 
-      BlockHeight++;
+        BlockHeight++;
+      }
     }
 
 

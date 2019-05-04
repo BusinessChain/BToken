@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Text;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
 
@@ -15,11 +15,11 @@ namespace BToken.Accounting
     class UTXOLoader
     {
       const int COUNT_HEADER_BYTES = 80;
+      const int OFFSET_INDEX_HASH_PREVIOUS = 4;
       const int OFFSET_INDEX_MERKLE_ROOT = 36;
       UTXO UTXO;
 
       int BatchIndex;
-      int QueueIndex;
       StreamWriter BuildWriter;
       
       Stopwatch Stopwatch;
@@ -37,7 +37,6 @@ namespace BToken.Accounting
       {
         UTXO = uTXO;
         BatchIndex = batchIndex;
-        QueueIndex = queueIndex;
         BuildWriter = buildWriter;
 
         Stopwatch = stopwatch;
@@ -49,23 +48,66 @@ namespace BToken.Accounting
         {
           if (BlockArchiver.Exists(BatchIndex, out string filePath))
           {
-            byte[] blockBatchBytes = await BlockArchiver.ReadBlockBatchAsync(filePath);
+            byte[] buffer = await BlockArchiver.ReadBlockBatchAsync(filePath).ConfigureAwait(false);
 
+            int bufferIndex = 0;
+
+            var blocks = new List<Block>();
+
+            while (bufferIndex < buffer.Length)
+            {
+              var block = new Block();
+
+              block.HeaderHash =
+              SHA256Generator.ComputeHash(
+                SHA256Generator.ComputeHash(
+                  buffer,
+                  bufferIndex,
+                  COUNT_HEADER_BYTES));
+
+              ValidateHeaderHash(block.HeaderHash);
+
+              int indexMerkleRoot = bufferIndex + OFFSET_INDEX_MERKLE_ROOT;
+              int indexHashPrevious = bufferIndex + OFFSET_INDEX_HASH_PREVIOUS;
+              byte[] hashPrevious = new byte[HASH_BYTE_SIZE];
+              Array.Copy(buffer, indexHashPrevious, hashPrevious, 0, HASH_BYTE_SIZE);
+
+              bufferIndex += COUNT_HEADER_BYTES;
+
+              int tXCount = (int)VarInt.GetUInt64(buffer, ref bufferIndex);
+
+              block.TXs = new TX[tXCount];
+
+              byte[] merkleRootHash = ComputeMerkleRootHash(
+                buffer,
+                ref bufferIndex,
+                block.TXs,
+                SHA256Generator,
+                Stopwatch);
+
+              if (!merkleRootHash.IsEqual(buffer, indexMerkleRoot))
+              {
+                throw new UTXOException("Payload corrupted.");
+              }
+
+              blocks.Add(block);
+            }
+            
             lock (UTXO.MergeLOCK)
             {
-              if (UTXO.MergeBatchIndex != BatchIndex)
+              if (UTXO.IndexBatchMerge != BatchIndex)
               {
-                UTXO.QueueMergeBlockBatches[QueueIndex] = blockBatchBytes;
+                UTXO.QueueBlocksMerge.Add(BatchIndex, blocks);
                 return;
               }
             }
 
             while (true)
             {
-              Merge(blockBatchBytes);
+              UTXO.Merge(blocks);
 
               string metricsCSV = string.Format("{0},{1},{2},{3},{4},{5}",
-                UTXO.MergeBatchIndex,
+                UTXO.IndexBatchMerge,
                 DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
                 UTXO.BlockHeight,
                 0,
@@ -77,17 +119,15 @@ namespace BToken.Accounting
 
               lock (UTXO.MergeLOCK)
               {
-                UTXO.MergeBatchIndex++;
-                QueueIndex++;
+                UTXO.IndexBatchMerge += 1;
 
-                if (QueueIndex == COUNT_BATCHES_PARALLEL ||
-                  UTXO.QueueMergeBlockBatches[QueueIndex] == null)
+                if (UTXO.QueueBlocksMerge.TryGetValue(UTXO.IndexBatchMerge, out blocks))
                 {
-                  return;
+                  UTXO.QueueBlocksMerge.Remove(UTXO.IndexBatchMerge);
+                  continue;
                 }
 
-                blockBatchBytes = UTXO.QueueMergeBlockBatches[QueueIndex];
-                UTXO.QueueMergeBlockBatches[QueueIndex] = null;
+                break;
               }
             }
           }
@@ -99,47 +139,6 @@ namespace BToken.Accounting
         catch (Exception ex)
         {
           Console.WriteLine(ex.Message);
-        }
-      }
-
-      void Merge(byte[] buffer)
-      {
-        int bufferIndex = 0;
-
-        while (bufferIndex < buffer.Length)
-        {
-          byte[] headerHash =
-          SHA256Generator.ComputeHash(
-            SHA256Generator.ComputeHash(
-              buffer,
-              bufferIndex,
-              COUNT_HEADER_BYTES));
-
-          ValidateHeaderHash(headerHash);
-
-          int indexMerkleRoot = bufferIndex + OFFSET_INDEX_MERKLE_ROOT;
-          bufferIndex += COUNT_HEADER_BYTES;
-
-          int tXCount = (int)VarInt.GetUInt64(buffer, ref bufferIndex);
-          
-          var tXs = new TX[tXCount];
-
-          byte[] merkleRootHash = ComputeMerkleRootHash(
-            buffer,
-            ref bufferIndex,
-            tXs,
-            SHA256Generator,
-            Stopwatch);
-
-          if (!merkleRootHash.IsEqual(buffer, indexMerkleRoot))
-          {
-            throw new UTXOException("Payload corrupted.");
-          }
-
-          UTXO.Merge(
-            buffer,
-            tXs,
-            headerHash);
         }
       }
       

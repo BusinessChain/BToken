@@ -13,10 +13,8 @@ namespace BToken.Accounting
   {
     static string[] ShardPaths = {
     "I:\\BlockArchivePartitioned",
-    //"J:\\BlockArchive",
-    //"D:\\BlockArchive",
-    //"C:\\BlockArchive"
-    };
+    "J:\\BlockArchivePartitioned",};
+
     const int PrefixBlockFolderBytes = 2;
 
     public static async Task ArchiveBlocksAsync(List<Block> blocks, int filePartitionIndex)

@@ -8,23 +8,21 @@ namespace BToken.Accounting
 {
   class Block
   {
-    public byte[] HeaderHashBytes;
-    public TX[] TXs;
-    public byte[][] TXHashes;
     public byte[] BlockBytes;
+    public byte[] HeaderHash;
+    public TX[] TXs;
     public int Height;
+
+    public Block()
+    { }
 
     public Block(
       byte[] headerHashBytes, 
       TX[] tXs,
-      byte[][] tXHashes,
-      byte[] blockBytes,
       int height)
     {
-      HeaderHashBytes = headerHashBytes;
+      HeaderHash = headerHashBytes;
       TXs = tXs;
-      TXHashes = tXHashes;
-      BlockBytes = blockBytes;
       Height = height;
     }
   }
