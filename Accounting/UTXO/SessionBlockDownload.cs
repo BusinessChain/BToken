@@ -44,123 +44,123 @@ namespace BToken.Accounting
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
       {
-        Channel = channel;
+        //Channel = channel;
         
-        List<Inventory> inventories = HeaderLocations
-          .Skip(IndexBlockReceived)
-          .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.Hash))
-          .ToList();
+        //List<Inventory> inventories = HeaderLocations
+        //  .Skip(IndexBlockReceived)
+        //  .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.Hash))
+        //  .ToList();
 
-        await Channel.SendMessageAsync(new GetDataMessage(inventories));
+        //await Channel.SendMessageAsync(new GetDataMessage(inventories));
 
-        var CancellationGetBlock =
-          new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
+        //var CancellationGetBlock =
+        //  new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
 
-        while (IndexBlockReceived < HeaderLocations.Length)
-        {
-          NetworkMessage networkMessage = await Channel.ReceiveSessionMessageAsync(CancellationGetBlock.Token);
+        //while (IndexBlockReceived < HeaderLocations.Length)
+        //{
+        //  NetworkMessage networkMessage = await Channel.ReceiveSessionMessageAsync(CancellationGetBlock.Token);
 
-          if (networkMessage.Command == "block")
-          {
-            byte[] blockBytes = networkMessage.Payload;
+        //  if (networkMessage.Command == "block")
+        //  {
+        //    byte[] blockBytes = networkMessage.Payload;
 
-            int startIndex = 0;
-            NetworkHeader header = NetworkHeader.ParseHeader(
-              blockBytes,
-              out int tXCount,
-              ref startIndex);
+        //    int startIndex = 0;
+        //    NetworkHeader header = NetworkHeader.ParseHeader(
+        //      blockBytes,
+        //      out int tXCount,
+        //      ref startIndex);
 
-            byte[] headerHash = header.ComputeHash();
-            byte[] hash = HeaderLocations[IndexBlockReceived].Hash;
-            if (!hash.Equals(headerHash))
-            {
-              throw new UTXOException("Unexpected header hash.");
-            }
+        //    byte[] headerHash = header.ComputeHash();
+        //    byte[] hash = HeaderLocations[IndexBlockReceived].Hash;
+        //    if (!hash.Equals(headerHash))
+        //    {
+        //      throw new UTXOException("Unexpected header hash.");
+        //    }
 
-            TX[] tXs = ParseBlock(blockBytes, ref startIndex, tXCount);
-            //byte[] merkleRootHash = ComputeMerkleRootHash(tXs, out byte[][] tXHashes, null, null);
-            //if (!merkleRootHash.IsEqual(header.MerkleRoot))
-            //{
-            //  throw new UTXOException("Payload corrupted.");
-            //}
+        //    TX[] tXs = ParseBlock(blockBytes, ref startIndex, tXCount);
+        //    //byte[] merkleRootHash = ComputeMerkleRootHash(tXs, out byte[][] tXHashes, null, null);
+        //    //if (!merkleRootHash.IsEqual(header.MerkleRoot))
+        //    //{
+        //    //  throw new UTXOException("Payload corrupted.");
+        //    //}
 
-            //BlocksReceived[IndexBlockReceived] = new Block(
-            //  headerHash,
-            //  tXs,
-            //  tXHashes,
-            //  blockBytes,
-            //  HeaderLocations[IndexBlockReceived].Height);
+        //    //BlocksReceived[IndexBlockReceived] = new Block(
+        //    //  headerHash,
+        //    //  tXs,
+        //    //  tXHashes,
+        //    //  blockBytes,
+        //    //  HeaderLocations[IndexBlockReceived].Height);
 
-            //Console.WriteLine("'{0}' Downloaded block '{1}', height {2}", 
-            //  Channel.GetIdentification(),
-            //  hash,
-            //  HeaderLocations[IndexBlockReceived].Height);
+        //    //Console.WriteLine("'{0}' Downloaded block '{1}', height {2}", 
+        //    //  Channel.GetIdentification(),
+        //    //  hash,
+        //    //  HeaderLocations[IndexBlockReceived].Height);
 
-            IndexBlockReceived++;
-          }
-        }
+        //    IndexBlockReceived++;
+        //  }
+        //}
         
-        lock (UTXO.MergeLOCK)
-        {
-          if (UTXO.MergeBatchIndex != BatchIndex)
-          {
-            UTXO.QueueMergeBlocks.Add(BatchIndex, BlocksReceived);
-            return;
-          }
-        }
+        //lock (UTXO.MergeLOCK)
+        //{
+        //  if (UTXO.MergeBatchIndex != BatchIndex)
+        //  {
+        //    UTXO.QueueBlocksMerge.Add(BatchIndex, BlocksReceived);
+        //    return;
+        //  }
+        //}
 
-        long countBlockBytesDownloadedBatch = 0;
-        while (true)
-        {
-          for (int i = 0; i < BlocksReceived.Length; i++)
-          {
-            //UTXO.Merge(
-            //  BlocksReceived[i].TXs,
-            //  BlocksReceived[i].TXHashes,
-            //  BlocksReceived[i].HeaderHashBytes);
+        //long countBlockBytesDownloadedBatch = 0;
+        //while (true)
+        //{
+        //  for (int i = 0; i < BlocksReceived.Length; i++)
+        //  {
+        //    //UTXO.Merge(
+        //    //  BlocksReceived[i].TXs,
+        //    //  BlocksReceived[i].TXHashes,
+        //    //  BlocksReceived[i].HeaderHashBytes);
 
-            UTXO.BlocksPartitioned.Add(BlocksReceived[i]);
-            UTXO.CountTXsPartitioned += BlocksReceived[i].TXs.Length;
+        //    UTXO.BlocksPartitioned.Add(BlocksReceived[i]);
+        //    UTXO.CountTXsPartitioned += BlocksReceived[i].TXs.Length;
 
-            if (UTXO.CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
-            {
-              Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
-                UTXO.BlocksPartitioned,
-                UTXO.FilePartitionIndex++);
+        //    if (UTXO.CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
+        //    {
+        //      Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
+        //        UTXO.BlocksPartitioned,
+        //        UTXO.FilePartitionIndex++);
 
-              UTXO.BlocksPartitioned = new List<Block>();
-              UTXO.CountTXsPartitioned = 0;
-            }
+        //      UTXO.BlocksPartitioned = new List<Block>();
+        //      UTXO.CountTXsPartitioned = 0;
+        //    }
 
-            countBlockBytesDownloadedBatch += BlocksReceived[i].BlockBytes.Length;
-          }
+        //    //countBlockBytesDownloadedBatch += BlocksReceived[i].BlockBytes.Length;
+        //  }
 
-          UTXO.CountBlockBytesDownloadedTotal += countBlockBytesDownloadedBatch;
+        //  UTXO.CountBlockBytesDownloadedTotal += countBlockBytesDownloadedBatch;
 
-          string metricsCSV = string.Format("{0},{1},{2},{3},{4}",
-            UTXO.MergeBatchIndex,
-            DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
-            BlocksReceived.Last().Height,
-            UTXO.CountBlockBytesDownloadedTotal,
-            UTXO.Cache.GetMetricsCSV());
+        //  string metricsCSV = string.Format("{0},{1},{2},{3},{4}",
+        //    UTXO.MergeBatchIndex,
+        //    DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
+        //    BlocksReceived.Last().Height,
+        //    UTXO.CountBlockBytesDownloadedTotal,
+        //    UTXO.Cache.GetMetricsCSV());
 
-          Console.WriteLine(metricsCSV);
-          BuildWriter.WriteLine(metricsCSV);
+        //  Console.WriteLine(metricsCSV);
+        //  BuildWriter.WriteLine(metricsCSV);
 
-          lock (UTXO.MergeLOCK)
-          {
-            UTXO.MergeBatchIndex++;
+        //  lock (UTXO.MergeLOCK)
+        //  {
+        //    UTXO.MergeBatchIndex++;
 
-            if (UTXO.QueueMergeBlocks.TryGetValue(UTXO.MergeBatchIndex, out BlocksReceived))
-            {
-              UTXO.QueueMergeBlocks.Remove(UTXO.MergeBatchIndex);
-            }
-            else
-            {
-              return;
-            }
-          }
-        }
+        //    if (UTXO.QueueBlocksMerge.TryGetValue(UTXO.MergeBatchIndex, out BlocksReceived))
+        //    {
+        //      UTXO.QueueBlocksMerge.Remove(UTXO.MergeBatchIndex);
+        //    }
+        //    else
+        //    {
+        //      return;
+        //    }
+        //  }
+        //}
       }
 
       public string GetSessionID()
