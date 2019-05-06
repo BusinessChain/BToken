@@ -14,10 +14,5 @@ namespace BToken.Accounting
     {
       return new TXWitness();
     }
-
-    public byte[] GetBytes()
-    {
-      return new byte[0];
-    }
   }
 }

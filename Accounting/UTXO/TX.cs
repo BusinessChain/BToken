@@ -20,13 +20,11 @@ namespace BToken.Accounting
     TX(
       byte[] hash,
       TXInput[] inputs,
-      TXOutput[] outputs,
-      TXWitness[] witnesses)
+      TXOutput[] outputs)
     {
       Hash = hash;
       Inputs = inputs;
       Outputs = outputs;
-      Witnesses = witnesses;
     }
 
     public static TX Parse(byte[] buffer, ref int bufferIndex, SHA256 sHA256Generator)
@@ -41,24 +39,27 @@ namespace BToken.Accounting
         bufferIndex += 2;
       }
 
-      int tXInputsCount = (int)VarInt.GetUInt64(buffer, ref bufferIndex);
+      int tXInputsCount = VarInt.GetInt32(buffer, ref bufferIndex);
       var inputs = new TXInput[tXInputsCount];
       for (int i = 0; i < tXInputsCount; i += 1)
       {
         inputs[i] = TXInput.Parse(buffer, ref bufferIndex);
       }
 
-      int tXOutputsCount = (int)VarInt.GetUInt64(buffer, ref bufferIndex);
+      int tXOutputsCount = VarInt.GetInt32(buffer, ref bufferIndex);
       var outputs = new TXOutput[tXOutputsCount];
       for (int i = 0; i < tXOutputsCount; i += 1)
       {
         outputs[i] = TXOutput.Parse(buffer, ref bufferIndex);
       }
 
-      var witnesses = new TXWitness[tXInputsCount];
-      for (int i = 0; i < tXInputsCount; i += 1)
+      if(isWitnessFlagPresent)
       {
-        witnesses[i] = TXWitness.Parse(buffer, ref bufferIndex);
+        var witnesses = new TXWitness[tXInputsCount];
+        for (int i = 0; i < tXInputsCount; i += 1)
+        {
+          witnesses[i] = TXWitness.Parse(buffer, ref bufferIndex);
+        }
       }
 
       bufferIndex += 4; // Lock time
@@ -72,8 +73,7 @@ namespace BToken.Accounting
       return new TX(
         hash,
         inputs,
-        outputs,
-        witnesses); ;
+        outputs);
     }
 
   }

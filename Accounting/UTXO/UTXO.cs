@@ -36,7 +36,7 @@ namespace BToken.Accounting
     static long UTCTimeStartup;
     Stopwatch[] Stopwatchs = new Stopwatch[COUNT_BATCHES_PARALLEL];
 
-    const int COUNT_BATCHES_PARALLEL = 1;
+    const int COUNT_BATCHES_PARALLEL = 4;
     bool ParallelBatchesExistInArchive = true;
     Dictionary<int, BatchBlockLoad> QueueBlocksMerge = new Dictionary<int, BatchBlockLoad>();
     readonly object MergeLOCK = new object();
@@ -312,7 +312,7 @@ namespace BToken.Accounting
 
           bufferIndex += COUNT_HEADER_BYTES;
 
-          int tXCount = (int)VarInt.GetUInt64(blockBuffer, ref bufferIndex);
+          int tXCount = VarInt.GetInt32(blockBuffer, ref bufferIndex);
 
           block.TXs = new TX[tXCount];
 
