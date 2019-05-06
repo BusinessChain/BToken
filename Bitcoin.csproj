@@ -76,11 +76,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Accounting\UTXO\Block.cs" />
+    <Compile Include="Accounting\UTXO\IBlockLoader.cs" />
     <Compile Include="Accounting\UTXO\UTXOArchiver.cs" />
     <Compile Include="Accounting\UTXO\UTXOCache.cs" />
     <Compile Include="Accounting\UTXO\UTXOCacheByteArray.cs" />
     <Compile Include="Accounting\UTXO\UTXOCacheUInt32.cs" />
-    <Compile Include="Accounting\UTXO\UTXOLoader.cs" />
+    <Compile Include="Accounting\UTXO\BatchBlockLoad.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\Script.cs" />

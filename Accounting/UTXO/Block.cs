@@ -8,7 +8,6 @@ namespace BToken.Accounting
 {
   class Block
   {
-    public byte[] BlockBytes;
     public byte[] HeaderHash;
     public TX[] TXs;
     public int Height;

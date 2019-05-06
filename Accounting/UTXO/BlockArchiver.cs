@@ -12,8 +12,7 @@ namespace BToken.Accounting
   partial class BlockArchiver
   {
     static string[] ShardPaths = {
-    "I:\\BlockArchivePartitioned",
-    "J:\\BlockArchivePartitioned",};
+    "I:\\BlockArchivePartitioned"};
 
     const int PrefixBlockFolderBytes = 2;
 
@@ -23,7 +22,7 @@ namespace BToken.Accounting
       {
         foreach(Block block in blocks)
         {
-          await file.WriteAsync(block.BlockBytes, 0, block.BlockBytes.Length);
+          //await file.WriteAsync(block.BlockBytes, 0, block.BlockBytes.Length);
         }
       }
     }
