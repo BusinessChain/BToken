@@ -18,7 +18,7 @@ namespace BToken.Chaining
   {
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
-    ChainHeader GenesisHeader;
+    public ChainHeader GenesisHeader;
     List<HeaderLocation> Checkpoints;
 
     readonly object HeaderIndexLOCK = new object();
@@ -161,13 +161,6 @@ namespace BToken.Chaining
       throw new ChainException(string.Format("Header hash {0} not in chain.",
         headerHash.ToHexString()));
     }
-    public bool TryReadHeaders(int keyHeaderIndex, out List<ChainHeader> headers)
-    {
-      lock(HeaderIndexLOCK)
-      {
-        return HeaderIndex.TryGetValue(keyHeaderIndex, out headers);
-      }
-    }
 
     void UpdateHeaderIndex(ChainHeader header, byte[] headerHash)
     {
@@ -202,7 +195,7 @@ namespace BToken.Chaining
           //int countHeader = 0;
           //while (header != null && countHeader < 200000)
           //{
-          //  countHeader++;
+          //  countHeader += 1;
           //  await InsertHeaderAsync(header);
           //  header = archiveReader.GetNextHeader();
           //}

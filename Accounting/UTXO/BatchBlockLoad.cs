@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
 
-using BToken.Networking;
 using BToken.Chaining;
 
 namespace BToken.Accounting

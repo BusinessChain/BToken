@@ -18,7 +18,7 @@ namespace BToken.Accounting
     class SessionBlockDownload : BatchBlockLoad, INetworkSession
     {
       UTXO UTXO;
-      HeaderLocation[] HeaderLocations;
+      byte[][] HeaderHashes;
 
       public INetworkChannel Channel { get; private set; }
 
@@ -27,21 +27,21 @@ namespace BToken.Accounting
 
       public SessionBlockDownload(
         UTXO uTXO,
-        HeaderLocation[] headerLocations,
+        byte[][] headerHashes,
         int batchIndex)
         : base(batchIndex)
       {
         UTXO = uTXO;
-        HeaderLocations = headerLocations;
+        HeaderHashes = headerHashes;
       }
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
       {
         Channel = channel;
 
-        List<Inventory> inventories = HeaderLocations
+        List<Inventory> inventories = HeaderHashes
           .Skip(Blocks.Count)
-          .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.Hash))
+          .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
           .ToList();
 
         await Channel.SendMessageAsync(new GetDataMessage(inventories));
@@ -49,39 +49,22 @@ namespace BToken.Accounting
         var CancellationGetBlock =
           new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
         
-        while (Blocks.Count < HeaderLocations.Length)
+        while (Blocks.Count < HeaderHashes.Length)
         {
           NetworkMessage networkMessage = await Channel.ReceiveSessionMessageAsync(CancellationGetBlock.Token);
 
           if (networkMessage.Command == "block")
           {
-            Blocks.AddRange(
-              UTXO.ParseBlocks(
-                this,
-                networkMessage.Payload));
+            List<Block> blocks = UTXO.ParseBlocks(this, networkMessage.Payload);
 
-            Console.WriteLine("'{0}' Downloaded block '{1}', height {2}",
+            blocks[0].BlockBytes = networkMessage.Payload;
+            Blocks.Add(blocks[0]);
+
+            Console.WriteLine("{0} Downloaded block {1}",
               Channel.GetIdentification(),
-              Blocks.Last().HeaderHash.ToHexString(),
-              HeaderLocations[Blocks.Count].Height);
+              Blocks.Last().HeaderHash.ToHexString());
           }
         }
-        
-        UTXO.BlocksPartitioned.AddRange(Blocks);
-        UTXO.CountTXsPartitioned += Blocks.Sum(b => b.TXs.Length);
-
-        if (UTXO.CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
-        {
-          Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
-            UTXO.BlocksPartitioned,
-            UTXO.FilePartitionIndex);
-
-          UTXO.FilePartitionIndex += 1;
-
-          UTXO.BlocksPartitioned = new List<Block>();
-          UTXO.CountTXsPartitioned = 0;
-        }
-
 
         lock (UTXO.MergeLOCK)
         {
@@ -92,17 +75,11 @@ namespace BToken.Accounting
           }
         }
 
-        UTXO.Merge(this);
+        UTXO.Merge(
+          this, 
+          flagArchive: true);
       }
 
-      public List<Block> GetBlocks()
-      {
-        return Blocks;
-      }
-      public Headerchain.ChainHeader GetChainHeader()
-      {
-        return ChainHeader;
-      }
 
       public string GetSessionID()
       {

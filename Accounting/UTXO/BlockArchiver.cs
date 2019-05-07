@@ -1,11 +1,7 @@
 ﻿using System.Collections.Generic;
 using System;
-using System.Linq;
-using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
 using System.IO;
-
-using BToken.Networking;
 
 namespace BToken.Accounting
 {
@@ -16,13 +12,15 @@ namespace BToken.Accounting
 
     const int PrefixBlockFolderBytes = 2;
 
-    public static async Task ArchiveBlocksAsync(List<Block> blocks, int filePartitionIndex)
+    public static async Task ArchiveBlocksAsync(
+      List<Block> blocks, 
+      int filePartitionIndex)
     {
       using (FileStream file = CreateFile(filePartitionIndex))
       {
         foreach(Block block in blocks)
         {
-          //await file.WriteAsync(block.BlockBytes, 0, block.BlockBytes.Length);
+          await file.WriteAsync(block.BlockBytes, 0, block.BlockBytes.Length);
         }
       }
     }

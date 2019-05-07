@@ -17,7 +17,6 @@ namespace BToken.Networking
 
   class Inventory
   {
-
     public InventoryType Type { get; private set; }
     public byte[] Hash { get; private set; }
 
@@ -27,7 +26,7 @@ namespace BToken.Networking
       Hash = hash;
     }
 
-    public List<byte> getBytes()
+    public List<byte> GetBytes()
     {
       List<byte> bytes = new List<byte>();
 
