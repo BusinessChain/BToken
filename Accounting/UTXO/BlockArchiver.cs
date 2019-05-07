@@ -1,23 +1,20 @@
 ﻿using System.Collections.Generic;
 using System;
-using System.Linq;
-using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Threading.Tasks;
 using System.IO;
-
-using BToken.Networking;
 
 namespace BToken.Accounting
 {
   partial class BlockArchiver
   {
     static string[] ShardPaths = {
-    "I:\\BlockArchivePartitioned",
-    "J:\\BlockArchivePartitioned",};
+    "I:\\BlockArchivePartitioned"};
 
     const int PrefixBlockFolderBytes = 2;
 
-    public static async Task ArchiveBlocksAsync(List<Block> blocks, int filePartitionIndex)
+    public static async Task ArchiveBlocksAsync(
+      List<Block> blocks, 
+      int filePartitionIndex)
     {
       using (FileStream file = CreateFile(filePartitionIndex))
       {

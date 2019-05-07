@@ -13,12 +13,12 @@ namespace BToken.Networking
 
     public InvMessage(NetworkMessage networkMessage) : base("inv", networkMessage.Payload)
     {
-      deserializePayload();
+      DeserializePayload();
     }
-    void deserializePayload()
+    void DeserializePayload()
     {
       int startIndex = 0;
-      int inventoryCount = (int)VarInt.GetUInt64(Payload, ref startIndex);
+      int inventoryCount = VarInt.GetInt32(Payload, ref startIndex);
 
       deserializeInventories(Payload, ref startIndex, inventoryCount);
     }

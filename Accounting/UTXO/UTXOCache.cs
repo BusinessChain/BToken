@@ -66,7 +66,7 @@ namespace BToken.Accounting
           cache = cache.NextCache;
         }
 
-        throw new UTXOException("UTXO could not be inserted attached Cache modules.");
+        throw new UTXOException("UTXO could not be inserted in Cache modules.");
       }
       bool TryInsertUTXO(
         int primaryKey,
@@ -103,9 +103,7 @@ namespace BToken.Accounting
       protected abstract bool TrySetCollisionBit(int primaryKey, int collisionAddress);
       protected abstract void SecondaryCacheAddUTXO(byte[] tXIDHash);
       protected abstract void PrimaryCacheAddUTXO(int primaryKey);
-
-
-      
+                 
       public void SpendUTXO(byte[] tXIDOutput, int outputIndex)
       {
         int primaryKey = BitConverter.ToInt32(tXIDOutput, 0);

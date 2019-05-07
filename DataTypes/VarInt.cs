@@ -107,28 +107,37 @@ namespace BToken
 
       return BitConverter.ToUInt64(value, 0);
     }
+    
+    public static int GetInt32(byte[] buffer, ref int startIndex)
+    {
+      int prefix = buffer[startIndex];
+      startIndex++;
+
+      if (prefix == 0xfd)
+      {
+        prefix = BitConverter.ToUInt16(buffer, startIndex);
+        startIndex += 2;
+      }
+      else if (prefix == 0xfe)
+      {
+        prefix = BitConverter.ToInt32(buffer, startIndex);
+        startIndex += 4;
+      }
+
+      return prefix;
+    }
 
     public static UInt64 GetUInt64(byte[] buffer, ref int startIndex)
     {
       byte prefix = buffer[startIndex];
       startIndex++;
-      return ConvertBytesToInt(prefix, buffer, ref startIndex);
+      return ConvertBytesToLong(prefix, buffer, ref startIndex);
     }
-    static UInt64 ConvertBytesToInt(UInt64 prefix, byte[] buffer, ref int startIndex)
+    static UInt64 ConvertBytesToLong(UInt64 prefix, byte[] buffer, ref int startIndex)
     {
       try
       {
-        if (prefix == 0xfd)
-        {
-          prefix = BitConverter.ToUInt16(buffer, startIndex);
-          startIndex += 2;
-        }
-        else if (prefix == 0xfe)
-        {
-          prefix = BitConverter.ToUInt32(buffer, startIndex);
-          startIndex += 4;
-        }
-        else if (prefix == 0xff)
+        if (prefix == 0xff)
         {
           prefix = BitConverter.ToUInt64(buffer, startIndex);
           startIndex += 8;

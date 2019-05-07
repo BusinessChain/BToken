@@ -38,12 +38,12 @@ namespace BToken.Networking
       {
         int startIndex = 0;
 
-        MessageTypeRejected = VarString.getString(Payload, ref startIndex);
+        MessageTypeRejected = VarString.GetString(Payload, ref startIndex);
 
         RejectionCode = Payload[startIndex];
         startIndex += 1;
 
-        RejectionReason = VarString.getString(Payload, ref startIndex);
+        RejectionReason = VarString.GetString(Payload, ref startIndex);
 
         deserializeExtraData(ref startIndex);
       }
@@ -83,9 +83,9 @@ namespace BToken.Networking
       {
         List<byte> rejectPayload = new List<byte>();
 
-        rejectPayload.AddRange(VarString.getBytes(MessageTypeRejected));
+        rejectPayload.AddRange(VarString.GetBytes(MessageTypeRejected));
         rejectPayload.Add((byte)RejectionCode);
-        rejectPayload.AddRange(VarString.getBytes(RejectionReason));
+        rejectPayload.AddRange(VarString.GetBytes(RejectionReason));
         rejectPayload.AddRange(ExtraData);
 
         Payload = rejectPayload.ToArray();

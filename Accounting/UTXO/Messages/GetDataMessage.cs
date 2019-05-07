@@ -27,7 +27,7 @@ namespace BToken.Accounting
 
       for (int i = 0; i < Inventories.Count(); i++)
       {
-        payload.AddRange(Inventories.ElementAt(i).getBytes());
+        payload.AddRange(Inventories.ElementAt(i).GetBytes());
       }
 
       Payload = payload.ToArray();

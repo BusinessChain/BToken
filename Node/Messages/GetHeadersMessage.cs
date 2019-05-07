@@ -49,7 +49,7 @@ namespace BToken
       ProtocolVersion = BitConverter.ToUInt32(Payload, startIndex);
       startIndex += 4;
 
-      int headersCount = (int)VarInt.GetUInt64(Payload, ref startIndex);
+      int headersCount = VarInt.GetInt32(Payload, ref startIndex);
       for (int i = 0; i < headersCount; i++)
       {
         byte[] hash = new byte[32];

@@ -21,7 +21,7 @@ namespace BToken.Networking
       {
         int startIndex = 0;
 
-        int addressesCount = (int)VarInt.GetUInt64(Payload, ref startIndex);
+        int addressesCount = VarInt.GetInt32(Payload, ref startIndex);
         for (int i = 0; i < addressesCount; i++)
         {
           NetworkAddresses.Add(NetworkAddress.ParseAddress(Payload, ref startIndex));

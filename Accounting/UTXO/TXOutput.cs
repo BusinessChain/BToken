@@ -13,12 +13,9 @@ namespace BToken.Accounting
     public UInt64 Value { get; private set; }
     public byte[] LockingScript { get; private set; }
 
-    public TXOutput(
-      UInt64 value,
-      byte[] lockingScript)
+    public TXOutput(UInt64 value)
     {
       Value = value;
-      LockingScript = lockingScript;
     }
 
     public static TXOutput Parse(byte[] byteStream, ref int startIndex)
@@ -26,25 +23,12 @@ namespace BToken.Accounting
       UInt64 value = BitConverter.ToUInt64(byteStream, startIndex);
       startIndex += 8;
 
-      int lockingScriptLength = (int)VarInt.GetUInt64(byteStream, ref startIndex);
-      byte[] lockingScript = new byte[lockingScriptLength];
-      Array.Copy(byteStream, startIndex, lockingScript, 0, lockingScriptLength);
+      int lockingScriptLength = VarInt.GetInt32(byteStream, ref startIndex);
+      //byte[] lockingScript = new byte[lockingScriptLength];
+      //Array.Copy(byteStream, startIndex, lockingScript, 0, lockingScriptLength);
       startIndex += lockingScriptLength;
 
-      return new TXOutput(
-        value,
-        lockingScript);
-    }
-
-    public byte[] GetBytes()
-    {
-      List<byte> byteStream = new List<byte>();
-
-      byteStream.AddRange(BitConverter.GetBytes(Value));
-      byteStream.AddRange(VarInt.GetBytes(LockingScript.Length));
-      byteStream.AddRange(LockingScript);
-
-      return byteStream.ToArray();
+      return new TXOutput(value);
     }
 
   }

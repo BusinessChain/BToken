@@ -63,7 +63,7 @@ namespace BToken.Networking
         Nonce = BitConverter.ToUInt64(Payload, startIndex);
         startIndex += 8;
 
-        UserAgent = VarString.getString(Payload, ref startIndex);
+        UserAgent = VarString.GetString(Payload, ref startIndex);
 
         BlockchainHeight = BitConverter.ToUInt32(Payload, startIndex);
         startIndex += 4;
@@ -110,7 +110,7 @@ namespace BToken.Networking
         versionPayload.AddRange(IPAddressLocal.GetAddressBytes());
         versionPayload.AddRange(GetBytes(PortLocal));
         versionPayload.AddRange(BitConverter.GetBytes(Nonce));
-        versionPayload.AddRange(VarString.getBytes(UserAgent));
+        versionPayload.AddRange(VarString.GetBytes(UserAgent));
         versionPayload.AddRange(BitConverter.GetBytes(BlockchainHeight));
         versionPayload.Add(RelayOption);
 

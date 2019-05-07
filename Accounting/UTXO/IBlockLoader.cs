@@ -4,15 +4,16 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using BToken.Networking;
+using BToken.Chaining;
 
 namespace BToken.Accounting
 {
-  class TXWitness
+  public partial class UTXO
   {
-    public static TXWitness Parse(byte[] byteStream, ref int startIndex)
+    interface IBlockLoader
     {
-      return new TXWitness();
+      List<Block> GetBlocks();
+      Headerchain.ChainHeader GetChainHeader();
     }
   }
 }

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using BToken.Networking;
 
 namespace BToken.Accounting
 {
@@ -18,50 +17,32 @@ namespace BToken.Accounting
 
     public TXInput(
       byte[] tXIDOutput,
-      int indexOutput,
-      byte[] unlockingScript,
-      UInt32 sequence)
+      int indexOutput)
     {
       TXIDOutput = tXIDOutput;
-      IndexOutput = indexOutput;
-      UnlockingScript = unlockingScript;
-      Sequence = sequence;
+      IndexOutput = indexOutput;;
     }
 
     public static TXInput Parse(byte[] byteStream, ref int startIndex)
     {
-      byte[] tXIDOutput = new UInt256(byteStream, ref startIndex).GetBytes();
+      byte[] tXIDOutput = new byte[32];
+      Array.Copy(byteStream, startIndex, tXIDOutput, 0, 32);
+      startIndex += 32;
 
-      UInt32 indexOutput = BitConverter.ToUInt32(byteStream, startIndex);
+      int indexOutput = BitConverter.ToInt32(byteStream, startIndex);
       startIndex += 4;
 
-      int unlockingScriptLength = (int)VarInt.GetUInt64(byteStream, ref startIndex);
-      byte[] unlockingScript = new byte[unlockingScriptLength];
-      Array.Copy(byteStream, startIndex, unlockingScript, 0, unlockingScriptLength);
+      int unlockingScriptLength = VarInt.GetInt32(byteStream, ref startIndex);
+      //byte[] unlockingScript = new byte[unlockingScriptLength];
+      //Array.Copy(byteStream, startIndex, unlockingScript, 0, unlockingScriptLength);
       startIndex += unlockingScriptLength;
 
-      UInt32 sequence = BitConverter.ToUInt32(byteStream, startIndex);
+      //UInt32 sequence = BitConverter.ToUInt32(byteStream, startIndex);
       startIndex += 4;
 
       return new TXInput(
         tXIDOutput,
-        (int)indexOutput,
-        unlockingScript,
-        sequence);
+        indexOutput);
     }
-
-    public byte[] GetBytes()
-    {
-      List<byte> bytes = new List<byte>();
-
-      bytes.AddRange(TXIDOutput);
-      bytes.AddRange(BitConverter.GetBytes(IndexOutput));
-      bytes.AddRange(VarInt.GetBytes(UnlockingScript.Length));
-      bytes.AddRange(UnlockingScript);
-      bytes.AddRange(BitConverter.GetBytes(Sequence));
-
-      return bytes.ToArray();
-    }
-
   }
 }
