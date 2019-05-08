@@ -45,14 +45,14 @@ namespace BToken.Accounting
     int IndexBatchMerge = 0;
     StreamWriter BuildWriter;
 
-    const int COUNT_BLOCK_DOWNLOAD_BATCH = 2;
+    const int COUNT_BLOCK_DOWNLOAD_BATCH = 10;
     const int COUNT_DOWNLOAD_TASKS = 8;
 
     List<Block> BlocksPartitioned = new List<Block>();
     int CountTXsPartitioned = 0;
     int FilePartitionIndex = 0;
-    const int MAX_COUNT_TXS_IN_PARTITION = 10000;
-    
+    const int MAX_COUNT_TXS_IN_PARTITION = 100000;
+
     Headerchain.ChainHeader ChainHeader;
 
     int BlockHeight = 0;
@@ -101,7 +101,7 @@ namespace BToken.Accounting
         ",TimeLoad," +
         "TimeParse," +
         "TimeMerge");
-        
+
         Console.WriteLine(labelsCSV);
         BuildWriter.WriteLine(labelsCSV);
 
@@ -138,12 +138,8 @@ namespace BToken.Accounting
       if (BlockArchiver.Exists(batch.BatchIndex, out string filePath))
       {
         byte[] blockBuffer = await BlockArchiver.ReadBlockBatchAsync(filePath).ConfigureAwait(false);
-        
-        batch.StopwatchParse.Start();
 
         batch.Blocks = ParseBlocks(batch, blockBuffer);
-
-        batch.StopwatchParse.Stop();
 
         lock (MergeLOCK)
         {
@@ -210,7 +206,7 @@ namespace BToken.Accounting
               }
             }
           }
-          
+
           BlockHeight += 1;
         }
 
@@ -219,16 +215,11 @@ namespace BToken.Accounting
           ArchiveBatch(batch.BatchIndex, batch.Blocks);
         }
 
-        TimeParse += batch.StopwatchParse.ElapsedMilliseconds;
-        TimeHashing += batch.StopwatchHashing.ElapsedMilliseconds;
-
-        string metricsCSV = string.Format("{0},{1},{2},{3},{4},{5}",
+        string metricsCSV = string.Format("{0},{1},{2},{3}",
           IndexBatchMerge,
           BlockHeight,
           DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
-          Cache.GetMetricsCSV(),
-          TimeParse / 1000,
-          TimeHashing / 1000);
+          Cache.GetMetricsCSV());
 
         Console.WriteLine(metricsCSV);
         BuildWriter.WriteLine(metricsCSV);
@@ -268,10 +259,10 @@ namespace BToken.Accounting
     }
 
     static bool TryGetHeaderHashes(
-      ref Headerchain.ChainHeader chainHeader, 
+      ref Headerchain.ChainHeader chainHeader,
       out byte[][] headerHashes)
     {
-      if(chainHeader == null)
+      if (chainHeader == null)
       {
         headerHashes = null;
         return false;
@@ -317,7 +308,7 @@ namespace BToken.Accounting
       await Task.WhenAll(blockDownloadTasks);
     }
 
-    
+
 
     static byte[] ComputeMerkleRootHash(
     byte[] buffer,
@@ -325,7 +316,7 @@ namespace BToken.Accounting
     TX[] tXs,
     SHA256 sHA256Generator)
     {
-      if(tXs.Length == 1)
+      if (tXs.Length == 1)
       {
         tXs[0] = TX.Parse(buffer, ref bufferIndex, sHA256Generator);
         return tXs[0].Hash;
@@ -341,7 +332,7 @@ namespace BToken.Accounting
         merkleList[t] = tXs[t].Hash;
       }
 
-      if(tXsLengthMod2 != 0)
+      if (tXsLengthMod2 != 0)
       {
         merkleList[tXs.Length] = merkleList[tXs.Length - 1];
       }
@@ -428,13 +419,11 @@ namespace BToken.Accounting
 
           block.TXs = new TX[tXCount];
 
-          batch.StopwatchHashing.Start();
           byte[] merkleRootHash = ComputeMerkleRootHash(
             blockBuffer,
             ref bufferIndex,
             block.TXs,
             batch.SHA256Generator);
-          batch.StopwatchHashing.Stop();
 
           if (!merkleRootHash.IsEqual(blockBuffer, indexMerkleRoot))
           {
@@ -444,17 +433,17 @@ namespace BToken.Accounting
           blocks.Add(block);
         }
       }
-      catch(Exception ex)
+      catch (Exception ex)
       {
         Console.WriteLine("Block parsing threw exception: " + ex.Message);
       }
 
       return blocks;
     }
-        
+
     static void ValidateHeaderHash(
-      byte[] headerHash, 
-      ref Headerchain.ChainHeader chainHeader, 
+      byte[] headerHash,
+      ref Headerchain.ChainHeader chainHeader,
       SHA256 sHA256Generator)
     {
       byte[] headerHashValidator;

@@ -60,9 +60,9 @@ namespace BToken.Accounting
             blocks[0].BlockBytes = networkMessage.Payload;
             Blocks.Add(blocks[0]);
 
-            Console.WriteLine("{0} Downloaded block {1}",
-              Channel.GetIdentification(),
-              Blocks.Last().HeaderHash.ToHexString());
+            //Console.WriteLine("{0} Downloaded block {1}",
+            //  Channel.GetIdentification(),
+            //  Blocks.Last().HeaderHash.ToHexString());
           }
         }
 
