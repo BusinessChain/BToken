@@ -37,7 +37,7 @@ namespace BToken
       int startIndex = 0;
 
       int headersCount = VarInt.GetInt32(Payload, ref startIndex);
-      for (int i = 0; i < headersCount; i++)
+      for (int i = 0; i < headersCount; i += 1)
       {
         Headers.Add(NetworkHeader.ParseHeader(Payload, out int txCount, ref startIndex));
       }

@@ -27,8 +27,8 @@ namespace BToken.Accounting
 
       const int LENGTH_HEADER_INDEX_BYTES = (COUNT_HEADERINDEX_BITS + 7) / 8;
       const int COUNT_NON_HEADER_BITS_IN_BYTE = (8 - COUNT_HEADERINDEX_BITS % 8) % 8;
-      static readonly byte MaskAllOutputsBitsInByte = (byte)(byte.MaxValue << CountNonOutputsBitsInByte);
       static readonly int CountNonOutputsBitsInByte = CountHeaderPlusCollisionBits % 8;
+      static readonly byte MaskAllOutputsBitsInByte = (byte)(byte.MaxValue << CountNonOutputsBitsInByte);
       static readonly int OutputBitsByteIndex = CountHeaderPlusCollisionBits / 8;
       static readonly int ByteIndexCollisionBits = COUNT_HEADERINDEX_BITS / 8;
       static readonly int CountHeaderBitsInByte = COUNT_HEADERINDEX_BITS % 8;
@@ -187,6 +187,11 @@ namespace BToken.Accounting
         return true;
       }
 
+
+      protected override int GetSumPrimarySecondaryCount()
+      {
+        return PrimaryCache.Count + SecondaryCache.Count;
+      }
     }
   }
 }

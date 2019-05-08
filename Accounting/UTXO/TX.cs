@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Diagnostics;
 using System.Security.Cryptography;
 
 
@@ -63,13 +63,12 @@ namespace BToken.Accounting
       }
 
       bufferIndex += 4; // Lock time
-      
       byte[] hash = sHA256Generator.ComputeHash(
        sHA256Generator.ComputeHash(
          buffer,
          indexTXStart,
          bufferIndex - indexTXStart));
-      
+
       return new TX(
         hash,
         inputs,

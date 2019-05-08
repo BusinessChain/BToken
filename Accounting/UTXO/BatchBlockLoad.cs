@@ -18,6 +18,9 @@ namespace BToken.Accounting
       public Headerchain.ChainHeader ChainHeader;
       public SHA256 SHA256Generator = SHA256.Create();
 
+      public Stopwatch StopwatchHashing = new Stopwatch();
+      public Stopwatch StopwatchParse = new Stopwatch();
+
 
       public BatchBlockLoad(int batchIndex)
       {
