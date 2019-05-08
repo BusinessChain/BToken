@@ -41,7 +41,7 @@ namespace BToken.Accounting
           cache.Address = cacheAddress;
 
           cache = cache.NextCache;
-          cacheAddress++;
+          cacheAddress += 1;
         }
       }
 
@@ -222,14 +222,14 @@ namespace BToken.Accounting
 
       public string GetLabelsMetricsCSV()
       {
-        UTXOCache cache = NextCache;
         string labels = LabelPrimaryCache + "," + LabelSecondaryCache;
 
+        UTXOCache cache = NextCache;
         while (cache != null)
         {
           labels +=
-            "," + NextCache.LabelPrimaryCache +
-            "," + NextCache.LabelSecondaryCache;
+            "," + cache.LabelPrimaryCache +
+            "," + cache.LabelSecondaryCache;
 
           cache = cache.NextCache;
         }
@@ -238,20 +238,34 @@ namespace BToken.Accounting
       }
       public string GetMetricsCSV()
       {
-        UTXOCache cache = NextCache;
         string metrics = GetCountPrimaryCacheItems() + "," + GetCountSecondaryCacheItems();
 
-        while(cache != null)
+        UTXOCache cache = NextCache;
+        while (cache != null)
         {
           metrics +=
-            "," + NextCache.GetCountPrimaryCacheItems() +
-            "," + NextCache.GetCountSecondaryCacheItems();
+            "," + cache.GetCountPrimaryCacheItems() +
+            "," + cache.GetCountSecondaryCacheItems();
 
           cache = cache.NextCache;
         }
 
         return metrics;
       }
+
+      public int GetCount()
+      {
+        int count = GetSumPrimarySecondaryCount();
+
+        if(NextCache != null)
+        {
+          count += NextCache.GetCount();
+        }
+
+        return count;
+      }
+
+      protected abstract int GetSumPrimarySecondaryCount();
     }
   }
 }

@@ -18,6 +18,8 @@ namespace BToken.Accounting
       uint UTXOPrimaryExisting;
       uint UTXOSecondaryExisting;
 
+      const int COUNT_INTEGER_BITS = sizeof(int) * 8;
+
       static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountHeaderPlusCollisionBits;
       static readonly int CountNonHeaderBits = COUNT_INTEGER_BITS - COUNT_HEADERINDEX_BITS;
       static readonly int CountHeaderBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
@@ -32,8 +34,7 @@ namespace BToken.Accounting
         : base(
             nextCache,
             "PrimaryCacheUInt32",
-            "SecondaryCacheUInt32"
-            )
+            "SecondaryCacheUInt32")
       { }
 
 
@@ -54,7 +55,7 @@ namespace BToken.Accounting
       {
         UTXOIndex = 0;
 
-        for (int i = CountHeaderBytes; i > 0; i--)
+        for (int i = CountHeaderBytes; i > 0; i -= 1)
         {
           UTXOIndex <<= 8;
           UTXOIndex |= headerHashBytes[i - 1];
@@ -62,8 +63,7 @@ namespace BToken.Accounting
         UTXOIndex <<= CountNonHeaderBits;
         UTXOIndex >>= CountNonHeaderBits;
 
-        int countUTXORemainderBits = lengthUTXOBits % 8;
-        if (countUTXORemainderBits > 0)
+        if (COUNT_INTEGER_BITS > lengthUTXOBits)
         {
           UTXOIndex |= (uint.MaxValue << lengthUTXOBits);
         }
@@ -155,6 +155,10 @@ namespace BToken.Accounting
         areAllOutputpsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
       }
 
+      protected override int GetSumPrimarySecondaryCount()
+      {
+        return PrimaryCache.Count + SecondaryCache.Count;
+      }
     }
   }
 }
