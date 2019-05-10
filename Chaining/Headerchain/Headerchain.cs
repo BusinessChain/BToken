@@ -193,7 +193,7 @@ namespace BToken.Chaining
           }
 
           //int countHeader = 0;
-          //while (header != null && countHeader < 50000)
+          //while (header != null && countHeader < 250000)
           //{
           //  countHeader += 1;
           //  await InsertHeaderAsync(header);

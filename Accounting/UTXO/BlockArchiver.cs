@@ -8,7 +8,7 @@ namespace BToken.Accounting
   partial class BlockArchiver
   {
     static string[] ShardPaths = {
-    "I:\\BlockArchivePartitioned"};
+    "J:\\BlockArchivePartitioned"};
 
     const int PrefixBlockFolderBytes = 2;
 

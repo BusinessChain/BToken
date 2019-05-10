@@ -4,7 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Security.Cryptography;
 
@@ -34,13 +36,15 @@ namespace BToken.Accounting
     static readonly int CountHeaderPlusCollisionBits = COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS;
 
     long UTCTimeStartup;
-    long TimeHashing = 0;
-    long TimeParse = 0;
     Stopwatch Stopwatch = new Stopwatch();
 
+    CancellationTokenSource CancellationTokenSourceLoadBatch = new CancellationTokenSource();
+    BufferBlock<BatchBlockLoad> BatchQueue = new BufferBlock<BatchBlockLoad>();
+    readonly object BatchQueueLOCK = new object();
+    List<BatchBlockLoad> BatchesQueued = new List<BatchBlockLoad>();
     const int COUNT_BATCHES_PARALLEL = 4;
-    bool ParallelBatchesExistInArchive = true;
-    Dictionary<int, BatchBlockLoad> QueueBlocksMerge = new Dictionary<int, BatchBlockLoad>();
+    const int BATCHQUEUE_MAX_COUNT = 8;
+    Dictionary<int, BatchBlockLoad> QueueBatchsMerge = new Dictionary<int, BatchBlockLoad>();
     readonly object MergeLOCK = new object();
     int IndexBatchMerge = 0;
     StreamWriter BuildWriter;
@@ -97,73 +101,101 @@ namespace BToken.Accounting
         "BatchIndex," +
         "Block height," +
         "Time," +
-        Cache.GetLabelsMetricsCSV() +
-        ",TimeLoad," +
-        "TimeParse," +
-        "TimeMerge");
+        "Time merge," +
+        "Ratio," +
+        Cache.GetLabelsMetricsCSV());
 
         Console.WriteLine(labelsCSV);
         BuildWriter.WriteLine(labelsCSV);
 
         UTCTimeStartup = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-        await BuildFromArchive();
-        await BuildFromNetwork();
-      }
-    }
-
-    async Task BuildFromArchive()
-    {
-      int batchIndexOffset = 0;
-      ParallelBatchesExistInArchive = true;
-
-      Task[] loadTasks = new Task[COUNT_BATCHES_PARALLEL];
-
-      while (ParallelBatchesExistInArchive)
-      {
         Parallel.For(0, COUNT_BATCHES_PARALLEL, i =>
         {
-          loadTasks[i] = LoadAsync(
-            new BatchBlockLoad(batchIndexOffset + i));
+          Task mergeBatchTask = MergeBatchAsync(i);
         });
 
-        await Task.WhenAll(loadTasks);
-
-        batchIndexOffset += COUNT_BATCHES_PARALLEL;
+        await LoadBatchesFromArchive();
+        await LoadBatchesFromNetwork();
       }
     }
 
-    async Task LoadAsync(BatchBlockLoad batch)
+    async Task LoadBatchesFromArchive()
     {
-      if (BlockArchiver.Exists(batch.BatchIndex, out string filePath))
+      try
       {
-        byte[] blockBuffer = await BlockArchiver.ReadBlockBatchAsync(filePath).ConfigureAwait(false);
+        int batchIndex = 0;
 
-        batch.Blocks = ParseBlocks(batch, blockBuffer);
-
-        lock (MergeLOCK)
+        while (BlockArchiver.Exists(batchIndex, out string filePath))
         {
-          if (IndexBatchMerge != batch.BatchIndex)
+          BatchBlockLoad batch = new BatchBlockLoad()
           {
-            QueueBlocksMerge.Add(batch.BatchIndex, batch);
-            return;
+            Index = batchIndex,
+            Buffer = await BlockArchiver.ReadBlockBatchAsync(filePath).ConfigureAwait(false)
+          };
+
+          BatchesQueued.Add(batch);
+          BatchQueue.Post(batch);
+
+          if (BatchesQueued.Count > BATCHQUEUE_MAX_COUNT)
+          {
+            BatchBlockLoad batchCompleted = await await Task.WhenAny(
+              BatchesQueued.Select(b => b.SignalBatchCompletion.Task));
+
+            BatchesQueued.Remove(batchCompleted);
           }
+
+          batchIndex += 1;
         }
 
-        Merge(
-          batch,
-          flagArchive: false);
+        await Task.WhenAll(BatchesQueued.Select(b => b.SignalBatchCompletion.Task));
       }
-      else
+      catch (Exception ex)
       {
-        ParallelBatchesExistInArchive = false;
+        Console.WriteLine(ex.Message);
+      }
+      
+    }
+
+    async Task MergeBatchAsync(int mergerID)
+    {
+      try
+      {
+        while (true)
+        {
+          BatchBlockLoad batch = await BatchQueue.ReceiveAsync(CancellationTokenSourceLoadBatch.Token).ConfigureAwait(false);
+
+          batch.StopwatchParse.Start();
+          ParseBlocks(batch);
+          batch.StopwatchParse.Stop();
+
+          lock (MergeLOCK)
+          {
+            if (IndexBatchMerge != batch.Index)
+            {
+              QueueBatchsMerge.Add(batch.Index, batch);
+
+              continue;
+            }
+          }
+
+          Merge(
+            batch,
+            mergerID,
+            flagArchive: false);
+        }
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine(ex.Message);
       }
     }
 
-    void Merge(BatchBlockLoad batch, bool flagArchive)
+    void Merge(BatchBlockLoad batch, int mergerID, bool flagArchive)
     {
       while (true)
       {
+        batch.StopwatchMerging.Start();
         foreach (Block block in batch.Blocks)
         {
           for (int t = 0; t < block.TXs.Length; t += 1)
@@ -209,16 +241,24 @@ namespace BToken.Accounting
 
           BlockHeight += 1;
         }
+        batch.StopwatchMerging.Stop();
+
+        batch.SignalBatchCompletion.SetResult(batch);
 
         if (flagArchive)
         {
-          ArchiveBatch(batch.BatchIndex, batch.Blocks);
+          ArchiveBatch(batch.Index, batch.Blocks);
         }
 
-        string metricsCSV = string.Format("{0},{1},{2},{3}",
-          IndexBatchMerge,
+        long timeParsePlusMerge = batch.StopwatchMerging.ElapsedMilliseconds + batch.StopwatchParse.ElapsedMilliseconds;
+        int ratio = (int)((float)batch.StopwatchMerging.ElapsedTicks * 100 / batch.StopwatchParse.ElapsedTicks);
+
+        string metricsCSV = string.Format("{0},{1},{2},{3},{4},{5}",
+          batch.Index,
           BlockHeight,
           DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
+          timeParsePlusMerge,
+          ratio,
           Cache.GetMetricsCSV());
 
         Console.WriteLine(metricsCSV);
@@ -229,9 +269,9 @@ namespace BToken.Accounting
           IndexBatchMerge += 1;
           ChainHeader = batch.ChainHeader;
 
-          if (QueueBlocksMerge.TryGetValue(IndexBatchMerge, out batch))
+          if (QueueBatchsMerge.TryGetValue(IndexBatchMerge, out batch))
           {
-            QueueBlocksMerge.Remove(IndexBatchMerge);
+            QueueBatchsMerge.Remove(IndexBatchMerge);
             continue;
           }
 
@@ -279,7 +319,7 @@ namespace BToken.Accounting
       return true;
     }
 
-    async Task BuildFromNetwork()
+    async Task LoadBatchesFromNetwork()
     {
       Headerchain.ChainHeader chainHeader = ChainHeader;
       int indexBatchDownload = IndexBatchMerge;
@@ -307,8 +347,7 @@ namespace BToken.Accounting
 
       await Task.WhenAll(blockDownloadTasks);
     }
-
-
+    
 
     static byte[] ComputeMerkleRootHash(
     byte[] buffer,
@@ -387,21 +426,19 @@ namespace BToken.Accounting
       return merkleList;
     }
 
-    List<Block> ParseBlocks(BatchBlockLoad batch, byte[] blockBuffer)
+    void ParseBlocks(BatchBlockLoad batch)
     {
-      var blocks = new List<Block>();
-
       try
       {
         int bufferIndex = 0;
-        while (bufferIndex < blockBuffer.Length)
+        while (bufferIndex < batch.Buffer.Length)
         {
           var block = new Block();
 
           block.HeaderHash =
           batch.SHA256Generator.ComputeHash(
             batch.SHA256Generator.ComputeHash(
-              blockBuffer,
+              batch.Buffer,
               bufferIndex,
               COUNT_HEADER_BYTES));
 
@@ -415,30 +452,28 @@ namespace BToken.Accounting
 
           bufferIndex += COUNT_HEADER_BYTES;
 
-          int tXCount = VarInt.GetInt32(blockBuffer, ref bufferIndex);
+          int tXCount = VarInt.GetInt32(batch.Buffer, ref bufferIndex);
 
           block.TXs = new TX[tXCount];
 
           byte[] merkleRootHash = ComputeMerkleRootHash(
-            blockBuffer,
+            batch.Buffer,
             ref bufferIndex,
             block.TXs,
             batch.SHA256Generator);
 
-          if (!merkleRootHash.IsEqual(blockBuffer, indexMerkleRoot))
+          if (!merkleRootHash.IsEqual(batch.Buffer, indexMerkleRoot))
           {
             throw new UTXOException("Payload corrupted.");
           }
 
-          blocks.Add(block);
+          batch.Blocks.Add(block);
         }
       }
       catch (Exception ex)
       {
         Console.WriteLine("Block parsing threw exception: " + ex.Message);
       }
-
-      return blocks;
     }
 
     static void ValidateHeaderHash(

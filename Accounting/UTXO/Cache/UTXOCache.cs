@@ -252,20 +252,6 @@ namespace BToken.Accounting
 
         return metrics;
       }
-
-      public int GetCount()
-      {
-        int count = GetSumPrimarySecondaryCount();
-
-        if(NextCache != null)
-        {
-          count += NextCache.GetCount();
-        }
-
-        return count;
-      }
-
-      protected abstract int GetSumPrimarySecondaryCount();
     }
   }
 }
