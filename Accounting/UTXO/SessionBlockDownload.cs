@@ -55,35 +55,36 @@ namespace BToken.Accounting
 
           if (networkMessage.Command == "block")
           {
-            List<Block> blocks = UTXO.ParseBlocks(this, networkMessage.Payload);
+            //List<Block> blocks = UTXO.ParseBlocks(this, networkMessage.Payload);
 
-            blocks[0].BlockBytes = networkMessage.Payload;
-            Blocks.Add(blocks[0]);
+            //blocks[0].BlockBytes = networkMessage.Payload;
+            //Blocks.Add(blocks[0]);
 
-            Console.WriteLine("{0} Downloaded block {1}",
-              Channel.GetIdentification(),
-              Blocks.Last().HeaderHash.ToHexString());
+            //Console.WriteLine("{0} Downloaded block {1}",
+            //  Channel.GetIdentification(),
+            //  Blocks.Last().HeaderHash.ToHexString());
           }
         }
 
         lock (UTXO.MergeLOCK)
         {
-          if (UTXO.IndexBatchMerge != BatchIndex)
+          if (UTXO.IndexBatchMerge != Index)
           {
-            UTXO.QueueBlocksMerge.Add(BatchIndex, this);
+            UTXO.QueueBatchsMerge.Add(Index, this);
             return;
           }
         }
 
         UTXO.Merge(
           this, 
+          0,
           flagArchive: true);
       }
 
 
       public string GetSessionID()
       {
-        return BatchIndex.ToString();
+        return Index.ToString();
       }
     }
   }

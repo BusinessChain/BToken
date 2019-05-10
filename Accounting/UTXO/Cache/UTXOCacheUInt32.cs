@@ -155,10 +155,6 @@ namespace BToken.Accounting
         areAllOutputpsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
       }
 
-      protected override int GetSumPrimarySecondaryCount()
-      {
-        return PrimaryCache.Count + SecondaryCache.Count;
-      }
     }
   }
 }

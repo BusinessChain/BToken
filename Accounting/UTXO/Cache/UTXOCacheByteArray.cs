@@ -188,10 +188,6 @@ namespace BToken.Accounting
       }
 
 
-      protected override int GetSumPrimarySecondaryCount()
-      {
-        return PrimaryCache.Count + SecondaryCache.Count;
-      }
     }
   }
 }
