@@ -75,16 +75,12 @@ namespace BToken.Accounting
           }
         }
 
-        UTXO.Merge(
-          this, 
-          0,
-          flagArchive: true);
-      }
+        //UTXO.ArchiveBatch(batch.Index, batch.Blocks);
+        //Task cacheArchivingTask = UTXO.Cache.ArchiveAsync();
 
-
-      public string GetSessionID()
-      {
-        return Index.ToString();
+        //UTXO.Merge(
+        //  this,
+        //  flagArchive: true);
       }
     }
   }
