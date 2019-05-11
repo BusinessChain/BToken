@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace BToken.Accounting
@@ -30,11 +30,8 @@ namespace BToken.Accounting
         0x10000000 };
 
 
-      public UTXOCacheUInt32(UTXOCache nextCache) 
-        : base(
-            nextCache,
-            "PrimaryCacheUInt32",
-            "SecondaryCacheUInt32")
+      public UTXOCacheUInt32(UTXOCache nextCache)
+        : base(nextCache, "UInt32")
       { }
 
 
@@ -153,6 +150,37 @@ namespace BToken.Accounting
         uTXO |= mask;
 
         areAllOutputpsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
+      }
+
+      protected override byte[] GetPrimaryData()
+      {
+        byte[] buffer = new byte[PrimaryCache.Count << 3];
+
+        int index = 0;
+        foreach(KeyValuePair<int, uint> keyValuePair in PrimaryCache)
+        {
+          BitConverter.GetBytes(keyValuePair.Key).CopyTo(buffer, index);
+          index += 4;
+          BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
+          index += 4;
+        }
+
+        return buffer;
+      }
+      protected override byte[] GetSecondaryData()
+      {
+        byte[] buffer = new byte[SecondaryCache.Count * (HASH_BYTE_SIZE + 4)];
+
+        int index = 0;
+        foreach (KeyValuePair<byte[], uint> keyValuePair in SecondaryCache)
+        {
+          keyValuePair.Key.CopyTo(buffer, index);
+          index += HASH_BYTE_SIZE;
+          BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
+          index += 4;
+        }
+
+        return buffer;
       }
 
     }

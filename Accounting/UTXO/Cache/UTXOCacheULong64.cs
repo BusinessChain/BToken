@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace BToken.Accounting
@@ -30,10 +30,7 @@ namespace BToken.Accounting
 
 
       public UTXOCacheULong64(UTXOCache nextCache)
-        : base(
-            nextCache,
-            "PrimaryCacheULong64",
-            "SecondaryCacheULong64")
+        : base(nextCache, "ULong64")
       { }
 
 
@@ -153,6 +150,38 @@ namespace BToken.Accounting
 
         areAllOutputpsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
       }
+
+      protected override byte[] GetPrimaryData()
+      {
+        byte[] buffer = new byte[PrimaryCache.Count * 12];
+
+        int index = 0;
+        foreach (KeyValuePair<int, ulong> keyValuePair in PrimaryCache)
+        {
+          BitConverter.GetBytes(keyValuePair.Key).CopyTo(buffer, index);
+          index += 4;
+          BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
+          index += 8;
+        }
+
+        return buffer;
+      }
+      protected override byte[] GetSecondaryData()
+      {
+        byte[] buffer = new byte[SecondaryCache.Count * (HASH_BYTE_SIZE + 8)];
+
+        int index = 0;
+        foreach (KeyValuePair<byte[], ulong> keyValuePair in SecondaryCache)
+        {
+          keyValuePair.Key.CopyTo(buffer, index);
+          index += HASH_BYTE_SIZE;
+          BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
+          index += 8;
+        }
+
+        return buffer;
+      }
+
     }
   }
 }

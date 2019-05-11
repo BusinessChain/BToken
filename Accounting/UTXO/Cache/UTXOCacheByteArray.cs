@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace BToken.Accounting
@@ -15,7 +15,7 @@ namespace BToken.Accounting
       Dictionary<int, byte[]> PrimaryCache = new Dictionary<int, byte[]>();
       Dictionary<byte[], byte[]> SecondaryCache =
         new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
-
+      
       byte[] UTXOIndex;
       byte[] UTXOPrimaryExisting;
       byte[] UTXOSecondaryExisting;
@@ -34,16 +34,12 @@ namespace BToken.Accounting
       static readonly int CountHeaderBitsInByte = COUNT_HEADERINDEX_BITS % 8;
 
 
-      public UTXOCacheByteArray() 
-        : base(
-            null,
-            "PrimaryCacheByteArray",
-            "SecondaryCacheByteArray")
+      public UTXOCacheByteArray()
+        : base(null, "ByteArray")
       {
         Debug.Assert(COUNT_HEADERINDEX_BITS % 8 + COUNT_COLLISION_BITS <= 8,
           "Collision bits should not byte overflow, otherwise utxo parsing errors will occur.");
       }
-
 
       protected override int GetCountPrimaryCacheItems()
       {
@@ -93,8 +89,7 @@ namespace BToken.Accounting
       {
         PrimaryCache.Add(primaryKey, UTXOIndex);
       }
-
-
+      
       protected override void SpendPrimaryUTXO(int outputIndex, out bool areAllOutputpsSpent)
       {
         SpendUTXO(UTXOPrimaryExisting, outputIndex, out areAllOutputpsSpent);
@@ -187,7 +182,32 @@ namespace BToken.Accounting
         return true;
       }
 
+      protected override byte[] GetPrimaryData()
+      {
+        var byteList = new List<byte>();
 
+        foreach (KeyValuePair<int, byte[]> keyValuePair in PrimaryCache)
+        {
+          byteList.AddRange(BitConverter.GetBytes(keyValuePair.Key));
+          byteList.AddRange(VarInt.GetBytes(keyValuePair.Value.Length));
+          byteList.AddRange(keyValuePair.Value);
+        }
+
+        return byteList.ToArray();
+      }
+      protected override byte[] GetSecondaryData()
+      {
+        var byteList = new List<byte>();
+
+        foreach (KeyValuePair<byte[], byte[]> keyValuePair in SecondaryCache)
+        {
+          byteList.AddRange(keyValuePair.Key);
+          byteList.AddRange(VarInt.GetBytes(keyValuePair.Value.Length));
+          byteList.AddRange(keyValuePair.Value);
+        }
+
+        return byteList.ToArray();
+      }
     }
   }
 }

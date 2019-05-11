@@ -213,16 +213,15 @@ namespace BToken.Accounting
     {
       batch.SignalBatchCompletion.SetResult(batch);
 
-      if (batch.Index % CACHE_ARCHIVING_INTERVAL == 0)
+      if (batch.Index % CACHE_ARCHIVING_INTERVAL == 0 && batch.Index > 0)
       {
-        //Task cacheArchivingTask = Cache.ArchiveAsync();
+        Cache.ArchiveCaches();
       }
 
       long timeParsePlusMerge = batch.StopwatchMerging.ElapsedMilliseconds + batch.StopwatchParse.ElapsedMilliseconds;
       int ratio = (int)((float)batch.StopwatchMerging.ElapsedTicks * 100 / batch.StopwatchParse.ElapsedTicks);
 
-      string metricsCSV = string.Format("{0},{1},{2},{3},{4},{5},{6}",
-        mergerID,
+      string metricsCSV = string.Format("{0},{1},{2},{3},{4},{5}",
         batch.Index,
         BlockHeight,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
