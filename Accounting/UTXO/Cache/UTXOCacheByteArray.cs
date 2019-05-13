@@ -208,6 +208,59 @@ namespace BToken.Accounting
 
         return byteList.ToArray();
       }
+
+      protected override void LoadPrimaryData(byte[] buffer)
+      {
+        int index = 0;
+
+        int key;
+        int lengthValue;
+        byte[] value;
+
+        try
+        {
+          while (index < buffer.Length)
+          {
+            key = BitConverter.ToInt32(buffer, index);
+            index += 4;
+
+            lengthValue = VarInt.GetInt32(buffer, ref index);
+            value = new byte[lengthValue];
+            Array.Copy(buffer, index, value, 0, lengthValue);
+            index += lengthValue;
+
+            PrimaryCache.Add(key, value);
+          }
+        }
+        catch(Exception ex)
+        {
+          Console.WriteLine(ex.Message);
+        }
+      }
+      protected override void LoadSecondaryData(byte[] buffer)
+      {
+        int index = 0;
+
+        while (index < buffer.Length)
+        {
+          byte[] key = new byte[HASH_BYTE_SIZE];
+          Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
+          index += HASH_BYTE_SIZE;
+
+          int lengthValue = VarInt.GetInt32(buffer, ref index);
+          byte[] value = new byte[lengthValue];
+          Array.Copy(buffer, index, value, 0, lengthValue);
+          index += lengthValue;
+
+          SecondaryCache.Add(key, value);
+        }
+      }
+      
+      public override void Clear()
+      {
+        PrimaryCache.Clear();
+        SecondaryCache.Clear();
+      }
     }
   }
 }

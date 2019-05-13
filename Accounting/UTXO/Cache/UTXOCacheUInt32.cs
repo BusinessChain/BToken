@@ -183,6 +183,42 @@ namespace BToken.Accounting
         return buffer;
       }
 
+      protected override void LoadPrimaryData(byte[] buffer)
+      {
+        int index = 0;
+
+        while(index < buffer.Length)
+        {
+          int key = BitConverter.ToInt32(buffer, index);
+          index += 4;
+          uint value = BitConverter.ToUInt32(buffer, index);
+          index += 4;
+
+          PrimaryCache.Add(key, value);
+        }
+      }
+      protected override void LoadSecondaryData(byte[] buffer)
+      {
+        int index = 0;
+
+        while (index < buffer.Length)
+        {
+          byte[] key = new byte[HASH_BYTE_SIZE];
+          Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
+          index += HASH_BYTE_SIZE;
+
+          uint value = BitConverter.ToUInt32(buffer, index);
+          index += 4;
+
+          SecondaryCache.Add(key, value);
+        }
+      }
+
+      public override void Clear()
+      {
+        PrimaryCache.Clear();
+        SecondaryCache.Clear();
+      }
     }
   }
 }

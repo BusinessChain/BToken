@@ -78,7 +78,6 @@
     <Compile Include="Accounting\UTXO\Block.cs" />
     <Compile Include="Accounting\UTXO\Cache\UTXOCacheULong64.cs" />
     <Compile Include="Accounting\UTXO\IBlockLoader.cs" />
-    <Compile Include="Accounting\UTXO\UTXOArchiver.cs" />
     <Compile Include="Accounting\UTXO\Cache\UTXOCache.cs" />
     <Compile Include="Accounting\UTXO\Cache\UTXOCacheByteArray.cs" />
     <Compile Include="Accounting\UTXO\Cache\UTXOCacheUInt32.cs" />

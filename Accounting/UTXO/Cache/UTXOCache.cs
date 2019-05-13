@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
-using System.Text;
+using System.Linq;
 
 namespace BToken.Accounting
 {
@@ -13,8 +13,8 @@ namespace BToken.Accounting
       UTXOCache MainCache;
       UTXOCache NextCache;
 
-      protected static string RootPath = "UTXOCache";
       protected string Label;
+      string DirectoryPath;
 
       protected int Address;
 
@@ -27,6 +27,7 @@ namespace BToken.Accounting
       {
         NextCache = nextCache;
         Label = label;
+        DirectoryPath = Path.Combine(RootPath, Label);
       }
 
       public void Initialize()
@@ -221,7 +222,7 @@ namespace BToken.Accounting
 
       public string GetLabelsMetricsCSV()
       {
-        string labels = Label + "PrimaryCache," + Label + "SecondaryCache,";
+        string labels = Label + "PrimaryCache," + Label + "SecondaryCache";
 
         UTXOCache cache = NextCache;
         while (cache != null)
@@ -252,7 +253,7 @@ namespace BToken.Accounting
         return metrics;
       }
 
-      public void ArchiveCaches()
+      public void BackupToDisk()
       {
         List<UTXOCache> caches = new List<UTXOCache>();
         var cache = this;
@@ -265,43 +266,56 @@ namespace BToken.Accounting
 
         Parallel.ForEach(caches, c => c.Archive());
       }
-      async Task WriteToFileAsync(string filePath, byte[] buffer)
-      {
-        string filePathTemp = filePath + "_temp";
-
-        using (FileStream stream = new FileStream(
-           filePathTemp,
-           FileMode.Create,
-           FileAccess.ReadWrite,
-           FileShare.Read,
-           bufferSize: 4096,
-           useAsync: true))
-        {
-          await stream.WriteAsync(buffer, 0, buffer.Length);
-        }
-
-        if (File.Exists(filePath))
-        {
-          File.Delete(filePath);
-        }
-        File.Move(filePathTemp, filePath);
-      }
       void Archive()
       {
         string directoryPath = Path.Combine(RootPath, Label);
         Directory.CreateDirectory(directoryPath);
         
-        var writeToFileTask = WriteToFileAsync(
+        Task writeToFileTask = WriteFileAsync(
           Path.Combine(directoryPath, "PrimaryCache"), 
           GetPrimaryData());
         
-        writeToFileTask = WriteToFileAsync(
+        writeToFileTask = WriteFileAsync(
           Path.Combine(directoryPath, "SecondaryCache"), 
           GetSecondaryData());
       }
 
       protected abstract byte[] GetPrimaryData();
       protected abstract byte[] GetSecondaryData();
+
+      public async Task LoadFromDiskAsync()
+      {
+        List<UTXOCache> caches = new List<UTXOCache>();
+        var cache = this;
+
+        while (cache != null)
+        {
+          caches.Add(cache);
+          cache = cache.NextCache;
+        }
+        var loadTasks = caches
+          .Select(c => { return c.LoadAsync(); });
+
+        await Task.WhenAll(loadTasks);
+      }
+
+      async Task LoadAsync()
+      {
+        LoadPrimaryData(
+          await LoadFileAsync(
+            Path.Combine(DirectoryPath, "PrimaryCache")));
+
+        LoadSecondaryData(
+          await LoadFileAsync(
+            Path.Combine(DirectoryPath, "SecondaryCache")));
+      }
+
+      protected abstract void LoadPrimaryData(byte[] buffer);
+      protected abstract void LoadSecondaryData(byte[] buffer);
+
+
+      public abstract void Clear();
+
     }
   }
 }
