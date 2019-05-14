@@ -29,8 +29,7 @@ namespace BToken.Accounting
         0x10000000 };
 
 
-      public UTXOCacheULong64(UTXOCache nextCache)
-        : base(nextCache, "ULong64")
+      public UTXOCacheULong64(): base(1, "ULong64")
       { }
 
 
@@ -43,11 +42,11 @@ namespace BToken.Accounting
         return SecondaryCache.Count;
       }
 
-      protected override bool IsUTXOTooLongForCache(int lengthUTXOBits)
+      public override bool IsUTXOTooLongForCache(int lengthUTXOBits)
       {
         return COUNT_LONG_BITS < lengthUTXOBits;
       }
-      protected override void CreateUTXO(byte[] headerHashBytes, int lengthUTXOBits)
+      public override void CreateUTXO(byte[] headerHashBytes, int lengthUTXOBits)
       {
         UTXOIndex = 0;
 
@@ -64,7 +63,7 @@ namespace BToken.Accounting
           UTXOIndex |= (ulong.MaxValue << lengthUTXOBits);
         }
       }
-      protected override bool TrySetCollisionBit(int primaryKey, int collisionAddress)
+      public override bool TrySetCollisionBit(int primaryKey, int collisionAddress)
       {
         if (PrimaryCache.ContainsKey(primaryKey))
         {
@@ -74,33 +73,33 @@ namespace BToken.Accounting
 
         return false;
       }
-      protected override void SecondaryCacheAddUTXO(byte[] tXIDHash)
+      public override void SecondaryCacheAddUTXO(byte[] tXIDHash)
       {
         SecondaryCache.Add(tXIDHash, UTXOIndex);
       }
-      protected override void PrimaryCacheAddUTXO(int primaryKey)
+      public override void PrimaryCacheAddUTXO(int primaryKey)
       {
         PrimaryCache.Add(primaryKey, UTXOIndex);
       }
 
-      protected override void SpendPrimaryUTXO(int outputIndex, out bool areAllOutputpsSpent)
+      public override void SpendPrimaryUTXO(int primaryKey, int outputIndex, out bool areAllOutputpsSpent)
       {
         SpendUTXO(ref UTXOPrimaryExisting, outputIndex, out areAllOutputpsSpent);
-        PrimaryCache[PrimaryKey] = UTXOPrimaryExisting;
+        PrimaryCache[primaryKey] = UTXOPrimaryExisting;
       }
-      protected override bool TryGetValueInPrimaryCache(int primaryKey)
+      public override bool TryGetValueInPrimaryCache(int primaryKey)
       {
         return PrimaryCache.TryGetValue(primaryKey, out UTXOPrimaryExisting);
       }
-      protected override bool IsCollision(int cacheAddress)
+      public override bool IsCollision(int cacheAddress)
       {
         return (MasksCollision[cacheAddress] & UTXOPrimaryExisting) != 0;
       }
-      protected override void RemovePrimary(int primaryKey)
+      public override void RemovePrimary(int primaryKey)
       {
         PrimaryCache.Remove(primaryKey);
       }
-      protected override void ResolveCollision(int primaryKey, uint collisionBits)
+      public override void ResolveCollision(int primaryKey, uint collisionBits)
       {
         KeyValuePair<byte[], ulong> secondaryCacheItem =
           SecondaryCache.First(k => BitConverter.ToInt32(k.Key, 0) == primaryKey);
@@ -133,9 +132,9 @@ namespace BToken.Accounting
         hasMoreCollisions = SecondaryCache.Keys
           .Any(k => BitConverter.ToInt32(k, 0) == primaryKey);
       }
-      protected override void ClearCollisionBit(int cacheAddress)
+      protected override void ClearCollisionBit(int primaryKey, int cacheAddress)
       {
-        PrimaryCache[PrimaryKey] &= ~MasksCollision[cacheAddress];
+        PrimaryCache[primaryKey] &= ~MasksCollision[cacheAddress];
       }
 
       static void SpendUTXO(ref ulong uTXO, int outputIndex, out bool areAllOutputpsSpent)
