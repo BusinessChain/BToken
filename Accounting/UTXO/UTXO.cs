@@ -136,7 +136,7 @@ namespace BToken.Accounting
         
         Parallel.For(0, COUNT_BATCHES_PARALLEL, i =>
         {
-          Task mergeBatchTask = MergeBatchAsync(i);
+          Task mergeBatchTask = MergeBatchesQueuedAsync(i);
         });
 
         await LoadBatchesFromArchiveAsync();
@@ -163,10 +163,8 @@ namespace BToken.Accounting
 
           if (BatchesQueued.Count > BATCHQUEUE_MAX_COUNT)
           {
-            BatchBlockLoad batchCompleted = await await Task.WhenAny(
-              BatchesQueued.Select(b => b.SignalBatchCompletion.Task));
-
-            BatchesQueued.Remove(batchCompleted);
+            BatchesQueued.Remove(await await Task.WhenAny(BatchesQueued
+              .Select(b => b.SignalBatchCompletion.Task)));
           }
 
           batchIndex += 1;
@@ -181,14 +179,20 @@ namespace BToken.Accounting
 
     }
 
-    async Task MergeBatchAsync(int mergerID)
+    async Task MergeBatchesQueuedAsync(int mergerID)
     {
       while (true)
       {
         BatchBlockLoad batch = await BatchQueue.ReceiveAsync().ConfigureAwait(false);
 
         batch.StopwatchParse.Start();
-        ParseBlocks(batch);
+
+        int bufferIndex = 0;
+        while (bufferIndex < batch.Buffer.Length)
+        {
+          ParseBlock(batch, ref bufferIndex);
+        }
+
         batch.StopwatchParse.Stop();
 
         lock (MergeLOCK)
@@ -227,6 +231,187 @@ namespace BToken.Accounting
 
             break;
           }
+        }
+      }
+    }
+    void ParseBlock(BatchBlockLoad batch, ref int bufferIndex)
+    {
+      byte[] headerHash =
+      batch.SHA256Generator.ComputeHash(
+        batch.SHA256Generator.ComputeHash(
+          batch.Buffer,
+          bufferIndex,
+          COUNT_HEADER_BYTES));
+
+      ValidateHeaderHash(headerHash, batch);
+
+      int indexMerkleRoot = bufferIndex + OFFSET_INDEX_MERKLE_ROOT;
+
+      bufferIndex += COUNT_HEADER_BYTES;
+
+      int tXCount = VarInt.GetInt32(batch.Buffer, ref bufferIndex);
+      TX[] tXs = new TX[tXCount];
+
+      if (tXs.Length == 1)
+      {
+        int indexTX = bufferIndex;
+
+        CacheTX(batch.Buffer, ref bufferIndex);
+
+        byte[] hash = batch.SHA256Generator.ComputeHash(
+         batch.SHA256Generator.ComputeHash(
+           batch.Buffer,
+           indexTX,
+           bufferIndex - indexTX));
+
+        if (!hash.IsEqual(batch.Buffer, indexMerkleRoot))
+        {
+          throw new UTXOException(
+            string.Format("Payload corrupted. batchIndex {0}, bufferIndex: {1}", 
+            batch.Index,
+            bufferIndex));
+        }
+
+        return;
+      }
+    }
+    void CacheTX(byte[] buffer, ref int bufferIndex)
+    {
+      bufferIndex += 4; // version
+
+      bool isWitnessFlagPresent = buffer[bufferIndex] == 0x00;
+      if (isWitnessFlagPresent)
+      {
+        bufferIndex += 2;
+      }
+
+      int countTXInputs = VarInt.GetInt32(buffer, ref bufferIndex);
+      for (int i = 0; i < countTXInputs; i += 1)
+      {
+        inputs[i] = TXInput.Parse(buffer, ref bufferIndex);
+      }
+
+      int tXOutputsCount = VarInt.GetInt32(buffer, ref bufferIndex);
+      var outputs = new TXOutput[tXOutputsCount];
+      for (int i = 0; i < tXOutputsCount; i += 1)
+      {
+        outputs[i] = TXOutput.Parse(buffer, ref bufferIndex);
+      }
+
+      if (isWitnessFlagPresent)
+      {
+        var witnesses = new TXWitness[countTXInputs];
+        for (int i = 0; i < countTXInputs; i += 1)
+        {
+          witnesses[i] = TXWitness.Parse(buffer, ref bufferIndex);
+        }
+      }
+
+      bufferIndex += 4; // Lock time
+    }
+    void Merge(List<Block> blocks)
+    {
+      foreach (Block block in blocks)
+      {
+        InsertUTXOs(block.TXs, block.HeaderHash);
+        SpendUTXOs(block.TXs);
+
+        BlockHeight += 1;
+      }
+    }
+    void InsertUTXOs(TX[] tXs, byte[] headerHash)
+    {
+      int t = 0;
+
+    LoopInsertUTXOs:
+      while (t < tXs.Length)
+      {
+        for (int c = 0; c < Caches.Length; c += 1)
+        {
+          if (Caches[c].IsUTXOTooLongForCache(tXs[t].LengthUTXOBits))
+          {
+            continue;
+          }
+
+          Caches[c].CreateUTXO(headerHash, tXs[t].LengthUTXOBits);
+
+          for (int cc = 0; cc < Caches.Length; cc += 1)
+          {
+            if (Caches[cc].TrySetCollisionBit(tXs[t].PrimaryKey, Caches[c].Address))
+            {
+              Caches[c].SecondaryCacheAddUTXO(tXs[t].Hash);
+
+              t += 1;
+              goto LoopInsertUTXOs;
+            }
+          }
+
+          Caches[c].PrimaryCacheAddUTXO(tXs[t].PrimaryKey);
+
+          t += 1;
+          goto LoopInsertUTXOs;
+        }
+
+        throw new UTXOException("UTXO could not be inserted in Cache modules.");
+      }
+    }
+    void SpendUTXOs(TX[] tXs)
+    {
+      for (int t = 1; t < tXs.Length; t += 1)
+      {
+        int i = 0;
+
+      LoopSpendUTXOs:
+        while (i < tXs[t].Inputs.Length)
+        {
+          TXInput tXInput = tXs[t].Inputs[i];
+
+          int primaryKey = BitConverter.ToInt32(tXs[t].Inputs[i].TXIDOutput, 0);
+
+          for (int c = 0; c < Caches.Length; c += 1)
+          {
+            if (Caches[c].TryGetValueInPrimaryCache(primaryKey))
+            {
+              UTXOCache cacheCollision = null;
+              uint collisionBits = 0;
+              for (int cc = 0; cc < Caches.Length; cc += 1)
+              {
+                if (Caches[c].IsCollision(Caches[cc].Address))
+                {
+                  cacheCollision = Caches[cc];
+
+                  collisionBits |= (uint)(1 << cacheCollision.Address);
+
+                  if (cacheCollision.TrySpendSecondary(
+                    primaryKey,
+                    tXInput.TXIDOutput,
+                    tXInput.IndexOutput,
+                    Caches[c]))
+                  {
+                    i += 1;
+                    goto LoopSpendUTXOs;
+                  }
+                }
+              }
+
+              Caches[c].SpendPrimaryUTXO(primaryKey, tXInput.IndexOutput, out bool areAllOutputpsSpent);
+
+              if (areAllOutputpsSpent)
+              {
+                Caches[c].RemovePrimary(primaryKey);
+
+                if (cacheCollision != null)
+                {
+                  cacheCollision.ResolveCollision(primaryKey, collisionBits);
+                }
+              }
+
+              i += 1;
+              goto LoopSpendUTXOs;
+            }
+          }
+
+          throw new UTXOException("Referenced TXID not found in UTXO table.");
         }
       }
     }
@@ -316,122 +501,6 @@ namespace BToken.Accounting
       BuildWriter.WriteLine(metricsCSV);
     }
 
-    void Merge(List<Block> blocks)
-    {
-      foreach (Block block in blocks)
-      {
-        InsertUTXOs(block.TXs, block.HeaderHash);
-        SpendUTXOs(block.TXs);
-
-        BlockHeight += 1;
-      }
-    }
-    void InsertUTXOs(TX[] tXs, byte[] headerHash)
-    {
-      int t = 0;
-
-    LoopInsertUTXOs:
-      while (t < tXs.Length)
-      {
-        int primaryKey = BitConverter.ToInt32(tXs[t].Hash, 0);
-        
-        int lengthUTXOBits = CountHeaderPlusCollisionBits + tXs[t].Outputs.Length;
-
-        for (int c = 0; c < Caches.Length; c += 1)
-        {
-          if (Caches[c].IsUTXOTooLongForCache(lengthUTXOBits))
-          {
-            continue;
-          }
-
-          Caches[c].CreateUTXO(headerHash, lengthUTXOBits);
-
-          for (int cc = 0; cc < Caches.Length; cc += 1)
-          {
-            if (Caches[cc].TrySetCollisionBit(primaryKey, Caches[c].Address))
-            {
-              Caches[c].SecondaryCacheAddUTXO(tXs[t].Hash);
-
-              t += 1;
-              goto LoopInsertUTXOs;
-            }
-          }
-
-          Caches[c].PrimaryCacheAddUTXO(primaryKey);
-
-          t += 1;
-          goto LoopInsertUTXOs;
-        }
-
-        throw new UTXOException("UTXO could not be inserted in Cache modules.");
-      }
-    }
-    void SpendUTXOs(TX[] tXs)
-    {
-      for (int t = 1; t < tXs.Length; t += 1)
-      {
-        if (t == 1430)
-        { }
-
-        int i = 0;
-
-      LoopSpendUTXOs:
-        while(i < tXs[t].Inputs.Length)
-        {
-          TXInput tXInput = tXs[t].Inputs[i];
-
-          if ( i == 75)
-          { }
-
-          int primaryKey = BitConverter.ToInt32(tXInput.TXIDOutput, 0);
-          
-          for (int c = 0; c < Caches.Length; c += 1)
-          {
-            if (Caches[c].TryGetValueInPrimaryCache(primaryKey))
-            {
-              UTXOCache cacheCollision = null;
-              uint collisionBits = 0;
-              for(int cc = 0; cc < Caches.Length; cc += 1)
-              {
-                if (Caches[c].IsCollision(Caches[cc].Address))
-                {
-                  cacheCollision = Caches[cc];
-
-                  collisionBits |= (uint)(1 << cacheCollision.Address);
-
-                  if (cacheCollision.TrySpendSecondary(
-                    primaryKey,
-                    tXInput.TXIDOutput,
-                    tXInput.IndexOutput,
-                    Caches[c]))
-                  {
-                    i += 1;
-                    goto LoopSpendUTXOs;
-                  }
-                }
-              }
-
-              Caches[c].SpendPrimaryUTXO(primaryKey, tXInput.IndexOutput, out bool areAllOutputpsSpent);
-
-              if (areAllOutputpsSpent)
-              {
-                Caches[c].RemovePrimary(primaryKey);
-
-                if (cacheCollision != null)
-                {
-                  cacheCollision.ResolveCollision(primaryKey, collisionBits);
-                }
-              }
-
-              i += 1;
-              goto LoopSpendUTXOs;
-            }
-          }
-
-          throw new UTXOException("Referenced TXID not found in UTXO table.");
-        }
-      }
-    }
     
     void ArchiveBatch(int batchIndex, List<Block> blocks)
     {
@@ -500,150 +569,26 @@ namespace BToken.Accounting
 
       await Task.WhenAll(blockDownloadTasks);
     }
-
-
-    static byte[] ComputeMerkleRootHash(
-    byte[] buffer,
-    ref int bufferIndex,
-    TX[] tXs,
-    SHA256 sHA256Generator)
-    {
-      if (tXs.Length == 1)
-      {
-        tXs[0] = TX.Parse(buffer, ref bufferIndex, sHA256Generator);
-        return tXs[0].Hash;
-      }
-
-      int tXsLengthMod2 = tXs.Length & 1;
-
-      var merkleList = new byte[tXs.Length + tXsLengthMod2][];
-
-      for (int t = 0; t < tXs.Length; t++)
-      {
-        tXs[t] = TX.Parse(buffer, ref bufferIndex, sHA256Generator);
-        merkleList[t] = tXs[t].Hash;
-      }
-
-      if (tXsLengthMod2 != 0)
-      {
-        merkleList[tXs.Length] = merkleList[tXs.Length - 1];
-      }
-
-      return GetRoot(merkleList, sHA256Generator);
-    }
-
-    static byte[] GetRoot(
-      byte[][] merkleList,
-      SHA256 sHA256Generator)
-    {
-      int merkleIndex = merkleList.Length;
-
-      while (true)
-      {
-        merkleIndex >>= 1;
-
-        if (merkleIndex == 1)
-        {
-          return ComputeNextMerkleList(merkleList, merkleIndex, sHA256Generator)[0];
-        }
-
-        merkleList = ComputeNextMerkleList(merkleList, merkleIndex, sHA256Generator);
-
-        if ((merkleIndex & 1) != 0)
-        {
-          merkleList[merkleIndex] = merkleList[merkleIndex - 1];
-          merkleIndex += 1;
-        }
-      }
-
-    }
-
-    static byte[][] ComputeNextMerkleList(
-      byte[][] merkleList,
-      int merkleIndex,
-      SHA256 sHA256Generator)
-    {
-      byte[] leafPair = new byte[TWICE_HASH_BYTE_SIZE];
-
-      for (int i = 0; i < merkleIndex; i++)
-      {
-        int i2 = i << 1;
-        merkleList[i2].CopyTo(leafPair, 0);
-        merkleList[i2 + 1].CopyTo(leafPair, HASH_BYTE_SIZE);
-
-        merkleList[i] = sHA256Generator.ComputeHash(
-          sHA256Generator.ComputeHash(
-            leafPair));
-      }
-
-      return merkleList;
-    }
-
-    void ParseBlocks(BatchBlockLoad batch)
-    {
-      try
-      {
-        int bufferIndex = 0;
-        while (bufferIndex < batch.Buffer.Length)
-        {
-          var block = new Block();
-
-          block.HeaderHash =
-          batch.SHA256Generator.ComputeHash(
-            batch.SHA256Generator.ComputeHash(
-              batch.Buffer,
-              bufferIndex,
-              COUNT_HEADER_BYTES));
-
-          if (batch.ChainHeader == null)
-          {
-            batch.ChainHeader = Headerchain.ReadHeader(block.HeaderHash, batch.SHA256Generator);
-          }
-          ValidateHeaderHash(block.HeaderHash, ref batch.ChainHeader, batch.SHA256Generator);
-
-          int indexMerkleRoot = bufferIndex + OFFSET_INDEX_MERKLE_ROOT;
-
-          bufferIndex += COUNT_HEADER_BYTES;
-
-          int tXCount = VarInt.GetInt32(batch.Buffer, ref bufferIndex);
-
-          block.TXs = new TX[tXCount];
-
-          byte[] merkleRootHash = ComputeMerkleRootHash(
-            batch.Buffer,
-            ref bufferIndex,
-            block.TXs,
-            batch.SHA256Generator);
-
-          if (!merkleRootHash.IsEqual(batch.Buffer, indexMerkleRoot))
-          {
-            throw new UTXOException("Payload corrupted.");
-          }
-
-          batch.Blocks.Add(block);
-        }
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine("Block parsing threw exception: " + ex.Message);
-      }
-    }
-
-    static void ValidateHeaderHash(
+    
+    void ValidateHeaderHash(
       byte[] headerHash,
-      ref Headerchain.ChainHeader chainHeader,
-      SHA256 sHA256Generator)
+      BatchBlockLoad batch)
     {
+      if (batch.ChainHeader == null)
+      {
+        batch.ChainHeader = Headerchain.ReadHeader(headerHash, batch.SHA256Generator);
+      }
+
       byte[] headerHashValidator;
 
-      if (chainHeader.HeadersNext == null)
+      if (batch.ChainHeader.HeadersNext == null)
       {
-        headerHashValidator = chainHeader.GetHeaderHash(sHA256Generator);
+        headerHashValidator = batch.ChainHeader.GetHeaderHash(batch.SHA256Generator);
       }
       else
       {
-        chainHeader = chainHeader.HeadersNext[0];
-        headerHashValidator = chainHeader.NetworkHeader.HashPrevious;
+        batch.ChainHeader = batch.ChainHeader.HeadersNext[0];
+        headerHashValidator = batch.ChainHeader.NetworkHeader.HashPrevious;
       }
 
       if (!headerHashValidator.IsEqual(headerHash))

@@ -15,10 +15,12 @@ namespace BToken.Accounting
     {
       public int Index;
       public byte[] Buffer;
-      public readonly TaskCompletionSource<BatchBlockLoad> SignalBatchCompletion = new TaskCompletionSource<BatchBlockLoad>();
       public List<Block> Blocks = new List<Block>();
       public Headerchain.ChainHeader ChainHeader;
       public SHA256 SHA256Generator = SHA256.Create();
+
+      public readonly TaskCompletionSource<BatchBlockLoad> SignalBatchCompletion =
+        new TaskCompletionSource<BatchBlockLoad>();
 
       public Stopwatch StopwatchMerging = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();

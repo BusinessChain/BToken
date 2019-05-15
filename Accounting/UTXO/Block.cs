@@ -6,13 +6,16 @@ using System.Threading.Tasks;
 
 namespace BToken.Accounting
 {
-  class Block
+  public partial class UTXO
   {
-    public byte[] BlockBytes;
-    public byte[] HeaderHash;
-    public TX[] TXs;
+    class Block
+    {
+      public byte[] BlockBytes;
+      public byte[] HeaderHash;
+      public TX[] TXs;
 
-    public Block()
-    { }
+      public Block()
+      { }
+    }
   }
 }

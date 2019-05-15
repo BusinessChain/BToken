@@ -82,6 +82,7 @@
     <Compile Include="Accounting\UTXO\Cache\UTXOCacheByteArray.cs" />
     <Compile Include="Accounting\UTXO\Cache\UTXOCacheUInt32.cs" />
     <Compile Include="Accounting\UTXO\BatchBlockLoad.cs" />
+    <Compile Include="Accounting\UTXO\UTXOParser.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\Script.cs" />
