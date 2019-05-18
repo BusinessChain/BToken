@@ -11,51 +11,7 @@ namespace BToken.Accounting
   {
     static class UTXOParser
     {
-      public static TX[] Parse(
-      byte[] buffer,
-      ref int bufferIndex,
-      SHA256 sHA256Generator,
-      int indexMerkleRoot)
-      {
-        int tXCount = VarInt.GetInt32(buffer, ref bufferIndex);
-        TX[] tXs = new TX[tXCount];
-
-        if (tXs.Length == 1)
-        {
-          tXs[0] = TX.Parse(buffer, ref bufferIndex, sHA256Generator);
-
-          if (!tXs[0].Hash.IsEqual(buffer, indexMerkleRoot))
-          {
-            throw new UTXOException("Payload corrupted.");
-          }
-
-          return tXs;
-        }
-
-        int tXsLengthMod2 = tXs.Length & 1;
-
-        var merkleList = new byte[tXs.Length + tXsLengthMod2][];
-
-        for (int t = 0; t < tXs.Length; t++)
-        {
-          tXs[t] = TX.Parse(buffer, ref bufferIndex, sHA256Generator);
-          merkleList[t] = tXs[t].Hash;
-        }
-
-        if (tXsLengthMod2 != 0)
-        {
-          merkleList[tXs.Length] = merkleList[tXs.Length - 1];
-        }
-
-        if (!GetRoot(merkleList, sHA256Generator).IsEqual(buffer, indexMerkleRoot))
-        {
-          throw new UTXOException("Payload corrupted.");
-        }
-
-        return tXs;
-      }
-
-      static byte[] GetRoot(
+      public static byte[] GetRoot(
         byte[][] merkleList,
         SHA256 sHA256Generator)
       {

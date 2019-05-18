@@ -8,7 +8,7 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    abstract class UTXOCache
+    abstract class UTXOIndex
     {
       protected string Label;
       string DirectoryPath;
@@ -16,12 +16,17 @@ namespace BToken.Accounting
       public int Address;
 
 
-      protected UTXOCache(int address, string label)
+      protected UTXOIndex(int address, string label)
       {
         Label = label;
         Address = address;
         DirectoryPath = Path.Combine(RootPath, Label);
       }
+
+      public abstract bool TryParseUTXO(
+        byte[] headerHash, 
+        int lengthUTXOBits, 
+        out UTXODataItem uTXOIndexDataItem);
 
       public abstract bool IsUTXOTooLongForCache(int lengthUTXOBits);
       public abstract void CreateUTXO(byte[] headerHashBytes, int lengthUTXOBits);
@@ -39,7 +44,7 @@ namespace BToken.Accounting
         int primaryKey,
         byte[] tXIDOutput,
         int outputIndex,
-        UTXOCache primaryCache)
+        UTXOIndex primaryCache)
       {
         if (TryGetValueInSecondaryCache(tXIDOutput))
         {
@@ -99,8 +104,7 @@ namespace BToken.Accounting
 
       protected abstract void LoadPrimaryData(byte[] buffer);
       protected abstract void LoadSecondaryData(byte[] buffer);
-
-
+      
       public abstract void Clear();
 
       public async Task LoadAsync()
@@ -113,6 +117,15 @@ namespace BToken.Accounting
           await LoadFileAsync(
             Path.Combine(DirectoryPath, "SecondaryCache")));
       }
+    }
+
+    abstract class UTXODataItem
+    {
+      public int PrimaryKey;
+      public byte[] Hash;
+
+      public UTXODataItem()
+      { }
     }
   }
 }

@@ -10,7 +10,7 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class UTXOCacheByteArray : UTXOCache
+    class UTXOCacheByteArray : UTXOIndex
     {
       Dictionary<int, byte[]> PrimaryCache = new Dictionary<int, byte[]>();
       Dictionary<byte[], byte[]> SecondaryCache =
@@ -259,6 +259,14 @@ namespace BToken.Accounting
       {
         PrimaryCache.Clear();
         SecondaryCache.Clear();
+      }
+    }
+
+    class UTXOIndexByteArrayDataBatch : UTXODataItem
+    {
+      public UTXOIndexByteArrayDataBatch(int tXCount)
+      {
+
       }
     }
   }

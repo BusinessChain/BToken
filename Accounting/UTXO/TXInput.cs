@@ -7,42 +7,25 @@ using System.Threading.Tasks;
 
 namespace BToken.Accounting
 {
-  class TXInput
+  public partial class UTXO
   {
-    public byte[] TXIDOutput { get; private set; }
-    public int IndexOutput { get; private set; }
-    public byte[] UnlockingScript { get; private set; }
-    UInt32 Sequence;
-
-
-    public TXInput(
-      byte[] tXIDOutput,
-      int indexOutput)
+    class TXInput
     {
-      TXIDOutput = tXIDOutput;
-      IndexOutput = indexOutput;;
-    }
+      public int IndexTXIDOutput;
+      public int OutputIndex;
 
-    public static TXInput Parse(byte[] byteStream, ref int startIndex)
-    {
-      byte[] tXIDOutput = new byte[32];
-      Array.Copy(byteStream, startIndex, tXIDOutput, 0, 32);
-      startIndex += 32;
 
-      int indexOutput = BitConverter.ToInt32(byteStream, startIndex);
-      startIndex += 4;
+      public TXInput(byte[] byteStream, ref int startIndex)
+      {
+        IndexTXIDOutput = startIndex;
+        startIndex += 32;
 
-      int unlockingScriptLength = VarInt.GetInt32(byteStream, ref startIndex);
-      //byte[] unlockingScript = new byte[unlockingScriptLength];
-      //Array.Copy(byteStream, startIndex, unlockingScript, 0, unlockingScriptLength);
-      startIndex += unlockingScriptLength;
+        OutputIndex = BitConverter.ToInt32(byteStream, startIndex);
+        startIndex += 4;
 
-      //UInt32 sequence = BitConverter.ToUInt32(byteStream, startIndex);
-      startIndex += 4;
-
-      return new TXInput(
-        tXIDOutput,
-        indexOutput);
+        startIndex += VarInt.GetInt32(byteStream, ref startIndex); // length unlocking script
+        startIndex += 4; // sequence
+      }
     }
   }
 }

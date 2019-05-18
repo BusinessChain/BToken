@@ -59,6 +59,7 @@
     <Reference Include="System.IO.Compression, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL" />
     <Reference Include="System.Net" />
     <Reference Include="System.Numerics" />
+    <Reference Include="System.Runtime.Caching" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.ServiceModel" />
     <Reference Include="System.Threading.Tasks.Dataflow, Version=4.6.3.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
@@ -76,12 +77,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Accounting\UTXO\Block.cs" />
-    <Compile Include="Accounting\UTXO\Cache\UTXOCacheULong64.cs" />
+    <Compile Include="Accounting\UTXO\Index\UTXOIndexULong64.cs" />
     <Compile Include="Accounting\UTXO\IBlockLoader.cs" />
-    <Compile Include="Accounting\UTXO\Cache\UTXOCache.cs" />
-    <Compile Include="Accounting\UTXO\Cache\UTXOCacheByteArray.cs" />
-    <Compile Include="Accounting\UTXO\Cache\UTXOCacheUInt32.cs" />
-    <Compile Include="Accounting\UTXO\BatchBlockLoad.cs" />
+    <Compile Include="Accounting\UTXO\Index\UTXOIndex.cs" />
+    <Compile Include="Accounting\UTXO\Index\UTXOIndexByteArray.cs" />
+    <Compile Include="Accounting\UTXO\Index\UTXOIndexUInt32.cs" />
+    <Compile Include="Accounting\UTXO\UTXOBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOParser.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />

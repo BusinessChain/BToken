@@ -8,7 +8,7 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class UTXOCacheUInt32 : UTXOCache
+    class UTXOCacheUInt32 : UTXOIndex
     {
       Dictionary<int, uint> PrimaryCache = new Dictionary<int, uint>();
       Dictionary<byte[], uint> SecondaryCache = 
@@ -218,6 +218,45 @@ namespace BToken.Accounting
         PrimaryCache.Clear();
         SecondaryCache.Clear();
       }
+
+      public override bool TryParseUTXO(
+        byte[] headerHash, 
+        int lengthUTXOBits,
+        out UTXODataItem item)
+      {
+        if(COUNT_INTEGER_BITS < lengthUTXOBits)
+        {
+          item = null;
+          return false;
+        }
+      
+        uint uTXOIndex = 0;
+
+        for (int i = CountHeaderBytes; i > 0; i -= 1)
+        {
+          uTXOIndex <<= 8;
+          uTXOIndex |= headerHash[i - 1];
+        }
+        uTXOIndex <<= CountNonHeaderBits;
+        uTXOIndex >>= CountNonHeaderBits;
+
+        if (COUNT_INTEGER_BITS > lengthUTXOBits)
+        {
+          uTXOIndex |= (uint.MaxValue << lengthUTXOBits);
+        }
+
+        item = new UTXOIndexUInt32DataItem
+          {
+            UTXOIndex = uTXOIndex
+          };
+
+        return true;
+      }
+    }
+
+    class UTXOIndexUInt32DataItem : UTXODataItem
+    {
+      public uint UTXOIndex;
     }
   }
 }

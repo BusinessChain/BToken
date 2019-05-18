@@ -15,7 +15,7 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class SessionBlockDownload : BatchBlockLoad, INetworkSession
+    class SessionBlockDownload : UTXOBatch, INetworkSession
     {
       UTXO UTXO;
       byte[][] HeaderHashes;
