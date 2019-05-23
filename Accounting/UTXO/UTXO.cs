@@ -220,9 +220,6 @@ namespace BToken.Accounting
           batch.StopwatchMerging.Start();
           try
           {
-            if (batch.BatchIndex == 164)
-            { }
-
             InsertUTXOs(batch);
             SpendUTXOs(batch);
           }
@@ -282,42 +279,32 @@ namespace BToken.Accounting
     void SpendUTXOs(UTXOBatch batch)
     {
       foreach (Block block in batch.Blocks)
-      {
-        if (block.HeaderHashString == "000000000000068E8BC892FD269A8C12B89CB3DEA9990745416F762EA42A14EB")
-        { Console.WriteLine(block.HeaderHashString); }
-
-
+      {        
         for(int t = 0; t < block.TXCount; t += 1)
         {
-          if (t == 50)
-          { }
-
           int i = 0;
         LoopSpendUTXOs:
           while (i < block.InputsPerTX[t].Length)
           {
             TXInput input = block.InputsPerTX[t][i];
-
-            if (input.TXIDOutput.ToHexString() == "CE72EE3DF7B0D60016661476679AE884BFF0D5054535827DF42D028570CDDB9F")
-            { }
-            
+                        
             for (int c = 0; c < Tables.Length; c += 1)
             {
               UTXOTable table = Tables[c];
 
               if (table.TryGetValueInPrimaryCache(input.PrimaryKeyTXIDOutput))
               {
-                UTXOTable cacheCollision = null;
+                UTXOTable tableCollision = null;
                 uint collisionBits = 0;
-                while (c < Tables.Length)
+                for (int cc = 0; cc < Tables.Length; cc += 1)
                 {
-                  if (table.IsCollision(c))
+                  if (table.IsCollision(cc))
                   {
-                    cacheCollision = Tables[c];
+                    tableCollision = Tables[cc];
 
-                    collisionBits |= (uint)(1 << c);
+                    collisionBits |= (uint)(1 << cc);
 
-                    if (cacheCollision.TrySpendSecondary(
+                    if (tableCollision.TrySpendSecondary(
                       input,
                       table))
                     {
@@ -325,8 +312,6 @@ namespace BToken.Accounting
                       goto LoopSpendUTXOs;
                     }
                   }
-
-                  c += 1;
                 }
 
                 table.SpendPrimaryUTXO(input, out bool areAllOutputsSpent);
@@ -335,9 +320,9 @@ namespace BToken.Accounting
                 {
                   table.RemovePrimary(input.PrimaryKeyTXIDOutput);
 
-                  if (cacheCollision != null)
+                  if (tableCollision != null)
                   {
-                    cacheCollision.ResolveCollision(input.PrimaryKeyTXIDOutput, collisionBits);
+                    tableCollision.ResolveCollision(input.PrimaryKeyTXIDOutput, collisionBits);
                   }
                 }
 
