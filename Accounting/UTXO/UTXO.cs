@@ -41,8 +41,9 @@ namespace BToken.Accounting
     static readonly int CountHeaderBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
     static readonly int CountHeaderPlusCollisionBits = COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS;
 
-    long UTCTimeStartup;
-    Stopwatch Stopwatch = new Stopwatch();
+    long UTCTimeStartBuild;
+    long TimeMergingTotalTicks;
+    static Stopwatch StopwatchResolveCollision = new Stopwatch();
 
     BufferBlock<UTXOBatch> BatchQueue = new BufferBlock<UTXOBatch>();
     readonly object BatchQueueLOCK = new object();
@@ -136,7 +137,7 @@ namespace BToken.Accounting
         Console.WriteLine(labelsCSV);
         BuildWriter.WriteLine(labelsCSV);
 
-        UTCTimeStartup = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        UTCTimeStartBuild = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
         Parallel.For(0, COUNT_BATCHES_PARALLEL, i =>
         {
@@ -322,7 +323,9 @@ namespace BToken.Accounting
 
                   if (tableCollision != null)
                   {
+                    StopwatchResolveCollision.Start();
                     tableCollision.ResolveCollision(input.PrimaryKeyTXIDOutput, collisionBits);
+                    StopwatchResolveCollision.Stop();
                   }
                 }
 
@@ -411,13 +414,17 @@ namespace BToken.Accounting
       
       long timeParsePlusMerge = batch.StopwatchMerging.ElapsedMilliseconds + batch.StopwatchParse.ElapsedMilliseconds;
       int ratio = (int)((float)batch.StopwatchMerging.ElapsedTicks * 100 / batch.StopwatchParse.ElapsedTicks);
+      TimeMergingTotalTicks += batch.StopwatchMerging.ElapsedTicks;
 
-      string metricsCSV = string.Format("{0},{1},{2},{3},{4},{5},{6},{7}",
+      string metricsCSV = string.Format(
+        "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
         batch.BatchIndex,
         BlockHeight,
-        DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
+        DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartBuild,
         timeParsePlusMerge,
         ratio,
+        TimeMergingTotalTicks,
+        StopwatchResolveCollision.ElapsedTicks,
         Tables[0].GetMetricsCSV(),
         Tables[1].GetMetricsCSV(),
         Tables[2].GetMetricsCSV());
