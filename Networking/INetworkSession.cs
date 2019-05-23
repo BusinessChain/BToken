@@ -10,6 +10,5 @@ namespace BToken.Networking
   public interface INetworkSession
   {
     Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken);
-    string GetSessionID();
   }
 }

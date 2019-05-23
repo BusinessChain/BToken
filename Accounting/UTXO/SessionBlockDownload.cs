@@ -15,7 +15,7 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class SessionBlockDownload : BatchBlockLoad, INetworkSession
+    class SessionBlockDownload : UTXOBatch, INetworkSession
     {
       UTXO UTXO;
       byte[][] HeaderHashes;
@@ -68,23 +68,19 @@ namespace BToken.Accounting
 
         lock (UTXO.MergeLOCK)
         {
-          if (UTXO.IndexBatchMerge != Index)
+          if (UTXO.IndexBatchMerge != BatchIndex)
           {
-            UTXO.QueueBatchsMerge.Add(Index, this);
+            UTXO.QueueBatchsMerge.Add(BatchIndex, this);
             return;
           }
         }
 
-        UTXO.Merge(
-          this, 
-          0,
-          flagArchive: true);
-      }
+        //UTXO.ArchiveBatch(batch.Index, batch.Blocks);
+        //Task cacheArchivingTask = UTXO.Cache.ArchiveAsync();
 
-
-      public string GetSessionID()
-      {
-        return Index.ToString();
+        //UTXO.Merge(
+        //  this,
+        //  flagArchive: true);
       }
     }
   }
