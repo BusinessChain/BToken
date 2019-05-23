@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+using System.Security.Cryptography;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 using BToken.Chaining;
@@ -17,13 +18,13 @@ namespace BToken.Accounting
   {
     Headerchain Headerchain;
     Network Network;
-    
+
     protected static string RootPath = "UTXO";
 
     const int CACHE_ARCHIVING_INTERVAL = 100;
-    UTXOIndex[] Caches;
-    
-    const int BYTE_LENGTH_VERSION = 4; 
+    UTXOTable[] Tables;
+
+    const int BYTE_LENGTH_VERSION = 4;
     const int BYTE_LENGTH_OUTPUT_VALUE = 8;
     const int BYTE_LENGTH_LOCK_TIME = 4;
 
@@ -46,7 +47,7 @@ namespace BToken.Accounting
     BufferBlock<UTXOBatch> BatchQueue = new BufferBlock<UTXOBatch>();
     readonly object BatchQueueLOCK = new object();
     List<UTXOBatch> BatchesQueued = new List<UTXOBatch>();
-    const int COUNT_BATCHES_PARALLEL = 4;
+    const int COUNT_BATCHES_PARALLEL = 8;
     const int BATCHQUEUE_MAX_COUNT = 8;
     Dictionary<int, UTXOBatch> QueueBatchsMerge = new Dictionary<int, UTXOBatch>();
     readonly object MergeLOCK = new object();
@@ -63,7 +64,7 @@ namespace BToken.Accounting
     const int MAX_COUNT_TXS_IN_PARTITION = 100000;
 
     Headerchain.ChainHeader ChainHeader;
-    
+
 
     public UTXO(Headerchain headerchain, Network network)
     {
@@ -71,10 +72,10 @@ namespace BToken.Accounting
       ChainHeader = Headerchain.GenesisHeader;
       Network = network;
 
-      Caches = new UTXOIndex[]{
-        new UTXOCacheUInt32(),
-        new UTXOCacheULong64(),
-        new UTXOCacheByteArray()};
+      Tables = new UTXOTable[]{
+        new UTXOTableUInt32(),
+        new UTXOTableULong64(),
+        new UTXOTableByteArray()};
     }
 
     public async Task StartAsync()
@@ -83,14 +84,14 @@ namespace BToken.Accounting
       {
         await LoadBatchHeight();
 
-        await Task.WhenAll(Caches
+        await Task.WhenAll(Tables
           .Select(c => { return c.LoadAsync(); }));
       }
       catch
       {
-        for(int c = 0; c < Caches.Length; c += 1)
+        for (int c = 0; c < Tables.Length; c += 1)
         {
-          Caches[c].Clear();
+          Tables[c].Clear();
         }
 
         IndexBatchMerge = 0;
@@ -128,15 +129,15 @@ namespace BToken.Accounting
           "Time," +
           "Time merge," +
           "Ratio," +
-          Caches[0].GetLabelsMetricsCSV() + "," +
-          Caches[1].GetLabelsMetricsCSV() + "," +
-          Caches[2].GetLabelsMetricsCSV());
+          Tables[0].GetLabelsMetricsCSV() + "," +
+          Tables[1].GetLabelsMetricsCSV() + "," +
+          Tables[2].GetLabelsMetricsCSV());
 
         Console.WriteLine(labelsCSV);
         BuildWriter.WriteLine(labelsCSV);
 
         UTCTimeStartup = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        
+
         Parallel.For(0, COUNT_BATCHES_PARALLEL, i =>
         {
           Task mergeBatchTask = MergeBatchesQueuedAsync(i);
@@ -157,7 +158,7 @@ namespace BToken.Accounting
         {
           UTXOBatch batch = new UTXOBatch()
           {
-            Index = batchIndex,
+            BatchIndex = batchIndex,
             Buffer = await BlockArchiver.ReadBlockBatchAsync(filePath).ConfigureAwait(false)
           };
 
@@ -193,17 +194,23 @@ namespace BToken.Accounting
         int bufferIndex = 0;
         while (bufferIndex < batch.Buffer.Length)
         {
-          ParseBlock(batch, ref bufferIndex);
+          try
+          {
+            ParseBlock(batch, ref bufferIndex);
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(ex.Message);
+          }
         }
 
         batch.StopwatchParse.Stop();
 
         lock (MergeLOCK)
         {
-          if (IndexBatchMerge != batch.Index)
+          if (IndexBatchMerge != batch.BatchIndex)
           {
-            QueueBatchsMerge.Add(batch.Index, batch);
-
+            QueueBatchsMerge.Add(batch.BatchIndex, batch);
             continue;
           }
         }
@@ -211,12 +218,23 @@ namespace BToken.Accounting
         while (true)
         {
           batch.StopwatchMerging.Start();
-          Merge(batch);
+          try
+          {
+            if (batch.BatchIndex == 164)
+            { }
+
+            InsertUTXOs(batch);
+            SpendUTXOs(batch);
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(ex.Message);
+          }
           batch.StopwatchMerging.Stop();
 
           if (IndexBatchMerge % CACHE_ARCHIVING_INTERVAL == 0 && IndexBatchMerge > 0)
           {
-            BackupToDisk();
+            //BackupToDisk();
           }
 
           BatchReporting(batch, mergerID);
@@ -237,249 +255,101 @@ namespace BToken.Accounting
         }
       }
     }
-    void ParseBlock(UTXOBatch batch, ref int bufferIndex)
+    
+    void InsertUTXOs(UTXOBatch batch)
     {
-      byte[] headerHash =
-      batch.SHA256Generator.ComputeHash(
-        batch.SHA256Generator.ComputeHash(
-          batch.Buffer,
-          bufferIndex,
-          COUNT_HEADER_BYTES));
-
-      ValidateHeaderHash(headerHash, batch);
-
-      int indexMerkleRoot = bufferIndex + OFFSET_INDEX_MERKLE_ROOT;
-
-      bufferIndex += COUNT_HEADER_BYTES;
-
-      int tXCount = VarInt.GetInt32(batch.Buffer, ref bufferIndex);
-      batch.InitializeDataBatches(tXCount);
-
-      if (tXCount == 1)
+      foreach(Block block in batch.Blocks)
       {
-        byte[] hash = ParseTX(batch, ref bufferIndex, headerHash, 1);
-        
-        if (!hash.IsEqual(batch.Buffer, indexMerkleRoot))
+        for (int c = 0; c < Tables.Length; c += 1)
         {
-          throw new UTXOException(
-            string.Format("Payload corrupted. batchIndex {0}, bufferIndex: {1}", 
-            batch.Index,
-            bufferIndex));
-        }
-
-        return;
-      }
-
-      int tXsLengthMod2 = tXCount & 1;
-      var merkleList = new byte[tXCount + tXsLengthMod2][];
-
-      for (int t = 0; t < tXCount; t += 1)
-      {
-        merkleList[t] = ParseTX(batch, ref bufferIndex, headerHash, t);
-      }
-
-      if (tXsLengthMod2 != 0)
-      {
-        merkleList[tXCount] = merkleList[tXCount - 1];
-      }
-
-      if (!UTXOParser.GetRoot(merkleList, batch.SHA256Generator)
-        .IsEqual(batch.Buffer, indexMerkleRoot))
-      {
-        throw new UTXOException(
-          string.Format("Payload corrupted. batchIndex {0}, bufferIndex: {1}",
-          batch.Index,
-          bufferIndex));
-      }
-    }
-
-    byte[] ParseTX(UTXOBatch batch, ref int bufferIndex, byte[] headerHash, int tXIndex)
-    {
-      int tXStartIndex = bufferIndex;
-
-      bufferIndex += BYTE_LENGTH_VERSION;
-
-      bool isWitnessFlagPresent = batch.Buffer[bufferIndex] == 0x00;
-      if (isWitnessFlagPresent)
-      {
-        bufferIndex += 2;
-      }
-
-      int countTXInputs = VarInt.GetInt32(batch.Buffer, ref bufferIndex);
-      batch.Inputs[tXIndex] = new TXInput[countTXInputs];
-      for (int i = 0; i < countTXInputs; i += 1)
-      {
-        batch.Inputs[tXIndex][i] = new TXInput(batch.Buffer, ref bufferIndex);
-      }
-
-      int tXOutputsCount = VarInt.GetInt32(batch.Buffer, ref bufferIndex);
-      
-      for (int i = 0; i < tXOutputsCount; i += 1)
-      {
-        bufferIndex += BYTE_LENGTH_OUTPUT_VALUE;
-        bufferIndex += VarInt.GetInt32(batch.Buffer, ref bufferIndex); // locking script length
-      }
-
-      int lengthUTXOBits = CountHeaderPlusCollisionBits + tXOutputsCount;
-      
-      for (int c = 0; c < Caches.Length; c += 1)
-      {
-        if (Caches[c].TryParseUTXO(
-          headerHash,
-          lengthUTXOBits,
-          out UTXODataItem uTXODataBatch))
-        {
-          batch.PushUTXODataItem(c, uTXODataBatch);
-
-          if (isWitnessFlagPresent)
+        LoopUTXOItems:
+          while (block.TryPopUTXOItem(c, out UTXOItem uTXOItem))
           {
-            var witnesses = new TXWitness[countTXInputs];
-            for (int i = 0; i < countTXInputs; i += 1)
+            for (int cc = 0; cc < Tables.Length; cc += 1)
             {
-              witnesses[i] = TXWitness.Parse(batch.Buffer, ref bufferIndex);
-            }
-          }
-
-          bufferIndex += BYTE_LENGTH_LOCK_TIME;
-
-          byte[] hash = batch.SHA256Generator.ComputeHash(
-           batch.SHA256Generator.ComputeHash(
-             batch.Buffer,
-             tXStartIndex,
-             bufferIndex - tXStartIndex));
-
-          uTXODataBatch.Hash = hash;
-          uTXODataBatch.PrimaryKey = BitConverter.ToInt32(hash, 0);
-
-          return hash;
-        }
-      }
-
-      throw new UTXOException("UTXO could not be inserted in Cache modules.");
-    }
-    void Merge(UTXOBatch batch)
-    {
-      for (int c = 0; c < Caches.Length; c += 1)
-      {
-      LoopDataItems:
-        while (batch.TryGetDataItem(c, out UTXODataItem uTXODataItem))
-        {
-          for (int cc = 0; cc < Caches.Length; cc += 1)
-          {
-            if (Caches[cc].TrySetCollisionBit(uTXODataItem.PrimaryKey, c))
-            {
-              Caches[c].SecondaryCacheAddUTXO(uTXODataItem);
-              goto LoopDataItems;
-            }
-          }
-
-          Caches[c].PrimaryCacheAddUTXO(uTXODataItem);
-        }
-      }
-    }
-    void Merge(List<Block> blocks)
-    {
-      foreach (Block block in blocks)
-      {
-        InsertUTXOs(block.TXs, block.HeaderHash);
-        SpendUTXOs(block.TXs);
-
-        BlockHeight += 1;
-      }
-    }
-    void InsertUTXOs(TX[] tXs, byte[] headerHash)
-    {
-      int t = 0;
-
-    LoopInsertUTXOs:
-      while (t < tXs.Length)
-      {
-        for (int c = 0; c < Caches.Length; c += 1)
-        {
-          if (Caches[c].IsUTXOTooLongForCache(tXs[t].LengthUTXOBits))
-          {
-            continue;
-          }
-
-          Caches[c].CreateUTXO(headerHash, tXs[t].LengthUTXOBits);
-
-          for (int cc = 0; cc < Caches.Length; cc += 1)
-          {
-            if (Caches[cc].TrySetCollisionBit(tXs[t].PrimaryKey, Caches[c].Address))
-            {
-              Caches[c].SecondaryCacheAddUTXO(tXs[t].Hash);
-
-              t += 1;
-              goto LoopInsertUTXOs;
-            }
-          }
-
-          Caches[c].PrimaryCacheAddUTXO(tXs[t].PrimaryKey);
-
-          t += 1;
-          goto LoopInsertUTXOs;
-        }
-
-        throw new UTXOException("UTXO could not be inserted in Cache modules.");
-      }
-    }
-    void SpendUTXOs(TX[] tXs)
-    {
-      for (int t = 1; t < tXs.Length; t += 1)
-      {
-        int i = 0;
-
-      LoopSpendUTXOs:
-        while (i < tXs[t].Inputs.Length)
-        {
-          TXInput tXInput = tXs[t].Inputs[i];
-
-          int primaryKey = BitConverter.ToInt32(tXInput.IndexTXIDOutput, 0);
-
-          for (int c = 0; c < Caches.Length; c += 1)
-          {
-            if (Caches[c].TryGetValueInPrimaryCache(primaryKey))
-            {
-              UTXOIndex cacheCollision = null;
-              uint collisionBits = 0;
-              for (int cc = 0; cc < Caches.Length; cc += 1)
+              if (Tables[cc].TrySetCollisionBit(uTXOItem.PrimaryKey, c))
               {
-                if (Caches[c].IsCollision(cc))
+                Tables[c].SecondaryCacheAddUTXO(uTXOItem);
+                goto LoopUTXOItems;
+              }
+            }
+
+            Tables[c].PrimaryCacheAddUTXO(uTXOItem);
+          }
+        }
+      }
+    }
+    void SpendUTXOs(UTXOBatch batch)
+    {
+      foreach (Block block in batch.Blocks)
+      {
+        if (block.HeaderHashString == "000000000000068E8BC892FD269A8C12B89CB3DEA9990745416F762EA42A14EB")
+        { Console.WriteLine(block.HeaderHashString); }
+
+
+        for(int t = 0; t < block.TXCount; t += 1)
+        {
+          if (t == 50)
+          { }
+
+          int i = 0;
+        LoopSpendUTXOs:
+          while (i < block.InputsPerTX[t].Length)
+          {
+            TXInput input = block.InputsPerTX[t][i];
+
+            if (input.TXIDOutput.ToHexString() == "CE72EE3DF7B0D60016661476679AE884BFF0D5054535827DF42D028570CDDB9F")
+            { }
+            
+            for (int c = 0; c < Tables.Length; c += 1)
+            {
+              UTXOTable table = Tables[c];
+
+              if (table.TryGetValueInPrimaryCache(input.PrimaryKeyTXIDOutput))
+              {
+                UTXOTable cacheCollision = null;
+                uint collisionBits = 0;
+                while (c < Tables.Length)
                 {
-                  cacheCollision = Caches[cc];
-
-                  collisionBits |= (uint)(1 << cacheCollision.Address);
-
-                  if (cacheCollision.TrySpendSecondary(
-                    primaryKey,
-                    tXInput.IndexTXIDOutput,
-                    tXInput.OutputIndex,
-                    Caches[c]))
+                  if (table.IsCollision(c))
                   {
-                    i += 1;
-                    goto LoopSpendUTXOs;
+                    cacheCollision = Tables[c];
+
+                    collisionBits |= (uint)(1 << c);
+
+                    if (cacheCollision.TrySpendSecondary(
+                      input,
+                      table))
+                    {
+                      i += 1;
+                      goto LoopSpendUTXOs;
+                    }
+                  }
+
+                  c += 1;
+                }
+
+                table.SpendPrimaryUTXO(input, out bool areAllOutputsSpent);
+
+                if (areAllOutputsSpent)
+                {
+                  table.RemovePrimary(input.PrimaryKeyTXIDOutput);
+
+                  if (cacheCollision != null)
+                  {
+                    cacheCollision.ResolveCollision(input.PrimaryKeyTXIDOutput, collisionBits);
                   }
                 }
+
+                i += 1;
+                goto LoopSpendUTXOs;
               }
-
-              Caches[c].SpendPrimaryUTXO(primaryKey, tXInput.OutputIndex, out bool areAllOutputpsSpent);
-
-              if (areAllOutputpsSpent)
-              {
-                Caches[c].RemovePrimary(primaryKey);
-
-                if (cacheCollision != null)
-                {
-                  cacheCollision.ResolveCollision(primaryKey, collisionBits);
-                }
-              }
-
-              i += 1;
-              goto LoopSpendUTXOs;
             }
-          }
 
-          throw new UTXOException("Referenced TXID not found in UTXO table.");
+            throw new UTXOException(string.Format(
+              "Referenced TX {0} not found in UTXO table.",
+              input.TXIDOutput.ToHexString()));
+          }
         }
       }
     }
@@ -546,46 +416,47 @@ namespace BToken.Accounting
         Path.Combine(RootPath, "BatchHeight"),
         heights);
 
-      Parallel.ForEach(Caches, c => c.BackupToDisk());
+      Parallel.ForEach(Tables, c => c.BackupToDisk());
     }
     void BatchReporting(UTXOBatch batch, int mergerID)
     {
       batch.SignalBatchCompletion.SetResult(batch);
+
+      BlockHeight += batch.Blocks.Count;
       
       long timeParsePlusMerge = batch.StopwatchMerging.ElapsedMilliseconds + batch.StopwatchParse.ElapsedMilliseconds;
       int ratio = (int)((float)batch.StopwatchMerging.ElapsedTicks * 100 / batch.StopwatchParse.ElapsedTicks);
 
       string metricsCSV = string.Format("{0},{1},{2},{3},{4},{5},{6},{7}",
-        batch.Index,
+        batch.BatchIndex,
         BlockHeight,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartup,
         timeParsePlusMerge,
         ratio,
-        Caches[0].GetMetricsCSV(),
-        Caches[1].GetMetricsCSV(),
-        Caches[2].GetMetricsCSV());
+        Tables[0].GetMetricsCSV(),
+        Tables[1].GetMetricsCSV(),
+        Tables[2].GetMetricsCSV());
 
       Console.WriteLine(metricsCSV);
       BuildWriter.WriteLine(metricsCSV);
     }
-
-    
+        
     void ArchiveBatch(int batchIndex, List<Block> blocks)
     {
-      BlocksPartitioned.AddRange(blocks);
-      CountTXsPartitioned += blocks.Sum(b => b.TXs.Length);
+      //BlocksPartitioned.AddRange(blocks);
+      //CountTXsPartitioned += blocks.Sum(b => b.TXs.Length);
 
-      if (CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
-      {
-        Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
-          BlocksPartitioned,
-          FilePartitionIndex);
+      //if (CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
+      //{
+      //  Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
+      //    BlocksPartitioned,
+      //    FilePartitionIndex);
 
-        FilePartitionIndex += 1;
+      //  FilePartitionIndex += 1;
 
-        BlocksPartitioned = new List<Block>();
-        CountTXsPartitioned = 0;
-      }
+      //  BlocksPartitioned = new List<Block>();
+      //  CountTXsPartitioned = 0;
+      //}
     }
 
     static bool TryGetHeaderHashes(
@@ -638,33 +509,5 @@ namespace BToken.Accounting
       await Task.WhenAll(blockDownloadTasks);
     }
     
-    void ValidateHeaderHash(
-      byte[] headerHash,
-      UTXOBatch batch)
-    {
-      if (batch.ChainHeader == null)
-      {
-        batch.ChainHeader = Headerchain.ReadHeader(headerHash, batch.SHA256Generator);
-      }
-
-      byte[] headerHashValidator;
-
-      if (batch.ChainHeader.HeadersNext == null)
-      {
-        headerHashValidator = batch.ChainHeader.GetHeaderHash(batch.SHA256Generator);
-      }
-      else
-      {
-        batch.ChainHeader = batch.ChainHeader.HeadersNext[0];
-        headerHashValidator = batch.ChainHeader.NetworkHeader.HashPrevious;
-      }
-
-      if (!headerHashValidator.IsEqual(headerHash))
-      {
-        throw new UTXOException(string.Format("Unexpected header hash {0}, \nexpected {1}",
-          headerHash.ToHexString(),
-          headerHashValidator.ToHexString()));
-      }
-    }
   }
 }

@@ -8,7 +8,7 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    abstract class UTXOIndex
+    abstract class UTXOTable
     {
       protected string Label;
       string DirectoryPath;
@@ -16,7 +16,7 @@ namespace BToken.Accounting
       public int Address;
 
 
-      protected UTXOIndex(int address, string label)
+      protected UTXOTable(int address, string label)
       {
         Label = label;
         Address = address;
@@ -26,37 +26,33 @@ namespace BToken.Accounting
       public abstract bool TryParseUTXO(
         byte[] headerHash, 
         int lengthUTXOBits, 
-        out UTXODataItem uTXOIndexDataItem);
+        out UTXOItem uTXOIndexDataItem);
 
-      public abstract bool IsUTXOTooLongForCache(int lengthUTXOBits);
-      public abstract void CreateUTXO(byte[] headerHashBytes, int lengthUTXOBits);
       public abstract bool TrySetCollisionBit(int primaryKey, int collisionAddress);
-      public abstract void SecondaryCacheAddUTXO(byte[] tXIDHash);
-      public abstract void PrimaryCacheAddUTXO(int primaryKey);
-         
-      public abstract void SpendPrimaryUTXO(int primaryKey, int outputIndex, out bool areAllOutputpsSpent);
+      public abstract void SecondaryCacheAddUTXO(UTXOItem uTXODataItem);
+      public abstract void PrimaryCacheAddUTXO(UTXOItem uTXODataItem);
+
+      public abstract void SpendPrimaryUTXO(TXInput input, out bool areAllOutputpsSpent);
       public abstract bool TryGetValueInPrimaryCache(int primaryKey);
       public abstract bool IsCollision(int cacheAddress);
       public abstract void RemovePrimary(int primaryKey);
       public abstract void ResolveCollision(int primaryKey, uint collisionBits);
       
       public bool TrySpendSecondary(
-        int primaryKey,
-        byte[] tXIDOutput,
-        int outputIndex,
-        UTXOIndex primaryCache)
+        TXInput input,
+        UTXOTable primaryCache)
       {
-        if (TryGetValueInSecondaryCache(tXIDOutput))
+        if (TryGetValueInSecondaryCache(input.TXIDOutput))
         {
-          SpendSecondaryUTXO(tXIDOutput, outputIndex, out bool areAllOutputpsSpent);
+          SpendSecondaryUTXO(input.TXIDOutput, input.OutputIndex, out bool areAllOutputpsSpent);
 
           if (areAllOutputpsSpent)
           {
-            RemoveSecondary(primaryKey, tXIDOutput, out bool hasMoreCollisions);
+            RemoveSecondary(input.PrimaryKeyTXIDOutput, input.TXIDOutput, out bool hasMoreCollisions);
 
             if (!hasMoreCollisions)
             {
-              primaryCache.ClearCollisionBit(primaryKey, Address);
+              primaryCache.ClearCollisionBit(input.PrimaryKeyTXIDOutput, Address);
             }
           }
 
@@ -119,12 +115,12 @@ namespace BToken.Accounting
       }
     }
 
-    abstract class UTXODataItem
+    abstract class UTXOItem
     {
       public int PrimaryKey;
       public byte[] Hash;
 
-      public UTXODataItem()
+      public UTXOItem()
       { }
     }
   }

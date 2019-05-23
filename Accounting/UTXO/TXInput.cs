@@ -11,19 +11,24 @@ namespace BToken.Accounting
   {
     class TXInput
     {
-      public int IndexTXIDOutput;
+      public byte[] TXIDOutput;
+      public int PrimaryKeyTXIDOutput;
       public int OutputIndex;
 
 
-      public TXInput(byte[] byteStream, ref int startIndex)
+      public TXInput(byte[] buffer, ref int startIndex)
       {
-        IndexTXIDOutput = startIndex;
-        startIndex += 32;
+        PrimaryKeyTXIDOutput = BitConverter.ToInt32(buffer, startIndex);
+        TXIDOutput = new byte[HASH_BYTE_SIZE];
+        Array.Copy(buffer, startIndex, TXIDOutput, 0, HASH_BYTE_SIZE);
+        startIndex += HASH_BYTE_SIZE;
 
-        OutputIndex = BitConverter.ToInt32(byteStream, startIndex);
+        OutputIndex = BitConverter.ToInt32(buffer, startIndex);
         startIndex += 4;
 
-        startIndex += VarInt.GetInt32(byteStream, ref startIndex); // length unlocking script
+        int lengthUnlockingScript = VarInt.GetInt32(buffer, ref startIndex);
+        startIndex += lengthUnlockingScript;
+
         startIndex += 4; // sequence
       }
     }

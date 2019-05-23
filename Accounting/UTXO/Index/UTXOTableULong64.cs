@@ -8,29 +8,28 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class UTXOCacheUInt32 : UTXOIndex
+    class UTXOTableULong64 : UTXOTable
     {
-      Dictionary<int, uint> PrimaryCache = new Dictionary<int, uint>();
-      Dictionary<byte[], uint> SecondaryCache = 
-        new Dictionary<byte[], uint>(new EqualityComparerByteArray());
+      Dictionary<int, ulong> PrimaryCache = new Dictionary<int, ulong>();
+      Dictionary<byte[], ulong> SecondaryCache =
+        new Dictionary<byte[], ulong>(new EqualityComparerByteArray());
 
-      uint UTXOIndex;
-      uint UTXOPrimaryExisting;
-      uint UTXOSecondaryExisting;
+      ulong UTXOIndex;
+      ulong UTXOPrimaryExisting;
+      ulong UTXOSecondaryExisting;
 
-      const int COUNT_INTEGER_BITS = sizeof(int) * 8;
+      const int COUNT_LONG_BITS = sizeof(long) * 8;
 
-      static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountHeaderPlusCollisionBits;
-      static readonly int CountNonHeaderBits = COUNT_INTEGER_BITS - COUNT_HEADERINDEX_BITS;
-      static readonly int CountHeaderBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
+      static readonly ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountHeaderPlusCollisionBits;
+      static readonly int CountNonHeaderBits = COUNT_LONG_BITS - COUNT_HEADERINDEX_BITS;
 
-      uint[] MasksCollision = {
+      ulong[] MasksCollision = {
         0x04000000,
         0x08000000,
         0x10000000 };
 
 
-      public UTXOCacheUInt32() : base(0, "UInt32")
+      public UTXOTableULong64(): base(1, "ULong64")
       { }
 
 
@@ -43,27 +42,6 @@ namespace BToken.Accounting
         return SecondaryCache.Count;
       }
 
-      public override bool IsUTXOTooLongForCache(int lengthUTXOBits)
-      {
-        return COUNT_INTEGER_BITS < lengthUTXOBits;
-      }
-      public override void CreateUTXO(byte[] headerHashBytes, int lengthUTXOBits)
-      {
-        UTXOIndex = 0;
-
-        for (int i = CountHeaderBytes; i > 0; i -= 1)
-        {
-          UTXOIndex <<= 8;
-          UTXOIndex |= headerHashBytes[i - 1];
-        }
-        UTXOIndex <<= CountNonHeaderBits;
-        UTXOIndex >>= CountNonHeaderBits;
-
-        if (COUNT_INTEGER_BITS > lengthUTXOBits)
-        {
-          UTXOIndex |= (uint.MaxValue << lengthUTXOBits);
-        }
-      }
       public override bool TrySetCollisionBit(int primaryKey, int collisionAddress)
       {
         if (PrimaryCache.ContainsKey(primaryKey))
@@ -74,19 +52,58 @@ namespace BToken.Accounting
 
         return false;
       }
-      public override void SecondaryCacheAddUTXO(byte[] tXIDHash)
+      public override void SecondaryCacheAddUTXO(UTXOItem uTXODataItem)
       {
-        SecondaryCache.Add(tXIDHash, UTXOIndex);
+        SecondaryCache.Add(
+          uTXODataItem.Hash,
+          ((UTXOItemULong64)uTXODataItem).UTXOIndex);
       }
-      public override void PrimaryCacheAddUTXO(int primaryKey)
+      public override void PrimaryCacheAddUTXO(UTXOItem uTXODataItem)
       {
-        PrimaryCache.Add(primaryKey, UTXOIndex);
+        PrimaryCache.Add(
+          uTXODataItem.PrimaryKey,
+          ((UTXOItemULong64)uTXODataItem).UTXOIndex);
       }
 
-      public override void SpendPrimaryUTXO(int primaryKey, int outputIndex, out bool areAllOutputpsSpent)
+
+      public override bool TryParseUTXO(
+        byte[] headerHash,
+        int lengthUTXOBits,
+        out UTXOItem item)
       {
-        SpendUTXO(ref UTXOPrimaryExisting, outputIndex, out areAllOutputpsSpent);
-        PrimaryCache[primaryKey] = UTXOPrimaryExisting;
+        if (COUNT_LONG_BITS < lengthUTXOBits)
+        {
+          item = null;
+          return false;
+        }
+
+        ulong uTXOIndex = 0;
+
+        for (int i = CountHeaderBytes; i > 0; i--)
+        {
+          uTXOIndex <<= 8;
+          UTXOIndex |= headerHash[i - 1];
+        }
+        uTXOIndex <<= CountNonHeaderBits;
+        uTXOIndex >>= CountNonHeaderBits;
+
+        if (COUNT_LONG_BITS > lengthUTXOBits)
+        {
+          uTXOIndex |= (ulong.MaxValue << lengthUTXOBits);
+        }
+
+        item = new UTXOItemULong64
+        {
+          UTXOIndex = uTXOIndex
+        };
+
+        return true;
+      }
+
+      public override void SpendPrimaryUTXO(TXInput input, out bool areAllOutputpsSpent)
+      {
+        SpendUTXO(ref UTXOPrimaryExisting, input.OutputIndex, out areAllOutputpsSpent);
+        PrimaryCache[input.PrimaryKeyTXIDOutput] = UTXOPrimaryExisting;
       }
       public override bool TryGetValueInPrimaryCache(int primaryKey)
       {
@@ -102,7 +119,7 @@ namespace BToken.Accounting
       }
       public override void ResolveCollision(int primaryKey, uint collisionBits)
       {
-        KeyValuePair<byte[], uint> secondaryCacheItem =
+        KeyValuePair<byte[], ulong> secondaryCacheItem =
           SecondaryCache.First(k => BitConverter.ToInt32(k.Key, 0) == primaryKey);
         SecondaryCache.Remove(secondaryCacheItem.Key);
 
@@ -111,8 +128,8 @@ namespace BToken.Accounting
           collisionBits &= ~((uint)1 << Address);
         }
 
-        uint uTXO = secondaryCacheItem.Value
-          | (collisionBits << COUNT_HEADERINDEX_BITS);
+        ulong uTXO = secondaryCacheItem.Value
+          | ((ulong)collisionBits << COUNT_HEADERINDEX_BITS);
 
         PrimaryCache.Add(primaryKey, uTXO);
       }
@@ -137,10 +154,10 @@ namespace BToken.Accounting
       {
         PrimaryCache[primaryKey] &= ~MasksCollision[cacheAddress];
       }
-      
-      static void SpendUTXO(ref uint uTXO, int outputIndex, out bool areAllOutputpsSpent)
+
+      static void SpendUTXO(ref ulong uTXO, int outputIndex, out bool areAllOutputpsSpent)
       {
-        uint mask = (uint)1 << (CountHeaderPlusCollisionBits + outputIndex);
+        ulong mask = (ulong)1 << (CountHeaderPlusCollisionBits + outputIndex);
         if ((uTXO & mask) != 0x00)
         {
           throw new UTXOException(string.Format(
@@ -153,45 +170,46 @@ namespace BToken.Accounting
 
       protected override byte[] GetPrimaryData()
       {
-        byte[] buffer = new byte[PrimaryCache.Count << 3];
+        byte[] buffer = new byte[PrimaryCache.Count * 12];
 
         int index = 0;
-        foreach(KeyValuePair<int, uint> keyValuePair in PrimaryCache)
+        foreach (KeyValuePair<int, ulong> keyValuePair in PrimaryCache)
         {
           BitConverter.GetBytes(keyValuePair.Key).CopyTo(buffer, index);
           index += 4;
           BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
-          index += 4;
+          index += 8;
         }
 
         return buffer;
       }
       protected override byte[] GetSecondaryData()
       {
-        byte[] buffer = new byte[SecondaryCache.Count * (HASH_BYTE_SIZE + 4)];
+        byte[] buffer = new byte[SecondaryCache.Count * (HASH_BYTE_SIZE + 8)];
 
         int index = 0;
-        foreach (KeyValuePair<byte[], uint> keyValuePair in SecondaryCache)
+        foreach (KeyValuePair<byte[], ulong> keyValuePair in SecondaryCache)
         {
           keyValuePair.Key.CopyTo(buffer, index);
           index += HASH_BYTE_SIZE;
           BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
-          index += 4;
+          index += 8;
         }
 
         return buffer;
       }
 
+
       protected override void LoadPrimaryData(byte[] buffer)
       {
         int index = 0;
 
-        while(index < buffer.Length)
+        while (index < buffer.Length)
         {
           int key = BitConverter.ToInt32(buffer, index);
           index += 4;
-          uint value = BitConverter.ToUInt32(buffer, index);
-          index += 4;
+          ulong value = BitConverter.ToUInt64(buffer, index);
+          index += 8;
 
           PrimaryCache.Add(key, value);
         }
@@ -206,8 +224,8 @@ namespace BToken.Accounting
           Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
           index += HASH_BYTE_SIZE;
 
-          uint value = BitConverter.ToUInt32(buffer, index);
-          index += 4;
+          ulong value = BitConverter.ToUInt64(buffer, index);
+          index += 8;
 
           SecondaryCache.Add(key, value);
         }
@@ -218,45 +236,11 @@ namespace BToken.Accounting
         PrimaryCache.Clear();
         SecondaryCache.Clear();
       }
-
-      public override bool TryParseUTXO(
-        byte[] headerHash, 
-        int lengthUTXOBits,
-        out UTXODataItem item)
-      {
-        if(COUNT_INTEGER_BITS < lengthUTXOBits)
-        {
-          item = null;
-          return false;
-        }
-      
-        uint uTXOIndex = 0;
-
-        for (int i = CountHeaderBytes; i > 0; i -= 1)
-        {
-          uTXOIndex <<= 8;
-          uTXOIndex |= headerHash[i - 1];
-        }
-        uTXOIndex <<= CountNonHeaderBits;
-        uTXOIndex >>= CountNonHeaderBits;
-
-        if (COUNT_INTEGER_BITS > lengthUTXOBits)
-        {
-          uTXOIndex |= (uint.MaxValue << lengthUTXOBits);
-        }
-
-        item = new UTXOIndexUInt32DataItem
-          {
-            UTXOIndex = uTXOIndex
-          };
-
-        return true;
-      }
     }
 
-    class UTXOIndexUInt32DataItem : UTXODataItem
+    class UTXOItemULong64 : UTXOItem
     {
-      public uint UTXOIndex;
+      public ulong UTXOIndex;
     }
   }
 }

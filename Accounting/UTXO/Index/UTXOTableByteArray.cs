@@ -10,7 +10,7 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class UTXOCacheByteArray : UTXOIndex
+    class UTXOTableByteArray : UTXOTable
     {
       Dictionary<int, byte[]> PrimaryCache = new Dictionary<int, byte[]>();
       Dictionary<byte[], byte[]> SecondaryCache =
@@ -34,7 +34,7 @@ namespace BToken.Accounting
       static readonly int CountHeaderBitsInByte = COUNT_HEADERINDEX_BITS % 8;
 
 
-      public UTXOCacheByteArray() : base(2, "ByteArray")
+      public UTXOTableByteArray() : base(2, "ByteArray")
       {
         Debug.Assert(COUNT_HEADERINDEX_BITS % 8 + COUNT_COLLISION_BITS <= 8,
           "Collision bits should not byte overflow, otherwise utxo parsing errors will occur.");
@@ -49,27 +49,6 @@ namespace BToken.Accounting
         return SecondaryCache.Count;
       }
 
-      public override bool IsUTXOTooLongForCache(int lengthUTXOBits)
-      {
-        return false;
-      }
-      public override void CreateUTXO(byte[] headerHashBytes, int lengthUTXOBits)
-      {
-        int lengthUTXOIndex = (lengthUTXOBits + 7) / 8;
-        UTXOIndex = new byte[lengthUTXOIndex];
-
-        Array.Copy(headerHashBytes, UTXOIndex, LENGTH_HEADER_INDEX_BYTES);
-
-        int i = LENGTH_HEADER_INDEX_BYTES - 1;
-        UTXOIndex[i] <<= COUNT_NON_HEADER_BITS_IN_BYTE;
-        UTXOIndex[i] >>= COUNT_NON_HEADER_BITS_IN_BYTE;
-
-        int countUTXORemainderBits = lengthUTXOBits % 8;
-        if (countUTXORemainderBits > 0)
-        {
-          UTXOIndex[UTXOIndex.Length - 1] |= (byte)(byte.MaxValue << countUTXORemainderBits);
-        }
-      }
       public override bool TrySetCollisionBit(int primaryKey, int collisionAddress)
       {
         if (PrimaryCache.TryGetValue(primaryKey, out byte[] uTXOExisting))
@@ -80,18 +59,22 @@ namespace BToken.Accounting
 
         return false;
       }
-      public override void SecondaryCacheAddUTXO(byte[] tXIDHash)
+      public override void SecondaryCacheAddUTXO(UTXOItem uTXODataItem)
       {
-        SecondaryCache.Add(tXIDHash, UTXOIndex);
+        SecondaryCache.Add(
+          uTXODataItem.Hash,
+          ((UTXOItemByteArray)uTXODataItem).UTXOIndex);
       }
-      public override void PrimaryCacheAddUTXO(int primaryKey)
+      public override void PrimaryCacheAddUTXO(UTXOItem uTXODataItem)
       {
-        PrimaryCache.Add(primaryKey, UTXOIndex);
+        PrimaryCache.Add(
+          uTXODataItem.PrimaryKey,
+          ((UTXOItemByteArray)uTXODataItem).UTXOIndex);
       }
 
-      public override void SpendPrimaryUTXO(int primaryKey, int outputIndex, out bool areAllOutputpsSpent)
+      public override void SpendPrimaryUTXO(TXInput input, out bool areAllOutputpsSpent)
       {
-        SpendUTXO(UTXOPrimaryExisting, outputIndex, out areAllOutputpsSpent);
+        SpendUTXO(UTXOPrimaryExisting, input.OutputIndex, out areAllOutputpsSpent);
       }
       public override bool TryGetValueInPrimaryCache(int primaryKey)
       {
@@ -260,14 +243,39 @@ namespace BToken.Accounting
         PrimaryCache.Clear();
         SecondaryCache.Clear();
       }
+
+      public override bool TryParseUTXO(
+        byte[] headerHash,
+        int lengthUTXOBits,
+        out UTXOItem item)
+      {
+        int lengthUTXOIndex = (lengthUTXOBits + 7) / 8;
+        byte[] uTXOIndex = new byte[lengthUTXOIndex];
+
+        Array.Copy(headerHash, uTXOIndex, LENGTH_HEADER_INDEX_BYTES);
+
+        int i = LENGTH_HEADER_INDEX_BYTES - 1;
+        uTXOIndex[i] <<= COUNT_NON_HEADER_BITS_IN_BYTE;
+        uTXOIndex[i] >>= COUNT_NON_HEADER_BITS_IN_BYTE;
+
+        int countUTXORemainderBits = lengthUTXOBits % 8;
+        if (countUTXORemainderBits > 0)
+        {
+          uTXOIndex[uTXOIndex.Length - 1] |= (byte)(byte.MaxValue << countUTXORemainderBits);
+        }
+
+        item = new UTXOItemByteArray
+        {
+          UTXOIndex = uTXOIndex
+        };
+
+        return true;
+      }
     }
 
-    class UTXOIndexByteArrayDataBatch : UTXODataItem
+    class UTXOItemByteArray : UTXOItem
     {
-      public UTXOIndexByteArrayDataBatch(int tXCount)
-      {
-
-      }
+      public byte[] UTXOIndex;
     }
   }
 }

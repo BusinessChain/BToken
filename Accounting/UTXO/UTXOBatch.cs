@@ -12,11 +12,14 @@ namespace BToken.Accounting
   {
     class UTXOBatch
     {
-      public int Index;
+      public int BatchIndex;
       public byte[] Buffer;
-      public TXInput[][] Inputs;
-      public UTXODataItem[][] UTXODataItems;
-      public int[] IndexesUTXODataBatchs;
+      public List<Block> Blocks = new List<Block>(200);
+      public int[] IndexesUTXOItems = new int[3];
+
+      public int BlockIndex = -1;
+      public int InputIndex;
+      public int TXIndex;
 
       public Headerchain.ChainHeader ChainHeader;
       public SHA256 SHA256Generator = SHA256.Create();
@@ -32,34 +35,86 @@ namespace BToken.Accounting
       { }
       public UTXOBatch(int batchindex)
       { }
-
-      public void InitializeDataBatches(int tXCount)
+      
+      public void PushBlock(Block block)
       {
-        UTXODataItems = new UTXODataItem[][]{
-        new UTXOIndexUInt32DataItem[tXCount],
-        new UTXOIndexULong64DataBatch[tXCount],
-        new UTXOIndexByteArrayDataBatch[tXCount]};
+        Blocks.Add(block);
 
-        Inputs = new TXInput[tXCount][];
+        BlockIndex += 1;
+
+        TXIndex = 0;
+        InputIndex = 0;
+
+        for(int i = 0; i < IndexesUTXOItems.Length; i += 1)
+        {
+          IndexesUTXOItems[i] = 0;
+        }
+      }
+      public void InitializeInputs(int countInputs, int tXIndex)
+      {
+        Blocks[BlockIndex].InputsPerTX[tXIndex] = new TXInput[countInputs];
+        InputIndex = 0;
+      }
+      public void PushTXInput(int tXIndex, TXInput tXInput)
+      {
+        Blocks[BlockIndex]
+          .InputsPerTX[tXIndex][InputIndex] = tXInput;
+
+        InputIndex += 1;
+      }
+      public void PushUTXOItem(int address, UTXOItem uTXOItem)
+      {
+        Blocks[BlockIndex]
+          .UTXOItemsPerTable[address][IndexesUTXOItems[address]] = uTXOItem;
+
+        IndexesUTXOItems[address] += 1;
       }
 
-      public void PushUTXODataItem(int address, UTXODataItem uTXOIndexDataBatch)
+      public bool TryPopInput(out TXInput input)
       {
-        UTXODataItems[address][IndexesUTXODataBatchs[address]] = uTXOIndexDataBatch;
-        IndexesUTXODataBatchs[address] += 1;
-      }
+        if(BlockIndex < 0)
+        {
+          input = null;
+          return false;
+        }
 
-      public bool TryGetDataItem(int address, out UTXODataItem uTXODataItem)
+        input = Blocks[BlockIndex].InputsPerTX[TXIndex][InputIndex];
+
+        InputIndex -= 1;
+        if(InputIndex < 0)
+        {
+          TXIndex -= 1;
+
+          if(TXIndex < 0)
+          {
+            Blocks.RemoveAt(BlockIndex);
+            BlockIndex -= 1;
+            if(BlockIndex < 0)
+            {
+              return true;
+            }
+
+            TXIndex = Blocks[BlockIndex].TXCount - 1;
+          }
+
+          InputIndex = Blocks[BlockIndex].InputsPerTX[TXIndex].Length - 1;
+        }
+        
+        return true;
+      }
+      public bool TryPopUTXOItem(int address, out UTXOItem uTXODataItem)
       {
-        if(IndexesUTXODataBatchs[address] < 0)
+        IndexesUTXOItems[address] -= 1;
+
+        if (IndexesUTXOItems[address] < 0)
         {
           uTXODataItem = null;
           return false;
         }
 
-        uTXODataItem = UTXODataItems[address][IndexesUTXODataBatchs[address]];
-        IndexesUTXODataBatchs[address] -= 1;
-
+        uTXODataItem = Blocks[BlockIndex]
+          .UTXOItemsPerTable[address][IndexesUTXOItems[address]];
+        
         return true;
       }
     }

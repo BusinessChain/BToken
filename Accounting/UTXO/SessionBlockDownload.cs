@@ -68,9 +68,9 @@ namespace BToken.Accounting
 
         lock (UTXO.MergeLOCK)
         {
-          if (UTXO.IndexBatchMerge != Index)
+          if (UTXO.IndexBatchMerge != BatchIndex)
           {
-            UTXO.QueueBatchsMerge.Add(Index, this);
+            UTXO.QueueBatchsMerge.Add(BatchIndex, this);
             return;
           }
         }
