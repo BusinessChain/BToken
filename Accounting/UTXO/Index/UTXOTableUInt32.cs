@@ -19,9 +19,10 @@ namespace BToken.Accounting
 
       const int COUNT_INTEGER_BITS = sizeof(int) * 8;
 
-      static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountHeaderPlusCollisionBits;
-      static readonly int CountNonHeaderBits = COUNT_INTEGER_BITS - COUNT_HEADERINDEX_BITS;
-      static readonly int CountHeaderBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
+      static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountNonOutputBits;
+      static readonly uint MaskBatchIndex = ~(uint.MaxValue << COUNT_BATCHINDEX_BITS);
+      static readonly uint MaskHeaderBits = 
+        ~((uint.MaxValue << (COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS)) | MaskBatchIndex);
 
       uint[] MasksCollision = {
         0x04000000,
@@ -93,7 +94,7 @@ namespace BToken.Accounting
         }
 
         uint uTXO = secondaryCacheItem.Value
-          | (collisionBits << COUNT_HEADERINDEX_BITS);
+          | (collisionBits << COUNT_BATCHINDEX_BITS);
 
         PrimaryCache.Add(primaryKey, uTXO);
       }
@@ -121,7 +122,7 @@ namespace BToken.Accounting
       
       static void SpendUTXO(ref uint uTXO, int outputIndex, out bool areAllOutputpsSpent)
       {
-        uint mask = (uint)1 << (CountHeaderPlusCollisionBits + outputIndex);
+        uint mask = (uint)1 << (CountNonOutputBits + outputIndex);
         if ((uTXO & mask) != 0x00)
         {
           throw new UTXOException(string.Format(
@@ -201,6 +202,7 @@ namespace BToken.Accounting
       }
 
       public override bool TryParseUTXO(
+        int batchIndex,
         byte[] headerHash, 
         int lengthUTXOBits,
         out UTXOItem item)
@@ -210,17 +212,10 @@ namespace BToken.Accounting
           item = null;
           return false;
         }
-      
-        uint uTXOIndex = 0;
 
-        for (int i = CountHeaderBytes; i > 0; i -= 1)
-        {
-          uTXOIndex <<= 8;
-          uTXOIndex |= headerHash[i - 1];
-        }
-        uTXOIndex <<= CountNonHeaderBits;
-        uTXOIndex >>= CountNonHeaderBits;
-
+        uint uTXOIndex = (uint)batchIndex & MaskBatchIndex;
+        uTXOIndex |= ((uint)headerHash[0] << COUNT_BATCHINDEX_BITS) & MaskHeaderBits;
+        
         if (COUNT_INTEGER_BITS > lengthUTXOBits)
         {
           uTXOIndex |= (uint.MaxValue << lengthUTXOBits);

@@ -16,7 +16,6 @@ namespace BToken.Accounting
       Dictionary<byte[], byte[]> SecondaryCache =
         new Dictionary<byte[], byte[]>(new EqualityComparerByteArray());
       
-      byte[] UTXOIndex;
       byte[] UTXOPrimaryExisting;
       byte[] UTXOSecondaryExisting;
 
@@ -25,20 +24,20 @@ namespace BToken.Accounting
         0x08,
         0x10 };
 
-      const int LENGTH_HEADER_INDEX_BYTES = (COUNT_HEADERINDEX_BITS + 7) / 8;
-      const int COUNT_NON_HEADER_BITS_IN_BYTE = (8 - COUNT_HEADERINDEX_BITS % 8) % 8;
-      static readonly int CountNonOutputsBitsInByte = CountHeaderPlusCollisionBits % 8;
+      const int LENGTH_HEADER_INDEX_BYTES = (COUNT_BATCHINDEX_BITS + 7) / 8;
+      const int COUNT_NON_HEADER_BITS_IN_BYTE = (8 - COUNT_BATCHINDEX_BITS % 8) % 8;
+      static readonly int CountNonOutputsBitsInByte = CountNonOutputBits % 8;
       static readonly byte MaskAllOutputsBitsInByte = (byte)(byte.MaxValue << CountNonOutputsBitsInByte);
-      static readonly int OutputBitsByteIndex = CountHeaderPlusCollisionBits / 8;
-      static readonly int ByteIndexCollisionBits = COUNT_HEADERINDEX_BITS / 8;
-      static readonly int CountHeaderBitsInByte = COUNT_HEADERINDEX_BITS % 8;
+      static readonly int OutputBitsByteIndex = CountNonOutputBits / 8;
+      static readonly int ByteIndexCollisionBits = COUNT_BATCHINDEX_BITS / 8;
+      static readonly int CountHeaderBitsInByte = COUNT_BATCHINDEX_BITS % 8;
 
+      static readonly int CountBatchIndexBytes = (COUNT_BATCHINDEX_BITS + 7) / 8;
+      static readonly int ByteIndexHeaderBits = COUNT_BATCHINDEX_BITS / 8;
+      static readonly byte MaskHeaderBits = byte.MaxValue >> (8 - COUNT_HEADER_BITS);
 
       public UTXOTableByteArray() : base(2, "ByteArray")
-      {
-        Debug.Assert(COUNT_HEADERINDEX_BITS % 8 + COUNT_COLLISION_BITS <= 8,
-          "Collision bits should not byte overflow, otherwise utxo parsing errors will occur.");
-      }
+      { }
 
       protected override int GetCountPrimaryCacheItems()
       {
@@ -131,7 +130,7 @@ namespace BToken.Accounting
 
       static void SpendUTXO(byte[] uTXO, int outputIndex, out bool areAllOutputpsSpent)
       {
-        int bitOffset = CountHeaderPlusCollisionBits + outputIndex;
+        int bitOffset = CountNonOutputBits + outputIndex;
         int byteIndex = bitOffset / 8;
         int bitIndex = bitOffset % 8;
 
@@ -245,24 +244,25 @@ namespace BToken.Accounting
       }
 
       public override bool TryParseUTXO(
+        int batchIndex,
         byte[] headerHash,
         int lengthUTXOBits,
         out UTXOItem item)
       {
-        int lengthUTXOIndex = (lengthUTXOBits + 7) / 8;
-        byte[] uTXOIndex = new byte[lengthUTXOIndex];
-
-        Array.Copy(headerHash, uTXOIndex, LENGTH_HEADER_INDEX_BYTES);
-
-        int i = LENGTH_HEADER_INDEX_BYTES - 1;
-        uTXOIndex[i] <<= COUNT_NON_HEADER_BITS_IN_BYTE;
-        uTXOIndex[i] >>= COUNT_NON_HEADER_BITS_IN_BYTE;
+        byte[] uTXOIndex = new byte[(lengthUTXOBits + 7) / 8];
 
         int countUTXORemainderBits = lengthUTXOBits % 8;
         if (countUTXORemainderBits > 0)
         {
           uTXOIndex[uTXOIndex.Length - 1] |= (byte)(byte.MaxValue << countUTXORemainderBits);
         }
+
+        for (int i = 0; i < CountBatchIndexBytes; i += 1)
+        {
+          uTXOIndex[i] = (byte)(batchIndex >> i);
+        }
+
+        uTXOIndex[ByteIndexHeaderBits] = (byte)(headerHash[0] & MaskHeaderBits);
 
         item = new UTXOItemByteArray
         {

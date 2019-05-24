@@ -14,14 +14,15 @@ namespace BToken.Accounting
       Dictionary<byte[], ulong> SecondaryCache =
         new Dictionary<byte[], ulong>(new EqualityComparerByteArray());
 
-      ulong UTXOIndex;
       ulong UTXOPrimaryExisting;
       ulong UTXOSecondaryExisting;
 
       const int COUNT_LONG_BITS = sizeof(long) * 8;
 
-      static readonly ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountHeaderPlusCollisionBits;
-      static readonly int CountNonHeaderBits = COUNT_LONG_BITS - COUNT_HEADERINDEX_BITS;
+      static readonly ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
+      static readonly ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
+      static readonly ulong MaskHeaderBits =
+        ~((uint.MaxValue << (COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS)) | MaskBatchIndex);
 
       ulong[] MasksCollision = {
         0x04000000,
@@ -67,6 +68,7 @@ namespace BToken.Accounting
 
 
       public override bool TryParseUTXO(
+        int batchIndex,
         byte[] headerHash,
         int lengthUTXOBits,
         out UTXOItem item)
@@ -77,16 +79,9 @@ namespace BToken.Accounting
           return false;
         }
 
-        ulong uTXOIndex = 0;
-
-        for (int i = CountHeaderBytes; i > 0; i--)
-        {
-          uTXOIndex <<= 8;
-          UTXOIndex |= headerHash[i - 1];
-        }
-        uTXOIndex <<= CountNonHeaderBits;
-        uTXOIndex >>= CountNonHeaderBits;
-
+        ulong uTXOIndex = (uint)batchIndex & MaskBatchIndex;
+        uTXOIndex |= ((uint)headerHash[0] << COUNT_BATCHINDEX_BITS) & MaskHeaderBits;
+        
         if (COUNT_LONG_BITS > lengthUTXOBits)
         {
           uTXOIndex |= (ulong.MaxValue << lengthUTXOBits);
@@ -129,7 +124,7 @@ namespace BToken.Accounting
         }
 
         ulong uTXO = secondaryCacheItem.Value
-          | ((ulong)collisionBits << COUNT_HEADERINDEX_BITS);
+          | ((ulong)collisionBits << COUNT_BATCHINDEX_BITS);
 
         PrimaryCache.Add(primaryKey, uTXO);
       }
@@ -157,7 +152,7 @@ namespace BToken.Accounting
 
       static void SpendUTXO(ref ulong uTXO, int outputIndex, out bool areAllOutputpsSpent)
       {
-        ulong mask = (ulong)1 << (CountHeaderPlusCollisionBits + outputIndex);
+        ulong mask = (ulong)1 << (CountNonOutputBits + outputIndex);
         if ((uTXO & mask) != 0x00)
         {
           throw new UTXOException(string.Format(

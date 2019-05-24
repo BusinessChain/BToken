@@ -24,8 +24,9 @@ namespace BToken.Accounting
       }
 
       public abstract bool TryParseUTXO(
+        int batchIndex,
         byte[] headerHash, 
-        int lengthUTXOBits, 
+        int countTXOutputs, 
         out UTXOItem uTXOIndexDataItem);
 
       public abstract bool TrySetCollisionBit(int primaryKey, int collisionAddress);

@@ -24,22 +24,14 @@ namespace BToken.Accounting
     const int CACHE_ARCHIVING_INTERVAL = 100;
     UTXOTable[] Tables;
 
-    const int BYTE_LENGTH_VERSION = 4;
-    const int BYTE_LENGTH_OUTPUT_VALUE = 8;
-    const int BYTE_LENGTH_LOCK_TIME = 4;
-
-
-    const int COUNT_HEADER_BYTES = 80;
-    const int OFFSET_INDEX_HASH_PREVIOUS = 4;
-    const int OFFSET_INDEX_MERKLE_ROOT = 36;
     const int HASH_BYTE_SIZE = 32;
-    const int TWICE_HASH_BYTE_SIZE = HASH_BYTE_SIZE << 1;
 
-    const int COUNT_HEADERINDEX_BITS = 26;
-    const int COUNT_COLLISION_BITS = 3;
-
-    static readonly int CountHeaderBytes = (COUNT_HEADERINDEX_BITS + 7) / 8;
-    static readonly int CountHeaderPlusCollisionBits = COUNT_HEADERINDEX_BITS + COUNT_COLLISION_BITS;
+    const int COUNT_BATCHINDEX_BITS = 16;
+    const int COUNT_HEADER_BITS = 4;
+    const int COUNT_COLLISION_BITS = 6;
+    
+    static readonly int CountNonOutputBits = 
+      COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS + COUNT_COLLISION_BITS;
 
     long UTCTimeStartBuild;
     long TimeMergingTotalTicks;
@@ -191,20 +183,7 @@ namespace BToken.Accounting
         UTXOBatch batch = await BatchQueue.ReceiveAsync().ConfigureAwait(false);
 
         batch.StopwatchParse.Start();
-
-        int bufferIndex = 0;
-        while (bufferIndex < batch.Buffer.Length)
-        {
-          try
-          {
-            ParseBlock(batch, ref bufferIndex);
-          }
-          catch (Exception ex)
-          {
-            Console.WriteLine(ex.Message);
-          }
-        }
-
+        ParseBatch(batch);
         batch.StopwatchParse.Stop();
 
         lock (MergeLOCK)
@@ -219,15 +198,7 @@ namespace BToken.Accounting
         while (true)
         {
           batch.StopwatchMerging.Start();
-          try
-          {
-            InsertUTXOs(batch);
-            SpendUTXOs(batch);
-          }
-          catch (Exception ex)
-          {
-            Console.WriteLine(ex.Message);
-          }
+          MergeBatch(batch);
           batch.StopwatchMerging.Stop();
 
           if (IndexBatchMerge % CACHE_ARCHIVING_INTERVAL == 0 && IndexBatchMerge > 0)
@@ -254,6 +225,18 @@ namespace BToken.Accounting
       }
     }
     
+    void MergeBatch(UTXOBatch batch)
+    {
+      try
+      {
+        InsertUTXOs(batch);
+        SpendUTXOs(batch);
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine(ex.Message);
+      }
+    }
     void InsertUTXOs(UTXOBatch batch)
     {
       foreach(Block block in batch.Blocks)
