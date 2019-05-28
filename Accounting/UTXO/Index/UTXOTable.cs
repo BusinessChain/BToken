@@ -10,16 +10,27 @@ namespace BToken.Accounting
   {
     abstract class UTXOTable
     {
+      public int Address;
+      public int OffsetCollisionBits;
       protected string Label;
+
       string DirectoryPath;
 
-      public int Address;
 
+      public int PrimaryKey;
 
-      protected UTXOTable(int address, string label)
+      protected UTXOTable(
+        int address,
+        string label)
       {
-        Label = label;
         Address = address;
+        Label = label;
+
+        OffsetCollisionBits = 
+          COUNT_BATCHINDEX_BITS 
+          + COUNT_HEADER_BITS 
+          + address * COUNT_COLLISION_BITS_PER_TABLE;
+
         DirectoryPath = Path.Combine(RootPath, Label);
       }
 
@@ -29,48 +40,62 @@ namespace BToken.Accounting
         int countTXOutputs, 
         out UTXOItem uTXOIndexDataItem);
 
-      public abstract bool TrySetCollisionBit(int primaryKey, int collisionAddress);
-      public abstract void SecondaryCacheAddUTXO(UTXOItem uTXODataItem);
-      public abstract void PrimaryCacheAddUTXO(UTXOItem uTXODataItem);
+      public abstract bool PrimaryTableContainsKey(int primaryKey);
+      public abstract void IncrementCollisionBits(int primaryKey, int collisionAddress);
+      public abstract void SecondaryTableAddUTXO(UTXOItem uTXODataItem);
+      public abstract void PrimaryTableAddUTXO(UTXOItem uTXODataItem);
 
       public abstract void SpendPrimaryUTXO(TXInput input, out bool areAllOutputpsSpent);
-      public abstract bool TryGetValueInPrimaryCache(int primaryKey);
-      public abstract bool IsCollision(int cacheAddress);
-      public abstract void RemovePrimary(int primaryKey);
-      public abstract void ResolveCollision(int primaryKey, uint collisionBits);
-      
-      public bool TrySpendSecondary(
+      public abstract bool TryGetValueInPrimaryTable(int primaryKey);
+      public abstract bool HasCollision(int cacheAddress);
+      public abstract void RemovePrimary();
+      public abstract void ResolveCollision(UTXOTable tablePrimary);
+      public abstract uint GetCollisionBits();
+      public abstract bool AreCollisionBitsFull();
+
+      public bool TrySpendCollision(
         TXInput input,
-        UTXOTable primaryCache)
+        UTXOTable tablePrimary)
       {
-        if (TryGetValueInSecondaryCache(input.TXIDOutput))
+        if (TryGetValueInCollisionTable(input.TXIDOutput))
         {
-          SpendSecondaryUTXO(input.TXIDOutput, input.OutputIndex, out bool areAllOutputpsSpent);
+          SpendCollisionUTXO(
+            input.TXIDOutput, 
+            input.OutputIndex,
+            out bool allOutputsSpent);
 
-          if (areAllOutputpsSpent)
+          if (allOutputsSpent)
           {
-            RemoveSecondary(input.PrimaryKeyTXIDOutput, input.TXIDOutput, out bool hasMoreCollisions);
+            RemoveCollision(input.TXIDOutput);
 
-            if (!hasMoreCollisions)
+            if (tablePrimary.AreCollisionBitsFull())
             {
-              primaryCache.ClearCollisionBit(input.PrimaryKeyTXIDOutput, Address);
+              if (HasCountCollisions(
+                input.PrimaryKeyTXIDOutput, 
+                COUNT_COLLISIONS_MAX))
+              {
+                return true;
+              }
             }
+
+            tablePrimary.DecrementCollisionBits(Address);
+            tablePrimary.UpdateUTXOInTable();
           }
 
           return true;
         }
-        else
-        {
-          return false;
-        }
-      }
-      protected abstract void SpendSecondaryUTXO(byte[] key, int outputIndex, out bool areAllOutputpsSpent);
-      protected abstract bool TryGetValueInSecondaryCache(byte[] key);
-      protected abstract void RemoveSecondary(int primaryKey, byte[] key, out bool hasMoreCollisions);
-      protected abstract void ClearCollisionBit(int primaryKey, int cacheAddress);
 
-      protected abstract int GetCountPrimaryCacheItems();
-      protected abstract int GetCountSecondaryCacheItems();
+        return false;
+      }
+      protected abstract void SpendCollisionUTXO(byte[] key, int outputIndex, out bool areAllOutputpsSpent);
+      protected abstract bool TryGetValueInCollisionTable(byte[] key);
+      protected abstract void RemoveCollision(byte[] key);
+      protected abstract bool HasCountCollisions(int primaryKey, uint countCollisions);
+      public abstract void DecrementCollisionBits(int tableAddress);
+      protected abstract void UpdateUTXOInTable();
+
+      protected abstract int GetCountPrimaryTableItems();
+      protected abstract int GetCountSecondaryTableItems();
 
       public string GetLabelsMetricsCSV()
       {
@@ -78,7 +103,7 @@ namespace BToken.Accounting
       }
       public string GetMetricsCSV()
       {
-        return GetCountPrimaryCacheItems() + "," + GetCountSecondaryCacheItems();
+        return GetCountPrimaryTableItems() + "," + GetCountSecondaryTableItems();
       }
 
       public void BackupToDisk()
@@ -92,15 +117,15 @@ namespace BToken.Accounting
         
         writeToFileTask = WriteFileAsync(
           Path.Combine(directoryPath, "SecondaryCache"), 
-          GetSecondaryData());
+          GetCollisionData());
       }
 
       protected abstract byte[] GetPrimaryData();
-      protected abstract byte[] GetSecondaryData();
+      protected abstract byte[] GetCollisionData();
 
 
       protected abstract void LoadPrimaryData(byte[] buffer);
-      protected abstract void LoadSecondaryData(byte[] buffer);
+      protected abstract void LoadCollisionData(byte[] buffer);
       
       public abstract void Clear();
 
@@ -110,7 +135,7 @@ namespace BToken.Accounting
           await LoadFileAsync(
             Path.Combine(DirectoryPath, "PrimaryCache")));
 
-        LoadSecondaryData(
+        LoadCollisionData(
           await LoadFileAsync(
             Path.Combine(DirectoryPath, "SecondaryCache")));
       }

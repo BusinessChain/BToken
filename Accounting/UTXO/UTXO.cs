@@ -6,8 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using System.Security.Cryptography;
-using System.Runtime.Remoting.Metadata.W3cXsd2001;
 
 using BToken.Chaining;
 using BToken.Networking;
@@ -20,22 +18,30 @@ namespace BToken.Accounting
     Network Network;
 
     protected static string RootPath = "UTXO";
-
-    const int CACHE_ARCHIVING_INTERVAL = 100;
-    UTXOTable[] Tables;
+    const int TABLE_ARCHIVING_INTERVAL = 100;
 
     const int HASH_BYTE_SIZE = 32;
 
     const int COUNT_BATCHINDEX_BITS = 16;
     const int COUNT_HEADER_BITS = 4;
-    const int COUNT_COLLISION_BITS = 6;
-    
-    static readonly int CountNonOutputBits = 
-      COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS + COUNT_COLLISION_BITS;
+    const int COUNT_COLLISION_BITS_PER_TABLE = 2;
+
+    static readonly uint MaskCollisionBits = 0x03F00000;
+
+    UTXOTable[] Tables = new UTXOTable[]{
+        new UTXOTableUInt32(),
+        new UTXOTableULong64(),
+        new UTXOTableUInt32Array()};
+
+    const int COUNT_COLLISIONS_MAX = 3;
+
+    static readonly int CountNonOutputBits =
+      COUNT_BATCHINDEX_BITS +
+      COUNT_HEADER_BITS +
+      COUNT_COLLISION_BITS_PER_TABLE * 3;
 
     long UTCTimeStartBuild;
     long TimeMergingTotalTicks;
-    static Stopwatch StopwatchResolveCollision = new Stopwatch();
 
     BufferBlock<UTXOBatch> BatchQueue = new BufferBlock<UTXOBatch>();
     readonly object BatchQueueLOCK = new object();
@@ -64,11 +70,6 @@ namespace BToken.Accounting
       Headerchain = headerchain;
       ChainHeader = Headerchain.GenesisHeader;
       Network = network;
-
-      Tables = new UTXOTable[]{
-        new UTXOTableUInt32(),
-        new UTXOTableULong64(),
-        new UTXOTableByteArray()};
     }
 
     public async Task StartAsync()
@@ -201,7 +202,7 @@ namespace BToken.Accounting
           MergeBatch(batch);
           batch.StopwatchMerging.Stop();
 
-          if (IndexBatchMerge % CACHE_ARCHIVING_INTERVAL == 0 && IndexBatchMerge > 0)
+          if (IndexBatchMerge % TABLE_ARCHIVING_INTERVAL == 0 && IndexBatchMerge > 0)
           {
             //BackupToDisk();
           }
@@ -248,14 +249,16 @@ namespace BToken.Accounting
           {
             for (int cc = 0; cc < Tables.Length; cc += 1)
             {
-              if (Tables[cc].TrySetCollisionBit(uTXOItem.PrimaryKey, c))
+              if (Tables[cc].PrimaryTableContainsKey(uTXOItem.PrimaryKey))
               {
-                Tables[c].SecondaryCacheAddUTXO(uTXOItem);
+                Tables[cc].IncrementCollisionBits(uTXOItem.PrimaryKey, c);
+
+                Tables[c].SecondaryTableAddUTXO(uTXOItem);
                 goto LoopUTXOItems;
               }
             }
 
-            Tables[c].PrimaryCacheAddUTXO(uTXOItem);
+            Tables[c].PrimaryTableAddUTXO(uTXOItem);
           }
         }
       }
@@ -274,23 +277,18 @@ namespace BToken.Accounting
                         
             for (int c = 0; c < Tables.Length; c += 1)
             {
-              UTXOTable table = Tables[c];
+              UTXOTable tablePrimary = Tables[c];
 
-              if (table.TryGetValueInPrimaryCache(input.PrimaryKeyTXIDOutput))
+              if (tablePrimary.TryGetValueInPrimaryTable(input.PrimaryKeyTXIDOutput))
               {
                 UTXOTable tableCollision = null;
-                uint collisionBits = 0;
                 for (int cc = 0; cc < Tables.Length; cc += 1)
                 {
-                  if (table.IsCollision(cc))
+                  if (tablePrimary.HasCollision(cc))
                   {
                     tableCollision = Tables[cc];
 
-                    collisionBits |= (uint)(1 << cc);
-
-                    if (tableCollision.TrySpendSecondary(
-                      input,
-                      table))
+                    if (tableCollision.TrySpendCollision(input, tablePrimary))
                     {
                       i += 1;
                       goto LoopSpendUTXOs;
@@ -298,17 +296,15 @@ namespace BToken.Accounting
                   }
                 }
 
-                table.SpendPrimaryUTXO(input, out bool areAllOutputsSpent);
+                tablePrimary.SpendPrimaryUTXO(input, out bool allOutputsSpent);
 
-                if (areAllOutputsSpent)
+                if (allOutputsSpent)
                 {
-                  table.RemovePrimary(input.PrimaryKeyTXIDOutput);
+                  tablePrimary.RemovePrimary();
 
                   if (tableCollision != null)
                   {
-                    StopwatchResolveCollision.Start();
-                    tableCollision.ResolveCollision(input.PrimaryKeyTXIDOutput, collisionBits);
-                    StopwatchResolveCollision.Stop();
+                    tableCollision.ResolveCollision(tablePrimary);
                   }
                 }
 
@@ -400,14 +396,13 @@ namespace BToken.Accounting
       TimeMergingTotalTicks += batch.StopwatchMerging.ElapsedTicks;
 
       string metricsCSV = string.Format(
-        "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
+        "{0},{1},{2},{3},{4},{5},{6},{7},{8}",
         batch.BatchIndex,
         BlockHeight,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartBuild,
         timeParsePlusMerge,
         ratio,
         TimeMergingTotalTicks,
-        StopwatchResolveCollision.ElapsedTicks,
         Tables[0].GetMetricsCSV(),
         Tables[1].GetMetricsCSV(),
         Tables[2].GetMetricsCSV());

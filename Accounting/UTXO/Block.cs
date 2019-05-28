@@ -29,7 +29,7 @@ namespace BToken.Accounting
         UTXOItemsPerTable = new UTXOItem[][]{
           new UTXOItemUInt32[tXCount],
           new UTXOItemULong64[tXCount],
-          new UTXOItemByteArray[tXCount]};
+          new UTXOItemUInt32Array[tXCount]};
 
         IndexesUTXOItems = new int[UTXOItemsPerTable.Length];
 
