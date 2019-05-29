@@ -266,7 +266,7 @@ namespace BToken.Accounting
     void SpendUTXOs(UTXOBatch batch)
     {
       foreach (Block block in batch.Blocks)
-      {        
+      {
         for(int t = 0; t < block.TXCount; t += 1)
         {
           int i = 0;

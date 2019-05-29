@@ -96,6 +96,7 @@ namespace BToken.Accounting
       }
       public override bool TryGetValueInPrimaryTable(int primaryKey)
       {
+        PrimaryKey = primaryKey; // cache
         return PrimaryTable.TryGetValue(primaryKey, out UTXOPrimary);
       }
       public override bool HasCollision(int cacheAddress)

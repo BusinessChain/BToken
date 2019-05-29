@@ -17,7 +17,7 @@ namespace BToken.Accounting
       ulong UTXOPrimary;
       ulong UTXOSecondary;
 
-      const int COUNT_LONG_BITS = sizeof(long) * 8;
+      const int COUNT_LONG_BITS = 64;
 
       static readonly ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
       static readonly ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
@@ -126,6 +126,7 @@ namespace BToken.Accounting
       }
       public override bool TryGetValueInPrimaryTable(int primaryKey)
       {
+        PrimaryKey = primaryKey; // cache
         return PrimaryTable.TryGetValue(primaryKey, out UTXOPrimary);
       }
       public override bool HasCollision(int cacheAddress)

@@ -15,7 +15,7 @@ namespace BToken.Accounting
       uint UTXOPrimary;
       uint UTXOCollision;
 
-      const int COUNT_INTEGER_BITS = sizeof(int) * 8;
+      const int COUNT_INTEGER_BITS = 32;
 
       static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountNonOutputBits;
       static readonly uint MaskBatchIndex = ~(uint.MaxValue << COUNT_BATCHINDEX_BITS);
