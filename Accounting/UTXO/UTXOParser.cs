@@ -172,12 +172,8 @@ namespace BToken.Accounting
         batch.BufferIndex += lengthLockingScript;
       }
 
-
       int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
-
-      if (batch.BatchIndex == 36 && countTXOutputs > 3)
-      { }
-
+      
       for (int c = 0; c < Tables.Length; c += 1)
       {
         if (Tables[c].TryParseUTXO(
@@ -207,7 +203,7 @@ namespace BToken.Accounting
           
           uTXOItem.PrimaryKey = BitConverter.ToInt32(tXHash, 0);
           uTXOItem.Hash = tXHash;
-
+          
           return tXHash;
         }
       }

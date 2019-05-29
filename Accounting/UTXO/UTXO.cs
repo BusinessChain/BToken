@@ -257,7 +257,6 @@ namespace BToken.Accounting
                 goto LoopUTXOItems;
               }
             }
-
             Tables[c].PrimaryTableAddUTXO(uTXOItem);
           }
         }
