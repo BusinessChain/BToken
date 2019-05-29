@@ -14,6 +14,7 @@ namespace BToken.Accounting
     {
       public int BatchIndex;
       public byte[] Buffer;
+      public int BufferIndex;
       public List<Block> Blocks = new List<Block>(200);
       public int[] IndexesUTXOItems = new int[3];
 
