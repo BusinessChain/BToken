@@ -74,6 +74,7 @@ namespace BToken.Accounting
         if (collisionBits == MasksCollisionBitsTwo[collisionAddress])
         {
           PrimaryTable[primaryKey] |= MasksCollisionBitsFull[collisionAddress];
+          return;
         }
       }
       public override void SecondaryTableAddUTXO(UTXOItem uTXOItem)
@@ -181,6 +182,7 @@ namespace BToken.Accounting
           return;
         }
 
+        UTXOPrimary &= MasksCollisionBitsClear[tableAddress];
         UTXOPrimary |= MasksCollisionBitsTwo[tableAddress];
       }
       protected override void UpdateUTXOInTable()

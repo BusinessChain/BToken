@@ -19,9 +19,7 @@ namespace BToken.Accounting
     {
       UTXO UTXO;
       byte[][] HeaderHashes;
-
-      public INetworkChannel Channel { get; private set; }
-
+      
       const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
 
@@ -37,38 +35,37 @@ namespace BToken.Accounting
 
       public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
       {
-        Channel = channel;
+        await channel.SendMessageAsync(
+          new GetDataMessage(
+            HeaderHashes
+            .Skip(Blocks.Count)
+            .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
+            .ToList()));
 
-        List<Inventory> inventories = HeaderHashes
-          .Skip(Blocks.Count)
-          .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
-          .ToList();
-
-        await Channel.SendMessageAsync(new GetDataMessage(inventories));
-
-        var CancellationGetBlock =
+        var cancellationGetBlock =
           new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
         
         while (Blocks.Count < HeaderHashes.Length)
         {
-          NetworkMessage networkMessage = await Channel.ReceiveSessionMessageAsync(CancellationGetBlock.Token);
+          //NetworkMessage networkMessage = 
+          //  await channel.ReceiveSessionMessageAsync(cancellationGetBlock.Token);
 
-          if (networkMessage.Command == "block")
-          {
-            //List<Block> blocks = UTXO.ParseBlocks(this, networkMessage.Payload);
+          //if (networkMessage.Command == "block")
+          //{
+          //  List<Block> blocks = UTXO.ParseBlocks(this, networkMessage.Payload);
 
-            //blocks[0].BlockBytes = networkMessage.Payload;
-            //Blocks.Add(blocks[0]);
+          //  blocks[0].BlockBytes = networkMessage.Payload;
+          //  Blocks.Add(blocks[0]);
 
-            //Console.WriteLine("{0} Downloaded block {1}",
-            //  Channel.GetIdentification(),
-            //  Blocks.Last().HeaderHash.ToHexString());
-          }
+          //  Console.WriteLine("{0} Downloaded block {1}",
+          //    channel.GetIdentification(),
+          //    Blocks.Last().HeaderHash.ToHexString());
+          //}
         }
 
-        lock (UTXO.MergeLOCK)
+        lock (UTXO.LOCK_IndexMerge)
         {
-          if (UTXO.IndexBatchMerge != BatchIndex)
+          if (UTXO.IndexMerge != BatchIndex)
           {
             UTXO.QueueBatchsMerge.Add(BatchIndex, this);
             return;

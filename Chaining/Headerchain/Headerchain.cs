@@ -186,19 +186,19 @@ namespace BToken.Chaining
         {
           NetworkHeader header = archiveReader.GetNextHeader();
 
-          //while (header != null)
-          //{
-          //  await InsertHeaderAsync(header);
-          //  header = archiveReader.GetNextHeader();
-          //}
-
-          int countHeader = 0;
-          while (header != null && countHeader < 200000)
+          while (header != null)
           {
-            countHeader += 1;
             await InsertHeaderAsync(header);
             header = archiveReader.GetNextHeader();
           }
+
+          //int countHeader = 0;
+          //while (header != null && countHeader < 200000)
+          //{
+          //  countHeader += 1;
+          //  await InsertHeaderAsync(header);
+          //  header = archiveReader.GetNextHeader();
+          //}
         }
       }
       catch (Exception ex)

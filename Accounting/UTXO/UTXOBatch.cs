@@ -29,6 +29,7 @@ namespace BToken.Accounting
         new TaskCompletionSource<UTXOBatch>();
 
       public Stopwatch StopwatchMerging = new Stopwatch();
+      public Stopwatch StopwatchResolver = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
 
 
