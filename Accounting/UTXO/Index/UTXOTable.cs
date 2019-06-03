@@ -116,9 +116,9 @@ namespace BToken.Accounting
         Task writeToFileTask = WriteFileAsync(
           Path.Combine(directoryPath, "PrimaryTable"), 
           GetPrimaryData());
-        
+
         writeToFileTask = WriteFileAsync(
-          Path.Combine(directoryPath, "CollisionTable"), 
+          Path.Combine(directoryPath, "CollisionTable"),
           GetCollisionData());
       }
 

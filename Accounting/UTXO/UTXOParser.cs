@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Security.Cryptography;
 
 using BToken.Chaining;
@@ -39,12 +35,20 @@ namespace BToken.Accounting
 
         ValidateHeaderHash(headerHash, batch);
 
+        int startIndexBlock = batch.BufferIndex;
         int indexMerkleRoot = batch.BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
 
         batch.BufferIndex += COUNT_HEADER_BYTES;
 
         int tXCount = VarInt.GetInt32(batch.Buffer, ref batch.BufferIndex);
-        var block = new Block(tXCount, headerHash);
+
+        var block = new Block(
+          batch.Buffer,
+          startIndexBlock,
+          batch.BufferIndex,
+          headerHash, 
+          tXCount);
+
         batch.PushBlock(block);
 
         if (tXCount == 1)
@@ -110,7 +114,11 @@ namespace BToken.Accounting
     {
       if (batch.ChainHeader == null)
       {
-        batch.ChainHeader = Headerchain.ReadHeader(headerHash, batch.SHA256Generator);
+        batch.ChainHeader = Headerchain.ReadHeader(
+          headerHash, 
+          batch.SHA256Generator);
+
+        batch.HeaderHashPrevious = batch.ChainHeader.NetworkHeader.HashPrevious;
       }
 
       byte[] headerHashValidator;
@@ -195,11 +203,14 @@ namespace BToken.Accounting
 
           batch.BufferIndex += BYTE_LENGTH_LOCK_TIME;
 
+          int tXLength = batch.BufferIndex - tXStartIndex;
+          block.Length += tXLength;
+
           byte[] tXHash = batch.SHA256Generator.ComputeHash(
            batch.SHA256Generator.ComputeHash(
              batch.Buffer,
              tXStartIndex,
-             batch.BufferIndex - tXStartIndex));
+             tXLength));
           
           uTXOItem.PrimaryKey = BitConverter.ToInt32(tXHash, 0);
           uTXOItem.Hash = tXHash;

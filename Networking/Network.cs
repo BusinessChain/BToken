@@ -1,15 +1,10 @@
-﻿using System.Diagnostics;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-
-using BToken.Accounting;
 
 
 namespace BToken.Networking
@@ -22,7 +17,7 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-    const int PEERS_COUNT_OUTBOUND = 8;
+    const int PEERS_COUNT_OUTBOUND = 1;
     const int PEERS_COUNT_INBOUND = 8;
 
     static UInt64 Nonce;

@@ -140,6 +140,12 @@ namespace BToken.Chaining
       Locator.Reorganize();
     }
 
+    public ChainHeader ReadHeader(byte[] headerHash)
+    {
+      SHA256 sHA256Generator = SHA256.Create();
+
+      return ReadHeader(headerHash, sHA256Generator);
+    }
     public ChainHeader ReadHeader(byte[] headerHash, SHA256 sHA256Generator)
     {
       int key = BitConverter.ToInt32(headerHash, 0);

@@ -208,7 +208,7 @@ namespace BToken.Accounting
         byte[] buffer = new byte[PrimaryTable.Count << 3];
 
         int index = 0;
-        foreach(KeyValuePair<int, uint> keyValuePair in PrimaryTable)
+        foreach (KeyValuePair<int, uint> keyValuePair in PrimaryTable)
         {
           BitConverter.GetBytes(keyValuePair.Key).CopyTo(buffer, index);
           index += 4;

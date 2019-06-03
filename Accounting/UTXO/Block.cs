@@ -11,18 +11,27 @@ namespace BToken.Accounting
     class Block
     {
       public byte[] Buffer;
+      public int StartIndex;
+      public int Length;
+
       public byte[] HeaderHash;
-      public string HeaderHashString;
 
       public int TXCount;
       public UTXOItem[][] UTXOItemsPerTable;
       public int[] IndexesUTXOItems;
       public TXInput[][] InputsPerTX;
 
-      public Block(int tXCount, byte[] headerHash)
+      public Block(
+        byte[] buffer,
+        int startIndexBlock,
+        int startIndexTXs,
+        byte[] headerHash,
+        int tXCount)
       {
+        Buffer = buffer;
+        StartIndex = startIndexBlock;
+        Length = startIndexTXs - startIndexBlock;
         HeaderHash = headerHash;
-        HeaderHashString = headerHash.ToHexString();
 
         TXCount = tXCount;
 
