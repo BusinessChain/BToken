@@ -59,15 +59,21 @@ namespace BToken.Accounting
             UTXO.ParseBatch(Batch);
             Batch.StopwatchParse.Stop();
 
-            Console.WriteLine("{0} Downloaded block {1}",
-              channel.GetIdentification(),
-              Batch.Blocks.Last().HeaderHash.ToHexString());
+            //Console.WriteLine("{0}, {1} Downloaded block {2}",
+            //  DateTime.Now,
+            //  channel.GetIdentification(),
+            //  Batch.Blocks.Last().HeaderHash.ToHexString());
           }
         }
 
-        await UTXO.MergeBatchAsync(Batch);
+        Console.WriteLine("{0}, {1} Downloaded batch {2}",
+          DateTime.Now,
+          channel.GetIdentification(),
+          Batch.BatchIndex);
 
-        UTXO.ArchiveBatch(Batch);
+        await UTXO.MergeBatchAsync(
+          Batch,
+          enableBlockArchiving: true);
       }
     }
   }

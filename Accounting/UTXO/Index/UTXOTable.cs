@@ -99,10 +99,6 @@ namespace BToken.Accounting
       protected abstract int GetCountPrimaryTableItems();
       protected abstract int GetCountSecondaryTableItems();
 
-      public string GetLabelsMetricsCSV()
-      {
-        return Label + "PrimaryTable," + Label + "CollisionTable";
-      }
       public string GetMetricsCSV()
       {
         return GetCountPrimaryTableItems() + "," + GetCountSecondaryTableItems();

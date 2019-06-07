@@ -263,25 +263,18 @@ namespace BToken.Accounting
         int uintLength;
         uint[] value;
 
-        try
+        while (index < buffer.Length)
         {
-          while (index < buffer.Length)
-          {
-            key = BitConverter.ToInt32(buffer, index);
-            index += 4;
+          key = BitConverter.ToInt32(buffer, index);
+          index += 4;
 
-            int byteLength = VarInt.GetInt32(buffer, ref index);
-            uintLength = byteLength >> 2;
-            value = new uint[uintLength];
-            Buffer.BlockCopy(buffer, index, value, 0, byteLength);
-            index += byteLength;
+          int byteLength = VarInt.GetInt32(buffer, ref index);
+          uintLength = byteLength >> 2;
+          value = new uint[uintLength];
+          Buffer.BlockCopy(buffer, index, value, 0, byteLength);
+          index += byteLength;
 
-            PrimaryTable.Add(key, value);
-          }
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine(ex.Message);
+          PrimaryTable.Add(key, value);
         }
       }
       protected override void LoadCollisionData(byte[] buffer)

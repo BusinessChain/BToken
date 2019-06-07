@@ -53,30 +53,6 @@ namespace BToken.Networking
         IPEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
       }
 
-      public async Task<bool> TryStartAsync()
-      {
-        try
-        {
-          await ConnectAsync();
-
-          lock (IsDispatchedLOCK)
-          {
-            IsDispatched = false;
-          }
-
-          await ProcessNetworkMessagesAsync();
-
-          return true;
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine("Peer '{0}' threw exception: \n'{1}'",
-            IPEndPoint.Address.ToString(),
-            ex.Message);
-
-          return false;
-        }
-      }
       public async Task StartAsync()
       {
         try
@@ -92,10 +68,6 @@ namespace BToken.Networking
         }
         catch (Exception ex)
         {
-          Console.WriteLine("Peer '{0}' threw exception: \n'{1}'",
-            IPEndPoint.Address.ToString(),
-            ex.Message);
-
           throw ex;
         }
         finally
@@ -260,12 +232,12 @@ namespace BToken.Networking
           await session.RunAsync(this, cancellationToken);
           return true;
         }
-        catch (Exception ex)
+        catch // (Exception ex)
         {
-          Console.WriteLine("Session '{0}' with peer '{1}' ended with exception: \n'{2}'",
-            session.GetType().ToString(),
-            IPEndPoint.Address.ToString(),
-            ex.Message);
+          //Console.WriteLine("Session '{0}' with peer '{1}' ended with exception: \n'{2}'",
+          //  session.GetType().ToString(),
+          //  IPEndPoint.Address.ToString(),
+          //  ex.Message);
 
           return false;
         }

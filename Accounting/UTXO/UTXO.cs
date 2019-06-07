@@ -16,7 +16,7 @@ namespace BToken.Accounting
     Network Network;
 
     protected static string RootPath = "UTXO";
-    const int TABLE_ARCHIVING_INTERVAL = 300;
+    const int UTXOSTATE_ARCHIVING_INTERVAL = 50;
 
     const int HASH_BYTE_SIZE = 32;
 
@@ -44,11 +44,10 @@ namespace BToken.Accounting
     const int COUNT_BATCHES_PARALLEL = 1;
     const int BATCHQUEUE_MAX_COUNT = 16;
     Dictionary<int, UTXOBatch> QueueBatchsMerge = new Dictionary<int, UTXOBatch>();
-    readonly object LOCK_IndexLoad = new object();
-    int IndexLoad;
-    readonly object LOCK_IndexMerge = new object();
-    int IndexMerge;
-    int BlockHeight;
+    readonly object LOCK_IndexFilePartition = new object();
+    readonly object LOCK_BatchIndexMerge = new object();
+    int BatchIndexMerge = 0;
+    int BlockHeight = 0;
     StreamWriter BuildWriter;
 
     const int COUNT_BLOCK_DOWNLOAD_BATCH = 10;
@@ -57,13 +56,15 @@ namespace BToken.Accounting
     List<Block> BlocksPartitioned = new List<Block>();
     int CountTXsPartitioned = 0;
     int FilePartitionIndex = 0;
-    const int MAX_COUNT_TXS_IN_PARTITION = 10000;
+    const int MAX_COUNT_TXS_IN_PARTITION = 100;
 
     Headerchain.ChainHeader ChainHeaderMergedLast;
+    BitcoinGenesisBlock GenesisBlock;
 
 
-    public UTXO(Headerchain headerchain, Network network)
+    public UTXO(BitcoinGenesisBlock genesisBlock, Headerchain headerchain, Network network)
     {
+      GenesisBlock = genesisBlock;
       Headerchain = headerchain;
       Network = network;
     }
@@ -73,9 +74,7 @@ namespace BToken.Accounting
       try
       {
         await LoadUTXOState();
-
-        await Task.WhenAll(Tables
-          .Select(c => { return c.LoadAsync(); }));
+        await Task.WhenAll(Tables.Select(c => { return c.LoadAsync(); }));
       }
       catch
       {
@@ -84,21 +83,31 @@ namespace BToken.Accounting
           Tables[c].Clear();
         }
 
-        // Merge Genesis Block
+        InsertGenesisBlock();
 
-        IndexMerge = 0;
-        BlockHeight = 0;
-
+        ChainHeaderMergedLast = Headerchain.GenesisHeader;
       }
 
       await BuildAsync();
+    }
+    void InsertGenesisBlock()
+    {
+      UTXOBatch genesisBatch = new UTXOBatch()
+      {
+        BatchIndex = 0,
+        Buffer = GenesisBlock.BlockBytes
+      };
+
+      ParseBatch(genesisBatch);
+
+      InsertUTXOs(genesisBatch);
     }
 
     async Task LoadUTXOState()
     {
       byte[] uTXOState = await LoadFileAsync(Path.Combine(RootPath, "UTXOState"));
-      IndexMerge = BitConverter.ToInt32(uTXOState, 0) + 1;
-      IndexLoad = IndexMerge;
+      BatchIndexMerge = BitConverter.ToInt32(uTXOState, 0) + 1;
+      FilePartitionIndex = BatchIndexMerge;
       BlockHeight = BitConverter.ToInt32(uTXOState, 4);
 
       byte[] chainHeaderHash = new byte[HASH_BYTE_SIZE];
@@ -120,19 +129,6 @@ namespace BToken.Accounting
           FileShare.Read)))
       {
         BuildWriter = buildWriter;
-
-        string labelsCSV = string.Format(
-          "BatchIndex," +
-          "Block height," +
-          "Time parse," +
-          "Ratio merge/parse," +
-          "Ratio resolve/merge," +
-          Tables[0].GetLabelsMetricsCSV() + "," +
-          Tables[1].GetLabelsMetricsCSV() + "," +
-          Tables[2].GetLabelsMetricsCSV());
-
-        Console.WriteLine(labelsCSV);
-        BuildWriter.WriteLine(labelsCSV);
 
         UTCTimeStartBuild = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -156,10 +152,10 @@ namespace BToken.Accounting
       {
         while (true)
         {
-          lock (LOCK_IndexLoad)
+          lock (LOCK_IndexFilePartition)
           {
-            batchIndex = IndexLoad;
-            IndexLoad += 1;
+            batchIndex = FilePartitionIndex;
+            FilePartitionIndex += 1;
           }
 
           if (!BlockArchiver.Exists(batchIndex, out string filePath))
@@ -177,7 +173,9 @@ namespace BToken.Accounting
           ParseBatch(batch);
           batch.StopwatchParse.Stop();
 
-          await MergeBatchAsync(batch);
+          await MergeBatchAsync(
+            batch, 
+            enableBlockArchiving: false);
         }
       }
       catch (Exception ex)
@@ -188,10 +186,10 @@ namespace BToken.Accounting
     }
     async Task LoadBatchesFromNetworkAsync()
     {
-      int batchIndex = IndexMerge;
-      FilePartitionIndex = IndexMerge;
+      int batchIndex = BatchIndexMerge;
+      FilePartitionIndex = BatchIndexMerge;
       var blockDownloadTasks = new List<Task>(COUNT_DOWNLOAD_TASKS);
-      Headerchain.ChainHeader chainHeaderFetchHashes = ChainHeaderMergedLast;
+      Headerchain.ChainHeader chainHeaderFetchHashes = ChainHeaderMergedLast.HeadersNext[0];
 
       while (TryGetHeaderHashes(out byte[][] headerHashes, ref chainHeaderFetchHashes))
       {
@@ -233,13 +231,15 @@ namespace BToken.Accounting
       return true;
     }
 
-    async Task MergeBatchAsync(UTXOBatch batch)
+    async Task MergeBatchAsync(
+      UTXOBatch batch, 
+      bool enableBlockArchiving)
     {
       bool isBatchQueued = false;
 
-      lock (LOCK_IndexMerge)
+      lock (LOCK_BatchIndexMerge)
       {
-        if (IndexMerge != batch.BatchIndex)
+        if (BatchIndexMerge != batch.BatchIndex)
         {
           isBatchQueued = true;
           QueueBatchsMerge.Add(batch.BatchIndex, batch);
@@ -258,12 +258,12 @@ namespace BToken.Accounting
 
       while (true)
       {
-        if (ChainHeaderMergedLast != null && 
-          !batch.HeaderHashPrevious.IsEqual(ChainHeaderMergedLast.GetHeaderHash()))
+        if (!batch.HeaderHashPrevious.IsEqual(ChainHeaderMergedLast.GetHeaderHash())
+          && batch.BatchIndex > 0)
         {
           throw new UTXOException(
-            string.Format("Batch {0} with Hash previous \n{1} in " +
-            "does not link to last hash chain \n{2}.",
+            string.Format("Batch {0} with Hash previous \n{1} " +
+            "does not link to last block merged \n{2}.",
             batch.BatchIndex,
             batch.HeaderHashPrevious.ToHexString(),
             ChainHeaderMergedLast.GetHeaderHash().ToHexString()));
@@ -277,21 +277,26 @@ namespace BToken.Accounting
         ChainHeaderMergedLast = batch.ChainHeader.HeaderPrevious;
         BlockHeight += batch.Blocks.Count;
 
-        if (batch.BatchIndex % TABLE_ARCHIVING_INTERVAL == 0 
+        if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0
           && batch.BatchIndex > 0)
         {
-          BackupToDisk();
+          ArchiveUTXOState(BlockHeight, batch);
+        }
+
+        if (enableBlockArchiving)
+        {
+          ArchiveBlocks(batch.Blocks);
         }
 
         BatchReporting(batch);
 
-        lock (LOCK_IndexMerge)
+        lock (LOCK_BatchIndexMerge)
         {
-          IndexMerge += 1;
+          BatchIndexMerge += 1;
 
-          if (QueueBatchsMerge.TryGetValue(IndexMerge, out batch))
+          if (QueueBatchsMerge.TryGetValue(BatchIndexMerge, out batch))
           {
-            QueueBatchsMerge.Remove(IndexMerge);
+            QueueBatchsMerge.Remove(BatchIndexMerge);
             continue;
           }
 
@@ -383,20 +388,37 @@ namespace BToken.Accounting
       }
     }
 
-    void BackupToDisk()
+    void ArchiveUTXOState(int blockHeight, UTXOBatch batch)
     {
       Directory.CreateDirectory(RootPath);
 
       byte[] uTXOState = new byte[40];
-      BitConverter.GetBytes(IndexMerge).CopyTo(uTXOState, 0);
-      BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
-      ChainHeaderMergedLast.GetHeaderHash().CopyTo(uTXOState, 8);
+      BitConverter.GetBytes(FilePartitionIndex).CopyTo(uTXOState, 0);
+      BitConverter.GetBytes(blockHeight).CopyTo(uTXOState, 4);
+      batch.ChainHeader.NetworkHeader.HashPrevious.CopyTo(uTXOState, 8);
 
-      Task backupUTXOStateTask = WriteFileAsync(
-        Path.Combine(RootPath, "UTXOState"),
+      Task writeFileTask = WriteFileAsync(
+        Path.Combine(RootPath, "UTXOState"), 
         uTXOState);
 
       Parallel.ForEach(Tables, c => c.BackupToDisk());
+    }
+    void ArchiveBlocks(List<Block> blocks)
+    {
+      BlocksPartitioned.AddRange(blocks);
+      CountTXsPartitioned += blocks.Sum(b => b.TXCount);
+
+      if (CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
+      {
+        Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
+          BlocksPartitioned,
+          FilePartitionIndex);
+
+        FilePartitionIndex += 1;
+
+        BlocksPartitioned = new List<Block>();
+        CountTXsPartitioned = 0;
+      }
     }
 
     static async Task<byte[]> LoadFileAsync(string fileName)
@@ -430,39 +452,47 @@ namespace BToken.Accounting
     }
     static async Task WriteFileAsync(string filePath, byte[] buffer)
     {
-      string filePathTemp = filePath + "_temp";
-
-      using (FileStream stream = new FileStream(
-         filePathTemp,
-         FileMode.Create,
-         FileAccess.ReadWrite,
-         FileShare.Read,
-         bufferSize: 4096,
-         useAsync: true))
+      try
       {
-        await stream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-      }
+        string filePathTemp = filePath + "_temp";
 
-      if (File.Exists(filePath))
-      {
-        File.Delete(filePath);
+        using (FileStream stream = new FileStream(
+           filePathTemp,
+           FileMode.Create,
+           FileAccess.ReadWrite,
+           FileShare.Read,
+           bufferSize: 4096,
+           useAsync: true))
+        {
+          await stream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+        }
+
+        if (File.Exists(filePath))
+        {
+          File.Delete(filePath);
+        }
+        File.Move(filePathTemp, filePath);
       }
-      File.Move(filePathTemp, filePath);
+      catch(Exception ex)
+      {
+        Console.WriteLine(ex.Message);
+      }
     }
     void BatchReporting(UTXOBatch batch)
     {
       long timeParsing = batch.StopwatchParse.ElapsedMilliseconds;
-      int ratioMergeToParse = (int)((float)batch.StopwatchMerging.ElapsedMilliseconds * 100 / timeParsing);
-      int ratioResolveToMerge = (int)((float)batch.StopwatchResolver.ElapsedTicks * 100 / batch.StopwatchMerging.ElapsedTicks);
 
+      int ratioMergeToParse = 
+        (int)((float)batch.StopwatchMerging.ElapsedTicks * 100 
+        / batch.StopwatchParse.ElapsedTicks);
+      
       string metricsCSV = string.Format(
-        "{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+        "{0},{1},{2},{3},{4},{5},{6},{7}",
         batch.BatchIndex,
         BlockHeight,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartBuild,
         timeParsing,
         ratioMergeToParse,
-        ratioResolveToMerge,
         Tables[0].GetMetricsCSV(),
         Tables[1].GetMetricsCSV(),
         Tables[2].GetMetricsCSV());
@@ -470,24 +500,5 @@ namespace BToken.Accounting
       Console.WriteLine(metricsCSV);
       BuildWriter.WriteLine(metricsCSV);
     }
-        
-    void ArchiveBatch(UTXOBatch batch)
-    {
-      BlocksPartitioned.AddRange(batch.Blocks);
-      CountTXsPartitioned += batch.Blocks.Sum(b => b.TXCount);
-
-      if (CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
-      {
-        Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
-          BlocksPartitioned,
-          FilePartitionIndex);
-
-        FilePartitionIndex += 1; // should be thread safe I think.
-
-        BlocksPartitioned = new List<Block>();
-        CountTXsPartitioned = 0;
-      }
-    }
-           
   }
 }
