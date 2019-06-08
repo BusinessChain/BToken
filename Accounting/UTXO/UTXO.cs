@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -18,15 +16,13 @@ namespace BToken.Accounting
     Network Network;
 
     protected static string RootPath = "UTXO";
-    const int TABLE_ARCHIVING_INTERVAL = 100;
+    const int UTXOSTATE_ARCHIVING_INTERVAL = 50;
 
     const int HASH_BYTE_SIZE = 32;
 
     const int COUNT_BATCHINDEX_BITS = 16;
     const int COUNT_HEADER_BITS = 4;
     const int COUNT_COLLISION_BITS_PER_TABLE = 2;
-
-    static readonly uint MaskCollisionBits = 0x03F00000;
 
     UTXOTable[] Tables = new UTXOTable[]{
         new UTXOTableUInt32(),
@@ -41,17 +37,17 @@ namespace BToken.Accounting
       COUNT_COLLISION_BITS_PER_TABLE * 3;
 
     long UTCTimeStartBuild;
-    long TimeMergingTotalTicks;
 
     BufferBlock<UTXOBatch> BatchQueue = new BufferBlock<UTXOBatch>();
     readonly object BatchQueueLOCK = new object();
     List<UTXOBatch> BatchesQueued = new List<UTXOBatch>();
-    const int COUNT_BATCHES_PARALLEL = 8;
-    const int BATCHQUEUE_MAX_COUNT = 8;
+    const int COUNT_BATCHES_PARALLEL = 1;
+    const int BATCHQUEUE_MAX_COUNT = 16;
     Dictionary<int, UTXOBatch> QueueBatchsMerge = new Dictionary<int, UTXOBatch>();
-    readonly object MergeLOCK = new object();
-    int IndexBatchMerge;
-    int BlockHeight;
+    readonly object LOCK_IndexFilePartition = new object();
+    readonly object LOCK_BatchIndexMerge = new object();
+    int BatchIndexMerge = 0;
+    int BlockHeight = 0;
     StreamWriter BuildWriter;
 
     const int COUNT_BLOCK_DOWNLOAD_BATCH = 10;
@@ -60,15 +56,16 @@ namespace BToken.Accounting
     List<Block> BlocksPartitioned = new List<Block>();
     int CountTXsPartitioned = 0;
     int FilePartitionIndex = 0;
-    const int MAX_COUNT_TXS_IN_PARTITION = 100000;
+    const int MAX_COUNT_TXS_IN_PARTITION = 100;
 
-    Headerchain.ChainHeader ChainHeader;
+    Headerchain.ChainHeader ChainHeaderMergedLast;
+    BitcoinGenesisBlock GenesisBlock;
 
 
-    public UTXO(Headerchain headerchain, Network network)
+    public UTXO(BitcoinGenesisBlock genesisBlock, Headerchain headerchain, Network network)
     {
+      GenesisBlock = genesisBlock;
       Headerchain = headerchain;
-      ChainHeader = Headerchain.GenesisHeader;
       Network = network;
     }
 
@@ -76,10 +73,8 @@ namespace BToken.Accounting
     {
       try
       {
-        await LoadBatchHeight();
-
-        await Task.WhenAll(Tables
-          .Select(c => { return c.LoadAsync(); }));
+        await LoadUTXOState();
+        await Task.WhenAll(Tables.Select(c => { return c.LoadAsync(); }));
       }
       catch
       {
@@ -88,18 +83,36 @@ namespace BToken.Accounting
           Tables[c].Clear();
         }
 
-        IndexBatchMerge = 0;
-        BlockHeight = -1;
+        InsertGenesisBlock();
+
+        ChainHeaderMergedLast = Headerchain.GenesisHeader;
       }
 
       await BuildAsync();
     }
-
-    async Task LoadBatchHeight()
+    void InsertGenesisBlock()
     {
-      byte[] batchHeight = await LoadFileAsync(Path.Combine(RootPath, "BatchHeight"));
-      IndexBatchMerge = BitConverter.ToInt32(batchHeight, 0) + 1;
-      BlockHeight = BitConverter.ToInt32(batchHeight, 4);
+      UTXOBatch genesisBatch = new UTXOBatch()
+      {
+        BatchIndex = 0,
+        Buffer = GenesisBlock.BlockBytes
+      };
+
+      ParseBatch(genesisBatch);
+
+      InsertUTXOs(genesisBatch);
+    }
+
+    async Task LoadUTXOState()
+    {
+      byte[] uTXOState = await LoadFileAsync(Path.Combine(RootPath, "UTXOState"));
+      BatchIndexMerge = BitConverter.ToInt32(uTXOState, 0) + 1;
+      FilePartitionIndex = BatchIndexMerge;
+      BlockHeight = BitConverter.ToInt32(uTXOState, 4);
+
+      byte[] chainHeaderHash = new byte[HASH_BYTE_SIZE];
+      Array.Copy(uTXOState, 8, chainHeaderHash, 0, HASH_BYTE_SIZE);
+      ChainHeaderMergedLast = Headerchain.ReadHeader(chainHeaderHash);
     }
     async Task BuildAsync()
     {
@@ -117,125 +130,178 @@ namespace BToken.Accounting
       {
         BuildWriter = buildWriter;
 
-        string labelsCSV = string.Format(
-          "BatchIndex," +
-          "Block height," +
-          "Time," +
-          "Time merge," +
-          "Ratio," +
-          Tables[0].GetLabelsMetricsCSV() + "," +
-          Tables[1].GetLabelsMetricsCSV() + "," +
-          Tables[2].GetLabelsMetricsCSV());
-
-        Console.WriteLine(labelsCSV);
-        BuildWriter.WriteLine(labelsCSV);
-
         UTCTimeStartBuild = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
+        Task[] archiveLoaderTasks = new Task[COUNT_BATCHES_PARALLEL];
         Parallel.For(0, COUNT_BATCHES_PARALLEL, i =>
         {
-          Task mergeBatchTask = MergeBatchesQueuedAsync(i);
+          archiveLoaderTasks[i] = LoadBatchesFromArchiveAsync(i);
         });
 
-        await LoadBatchesFromArchiveAsync();
+        await Task.WhenAll(archiveLoaderTasks);
+
         await LoadBatchesFromNetworkAsync();
       }
     }
 
-    async Task LoadBatchesFromArchiveAsync()
+    async Task LoadBatchesFromArchiveAsync(int loaderID)
     {
+      int batchIndex;
+
       try
       {
-        int batchIndex = IndexBatchMerge;
-
-        while (BlockArchiver.Exists(batchIndex, out string filePath))
+        while (true)
         {
+          lock (LOCK_IndexFilePartition)
+          {
+            batchIndex = FilePartitionIndex;
+            FilePartitionIndex += 1;
+          }
+
+          if (!BlockArchiver.Exists(batchIndex, out string filePath))
+          {
+            return;
+          }
+
           UTXOBatch batch = new UTXOBatch()
           {
             BatchIndex = batchIndex,
             Buffer = await BlockArchiver.ReadBlockBatchAsync(filePath).ConfigureAwait(false)
           };
 
-          BatchesQueued.Add(batch);
-          BatchQueue.Post(batch);
+          batch.StopwatchParse.Start();
+          ParseBatch(batch);
+          batch.StopwatchParse.Stop();
 
-          if (BatchesQueued.Count > BATCHQUEUE_MAX_COUNT)
-          {
-            BatchesQueued.Remove(await await Task.WhenAny(BatchesQueued
-              .Select(b => b.SignalBatchCompletion.Task)));
-          }
-
-          batchIndex += 1;
+          await MergeBatchAsync(
+            batch, 
+            enableBlockArchiving: false);
         }
-
-        await Task.WhenAll(BatchesQueued.Select(b => b.SignalBatchCompletion.Task));
       }
       catch (Exception ex)
       {
         Console.WriteLine(ex.Message);
+        throw ex;
+      }
+    }
+    async Task LoadBatchesFromNetworkAsync()
+    {
+      int batchIndex = BatchIndexMerge;
+      FilePartitionIndex = BatchIndexMerge;
+      var blockDownloadTasks = new List<Task>(COUNT_DOWNLOAD_TASKS);
+      Headerchain.ChainHeader chainHeaderFetchHashes = ChainHeaderMergedLast.HeadersNext[0];
+
+      while (TryGetHeaderHashes(out byte[][] headerHashes, ref chainHeaderFetchHashes))
+      {
+        var sessionBlockDownload = new SessionBlockDownload(
+          this,
+          headerHashes,
+          batchIndex);
+
+        Task blockDownloadTask = Network.ExecuteSessionAsync(sessionBlockDownload);
+        blockDownloadTasks.Add(blockDownloadTask);
+
+        if (blockDownloadTasks.Count > COUNT_DOWNLOAD_TASKS)
+        {
+          Task blockDownloadTaskCompleted = await Task.WhenAny(blockDownloadTasks);
+          blockDownloadTasks.Remove(blockDownloadTaskCompleted);
+        }
+
+        batchIndex += 1;
       }
 
+      await Task.WhenAll(blockDownloadTasks);
     }
 
-    async Task MergeBatchesQueuedAsync(int mergerID)
+    bool TryGetHeaderHashes(
+      out byte[][] headerHashes, 
+      ref Headerchain.ChainHeader chainHeaderFetchHashes)
     {
+      headerHashes = new byte[COUNT_BLOCK_DOWNLOAD_BATCH][];
+
+      for (
+        int i = 0;
+        i < headerHashes.Length && chainHeaderFetchHashes.HeadersNext != null;
+        i += 1)
+      {
+        headerHashes[i] = chainHeaderFetchHashes.GetHeaderHash();
+        chainHeaderFetchHashes = chainHeaderFetchHashes.HeadersNext[0];
+      }
+
+      return true;
+    }
+
+    async Task MergeBatchAsync(
+      UTXOBatch batch, 
+      bool enableBlockArchiving)
+    {
+      bool isBatchQueued = false;
+
+      lock (LOCK_BatchIndexMerge)
+      {
+        if (BatchIndexMerge != batch.BatchIndex)
+        {
+          isBatchQueued = true;
+          QueueBatchsMerge.Add(batch.BatchIndex, batch);
+        }
+      }
+
+      if(isBatchQueued)
+      {
+        while(QueueBatchsMerge.Count > BATCHQUEUE_MAX_COUNT)
+        {
+          await Task.Delay(500);
+        }
+
+        return;
+      }
+
       while (true)
       {
-        UTXOBatch batch = await BatchQueue.ReceiveAsync().ConfigureAwait(false);
-
-        batch.StopwatchParse.Start();
-        ParseBatch(batch);
-        batch.StopwatchParse.Stop();
-
-        lock (MergeLOCK)
+        if (!batch.HeaderHashPrevious.IsEqual(ChainHeaderMergedLast.GetHeaderHash())
+          && batch.BatchIndex > 0)
         {
-          if (IndexBatchMerge != batch.BatchIndex)
-          {
-            QueueBatchsMerge.Add(batch.BatchIndex, batch);
-            continue;
-          }
+          throw new UTXOException(
+            string.Format("Batch {0} with Hash previous \n{1} " +
+            "does not link to last block merged \n{2}.",
+            batch.BatchIndex,
+            batch.HeaderHashPrevious.ToHexString(),
+            ChainHeaderMergedLast.GetHeaderHash().ToHexString()));
         }
 
-        while (true)
-        {
-          batch.StopwatchMerging.Start();
-          MergeBatch(batch);
-          batch.StopwatchMerging.Stop();
-
-          if (IndexBatchMerge % TABLE_ARCHIVING_INTERVAL == 0 && IndexBatchMerge > 0)
-          {
-            //BackupToDisk();
-          }
-
-          BatchReporting(batch, mergerID);
-
-          lock (MergeLOCK)
-          {
-            IndexBatchMerge += 1;
-            ChainHeader = batch.ChainHeader;
-
-            if (QueueBatchsMerge.TryGetValue(IndexBatchMerge, out batch))
-            {
-              QueueBatchsMerge.Remove(IndexBatchMerge);
-              continue;
-            }
-
-            break;
-          }
-        }
-      }
-    }
-    
-    void MergeBatch(UTXOBatch batch)
-    {
-      try
-      {
+        batch.StopwatchMerging.Start();
         InsertUTXOs(batch);
         SpendUTXOs(batch);
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine(ex.Message);
+        batch.StopwatchMerging.Stop();
+
+        ChainHeaderMergedLast = batch.ChainHeader.HeaderPrevious;
+        BlockHeight += batch.Blocks.Count;
+
+        if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0
+          && batch.BatchIndex > 0)
+        {
+          ArchiveUTXOState(BlockHeight, batch);
+        }
+
+        if (enableBlockArchiving)
+        {
+          ArchiveBlocks(batch.Blocks);
+        }
+
+        BatchReporting(batch);
+
+        lock (LOCK_BatchIndexMerge)
+        {
+          BatchIndexMerge += 1;
+
+          if (QueueBatchsMerge.TryGetValue(BatchIndexMerge, out batch))
+          {
+            QueueBatchsMerge.Remove(BatchIndexMerge);
+            continue;
+          }
+
+          break;
+        }
       }
     }
     void InsertUTXOs(UTXOBatch batch)
@@ -303,7 +369,9 @@ namespace BToken.Accounting
 
                   if (tableCollision != null)
                   {
+                    batch.StopwatchResolver.Start();
                     tableCollision.ResolveCollision(tablePrimary);
+                    batch.StopwatchResolver.Stop();
                   }
                 }
 
@@ -317,6 +385,39 @@ namespace BToken.Accounting
               input.TXIDOutput.ToHexString()));
           }
         }
+      }
+    }
+
+    void ArchiveUTXOState(int blockHeight, UTXOBatch batch)
+    {
+      Directory.CreateDirectory(RootPath);
+
+      byte[] uTXOState = new byte[40];
+      BitConverter.GetBytes(FilePartitionIndex).CopyTo(uTXOState, 0);
+      BitConverter.GetBytes(blockHeight).CopyTo(uTXOState, 4);
+      batch.ChainHeader.NetworkHeader.HashPrevious.CopyTo(uTXOState, 8);
+
+      Task writeFileTask = WriteFileAsync(
+        Path.Combine(RootPath, "UTXOState"), 
+        uTXOState);
+
+      Parallel.ForEach(Tables, c => c.BackupToDisk());
+    }
+    void ArchiveBlocks(List<Block> blocks)
+    {
+      BlocksPartitioned.AddRange(blocks);
+      CountTXsPartitioned += blocks.Sum(b => b.TXCount);
+
+      if (CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
+      {
+        Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
+          BlocksPartitioned,
+          FilePartitionIndex);
+
+        FilePartitionIndex += 1;
+
+        BlocksPartitioned = new List<Block>();
+        CountTXsPartitioned = 0;
       }
     }
 
@@ -351,57 +452,47 @@ namespace BToken.Accounting
     }
     static async Task WriteFileAsync(string filePath, byte[] buffer)
     {
-      string filePathTemp = filePath + "_temp";
-
-      using (FileStream stream = new FileStream(
-         filePathTemp,
-         FileMode.Create,
-         FileAccess.ReadWrite,
-         FileShare.Read,
-         bufferSize: 4096,
-         useAsync: true))
+      try
       {
-        await stream.WriteAsync(buffer, 0, buffer.Length);
-      }
+        string filePathTemp = filePath + "_temp";
 
-      if (File.Exists(filePath))
+        using (FileStream stream = new FileStream(
+           filePathTemp,
+           FileMode.Create,
+           FileAccess.ReadWrite,
+           FileShare.Read,
+           bufferSize: 4096,
+           useAsync: true))
+        {
+          await stream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+        }
+
+        if (File.Exists(filePath))
+        {
+          File.Delete(filePath);
+        }
+        File.Move(filePathTemp, filePath);
+      }
+      catch(Exception ex)
       {
-        File.Delete(filePath);
+        Console.WriteLine(ex.Message);
       }
-      File.Move(filePathTemp, filePath);
     }
-    void BackupToDisk()
+    void BatchReporting(UTXOBatch batch)
     {
-      Directory.CreateDirectory(RootPath);
+      long timeParsing = batch.StopwatchParse.ElapsedMilliseconds;
 
-      byte[] heights = new byte[8];
-      BitConverter.GetBytes(IndexBatchMerge).CopyTo(heights, 0);
-      BitConverter.GetBytes(BlockHeight).CopyTo(heights, 4);
-
-      Task backupBlockHeightTask = WriteFileAsync(
-        Path.Combine(RootPath, "BatchHeight"),
-        heights);
-
-      Parallel.ForEach(Tables, c => c.BackupToDisk());
-    }
-    void BatchReporting(UTXOBatch batch, int mergerID)
-    {
-      batch.SignalBatchCompletion.SetResult(batch);
-
-      BlockHeight += batch.Blocks.Count;
+      int ratioMergeToParse = 
+        (int)((float)batch.StopwatchMerging.ElapsedTicks * 100 
+        / batch.StopwatchParse.ElapsedTicks);
       
-      long timeParsePlusMerge = batch.StopwatchMerging.ElapsedMilliseconds + batch.StopwatchParse.ElapsedMilliseconds;
-      int ratio = (int)((float)batch.StopwatchMerging.ElapsedTicks * 100 / batch.StopwatchParse.ElapsedTicks);
-      TimeMergingTotalTicks += batch.StopwatchMerging.ElapsedTicks;
-
       string metricsCSV = string.Format(
-        "{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+        "{0},{1},{2},{3},{4},{5},{6},{7}",
         batch.BatchIndex,
         BlockHeight,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartBuild,
-        timeParsePlusMerge,
-        ratio,
-        TimeMergingTotalTicks,
+        timeParsing,
+        ratioMergeToParse,
         Tables[0].GetMetricsCSV(),
         Tables[1].GetMetricsCSV(),
         Tables[2].GetMetricsCSV());
@@ -409,74 +500,5 @@ namespace BToken.Accounting
       Console.WriteLine(metricsCSV);
       BuildWriter.WriteLine(metricsCSV);
     }
-        
-    void ArchiveBatch(int batchIndex, List<Block> blocks)
-    {
-      //BlocksPartitioned.AddRange(blocks);
-      //CountTXsPartitioned += blocks.Sum(b => b.TXs.Length);
-
-      //if (CountTXsPartitioned > MAX_COUNT_TXS_IN_PARTITION)
-      //{
-      //  Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
-      //    BlocksPartitioned,
-      //    FilePartitionIndex);
-
-      //  FilePartitionIndex += 1;
-
-      //  BlocksPartitioned = new List<Block>();
-      //  CountTXsPartitioned = 0;
-      //}
-    }
-
-    static bool TryGetHeaderHashes(
-      ref Headerchain.ChainHeader chainHeader,
-      out byte[][] headerHashes)
-    {
-      if (chainHeader == null)
-      {
-        headerHashes = null;
-        return false;
-      }
-
-      headerHashes = new byte[COUNT_BLOCK_DOWNLOAD_BATCH][];
-
-      for (int i = 0; i < headerHashes.Length && chainHeader.HeadersNext != null; i += 1)
-      {
-        headerHashes[i] = chainHeader.GetHeaderHash();
-        chainHeader = chainHeader.HeadersNext[0];
-      }
-
-      return true;
-    }
-
-    async Task LoadBatchesFromNetworkAsync()
-    {
-      Headerchain.ChainHeader chainHeader = ChainHeader;
-      int indexBatchDownload = IndexBatchMerge;
-      FilePartitionIndex = IndexBatchMerge;
-      var blockDownloadTasks = new List<Task>(COUNT_DOWNLOAD_TASKS);
-
-      while (TryGetHeaderHashes(ref chainHeader, out byte[][] headerHashes))
-      {
-        var sessionBlockDownload = new SessionBlockDownload(
-          this,
-          headerHashes,
-          indexBatchDownload);
-
-        Task blockDownloadTask = Network.ExecuteSessionAsync(sessionBlockDownload);
-        blockDownloadTasks.Add(blockDownloadTask);
-
-        if (blockDownloadTasks.Count > COUNT_DOWNLOAD_TASKS)
-        {
-          Task blockDownloadTaskCompleted = await Task.WhenAny(blockDownloadTasks);
-          blockDownloadTasks.Remove(blockDownloadTaskCompleted);
-        }
-
-        indexBatchDownload += 1;
-      }
-
-      await Task.WhenAll(blockDownloadTasks);
-    }
-    
   }
 }

@@ -227,9 +227,10 @@ namespace BToken.Accounting
         foreach (KeyValuePair<int, uint[]> keyValuePair in PrimaryTable)
         {
           byteList.AddRange(BitConverter.GetBytes(keyValuePair.Key));
-          byteList.AddRange(VarInt.GetBytes(keyValuePair.Value.Length));
+          int byteLength = keyValuePair.Value.Length << 2;
+          byteList.AddRange(VarInt.GetBytes(byteLength));
 
-          byte[] byteArray = new byte[keyValuePair.Value.Length << 2];
+          byte[] byteArray = new byte[byteLength];
           Buffer.BlockCopy(keyValuePair.Value, 0, byteArray, 0, byteArray.Length);
           byteList.AddRange(byteArray);
         }
@@ -243,12 +244,12 @@ namespace BToken.Accounting
         foreach (KeyValuePair<byte[], uint[]> keyValuePair in CollisionTable)
         {
           byteList.AddRange(keyValuePair.Key);
-          byteList.AddRange(VarInt.GetBytes(keyValuePair.Value.Length));
+          int byteLength = keyValuePair.Value.Length << 2;
+          byteList.AddRange(VarInt.GetBytes(byteLength));
 
           byte[] byteArray = new byte[keyValuePair.Value.Length << 2];
           Buffer.BlockCopy(keyValuePair.Value, 0, byteArray, 0, byteArray.Length);
           byteList.AddRange(byteArray);
-
         }
 
         return byteList.ToArray();
@@ -256,49 +257,46 @@ namespace BToken.Accounting
 
       protected override void LoadPrimaryData(byte[] buffer)
       {
-        //int index = 0;
+        int index = 0;
 
-        //int key;
-        //int lengthValue;
-        //byte[] value;
+        int key;
+        int uintLength;
+        uint[] value;
 
-        //try
-        //{
-        //  while (index < buffer.Length)
-        //  {
-        //    key = BitConverter.ToInt32(buffer, index);
-        //    index += 4;
+        while (index < buffer.Length)
+        {
+          key = BitConverter.ToInt32(buffer, index);
+          index += 4;
 
-        //    lengthValue = VarInt.GetInt32(buffer, ref index);
-        //    value = new byte[lengthValue];
-        //    Array.Copy(buffer, index, value, 0, lengthValue);
-        //    index += lengthValue;
+          int byteLength = VarInt.GetInt32(buffer, ref index);
+          uintLength = byteLength >> 2;
+          value = new uint[uintLength];
+          Buffer.BlockCopy(buffer, index, value, 0, byteLength);
+          index += byteLength;
 
-        //    PrimaryTable.Add(key, value);
-        //  }
-        //}
-        //catch (Exception ex)
-        //{
-        //  Console.WriteLine(ex.Message);
-        //}
+          PrimaryTable.Add(key, value);
+        }
       }
       protected override void LoadCollisionData(byte[] buffer)
       {
-        //int index = 0;
+        int index = 0;
+        int uintLength;
+        uint[] value;
 
-        //while (index < buffer.Length)
-        //{
-        //  byte[] key = new byte[HASH_BYTE_SIZE];
-        //  Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
-        //  index += HASH_BYTE_SIZE;
+        while (index < buffer.Length)
+        {
+          byte[] key = new byte[HASH_BYTE_SIZE];
+          Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
+          index += HASH_BYTE_SIZE;
 
-        //  int lengthValue = VarInt.GetInt32(buffer, ref index);
-        //  byte[] value = new byte[lengthValue];
-        //  Array.Copy(buffer, index, value, 0, lengthValue);
-        //  index += lengthValue;
+          int byteLength = VarInt.GetInt32(buffer, ref index);
+          uintLength = byteLength >> 2;
+          value = new uint[uintLength];
+          Buffer.BlockCopy(buffer, index, value, 0, byteLength);
+          index += byteLength;
 
-        //  CollisionTable.Add(key, value);
-        //}
+          CollisionTable.Add(key, value);
+        }
       }
 
       public override void Clear()

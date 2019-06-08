@@ -16,8 +16,10 @@ namespace BToken.Accounting
 
       string DirectoryPath;
 
-
+      protected static readonly uint MaskCollisionBits = 0x03F00000;
+      
       public int PrimaryKey;
+
 
       protected UTXOTable(
         int address,
@@ -97,10 +99,6 @@ namespace BToken.Accounting
       protected abstract int GetCountPrimaryTableItems();
       protected abstract int GetCountSecondaryTableItems();
 
-      public string GetLabelsMetricsCSV()
-      {
-        return Label + "PrimaryCache," + Label + "SecondaryCache";
-      }
       public string GetMetricsCSV()
       {
         return GetCountPrimaryTableItems() + "," + GetCountSecondaryTableItems();
@@ -112,11 +110,11 @@ namespace BToken.Accounting
         Directory.CreateDirectory(directoryPath);
         
         Task writeToFileTask = WriteFileAsync(
-          Path.Combine(directoryPath, "PrimaryCache"), 
+          Path.Combine(directoryPath, "PrimaryTable"), 
           GetPrimaryData());
-        
+
         writeToFileTask = WriteFileAsync(
-          Path.Combine(directoryPath, "SecondaryCache"), 
+          Path.Combine(directoryPath, "CollisionTable"),
           GetCollisionData());
       }
 
@@ -133,11 +131,11 @@ namespace BToken.Accounting
       {
         LoadPrimaryData(
           await LoadFileAsync(
-            Path.Combine(DirectoryPath, "PrimaryCache")));
+            Path.Combine(DirectoryPath, "PrimaryTable")));
 
         LoadCollisionData(
           await LoadFileAsync(
-            Path.Combine(DirectoryPath, "SecondaryCache")));
+            Path.Combine(DirectoryPath, "CollisionTable")));
       }
     }
 

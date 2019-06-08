@@ -11,6 +11,7 @@ namespace BToken.Chaining
   {
     class HeaderReader : IDisposable
     {
+      const int LENGTH_HEADER_BYTES = 80;
       FileStream FileStream;
 
       public HeaderReader()
@@ -22,18 +23,18 @@ namespace BToken.Chaining
           FileShare.Read);
       }
 
-      public NetworkHeader GetNextHeader()
+      public NetworkHeader GetNextHeader(out byte[] headerBytes)
       {
-        byte[] headerBytes = new byte[81];
-        int bytesReadCount = FileStream.Read(headerBytes, 0, 80);
+        headerBytes = new byte[LENGTH_HEADER_BYTES];
+        int bytesReadCount = FileStream.Read(headerBytes, 0, LENGTH_HEADER_BYTES);
 
-        if (bytesReadCount < 80)
+        if (bytesReadCount < LENGTH_HEADER_BYTES)
         {
           return null;
         }
-
+        
         int startIndex = 0;
-        return NetworkHeader.ParseHeader(headerBytes, out int txCount, ref startIndex);
+        return NetworkHeader.ParseHeader(headerBytes, ref startIndex);
       }
 
       public void Dispose()

@@ -74,6 +74,7 @@ namespace BToken.Accounting
         if (collisionBits == MasksCollisionBitsTwo[collisionAddress])
         {
           PrimaryTable[primaryKey] |= MasksCollisionBitsFull[collisionAddress];
+          return;
         }
       }
       public override void SecondaryTableAddUTXO(UTXOItem uTXOItem)
@@ -181,6 +182,7 @@ namespace BToken.Accounting
           return;
         }
 
+        UTXOPrimary &= MasksCollisionBitsClear[tableAddress];
         UTXOPrimary |= MasksCollisionBitsTwo[tableAddress];
       }
       protected override void UpdateUTXOInTable()
@@ -206,7 +208,7 @@ namespace BToken.Accounting
         byte[] buffer = new byte[PrimaryTable.Count << 3];
 
         int index = 0;
-        foreach(KeyValuePair<int, uint> keyValuePair in PrimaryTable)
+        foreach (KeyValuePair<int, uint> keyValuePair in PrimaryTable)
         {
           BitConverter.GetBytes(keyValuePair.Key).CopyTo(buffer, index);
           index += 4;

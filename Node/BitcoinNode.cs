@@ -15,7 +15,7 @@ namespace BToken
     UTXO UTXO;
     Wallet Wallet;
 
-    GenesisBlock GenesisBlock = new GenesisBlock();
+    BitcoinGenesisBlock GenesisBlock = new BitcoinGenesisBlock();
     List<HeaderLocation> Checkpoints = new List<HeaderLocation>()
       {
         new HeaderLocation(height : 11111, hash : "0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d"),
@@ -27,7 +27,7 @@ namespace BToken
     {
       Network = new Network();
       Headerchain = new Headerchain(GenesisBlock.Header, Checkpoints);
-      UTXO = new UTXO(Headerchain, Network);
+      UTXO = new UTXO(GenesisBlock, Headerchain, Network);
       Wallet = new Wallet(UTXO);
     }
 
@@ -36,10 +36,10 @@ namespace BToken
       Network.Start();
 
       await Headerchain.LoadFromArchiveAsync();
-      //Console.WriteLine("Loaded headerchain from archive, height '{0}'", Headerchain.GetHeight());
+      Console.WriteLine("Loaded headerchain from archive, height '{0}'", Headerchain.GetHeight());
 
-      //await Network.ExecuteSessionAsync(new SessionHeaderDownload(Headerchain));
-      //Console.WriteLine("downloaded headerchain from network, height '{0}'", Headerchain.GetHeight());
+      await Network.ExecuteSessionAsync(new SessionHeaderDownload(Headerchain));
+      Console.WriteLine("downloaded headerchain from network, height '{0}'", Headerchain.GetHeight());
 
       await UTXO.StartAsync();
 

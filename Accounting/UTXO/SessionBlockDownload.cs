@@ -1,86 +1,79 @@
-﻿using System.Diagnostics;
-using System;
+﻿using System;
 using System.Linq;
-using System.IO;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Security.Cryptography;
 
 using BToken.Networking;
-using BToken.Chaining;
 
 
 namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class SessionBlockDownload : UTXOBatch, INetworkSession
+    class SessionBlockDownload : INetworkSession
     {
       UTXO UTXO;
       byte[][] HeaderHashes;
 
-      public INetworkChannel Channel { get; private set; }
-
-      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
+      UTXOBatch Batch;
+      
+      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 30;
 
 
       public SessionBlockDownload(
         UTXO uTXO,
         byte[][] headerHashes,
         int batchIndex)
-        : base(batchIndex)
       {
         UTXO = uTXO;
         HeaderHashes = headerHashes;
+
+        Batch = new UTXOBatch(batchIndex);
       }
 
-      public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
+      public async Task RunAsync(
+        INetworkChannel channel, 
+        CancellationToken cancellationToken)
       {
-        Channel = channel;
+        await channel.SendMessageAsync(
+          new GetDataMessage(
+            HeaderHashes
+            .Skip(Batch.Blocks.Count)
+            .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
+            .ToList()));
 
-        List<Inventory> inventories = HeaderHashes
-          .Skip(Blocks.Count)
-          .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
-          .ToList();
-
-        await Channel.SendMessageAsync(new GetDataMessage(inventories));
-
-        var CancellationGetBlock =
+        var cancellationGetBlock =
           new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
         
-        while (Blocks.Count < HeaderHashes.Length)
+        while (Batch.Blocks.Count < HeaderHashes.Length)
         {
-          NetworkMessage networkMessage = await Channel.ReceiveSessionMessageAsync(CancellationGetBlock.Token);
+          NetworkMessage networkMessage =
+            await channel.ReceiveSessionMessageAsync(cancellationGetBlock.Token);
 
           if (networkMessage.Command == "block")
           {
-            //List<Block> blocks = UTXO.ParseBlocks(this, networkMessage.Payload);
+            Batch.Buffer = networkMessage.Payload;
+            Batch.BufferIndex = 0;
 
-            //blocks[0].BlockBytes = networkMessage.Payload;
-            //Blocks.Add(blocks[0]);
+            Batch.StopwatchParse.Start();
+            UTXO.ParseBatch(Batch);
+            Batch.StopwatchParse.Stop();
 
-            //Console.WriteLine("{0} Downloaded block {1}",
-            //  Channel.GetIdentification(),
-            //  Blocks.Last().HeaderHash.ToHexString());
+            //Console.WriteLine("{0}, {1} Downloaded block {2}",
+            //  DateTime.Now,
+            //  channel.GetIdentification(),
+            //  Batch.Blocks.Last().HeaderHash.ToHexString());
           }
         }
 
-        lock (UTXO.MergeLOCK)
-        {
-          if (UTXO.IndexBatchMerge != BatchIndex)
-          {
-            UTXO.QueueBatchsMerge.Add(BatchIndex, this);
-            return;
-          }
-        }
+        Console.WriteLine("{0}, {1} Downloaded batch {2}",
+          DateTime.Now,
+          channel.GetIdentification(),
+          Batch.BatchIndex);
 
-        //UTXO.ArchiveBatch(batch.Index, batch.Blocks);
-        //Task cacheArchivingTask = UTXO.Cache.ArchiveAsync();
-
-        //UTXO.Merge(
-        //  this,
-        //  flagArchive: true);
+        await UTXO.MergeBatchAsync(
+          Batch,
+          enableBlockArchiving: true);
       }
     }
   }

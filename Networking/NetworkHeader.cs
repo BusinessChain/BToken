@@ -46,7 +46,7 @@ namespace BToken.Networking
       return headerSerialized.ToArray();
     }
 
-    public static NetworkHeader ParseHeader(byte[] buffer, out int txCount, ref int startIndex)
+    public static NetworkHeader ParseHeader(byte[] buffer, ref int startIndex)
     {
       UInt32 version = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
@@ -67,9 +67,7 @@ namespace BToken.Networking
 
       UInt32 nonce = BitConverter.ToUInt32(buffer, startIndex);
       startIndex += 4;
-
-      txCount = VarInt.GetInt32(buffer, ref startIndex);
-
+      
       return new NetworkHeader(
         version, 
         previousHeaderHash, 
@@ -85,7 +83,8 @@ namespace BToken.Networking
     public static byte[] ComputeHash(
       this NetworkHeader header)
     {
-      return SHA256d.Compute(header.GetBytes());
+      byte[] headerBytes = header.GetBytes();
+      return SHA256d.Compute(headerBytes);
     }
   }
 }

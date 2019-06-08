@@ -1,7 +1,5 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Security.Cryptography;
 
 using BToken.Chaining;
@@ -15,8 +13,10 @@ namespace BToken.Accounting
       public int BatchIndex;
       public byte[] Buffer;
       public int BufferIndex;
-      public List<Block> Blocks = new List<Block>(200);
+      public List<Block> Blocks = new List<Block>(50);
       public int[] IndexesUTXOItems = new int[3];
+
+      public byte[] HeaderHashPrevious;
 
       public int BlockIndex = -1;
       public int InputIndex;
@@ -24,29 +24,27 @@ namespace BToken.Accounting
 
       public Headerchain.ChainHeader ChainHeader;
       public SHA256 SHA256Generator = SHA256.Create();
-
-      public readonly TaskCompletionSource<UTXOBatch> SignalBatchCompletion =
-        new TaskCompletionSource<UTXOBatch>();
-
+      
       public Stopwatch StopwatchMerging = new Stopwatch();
+      public Stopwatch StopwatchResolver = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
 
 
       public UTXOBatch()
       { }
       public UTXOBatch(int batchindex)
-      { }
+      {
+        BatchIndex = batchindex;
+      }
       
       public void PushBlock(Block block)
       {
         Blocks.Add(block);
 
         BlockIndex += 1;
-
         TXIndex = 0;
         InputIndex = 0;
-
-        for(int i = 0; i < IndexesUTXOItems.Length; i += 1)
+        for (int i = 0; i < IndexesUTXOItems.Length; i += 1)
         {
           IndexesUTXOItems[i] = 0;
         }
