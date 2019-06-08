@@ -32,7 +32,7 @@ namespace BToken.Chaining
     const int HEADERS_COUNT_MAX = 2000;
 
     static string ArchiveRootPath = Path.Combine(
-      AppDomain.CurrentDomain.BaseDirectory, 
+      AppDomain.CurrentDomain.BaseDirectory,
       "HeaderArchive");
 
     static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
@@ -54,7 +54,7 @@ namespace BToken.Chaining
 
       Inserter = new ChainInserter(this);
     }
-    
+
     public async Task<List<byte[]>> InsertHeadersAsync(List<NetworkHeader> headers)
     {
       using (var archiveWriter = new HeaderWriter())
@@ -62,7 +62,8 @@ namespace BToken.Chaining
         return await InsertHeadersAsync(archiveWriter, headers);
       }
     }
-    public async Task<List<byte[]>> InsertHeadersAsync(HeaderWriter archiveWriter, List<NetworkHeader> headers)
+    public async Task<List<byte[]>> InsertHeadersAsync(
+      HeaderWriter archiveWriter, List<NetworkHeader> headers)
     {
       var headersInserted = new List<byte[]>();
 
@@ -75,7 +76,7 @@ namespace BToken.Chaining
         catch (ChainException ex)
         {
           Console.WriteLine(string.Format("Insertion of header with hash '{0}' raised ChainException '{1}'.",
-            header.ComputeHash(), 
+            header.ComputeHash(),
             ex.Message));
 
           return headersInserted;
@@ -88,7 +89,12 @@ namespace BToken.Chaining
     }
     async Task<byte[]> InsertHeaderAsync(NetworkHeader header)
     {
-      ValidateHeader(header, out byte[] headerHash);
+      byte[] headerBytes = header.GetBytes();
+      return await InsertHeaderAsync(header, headerBytes);
+    }
+    async Task<byte[]> InsertHeaderAsync(NetworkHeader header, byte[] headerBytes)
+    {
+      ValidateHeader(header, headerBytes, out byte[] headerHash);
 
       using (var inserter = await DispatchInserterAsync())
       {
@@ -115,9 +121,12 @@ namespace BToken.Chaining
         throw new ChainException("Received signal available but could not dispatch inserter.");
       }
     }
-    static void ValidateHeader(NetworkHeader header, out byte[] headerHash)
+    static void ValidateHeader(
+      NetworkHeader header, 
+      byte[] headerBytes, 
+      out byte[] headerHash)
     {
-      headerHash = header.ComputeHash();
+      headerHash = SHA256d.Compute(headerBytes);
 
       if (headerHash.IsGreaterThan(header.NBits))
       {
@@ -190,12 +199,12 @@ namespace BToken.Chaining
       {
         using (var archiveReader = new HeaderReader())
         {
-          NetworkHeader header = archiveReader.GetNextHeader();
+          NetworkHeader header = archiveReader.GetNextHeader(out byte[] headerBytes);
 
           while (header != null)
           {
-            await InsertHeaderAsync(header);
-            header = archiveReader.GetNextHeader();
+            await InsertHeaderAsync(header, headerBytes);
+            header = archiveReader.GetNextHeader(out headerBytes);
           }
 
           //int countHeader = 0;
