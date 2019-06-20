@@ -151,11 +151,11 @@ namespace BToken.Chaining
 
     public ChainHeader ReadHeader(byte[] headerHash)
     {
-      SHA256 sHA256Generator = SHA256.Create();
+      SHA256 sHA256 = SHA256.Create();
 
-      return ReadHeader(headerHash, sHA256Generator);
+      return ReadHeader(headerHash, sHA256);
     }
-    public ChainHeader ReadHeader(byte[] headerHash, SHA256 sHA256Generator)
+    public ChainHeader ReadHeader(byte[] headerHash, SHA256 sHA256)
     {
       int key = BitConverter.ToInt32(headerHash, 0);
 
@@ -165,7 +165,7 @@ namespace BToken.Chaining
         {
           foreach (ChainHeader header in headers)
           {
-            if (headerHash.IsEqual(header.GetHeaderHash(sHA256Generator)))
+            if (headerHash.IsEqual(header.GetHeaderHash(sHA256)))
             {
               return header;
             }

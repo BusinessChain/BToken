@@ -13,16 +13,18 @@ namespace BToken.Accounting
     const int BYTE_LENGTH_LOCK_TIME = 4;
     const int OFFSET_INDEX_MERKLE_ROOT = 36;
     const int TWICE_HASH_BYTE_SIZE = HASH_BYTE_SIZE << 1;
-
+    
     void ParseBatch(UTXOBatch batch)
     {
+      batch.StopwatchParse.Start();
+
       while (batch.BufferIndex < batch.Buffer.Length)
       {
         try
         {
           byte[] headerHash =
-            batch.SHA256Generator.ComputeHash(
-              batch.SHA256Generator.ComputeHash(
+            batch.SHA256.ComputeHash(
+              batch.SHA256.ComputeHash(
                 batch.Buffer,
                 batch.BufferIndex,
                 COUNT_HEADER_BYTES));
@@ -43,7 +45,7 @@ namespace BToken.Accounting
             headerHash,
             tXCount);
 
-          batch.PushBlock(block);
+          batch.Blocks.Add(block);
 
           if (tXCount == 1)
           {
@@ -87,7 +89,7 @@ namespace BToken.Accounting
             merkleList[tXCount] = merkleList[tXCount - 1];
           }
 
-          if (!GetRoot(merkleList, batch.SHA256Generator)
+          if (!GetRoot(merkleList, batch.SHA256)
             .IsEqual(batch.Buffer, indexMerkleRoot))
           {
             throw new UTXOException(
@@ -101,6 +103,8 @@ namespace BToken.Accounting
           Console.WriteLine(ex.Message);
         }
       }
+
+      batch.StopwatchParse.Stop();
     }
     
     void ValidateHeaderHash(
@@ -111,7 +115,7 @@ namespace BToken.Accounting
       {
         batch.ChainHeader = Headerchain.ReadHeader(
           headerHash, 
-          batch.SHA256Generator);
+          batch.SHA256);
 
         batch.HeaderHashPrevious = batch.ChainHeader.NetworkHeader.HashPrevious;
       }
@@ -120,7 +124,7 @@ namespace BToken.Accounting
 
       if (batch.ChainHeader.HeadersNext == null)
       {
-        headerHashValidator = batch.ChainHeader.GetHeaderHash(batch.SHA256Generator);
+        headerHashValidator = batch.ChainHeader.GetHeaderHash(batch.SHA256);
       }
       else
       {
@@ -201,8 +205,8 @@ namespace BToken.Accounting
           int tXLength = batch.BufferIndex - tXStartIndex;
           block.Length += tXLength;
 
-          byte[] tXHash = batch.SHA256Generator.ComputeHash(
-           batch.SHA256Generator.ComputeHash(
+          byte[] tXHash = batch.SHA256.ComputeHash(
+           batch.SHA256.ComputeHash(
              batch.Buffer,
              tXStartIndex,
              tXLength));

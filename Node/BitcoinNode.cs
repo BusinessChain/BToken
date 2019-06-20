@@ -41,9 +41,10 @@ namespace BToken
       await Network.ExecuteSessionAsync(new SessionHeaderDownload(Headerchain));
       Console.WriteLine("downloaded headerchain from network, height '{0}'", Headerchain.GetHeight());
 
-      await UTXO.StartAsync();
+      UTXO.Start();
+      await UTXO.BuildAsync();
 
-      Task listenerTask = StartNetworkListenerAsync();
+      Task NetworkListenerTask = StartNetworkListenerAsync();
 
       Wallet.GeneratePublicKey();
     }

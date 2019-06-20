@@ -127,14 +127,14 @@ namespace BToken.Accounting
       
       public abstract void Clear();
 
-      public async Task LoadAsync()
+      public void Load()
       {
         LoadPrimaryData(
-          await LoadFileAsync(
+          File.ReadAllBytes(
             Path.Combine(DirectoryPath, "PrimaryTable")));
 
         LoadCollisionData(
-          await LoadFileAsync(
+          File.ReadAllBytes(
             Path.Combine(DirectoryPath, "CollisionTable")));
       }
     }
