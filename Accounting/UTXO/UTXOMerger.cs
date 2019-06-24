@@ -18,6 +18,7 @@ namespace BToken.Accounting
       public BufferBlock<UTXOBatch> BatchBuffer = new BufferBlock<UTXOBatch>();
       Dictionary<int, UTXOBatch> QueueMergeBatch = new Dictionary<int, UTXOBatch>();
       int BatchIndexNext;
+      byte[] HeaderHashMergedLast;
       int BlockHeight;
 
       long UTCTimeStartMerger;
@@ -29,12 +30,11 @@ namespace BToken.Accounting
         UTXO = uTXO;
       }
 
-      public async Task StartAsync(
-        int batchIndexNext,
-        int blockHeight)
+      public async Task StartAsync()
       {
-        BatchIndexNext = batchIndexNext;
-        BlockHeight = blockHeight;
+        HeaderHashMergedLast = UTXO.HeaderHashBatchedLast;
+        BatchIndexNext = UTXO.BatchIndexNextMerger;
+        BlockHeight = UTXO.BlockHeight;
 
         UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -61,12 +61,22 @@ namespace BToken.Accounting
 
             while(true)
             {
+              if(!HeaderHashMergedLast.IsEqual(batch.HeaderHashPrevious))
+              {
+                throw new UTXOException(string.Format(
+                  "In Batch {0} previous hash {1} is not equal to last merged hash {2}",
+                  batch.BatchIndex,
+                  batch.HeaderHashPrevious.ToHexString(),
+                  HeaderHashMergedLast.ToHexString()));
+              }
+
               batch.StopwatchMerging.Start();
               UTXO.InsertUTXOs(batch);
               UTXO.SpendUTXOs(batch);
               batch.StopwatchMerging.Stop();
 
               BatchIndexNext += 1;
+              HeaderHashMergedLast = batch.Blocks.Last().HeaderHash;
               BlockHeight += batch.Blocks.Count;
 
               if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0 && batch.BatchIndex > 0)
@@ -92,7 +102,7 @@ namespace BToken.Accounting
         byte[] uTXOState = new byte[40];
         BitConverter.GetBytes(BatchIndexNext).CopyTo(uTXOState, 0);
         BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
-        batch.Blocks.Last().HeaderHash.CopyTo(uTXOState, 8);
+        HeaderHashMergedLast.CopyTo(uTXOState, 8);
 
         await WriteFileAsync(
           Path.Combine(RootPath, "UTXOState"),
@@ -100,12 +110,7 @@ namespace BToken.Accounting
 
         Parallel.ForEach(UTXO.Tables, c => c.BackupToDisk());
       }
-
-      internal Task RunAsync(object batchIndexMergeNext, int blockHeight)
-      {
-        throw new NotImplementedException();
-      }
-
+      
       void LogCSV(UTXOBatch batch, StreamWriter logFileWriter)
       {
         long timeParsing = batch.StopwatchParse.ElapsedMilliseconds;

@@ -14,6 +14,7 @@ namespace BToken.Accounting
       UTXO UTXO;
       const int COUNT_BATCHES_PARALLEL = 8;
 
+      public byte[] HeaderHashSentToMergerLast = new byte[COUNT_HEADER_BYTES];
       readonly object LOCK_BatchFileIndex = new object();
       int BatchFileIndex;
       readonly object LOCK_BatchIndexMerge = new object();
@@ -25,17 +26,19 @@ namespace BToken.Accounting
         UTXO = uTXO;
       }
 
-      public async Task RunAsync(int batchIndexNext)
+      public async Task<byte[]> RunAsync()
       {
-        BatchFileIndex = batchIndexNext;
-        BatchIndexMerge = batchIndexNext;
-
+        BatchFileIndex = UTXO.BatchIndexNextMerger;
+        BatchIndexMerge = UTXO.BatchIndexNextMerger;
+        
         Task[] archiveLoaderTasks = new Task[COUNT_BATCHES_PARALLEL];
         for (int i = 0; i < COUNT_BATCHES_PARALLEL; i += 1)
         {
           archiveLoaderTasks[i] = LoadBatchesFromArchiveAsync();
         }
         await Task.WhenAll(archiveLoaderTasks);
+
+        return HeaderHashSentToMergerLast;
       }
 
       async Task LoadBatchesFromArchiveAsync()
@@ -69,6 +72,7 @@ namespace BToken.Accounting
             {
               UTXO.Merger.BatchBuffer.Post(batch);
               BatchIndexMerge += 1;
+              HeaderHashSentToMergerLast = batch.Blocks.Last().HeaderHash;
             }
           }
         }

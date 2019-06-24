@@ -55,9 +55,11 @@ namespace BToken.Chaining
         }
         else
         {
-          var temp = new ChainHeader[Probe.Header.HeadersNext.Length + 1];
-          Probe.Header.HeadersNext.CopyTo(temp, 0);
-          temp[Probe.Header.HeadersNext.Length] = chainHeader;
+          var headersNextNew = new ChainHeader[Probe.Header.HeadersNext.Length + 1];
+          Probe.Header.HeadersNext.CopyTo(headersNextNew, 0);
+          headersNextNew[Probe.Header.HeadersNext.Length] = chainHeader;
+
+          Probe.Header.HeadersNext = headersNextNew;
         }
 
         Headerchain.UpdateHeaderIndex(chainHeader, headerHash);

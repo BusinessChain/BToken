@@ -74,7 +74,7 @@ namespace BToken.Networking
       //Task peerInboundListenerTask = StartPeerInboundListenerAsync();
     }
 
-    public async Task ExecuteSessionAsync(INetworkSession session)
+    public async Task RunSessionAsync(INetworkSession session)
     {
       Peer peer = PeersOutboundAvailable.Receive();
 

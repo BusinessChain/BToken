@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using System.Security.Cryptography;
 
 using BToken.Chaining;
 using BToken.Networking;
@@ -16,7 +15,7 @@ namespace BToken.Accounting
     Headerchain Headerchain;
     Network Network;
 
-    ArchiveUTXOBatchLoader ArchiveLoader;
+    UTXOBuilder Builder;
     UTXOMerger Merger;
     UTXOParser Parser;
 
@@ -39,26 +38,22 @@ namespace BToken.Accounting
       COUNT_HEADER_BITS +
       COUNT_COLLISION_BITS_PER_TABLE * 3;
 
-    const int COUNT_DOWNLOAD_TASKS = 8;
     const int COUNT_TXS_IN_BATCH_FILE = 100;
     
     Dictionary<int, List<Block>> QueueMergeBlock = new Dictionary<int, List<Block>>();
-    Queue<Block> FIFOBlocks = new Queue<Block>();
-    int TXCountFIFO;
+    
     readonly object LOCK_BatchIndexMerge = new object();
     int BatchIndexNextMerger;
+    Queue<Block> FIFOBlocks = new Queue<Block>();
     readonly object LOCK_FIFOIndex = new object();
     int FIFOIndex;
-    readonly object LOCK_TryGetHeaderHashes = new object();
-    int DownloadIndex;
+    byte[] HeaderHashBatchedLast = new byte[HASH_BYTE_SIZE];
 
     int BlockHeight;
 
-    Headerchain.ChainHeader HeaderLastSentToMerger;
-    byte[] HeaderHashLastSentToMerger = new byte[HASH_BYTE_SIZE];
-
-    Headerchain.ChainHeader ChainHeaderMergedLast;
     BitcoinGenesisBlock GenesisBlock;
+    Headerchain.ChainHeader ChainHeaderMergedLast;
+    Headerchain.ChainHeader HeaderLastSentToMerger;
 
 
     public UTXO(
@@ -70,25 +65,19 @@ namespace BToken.Accounting
       Headerchain = headerchain;
       Network = network;
 
-      ArchiveLoader = new ArchiveUTXOBatchLoader(this);
+      Builder = new UTXOBuilder(this);
       Merger = new UTXOMerger(this);
     }
 
-    public void Start()
+    public async Task StartAsync()
     {
       LoadUTXOState();
 
-      Task runMergerTask = Merger.StartAsync(
-        BatchIndexNextMerger,
-        BlockHeight);
+      Task startMergerTask = Merger.StartAsync();
+
+      await Builder.RunAsync();
     }
 
-    public async Task BuildAsync()
-    {
-      await ArchiveLoader.RunAsync(BatchIndexNextMerger);
-      await NetworkLoaderRunAsync();
-    }
-    
     void LoadUTXOState()
     {
       try
@@ -97,10 +86,7 @@ namespace BToken.Accounting
 
         BatchIndexNextMerger = BitConverter.ToInt32(uTXOState, 0);
         BlockHeight = BitConverter.ToInt32(uTXOState, 4);
-
-        byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
-        Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
-        ChainHeaderMergedLast = Headerchain.ReadHeader(headerHashMergedLast);
+        Array.Copy(uTXOState, 8, HeaderHashBatchedLast, 0, HASH_BYTE_SIZE);
 
         for(int i = 0; i < Tables.Length; i += 1)
         {
@@ -133,107 +119,6 @@ namespace BToken.Accounting
       ParseBatch(genesisBatch);
 
       InsertUTXOs(genesisBatch);
-    }
-    async Task NetworkLoaderRunAsync()
-    {
-      Task[] downloadTasks = new Task[COUNT_DOWNLOAD_TASKS];
-      for (int i = 0; i < COUNT_DOWNLOAD_TASKS; i += 1)
-      {
-        var sessionBlockDownload = new SessionBlockDownload(this);
-        downloadTasks[i] = Network.ExecuteSessionAsync(sessionBlockDownload);
-      }
-      await Task.WhenAll(downloadTasks);
-    }
-        
-    bool TryGetHeaderHashes(
-      out byte[][] headerHashes,
-      out int downloadIndex,
-      int count,
-      SHA256 sHA256)
-    {
-      int i = 0;
-      headerHashes = new byte[count][];
-
-      lock (LOCK_TryGetHeaderHashes)
-      {
-        downloadIndex = DownloadIndex;
-        DownloadIndex += 1;
-
-        HeaderLastSentToMerger = Headerchain.ReadHeader(HeaderHashLastSentToMerger, sHA256);
-        
-        while (i < count && HeaderLastSentToMerger.HeadersNext != null)
-        {
-          headerHashes[i] = HeaderLastSentToMerger.GetHeaderHash(sHA256);
-          HeaderLastSentToMerger = HeaderLastSentToMerger.HeadersNext[0];
-          i += 1;
-        }
-      }
-
-      if (i > 0)
-      {
-        return true;
-      }
-      else
-      {
-        return false;
-      }
-    }
-
-    void MergeBlocks(List<Block> blocks, int downloadIndex)
-    {
-      lock (LOCK_FIFOIndex)
-      {
-        if (FIFOIndex != downloadIndex)
-        {
-          QueueMergeBlock.Add(downloadIndex, blocks);
-          return;
-        }
-      }
-      
-      while(true)
-      {
-        foreach (Block block in blocks)
-        {
-          FIFOBlocks.Enqueue(block);
-          TXCountFIFO += block.TXCount;
-        }
-
-        while (TXCountFIFO > COUNT_TXS_IN_BATCH_FILE)
-        {
-          UTXOBatch batch = new UTXOBatch()
-          {
-            BatchIndex = BatchIndexNextMerger
-          };
-
-          BatchIndexNextMerger += 1;
-
-          int tXCountBatch = 0;
-          while (tXCountBatch < COUNT_TXS_IN_BATCH_FILE)
-          {
-            Block block = FIFOBlocks.Dequeue();
-            batch.Blocks.Add(block);
-
-            tXCountBatch += block.TXCount;
-            TXCountFIFO -= block.TXCount;
-          }
-
-          Task archiveBlocksTask = BlockArchiver.ArchiveBlocksAsync(
-            batch.Blocks,
-            batch.BatchIndex);
-
-          Merger.BatchBuffer.Post(batch);
-        }
-
-        lock (LOCK_FIFOIndex)
-        {
-          FIFOIndex += 1;
-
-          if (QueueMergeBlock.TryGetValue(FIFOIndex, out blocks))
-          {
-            continue;
-          }
-        }
-      }
     }
 
     void InsertUTXOs(UTXOBatch batch)

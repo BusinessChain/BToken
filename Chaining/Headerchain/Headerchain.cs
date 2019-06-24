@@ -63,7 +63,8 @@ namespace BToken.Chaining
       }
     }
     public async Task<List<byte[]>> InsertHeadersAsync(
-      HeaderWriter archiveWriter, List<NetworkHeader> headers)
+      HeaderWriter archiveWriter, 
+      List<NetworkHeader> headers)
     {
       var headersInserted = new List<byte[]>();
 
@@ -71,7 +72,8 @@ namespace BToken.Chaining
       {
         try
         {
-          headersInserted.Add(await InsertHeaderAsync(header));
+          byte[] headerBytes = header.GetBytes();
+          headersInserted.Add(await InsertHeaderAsync(header, headerBytes));
         }
         catch (ChainException ex)
         {
@@ -86,11 +88,6 @@ namespace BToken.Chaining
       }
 
       return headersInserted;
-    }
-    async Task<byte[]> InsertHeaderAsync(NetworkHeader header)
-    {
-      byte[] headerBytes = header.GetBytes();
-      return await InsertHeaderAsync(header, headerBytes);
     }
     async Task<byte[]> InsertHeaderAsync(NetworkHeader header, byte[] headerBytes)
     {
