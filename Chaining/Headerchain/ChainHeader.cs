@@ -39,8 +39,7 @@ namespace BToken.Chaining
 
     public static byte[] GetHeaderHash(this Headerchain.ChainHeader header)
     {
-      SHA256 sHA256 = SHA256.Create();
-      return header.GetHeaderHash(sHA256);
+      return header.GetHeaderHash(SHA256.Create());
     }
   }
 }

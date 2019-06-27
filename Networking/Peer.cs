@@ -225,11 +225,11 @@ namespace BToken.Networking
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      public async Task<bool> TryExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken)
+      public async Task<bool> TryExecuteSessionAsync(INetworkSession session)
       {
         try
         {
-          await session.RunAsync(this, cancellationToken);
+          await session.RunAsync(this);
           return true;
         }
         catch // (Exception ex)

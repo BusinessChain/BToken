@@ -9,17 +9,15 @@ namespace BToken.Accounting
   {
     partial class BlockArchiver
     {
-      static string[] ShardPaths = { "J:\\BlockArchivePartitioned" };
+      static string BlockArchivePath = "J:\\BlockArchivePartitioned";
 
       const int PrefixBlockFolderBytes = 2;
 
-      public static async Task ArchiveBlocksAsync(
-        List<Block> blocks,
-        int filePartitionIndex)
+      public static async Task ArchiveBatchAsync(List<Block> blocks, int batchIndex)
       {
         try
         {
-          using (FileStream file = CreateFile(filePartitionIndex))
+          using (FileStream file = CreateFile(batchIndex))
           {
             foreach (Block block in blocks)
             {
@@ -34,9 +32,8 @@ namespace BToken.Accounting
       }
       static FileStream CreateFile(int filePartitionIndex)
       {
-        string shardRootPath = ShardPaths[filePartitionIndex % ShardPaths.Length];
-        Directory.CreateDirectory(shardRootPath);
-        string filePath = Path.Combine(shardRootPath, "p" + filePartitionIndex.ToString());
+        Directory.CreateDirectory(BlockArchivePath);
+        string filePath = Path.Combine(BlockArchivePath, "p" + filePartitionIndex.ToString());
 
         return new FileStream(
           filePath,
@@ -47,15 +44,10 @@ namespace BToken.Accounting
           useAsync: true);
       }
 
-      public static bool Exists(int batchIndex, out string filePath)
+      public static async Task<byte[]> ReadBlockBatchAsync(int batchIndex)
       {
-        string shardPath = ShardPaths[batchIndex % ShardPaths.Length];
-        filePath = Path.Combine(shardPath, "p" + batchIndex.ToString());
+        string filePath = Path.Combine(BlockArchivePath, "p" + batchIndex);
 
-        return File.Exists(filePath);
-      }
-      public static async Task<byte[]> ReadBlockBatchAsync(string filePath)
-      {
         using (FileStream fileStream = new FileStream(
           filePath,
           FileMode.Open,

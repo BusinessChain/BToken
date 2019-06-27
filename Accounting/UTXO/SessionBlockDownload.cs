@@ -30,29 +30,34 @@ namespace BToken.Accounting
           SHA256 = SHA256.Create();
         }
 
-        public async Task RunAsync(
-          INetworkChannel channel,
-          CancellationToken cancellationToken)
+        public async Task RunAsync(INetworkChannel channel)
         {
           Blocks.Clear();
 
+          UTXODownloadBatch downloadBatch;
+
           while (true)
           {
-            if (!Builder.TryGetDownloadBatch(out UTXODownloadBatch downloadBatch))
+            try
+            {
+              downloadBatch = await Builder.DownloaderBuffer
+                .ReceiveAsync(Builder.CancellationBuilder.Token).ConfigureAwait(false);
+            }
+            catch(TaskCanceledException)
             {
               return;
             }
-
+                       
             await channel.SendMessageAsync(
               new GetDataMessage(
                 downloadBatch.HeaderHashes
                 .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
                 .ToList()));
 
-            var cancellationGetBlock =
-              new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
+            var cancellationGetBlock = new CancellationTokenSource(
+              TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
 
-            while (Blocks.Count < downloadBatch.HeaderHashes.Length)
+            while (Blocks.Count < downloadBatch.HeaderHashes.Count)
             {
               NetworkMessage networkMessage =
                 await channel.ReceiveSessionMessageAsync(cancellationGetBlock.Token);
@@ -77,9 +82,9 @@ namespace BToken.Accounting
             Console.WriteLine("{0}, {1} Download index {2}",
               DateTime.Now,
               channel.GetIdentification(),
-              downloadBatch.Index);
+              downloadBatch.BatchIndex);
 
-            Builder.DownloadBuffer.Post(downloadBatch);
+            Builder.BatcherBuffer.Post(downloadBatch);
           }
         }
       }

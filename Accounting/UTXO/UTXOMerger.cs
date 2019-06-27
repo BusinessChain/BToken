@@ -9,129 +9,136 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class UTXOMerger
+    partial class UTXOBuilder
     {
-      const int UTXOSTATE_ARCHIVING_INTERVAL = 50;
-
-      UTXO UTXO;
-
-      public BufferBlock<UTXOBatch> BatchBuffer = new BufferBlock<UTXOBatch>();
-      Dictionary<int, UTXOBatch> QueueMergeBatch = new Dictionary<int, UTXOBatch>();
-      int BatchIndexNext;
-      byte[] HeaderHashMergedLast;
-      int BlockHeight;
-
-      long UTCTimeStartMerger;
-
-
-      public UTXOMerger(
-        UTXO uTXO)
+      class UTXOMerger
       {
-        UTXO = uTXO;
-      }
+        const int UTXOSTATE_ARCHIVING_INTERVAL = 50;
 
-      public async Task StartAsync()
-      {
-        HeaderHashMergedLast = UTXO.HeaderHashBatchedLast;
-        BatchIndexNext = UTXO.BatchIndexNextMerger;
-        BlockHeight = UTXO.BlockHeight;
+        UTXO UTXO;
+        UTXOBuilder Builder;
 
-        UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        public int BlockHeight;
+        public int BatchIndexNext;
+        public byte[] HeaderHashMergedLast = new byte[HASH_BYTE_SIZE];
+        public BufferBlock<UTXOBatch> BatchBuffer = new BufferBlock<UTXOBatch>();
+        Dictionary<int, UTXOBatch> QueueMergeBatch = new Dictionary<int, UTXOBatch>();
 
-        string pathLogFile = Path.Combine(
-          Directory.CreateDirectory("UTXOBuild").FullName,
-          "UTXOBuild-" + DateTime.Now.ToString("yyyyddM-HHmmss") + ".csv");
+        long UTCTimeStartMerger;
+        
 
-        using (StreamWriter logFileWriter = new StreamWriter(
-         new FileStream(
-           pathLogFile,
-           FileMode.Append,
-           FileAccess.Write,
-           FileShare.Read)))
+        public UTXOMerger(
+          UTXO uTXO,
+          UTXOBuilder builder)
         {
-          while (true)
+          UTXO = uTXO;
+          Builder = builder;
+        }
+
+        public async Task StartAsync()
+        {
+          UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+          string pathLogFile = Path.Combine(
+            Directory.CreateDirectory("UTXOBuild").FullName,
+            "UTXOBuild-" + DateTime.Now.ToString("yyyyddM-HHmmss") + ".csv");
+
+          using (StreamWriter logFileWriter = new StreamWriter(
+           new FileStream(
+             pathLogFile,
+             FileMode.Append,
+             FileAccess.Write,
+             FileShare.Read)))
           {
-            UTXOBatch batch = await BatchBuffer.ReceiveAsync().ConfigureAwait(false);
-
-            if (batch.BatchIndex != BatchIndexNext)
+            while (true)
             {
-              QueueMergeBatch.Add(batch.BatchIndex, batch);
-              continue;
-            }
+              UTXOBatch batch = await BatchBuffer.ReceiveAsync().ConfigureAwait(false);
 
-            while(true)
-            {
-              if(!HeaderHashMergedLast.IsEqual(batch.HeaderHashPrevious))
+              if (batch.BatchIndex != BatchIndexNext)
               {
-                throw new UTXOException(string.Format(
-                  "In Batch {0} previous hash {1} is not equal to last merged hash {2}",
-                  batch.BatchIndex,
-                  batch.HeaderHashPrevious.ToHexString(),
-                  HeaderHashMergedLast.ToHexString()));
+                QueueMergeBatch.Add(batch.BatchIndex, batch);
+                continue;
               }
 
-              batch.StopwatchMerging.Start();
-              UTXO.InsertUTXOs(batch);
-              UTXO.SpendUTXOs(batch);
-              batch.StopwatchMerging.Stop();
-
-              BatchIndexNext += 1;
-              HeaderHashMergedLast = batch.Blocks.Last().HeaderHash;
-              BlockHeight += batch.Blocks.Count;
-
-              if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0 && batch.BatchIndex > 0)
+              while (true)
               {
-                await ArchiveUTXOState(batch);
-              }
-              
-              LogCSV(batch, logFileWriter);
+                if (!HeaderHashMergedLast.IsEqual(batch.HeaderHashPrevious))
+                {
+                  throw new UTXOException(string.Format(
+                    "In Batch {0} previous hash {1} is not equal to last merged hash {2}",
+                    batch.BatchIndex,
+                    batch.HeaderHashPrevious.ToHexString(),
+                    HeaderHashMergedLast.ToHexString()));
+                }
 
-              if (!QueueMergeBatch.TryGetValue(BatchIndexNext, out batch))
-              {
-                break;
+                batch.StopwatchMerging.Start();
+                foreach (Block block in batch.Blocks)
+                {
+                  UTXO.InsertUTXOs(block);
+                }
+                foreach (Block block in batch.Blocks)
+                {
+                  UTXO.SpendUTXOs(block);
+                }
+                batch.StopwatchMerging.Stop();
+
+                BatchIndexNext += 1;
+                BlockHeight += batch.Blocks.Count;
+
+                if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0 && batch.BatchIndex > 0)
+                {
+                  await ArchiveUTXOState(batch); // Make Temp folder first
+                }
+
+                LogCSV(batch, logFileWriter);
+
+                if (!QueueMergeBatch.TryGetValue(BatchIndexNext, out batch))
+                {
+                  break;
+                }
               }
             }
           }
         }
-      }
 
-      async Task ArchiveUTXOState(UTXOBatch batch)
-      {
-        Directory.CreateDirectory(RootPath);
+        async Task ArchiveUTXOState(UTXOBatch batch)
+        {
+          Directory.CreateDirectory(RootPath);
 
-        byte[] uTXOState = new byte[40];
-        BitConverter.GetBytes(BatchIndexNext).CopyTo(uTXOState, 0);
-        BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
-        HeaderHashMergedLast.CopyTo(uTXOState, 8);
+          byte[] uTXOState = new byte[40];
+          BitConverter.GetBytes(BatchIndexNext).CopyTo(uTXOState, 0);
+          BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
+          HeaderHashMergedLast.CopyTo(uTXOState, 8);
 
-        await WriteFileAsync(
-          Path.Combine(RootPath, "UTXOState"),
-          uTXOState);
+          await WriteFileAsync(
+            Path.Combine(RootPath, "UTXOState"),
+            uTXOState);
 
-        Parallel.ForEach(UTXO.Tables, c => c.BackupToDisk());
-      }
-      
-      void LogCSV(UTXOBatch batch, StreamWriter logFileWriter)
-      {
-        long timeParsing = batch.StopwatchParse.ElapsedMilliseconds;
+          Parallel.ForEach(UTXO.Tables, c => c.BackupToDisk());
+        }
 
-        int ratioMergeToParse =
-          (int)((float)batch.StopwatchMerging.ElapsedTicks * 100
-          / batch.StopwatchParse.ElapsedTicks);
+        void LogCSV(UTXOBatch batch, StreamWriter logFileWriter)
+        {
+          long timeParsing = batch.StopwatchParse.ElapsedMilliseconds;
 
-        string logCSV = string.Format(
-          "{0},{1},{2},{3},{4},{5},{6},{7}",
-          batch.BatchIndex,
-          UTXO.BlockHeight,
-          DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
-          timeParsing,
-          ratioMergeToParse,
-          UTXO.Tables[0].GetMetricsCSV(),
-          UTXO.Tables[1].GetMetricsCSV(),
-          UTXO.Tables[2].GetMetricsCSV());
+          int ratioMergeToParse =
+            (int)((float)batch.StopwatchMerging.ElapsedTicks * 100
+            / batch.StopwatchParse.ElapsedTicks);
 
-        Console.WriteLine(logCSV);
-        logFileWriter.WriteLine(logCSV);
+          string logCSV = string.Format(
+            "{0},{1},{2},{3},{4},{5},{6},{7}",
+            batch.BatchIndex,
+            BlockHeight,
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
+            timeParsing,
+            ratioMergeToParse,
+            UTXO.Tables[0].GetMetricsCSV(),
+            UTXO.Tables[1].GetMetricsCSV(),
+            UTXO.Tables[2].GetMetricsCSV());
+
+          Console.WriteLine(logCSV);
+          logFileWriter.WriteLine(logCSV);
+        }
       }
     }
   }

@@ -76,14 +76,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Accounting\UTXO\ArchiveUTXOBatchLoader.cs" />
     <Compile Include="Accounting\UTXO\Block.cs" />
     <Compile Include="Accounting\UTXO\Index\UTXOTableUInt32Array.cs" />
     <Compile Include="Accounting\UTXO\Index\UTXOTableULong64.cs" />
     <Compile Include="Accounting\UTXO\IBlockLoader.cs" />
     <Compile Include="Accounting\UTXO\Index\UTXOTable.cs" />
     <Compile Include="Accounting\UTXO\Index\UTXOTableUInt32.cs" />
-    <Compile Include="Accounting\UTXO\NetworkUTXOBatchLoader.cs" />
     <Compile Include="Accounting\UTXO\UTXOBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOBuilder.cs" />
     <Compile Include="Accounting\UTXO\UTXODownloadBatch.cs" />

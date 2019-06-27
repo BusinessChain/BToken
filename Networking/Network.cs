@@ -80,7 +80,7 @@ namespace BToken.Networking
 
       while (true)
       {
-        if (await peer.TryExecuteSessionAsync(session, default).ConfigureAwait(false))
+        if (await peer.TryExecuteSessionAsync(session).ConfigureAwait(false))
         {
           await PeersOutboundAvailable.SendAsync(peer);
           return;

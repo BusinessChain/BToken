@@ -10,8 +10,9 @@ namespace BToken.Accounting
   {
     class UTXOBatch
     {
-      public int BatchIndex;
+      public bool IsCancellationBatch;
 
+      public int BatchIndex;
       public byte[] Buffer;
       public int BufferIndex;
 
@@ -24,7 +25,6 @@ namespace BToken.Accounting
       public SHA256 SHA256 = SHA256.Create();
 
       public Stopwatch StopwatchMerging = new Stopwatch();
-      public Stopwatch StopwatchResolver = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
       
     }
