@@ -23,8 +23,8 @@ namespace BToken.Accounting
         public UTXODownloadBatch(int batchIndex)
         {
           BatchIndex = batchIndex;
-          Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD);
-          HeaderHashes = new List<byte[]>(COUNT_BLOCKS_DOWNLOAD);
+          Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD_BATCH);
+          HeaderHashes = new List<byte[]>(COUNT_BLOCKS_DOWNLOAD_BATCH);
         }
       }
     }

@@ -52,7 +52,8 @@ namespace BToken.Accounting
           {
             while (true)
             {
-              UTXOBatch batch = await BatchBuffer.ReceiveAsync().ConfigureAwait(false);
+              UTXOBatch batch = await BatchBuffer
+                .ReceiveAsync(Builder.CancellationBuilder.Token).ConfigureAwait(false);
 
               if (batch.BatchIndex != BatchIndexNext)
               {
@@ -62,14 +63,14 @@ namespace BToken.Accounting
 
               while (true)
               {
-                if (!HeaderHashMergedLast.IsEqual(batch.HeaderHashPrevious))
-                {
-                  throw new UTXOException(string.Format(
-                    "In Batch {0} previous hash {1} is not equal to last merged hash {2}",
-                    batch.BatchIndex,
-                    batch.HeaderHashPrevious.ToHexString(),
-                    HeaderHashMergedLast.ToHexString()));
-                }
+                //if (!HeaderHashMergedLast.IsEqual(batch.Blocks.First().HeaderHashPrevious))
+                //{
+                //  throw new UTXOException(string.Format(
+                //    "In Batch {0} previous hash {1} is not equal to last merged hash {2}",
+                //    batch.BatchIndex,
+                //    batch.HeaderHashPrevious.ToHexString(),
+                //    HeaderHashMergedLast.ToHexString()));
+                //}
 
                 batch.StopwatchMerging.Start();
                 foreach (Block block in batch.Blocks)
@@ -91,6 +92,12 @@ namespace BToken.Accounting
                 }
 
                 LogCSV(batch, logFileWriter);
+
+                if(batch.IsCancellationBatch)
+                {
+                  Builder.CancellationBuilder.Cancel();
+                  break;
+                }
 
                 if (!QueueMergeBatch.TryGetValue(BatchIndexNext, out batch))
                 {

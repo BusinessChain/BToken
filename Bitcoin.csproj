@@ -87,7 +87,6 @@
     <Compile Include="Accounting\UTXO\UTXODownloadBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOMerger.cs" />
     <Compile Include="Accounting\UTXO\UTXOParser.cs" />
-    <Compile Include="Accounting\UTXO\UTXOParserNEW.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Accounting\UTXO\TXInput.cs" />

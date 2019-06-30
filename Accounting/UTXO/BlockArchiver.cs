@@ -21,7 +21,7 @@ namespace BToken.Accounting
           {
             foreach (Block block in blocks)
             {
-              await file.WriteAsync(block.Buffer, block.StartIndex, block.Length);
+              await file.WriteAsync(block.Buffer, 0, block.Buffer.Length);
             }
           }
         }

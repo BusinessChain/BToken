@@ -11,8 +11,6 @@ namespace BToken.Accounting
     class Block
     {
       public byte[] Buffer;
-      public int StartIndex;
-      public int Length;
 
       public byte[] HeaderHash;
 
@@ -21,16 +19,19 @@ namespace BToken.Accounting
       public int[] IndexesUTXOItems;
       public TXInput[][] InputsPerTX;
 
+      public Block(byte[] headerHash, int tXCount)
+        : this(
+          null,
+          headerHash,
+          tXCount)
+      { }
+
       public Block(
         byte[] buffer,
-        int startIndexBlock,
-        int startIndexTXs,
         byte[] headerHash,
         int tXCount)
       {
         Buffer = buffer;
-        StartIndex = startIndexBlock;
-        Length = startIndexTXs - startIndexBlock;
         HeaderHash = headerHash;
 
         TXCount = tXCount;

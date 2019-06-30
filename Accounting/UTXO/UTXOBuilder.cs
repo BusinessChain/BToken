@@ -21,8 +21,8 @@ namespace BToken.Accounting
       BitcoinGenesisBlock GenesisBlock;
 
       const int COUNT_PROCESSING_BATCHES_PARALLEL = 8;
-      const int COUNT_DOWNLOAD_TASKS = 8;
-      const int COUNT_BLOCKS_DOWNLOAD = 10;
+      const int COUNT_DOWNLOAD_TASKS_PARALLEL = 8;
+      const int COUNT_BLOCKS_DOWNLOAD_BATCH = 10;
       const int COUNT_TXS_IN_BATCH_FILE = 100;
 
       CancellationTokenSource CancellationBuilder 
@@ -68,16 +68,21 @@ namespace BToken.Accounting
         Task mergerTask = Merger.StartAsync();
 
         await RunArchiveLoaderAsync();
+        
+        StartNetworkLoader();
 
-        Headerchain.ChainHeader headerDispatchedLast
-          = UTXO.Headerchain.ReadHeader(HeaderHashDispatchedLast, SHA256);
-
-        if (headerDispatchedLast.HeadersNext == null)
+        await DelayUntilMergerCancelsAsync();
+      }
+      async Task DelayUntilMergerCancelsAsync()
+      {
+        try
+        {
+          await Task.Delay(-1, CancellationBuilder.Token).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException)
         {
           return;
         }
-
-        await RunNetworkLoaderAsync(headerDispatchedLast);
       }
       
       void LoadUTXOState()
@@ -119,7 +124,9 @@ namespace BToken.Accounting
           Buffer = GenesisBlock.BlockBytes
         };
 
-        UTXO.ParseBatch(genesisBatch);
+        var parser = new UTXOParser(UTXO);
+        parser.Load(genesisBatch);
+        parser.ParseBatch();
 
         UTXO.InsertUTXOs(genesisBatch.Blocks.First());
       }
@@ -135,6 +142,8 @@ namespace BToken.Accounting
       }
       async Task LoadBatchesFromArchiveAsync()
       {
+        UTXOParser parser = new UTXOParser(UTXO);
+
         try
         {
           while (true)
@@ -161,7 +170,10 @@ namespace BToken.Accounting
               }
             }
 
-            UTXO.Parser.ParseBatch(batch);
+            batch.StopwatchParse.Start();
+            parser.Load(batch);
+            parser.ParseBatch();
+            batch.StopwatchParse.Stop();
 
             Merger.BatchBuffer.Post(batch);
           }
@@ -173,42 +185,54 @@ namespace BToken.Accounting
         }
       }
 
-      async Task RunNetworkLoaderAsync(Headerchain.ChainHeader header)
+      void StartNetworkLoader()
       {
+        if(IsChainInSyncWithNetwork(out Headerchain.ChainHeader header))
+        {
+          return;
+        }
+
         for (int i = 0; i < COUNT_PROCESSING_BATCHES_PARALLEL; i += 1)
         {
-          Task parserTasks = StartTXParserAsync();
+          Task parserTasks = RunTXParserAsync();
         }
 
         Task runBatcherTask = RunBatcherAsync();
         
-        for (int i = 0; i < COUNT_DOWNLOAD_TASKS; i += 1)
+        for (int i = 0; i < COUNT_DOWNLOAD_TASKS_PARALLEL; i += 1)
         {
-          var sessionBlockDownload = new SessionBlockDownload(this);
-
-          Task runDownloadTask = UTXO.Network.RunSessionAsync(sessionBlockDownload);
+          Task runDownloadTask = UTXO.Network.RunSessionAsync(
+            new SessionBlockDownload(this));
         }
 
         CreateDownloadBatches(header);
-        
-        try
-        {
-          await Task.Delay(-1, CancellationBuilder.Token).ConfigureAwait(false);
-        }
-        catch (TaskCanceledException)
-        {
-          return;
-        }
       }
 
-      async Task StartTXParserAsync()
+      bool IsChainInSyncWithNetwork(out Headerchain.ChainHeader headerDispatchedLast)
       {
+        headerDispatchedLast = UTXO.Headerchain.ReadHeader(
+          HeaderHashDispatchedLast, 
+          SHA256);
+
+        if (headerDispatchedLast.HeadersNext == null)
+        {
+          return true;
+        }
+
+        return false;
+      }
+
+      async Task RunTXParserAsync()
+      {
+        UTXOParser parser = new UTXOParser(UTXO);
+        
         while(true)
         {
           UTXOBatch batch = await BatchParserBuffer
             .ReceiveAsync(CancellationBuilder.Token).ConfigureAwait(false);
 
-          UTXO.ParseBatch(batch);
+          parser.Load(batch);
+          parser.ParseBatch();
 
           await BlockArchiver.ArchiveBatchAsync(batch.Blocks, batch.BatchIndex);
 
@@ -288,7 +312,7 @@ namespace BToken.Accounting
         {
           var downloadBatch = new UTXODownloadBatch(indexDownloadBatch++);
 
-          for (int i = 0; i < COUNT_BLOCKS_DOWNLOAD; i += 1)
+          for (int i = 0; i < COUNT_BLOCKS_DOWNLOAD_BATCH; i += 1)
           {
             downloadBatch.HeaderHashes.Add(header.GetHeaderHash(SHA256));
 

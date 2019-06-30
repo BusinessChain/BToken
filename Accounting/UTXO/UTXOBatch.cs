@@ -17,16 +17,9 @@ namespace BToken.Accounting
       public int BufferIndex;
 
       public List<Block> Blocks = new List<Block>(50);
-
-      public byte[] HeaderHashPrevious;
-
-
-      public Headerchain.ChainHeader ChainHeader;
-      public SHA256 SHA256 = SHA256.Create();
-
+           
       public Stopwatch StopwatchMerging = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
-      
     }
   }
 }

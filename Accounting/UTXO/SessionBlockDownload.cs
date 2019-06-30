@@ -20,13 +20,15 @@ namespace BToken.Accounting
         const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 30;
 
         UTXOBuilder Builder;
-        public List<Block> Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD);
+        UTXOParser Parser;
+        public List<Block> Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD_BATCH);
         SHA256 SHA256;
 
 
         public SessionBlockDownload(UTXOBuilder builder)
         {
           Builder = builder;
+          Parser = new UTXOParser(Builder.UTXO);
           SHA256 = SHA256.Create();
         }
 
@@ -54,21 +56,19 @@ namespace BToken.Accounting
                 .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
                 .ToList()));
 
-            var cancellationGetBlock = new CancellationTokenSource(
+            var cancellationGetData = new CancellationTokenSource(
               TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
 
             while (Blocks.Count < downloadBatch.HeaderHashes.Count)
             {
               NetworkMessage networkMessage =
-                await channel.ReceiveSessionMessageAsync(cancellationGetBlock.Token);
+                await channel.ReceiveSessionMessageAsync(cancellationGetData.Token);
 
               if (networkMessage.Command == "block")
               {
-                Block block = UTXO.Parser.ParseBlock(
-                  networkMessage.Payload,
-                  0,
-                  downloadBatch.HeaderHashes[Blocks.Count],
-                  SHA256);
+                Parser.ParseHeader(out int indexMerkleRoot, out byte[] headerHash);
+
+                Block block = Parser.ParseBlock(headerHash, indexMerkleRoot);
 
                 Blocks.Add(block);
 
