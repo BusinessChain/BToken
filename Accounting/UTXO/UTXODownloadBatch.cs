@@ -17,14 +17,13 @@ namespace BToken.Accounting
         public bool IsCancellationBatch = false;
 
         public int BatchIndex;
-        public List<byte[]> HeaderHashes;
-        public List<Block> Blocks;
+
+        public List<byte[]> HeaderHashes = new List<byte[]>(COUNT_BLOCKS_DOWNLOAD_BATCH);
+        public List<Block> Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD_BATCH);
 
         public UTXODownloadBatch(int batchIndex)
         {
           BatchIndex = batchIndex;
-          Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD_BATCH);
-          HeaderHashes = new List<byte[]>(COUNT_BLOCKS_DOWNLOAD_BATCH);
         }
       }
     }

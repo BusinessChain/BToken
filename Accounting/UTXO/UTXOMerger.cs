@@ -73,13 +73,13 @@ namespace BToken.Accounting
                 //}
 
                 batch.StopwatchMerging.Start();
-                foreach (Block block in batch.Blocks)
+                foreach (UTXOParserData parserData in batch.UTXOParserData)
                 {
-                  UTXO.InsertUTXOs(block);
+                  UTXO.InsertUTXOs(parserData);
                 }
-                foreach (Block block in batch.Blocks)
+                foreach (UTXOParserData parserData in batch.UTXOParserData)
                 {
-                  UTXO.SpendUTXOs(block);
+                  UTXO.SpendUTXOs(parserData);
                 }
                 batch.StopwatchMerging.Stop();
 

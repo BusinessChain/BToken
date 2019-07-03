@@ -125,10 +125,9 @@ namespace BToken.Accounting
         };
 
         var parser = new UTXOParser(UTXO);
-        parser.Load(genesisBatch);
-        parser.ParseBatch();
+        parser.ParseBatch(genesisBatch.Buffer, 0);
 
-        UTXO.InsertUTXOs(genesisBatch.Blocks.First());
+        UTXO.InsertUTXOs(genesisBatch.UTXOParserData.First());
       }
 
       async Task RunArchiveLoaderAsync()
@@ -148,18 +147,19 @@ namespace BToken.Accounting
         {
           while (true)
           {
-            UTXOBatch batch = new UTXOBatch();
+            byte[] batchBuffer;
+            int batchIndex = 0;
 
             lock (LOCK_BatchIndexLoad)
             {
-              batch.BatchIndex = BatchIndexLoad;
+              batchIndex = BatchIndexLoad;
               BatchIndexLoad += 1;
             }
 
             try
             {
-              batch.Buffer = await BlockArchiver
-              .ReadBlockBatchAsync(batch.BatchIndex).ConfigureAwait(false);
+              batchBuffer = await BlockArchiver
+              .ReadBlockBatchAsync(batchIndex).ConfigureAwait(false);
             }
             catch(IOException)
             {
@@ -170,10 +170,7 @@ namespace BToken.Accounting
               }
             }
 
-            batch.StopwatchParse.Start();
-            parser.Load(batch);
-            parser.ParseBatch();
-            batch.StopwatchParse.Stop();
+            UTXOBatch batch = parser.ParseBatch(batchBuffer, batchIndex);
 
             Merger.BatchBuffer.Post(batch);
           }
@@ -231,8 +228,7 @@ namespace BToken.Accounting
           UTXOBatch batch = await BatchParserBuffer
             .ReceiveAsync(CancellationBuilder.Token).ConfigureAwait(false);
 
-          parser.Load(batch);
-          parser.ParseBatch();
+          parser.ParseBatch(batch);
 
           await BlockArchiver.ArchiveBatchAsync(batch.Blocks, batch.BatchIndex);
 
@@ -261,7 +257,7 @@ namespace BToken.Accounting
             continue;
           }
 
-          while (true)
+          do
           {
             foreach (Block block in downloadBatch.Blocks)
             {
@@ -269,8 +265,8 @@ namespace BToken.Accounting
               TXCountFIFO += block.TXCount;
             }
 
-            while(
-              TXCountFIFO > COUNT_TXS_IN_BATCH_FILE || 
+            while (
+              TXCountFIFO > COUNT_TXS_IN_BATCH_FILE ||
               (downloadBatch.IsCancellationBatch && TXCountFIFO > 0))
             {
               UTXOBatch batch = new UTXOBatch()
@@ -296,11 +292,7 @@ namespace BToken.Accounting
 
             DownloadBatcherIndex += 1;
 
-            if (!QueueDownloadBatch.TryGetValue(DownloadBatcherIndex, out downloadBatch))
-            {
-              break;
-            }
-          }
+          } while (QueueDownloadBatch.TryGetValue(DownloadBatcherIndex, out downloadBatch));
         }
       }
 

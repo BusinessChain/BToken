@@ -21,7 +21,6 @@ namespace BToken.Accounting
 
         UTXOBuilder Builder;
         UTXOParser Parser;
-        public List<Block> Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD_BATCH);
         SHA256 SHA256;
 
 
@@ -34,8 +33,6 @@ namespace BToken.Accounting
 
         public async Task RunAsync(INetworkChannel channel)
         {
-          Blocks.Clear();
-
           UTXODownloadBatch downloadBatch;
 
           while (true)
@@ -58,25 +55,29 @@ namespace BToken.Accounting
 
             var cancellationGetData = new CancellationTokenSource(
               TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
-
-            while (Blocks.Count < downloadBatch.HeaderHashes.Count)
+            
+            while (downloadBatch.Blocks.Count < COUNT_BLOCKS_DOWNLOAD_BATCH)
             {
-              NetworkMessage networkMessage =
-                await channel.ReceiveSessionMessageAsync(cancellationGetData.Token);
+              NetworkMessage networkMessage = await channel
+                .ReceiveSessionMessageAsync(cancellationGetData.Token)
+                .ConfigureAwait(false);
 
-              if (networkMessage.Command == "block")
+              if (networkMessage.Command != "block")
               {
-                Parser.ParseHeader(out int indexMerkleRoot, out byte[] headerHash);
-
-                Block block = Parser.ParseBlock(headerHash, indexMerkleRoot);
-
-                Blocks.Add(block);
-
-                //Console.WriteLine("{0}, {1} Downloaded block {2}",
-                //  DateTime.Now,
-                //  channel.GetIdentification(),
-                //  Batch.Blocks.Last().HeaderHash.ToHexString());
+                continue;
               }
+
+              Block block = new Block(networkMessage.Payload, 0);
+
+              UTXOParser.ParseHeader(
+                block,
+                SHA256);
+
+              UTXOParser.ValidateHeaderHash(
+                block.HeaderHash, 
+                downloadBatch.HeaderHashes[downloadBatch.Blocks.Count]);
+
+              downloadBatch.Blocks.Add(block);
             }
 
             Console.WriteLine("{0}, {1} Download index {2}",

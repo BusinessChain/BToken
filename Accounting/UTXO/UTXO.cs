@@ -51,12 +51,12 @@ namespace BToken.Accounting
       await Builder.RunAsync();
     }
 
-    void InsertUTXOs(Block block)
+    void InsertUTXOs(UTXOParserData parserData)
     {
       for (int c = 0; c < Tables.Length; c += 1)
       {
       LoopUTXOItems:
-        while (block.TryPopUTXOItem(c, out UTXOItem uTXOItem))
+        while (parserData.TryPopUTXOItem(c, out UTXOItem uTXOItem))
         {
           for (int cc = 0; cc < Tables.Length; cc += 1)
           {
@@ -72,15 +72,15 @@ namespace BToken.Accounting
         }
       }
     }
-    void SpendUTXOs(Block block)
+    void SpendUTXOs(UTXOParserData parserData)
     {
-      for (int t = 0; t < block.TXCount; t += 1)
+      for (int t = 0; t < parserData.InputsPerTX.Length; t += 1)
       {
         int i = 0;
       LoopSpendUTXOs:
-        while (i < block.InputsPerTX[t].Length)
+        while (i < parserData.InputsPerTX[t].Length)
         {
-          TXInput input = block.InputsPerTX[t][i];
+          TXInput input = parserData.InputsPerTX[t][i];
 
           for (int c = 0; c < Tables.Length; c += 1)
           {

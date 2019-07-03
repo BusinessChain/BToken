@@ -19,10 +19,12 @@ namespace BToken.Accounting
 
       UTXO UTXO;
 
-      UTXOBatch Batch;
       byte[] Buffer;
       int BatchIndex;
+      byte[] HeaderHash;
+      int TXCount;
 
+      public UTXOParserData UTXOParserData;
       Headerchain.ChainHeader ChainHeader;
 
       int BufferIndex = 0;
@@ -34,115 +36,126 @@ namespace BToken.Accounting
         UTXO = uTXO;
       }
       
-      public void Load(UTXOBatch batch)
+      public UTXOBatch ParseBatch(byte[] buffer, int batchIndex)
       {
-        Batch = batch;
-        Buffer = batch.Buffer;
-      }
+        int bufferIndex = 0;
 
-      
-      public void ParseBatch()
-      {
+        Block block = new Block(buffer, bufferIndex);
+
+        ParseHeader(
+          block,
+          SHA256);
+
+        Headerchain.ChainHeader chainHeader
+          = UTXO.Headerchain.ReadHeader(block.HeaderHash, SHA256);
+
+        UTXOBatch batch = new UTXOBatch()
+        {
+          BatchIndex = batchIndex,
+        };
+
+        batch.UTXOParserData.Add(
+          ParseBlock(block, batch.BatchIndex));
+
         while (BufferIndex < Buffer.Length)
         {
-          ParseHeader(out int indexMerkleRoot, out byte[] headerHash);
-
-          Block block = ParseBlock(headerHash, indexMerkleRoot);
-
-          Batch.Blocks.Add(block);
-        }
-      }
-      public Block ParseBlock(byte[] headerHash, int indexMerkleRoot)
-      {
-        int tXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
-        var block = new Block(headerHash, tXCount);
-
-        if (tXCount == 1)
-        {
-          byte[] tXHash = ParseTX(
+          ParseHeader(
             block,
-            tXIndex: 0,
-            isCoinbase: true);
+            SHA256);
 
-          if (!tXHash.IsEqual(Buffer, indexMerkleRoot))
-          {
-            throw new UTXOException(
-              string.Format("Payload corrupted. BatchIndex {0}, BufferIndex: {1}",
-              BatchIndex,
-              BufferIndex));
-          }
+          chainHeader = chainHeader.HeadersNext[0];
 
-          return block;
+          ValidateHeaderHash(
+            block.HeaderHash,
+            chainHeader.GetHeaderHash(SHA256));
+
+          batch.UTXOParserData.Add(
+            ParseBlock(block, batch.BatchIndex));
         }
 
-        int tXsLengthMod2 = tXCount & 1;
-        var merkleList = new byte[tXCount + tXsLengthMod2][];
-
-        merkleList[0] = ParseTX(
-          block,
-          tXIndex: 0,
-          isCoinbase: true);
-
-        for (int t = 1; t < tXCount; t += 1)
-        {
-          merkleList[t] = ParseTX(
-            block,
-            tXIndex: t,
-            isCoinbase: false);
-        }
-
-        if (tXsLengthMod2 != 0)
-        {
-          merkleList[tXCount] = merkleList[tXCount - 1];
-        }
-
-        if (!GetRoot(merkleList, SHA256).IsEqual(Buffer, indexMerkleRoot))
-        {
-          throw new UTXOException(
-            string.Format("Payload corrupted. batchIndex {0}, bufferIndex: {1}",
-            BatchIndex,
-            BufferIndex));
-        }
-
-        return block;
+        return batch;
       }
 
-      public void ParseHeader(out int indexMerkleRoot, out byte[] headerHash)
+      public static void ParseHeader(
+        Block block, 
+        SHA256 sHA256)
       {
-        headerHash =
-          SHA256.ComputeHash(
-            SHA256.ComputeHash(
-              Buffer,
-              BufferIndex,
+        block.HeaderHash =
+          sHA256.ComputeHash(
+            sHA256.ComputeHash(
+              block.Buffer,
+              block.BufferIndex,
               COUNT_HEADER_BYTES));
 
-        ValidateHeaderHash(headerHash);
-
-        indexMerkleRoot = BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
-        BufferIndex += COUNT_HEADER_BYTES;
+        block.BufferIndex += COUNT_HEADER_BYTES;
+        block.TXCount = VarInt.GetInt32(block.Buffer, ref block.BufferIndex);
       }
 
-      void ValidateHeaderHash(byte[] headerHash)
+      public static void ValidateHeaderHash(byte[] headerHash, byte[] headerHashValidator)
       {
-        if (ChainHeader == null)
-        {
-          ChainHeader = UTXO.Headerchain.ReadHeader(headerHash, SHA256);
-          return;
-        }
-
-        ChainHeader = ChainHeader.HeadersNext[0];
-
-        byte[] headerHashValidator = ChainHeader.GetHeaderHash(SHA256);
         if (!headerHash.IsEqual(headerHashValidator))
         {
-          throw new UTXOException(string.Format("Unexpected header hash {0}, \nexpected {1}",
+          throw new UTXOException(
+            string.Format("Unexpected header hash {0}, \nexpected {1}",
             headerHash.ToHexString(),
             headerHashValidator.ToHexString()));
         }
       }
 
+      public void ParseBatch(UTXOBatch batch)
+      {
+        foreach (Block block in batch.Blocks)
+        {
+          UTXOParserData uTXOParserData = ParseBlock(block, batch.BatchIndex);
+          batch.UTXOParserData.Add(uTXOParserData);
+        }
+      }
+      public UTXOParserData ParseBlock(Block block, int batchIndex)
+      {
+        Buffer = block.Buffer;
+        BufferIndex = block.BufferIndex;
+        HeaderHash = block.HeaderHash;
+        TXCount = block.TXCount;
+
+        BatchIndex = batchIndex;
+        UTXOParserData = new UTXOParserData(TXCount);
+
+        if (TXCount == 1)
+        {
+          byte[] tXHash = ParseTX(0, true);
+
+          if (!tXHash.IsEqual(Buffer, OFFSET_INDEX_MERKLE_ROOT))
+          {
+            throw new UTXOException("Payload merkle root corrupted");
+          }
+
+          return UTXOParserData;
+        }
+
+        int tXsLengthMod2 = TXCount & 1;
+        var merkleList = new byte[TXCount + tXsLengthMod2][];
+
+        merkleList[0] = ParseTX(0, true);
+
+        for (int t = 1; t < TXCount; t += 1)
+        {
+          merkleList[t] = ParseTX(t, false);
+        }
+
+        if (tXsLengthMod2 != 0)
+        {
+          merkleList[TXCount] = merkleList[TXCount - 1];
+        }
+
+        if (!GetRoot(merkleList, SHA256).IsEqual(Buffer, OFFSET_INDEX_MERKLE_ROOT))
+        {
+          throw new UTXOException("Payload merkle root corrupted.");
+        }
+
+        return UTXOParserData;
+      }
+
       byte[] ParseTX(
-        Block block,
         int tXIndex,
         bool isCoinbase)
       {
@@ -159,15 +172,15 @@ namespace BToken.Accounting
         int countTXInputs = VarInt.GetInt32(Buffer, ref BufferIndex);
         if (isCoinbase)
         {
-          block.InputsPerTX[tXIndex] = new TXInput[0];
+          UTXOParserData.InputsPerTX[tXIndex] = new TXInput[0];
           new TXInput(Buffer, ref BufferIndex);
         }
         else
         {
-          block.InputsPerTX[tXIndex] = new TXInput[countTXInputs];
+          UTXOParserData.InputsPerTX[tXIndex] = new TXInput[countTXInputs];
           for (int i = 0; i < countTXInputs; i += 1)
           {
-            block.InputsPerTX[tXIndex][i] = new TXInput(Buffer, ref BufferIndex);
+            UTXOParserData.InputsPerTX[tXIndex][i] = new TXInput(Buffer, ref BufferIndex);
           }
         }
 
@@ -185,11 +198,11 @@ namespace BToken.Accounting
         {
           if (UTXO.Tables[c].TryParseUTXO(
             BatchIndex,
-            block.HeaderHash,
+            HeaderHash,
             lengthUTXOBits,
             out UTXOItem uTXOItem))
           {
-            block.PushUTXOItem(c, uTXOItem);
+            UTXOParserData.PushUTXOItem(c, uTXOItem);
 
             if (isWitnessFlagPresent)
             {

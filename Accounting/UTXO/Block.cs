@@ -11,20 +11,15 @@ namespace BToken.Accounting
     class Block
     {
       public byte[] Buffer;
-
+      public int BufferIndex;
       public byte[] HeaderHash;
-
       public int TXCount;
-      public UTXOItem[][] UTXOItemsPerTable;
-      public int[] IndexesUTXOItems;
-      public TXInput[][] InputsPerTX;
 
-      public Block(byte[] headerHash, int tXCount)
-        : this(
-          null,
-          headerHash,
-          tXCount)
-      { }
+      public Block(byte[] buffer, int bufferIndex)
+      {
+        Buffer = buffer;
+        BufferIndex = bufferIndex;
+      }
 
       public Block(
         byte[] buffer,
@@ -33,38 +28,8 @@ namespace BToken.Accounting
       {
         Buffer = buffer;
         HeaderHash = headerHash;
-
         TXCount = tXCount;
-
-        UTXOItemsPerTable = new UTXOItem[][]{
-          new UTXOItemUInt32[tXCount],
-          new UTXOItemULong64[tXCount],
-          new UTXOItemUInt32Array[tXCount]};
-
-        IndexesUTXOItems = new int[UTXOItemsPerTable.Length];
-
-        InputsPerTX = new TXInput[tXCount][];
       }
-
-      public void PushUTXOItem(int address, UTXOItem uTXOItem)
-      {
-        UTXOItemsPerTable[address][IndexesUTXOItems[address]] = uTXOItem;
-        IndexesUTXOItems[address] += 1;
-      }
-      public bool TryPopUTXOItem(int address, out UTXOItem uTXOItem)
-      {
-        IndexesUTXOItems[address] -= 1;
-
-        if (IndexesUTXOItems[address] < 0)
-        {
-          uTXOItem = null;
-          return false;
-        }
-
-        uTXOItem = UTXOItemsPerTable[address][IndexesUTXOItems[address]];
-        return true;
-      }
-
     }
   }
 }
