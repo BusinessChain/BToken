@@ -10,6 +10,7 @@ namespace BToken.Accounting
   {
     class UTXOParserData
     {
+      public int TXCount;
       public UTXOItem[][] UTXOItemsPerTable;
       public int[] IndexesUTXOItems;
       public TXInput[][] InputsPerTX;
@@ -17,6 +18,8 @@ namespace BToken.Accounting
 
       public UTXOParserData(int tXCount)
       {
+        TXCount = tXCount;
+
         UTXOItemsPerTable = new UTXOItem[][]{
           new UTXOItemUInt32[tXCount],
           new UTXOItemULong64[tXCount],

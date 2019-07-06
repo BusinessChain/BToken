@@ -10,7 +10,7 @@ namespace BToken.Accounting
   {
     class UTXOParser
     {
-      const int COUNT_HEADER_BYTES = 80;
+      public const int COUNT_HEADER_BYTES = 80;
       const int BYTE_LENGTH_VERSION = 4;
       const int BYTE_LENGTH_OUTPUT_VALUE = 8;
       const int BYTE_LENGTH_LOCK_TIME = 4;
@@ -19,17 +19,18 @@ namespace BToken.Accounting
 
       UTXO UTXO;
 
-      byte[] Buffer;
       int BatchIndex;
+      byte[] Buffer;
+      int BufferIndex;
+      int MerkleIndex;
       byte[] HeaderHash;
       int TXCount;
 
-      public UTXOParserData UTXOParserData;
-      Headerchain.ChainHeader ChainHeader;
-
-      int BufferIndex = 0;
       SHA256 SHA256 = SHA256.Create();
 
+      public UTXOParserData UTXOParserData;
+      public Headerchain.ChainHeader ChainHeader;
+      
 
       public UTXOParser(UTXO uTXO)
       {
@@ -38,60 +39,67 @@ namespace BToken.Accounting
       
       public UTXOBatch ParseBatch(byte[] buffer, int batchIndex)
       {
-        int bufferIndex = 0;
-
-        Block block = new Block(buffer, bufferIndex);
-
-        ParseHeader(
-          block,
-          SHA256);
-
-        Headerchain.ChainHeader chainHeader
-          = UTXO.Headerchain.ReadHeader(block.HeaderHash, SHA256);
-
         UTXOBatch batch = new UTXOBatch()
         {
-          BatchIndex = batchIndex,
+          BatchIndex = batchIndex
         };
 
-        batch.UTXOParserData.Add(
-          ParseBlock(block, batch.BatchIndex));
+        batch.StopwatchParse.Start();
+
+        Buffer = buffer;
+        BufferIndex = 0;
+        
+        HeaderHash =
+          SHA256.ComputeHash(
+            SHA256.ComputeHash(
+              Buffer,
+              BufferIndex,
+              COUNT_HEADER_BYTES));
+
+        BufferIndex += COUNT_HEADER_BYTES;
+        TXCount = VarInt.GetInt32(buffer, ref BufferIndex);
+
+        ChainHeader = UTXO.Headerchain.ReadHeader(HeaderHash, SHA256);
+        
+        ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
+        batch.UTXOParserDatasets.Add(UTXOParserData);
 
         while (BufferIndex < Buffer.Length)
         {
-          ParseHeader(
-            block,
-            SHA256);
+          HeaderHash =
+            SHA256.ComputeHash(
+              SHA256.ComputeHash(
+                Buffer,
+                BufferIndex,
+                COUNT_HEADER_BYTES));
 
-          chainHeader = chainHeader.HeadersNext[0];
+          int merkleRootIndex = BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
+          BufferIndex += COUNT_HEADER_BYTES;
+          TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
+
+          ChainHeader = ChainHeader.HeadersNext[0];
 
           ValidateHeaderHash(
-            block.HeaderHash,
-            chainHeader.GetHeaderHash(SHA256));
+            HeaderHash,
+            ChainHeader.GetHeaderHash(SHA256));
 
-          batch.UTXOParserData.Add(
-            ParseBlock(block, batch.BatchIndex));
+          ParseBlock(merkleRootIndex);
+          batch.UTXOParserDatasets.Add(UTXOParserData);
         }
+
+        if(ChainHeader.HeadersNext == null)
+        {
+          batch.IsCancellationBatch = true;
+        }
+
+        batch.StopwatchParse.Stop();
 
         return batch;
       }
-
-      public static void ParseHeader(
-        Block block, 
-        SHA256 sHA256)
-      {
-        block.HeaderHash =
-          sHA256.ComputeHash(
-            sHA256.ComputeHash(
-              block.Buffer,
-              block.BufferIndex,
-              COUNT_HEADER_BYTES));
-
-        block.BufferIndex += COUNT_HEADER_BYTES;
-        block.TXCount = VarInt.GetInt32(block.Buffer, ref block.BufferIndex);
-      }
-
-      public static void ValidateHeaderHash(byte[] headerHash, byte[] headerHashValidator)
+      
+      static void ValidateHeaderHash(
+        byte[] headerHash, 
+        byte[] headerHashValidator)
       {
         if (!headerHash.IsEqual(headerHashValidator))
         {
@@ -102,34 +110,67 @@ namespace BToken.Accounting
         }
       }
 
+      public static Block ParseBlockHeader(
+        byte[] buffer,
+        byte[] headerHashValidator,
+        SHA256 sHA256)
+      {
+        int bufferIndex = 0;
+
+        byte[] headerHash =
+          sHA256.ComputeHash(
+            sHA256.ComputeHash(
+              buffer,
+              bufferIndex,
+              COUNT_HEADER_BYTES));
+
+        bufferIndex += COUNT_HEADER_BYTES;
+        int tXCount = VarInt.GetInt32(buffer, ref bufferIndex);
+
+        ValidateHeaderHash(
+          headerHash,
+          headerHashValidator);
+
+        return new Block(
+          buffer,
+          bufferIndex,
+          headerHash,
+          tXCount);
+      }
       public void ParseBatch(UTXOBatch batch)
       {
+        batch.StopwatchParse.Start();
         foreach (Block block in batch.Blocks)
         {
-          UTXOParserData uTXOParserData = ParseBlock(block, batch.BatchIndex);
-          batch.UTXOParserData.Add(uTXOParserData);
+          LoadBlock(block, batch.BatchIndex);
+          ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
+          batch.UTXOParserDatasets.Add(UTXOParserData);
         }
+        batch.StopwatchParse.Stop();
       }
-      public UTXOParserData ParseBlock(Block block, int batchIndex)
+      void LoadBlock(Block block, int batchIndex)
       {
+        BatchIndex = batchIndex;
         Buffer = block.Buffer;
         BufferIndex = block.BufferIndex;
+        MerkleIndex = block.BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
         HeaderHash = block.HeaderHash;
         TXCount = block.TXCount;
-
-        BatchIndex = batchIndex;
+      }
+      void ParseBlock(int merkleRootIndex)
+      {
         UTXOParserData = new UTXOParserData(TXCount);
 
         if (TXCount == 1)
         {
           byte[] tXHash = ParseTX(0, true);
 
-          if (!tXHash.IsEqual(Buffer, OFFSET_INDEX_MERKLE_ROOT))
+          if (!tXHash.IsEqual(Buffer, merkleRootIndex))
           {
             throw new UTXOException("Payload merkle root corrupted");
           }
 
-          return UTXOParserData;
+          return;
         }
 
         int tXsLengthMod2 = TXCount & 1;
@@ -147,12 +188,12 @@ namespace BToken.Accounting
           merkleList[TXCount] = merkleList[TXCount - 1];
         }
 
-        if (!GetRoot(merkleList, SHA256).IsEqual(Buffer, OFFSET_INDEX_MERKLE_ROOT))
+        if (!GetRoot(merkleList, SHA256).IsEqual(Buffer, merkleRootIndex))
         {
           throw new UTXOException("Payload merkle root corrupted.");
         }
 
-        return UTXOParserData;
+        return;
       }
 
       byte[] ParseTX(

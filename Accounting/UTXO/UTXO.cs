@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -13,7 +14,6 @@ namespace BToken.Accounting
     Network Network;
 
     UTXOBuilder Builder;
-    UTXOParser Parser;
 
     protected static string RootPath = "UTXO";
 
@@ -51,12 +51,15 @@ namespace BToken.Accounting
       await Builder.RunAsync();
     }
 
-    void InsertUTXOs(UTXOParserData parserData)
+    void InsertUTXOs(UTXOParserData uTXOParserData)
     {
+      if (uTXOParserData.TXCount == 2)
+      { }
+
       for (int c = 0; c < Tables.Length; c += 1)
       {
       LoopUTXOItems:
-        while (parserData.TryPopUTXOItem(c, out UTXOItem uTXOItem))
+        while (uTXOParserData.TryPopUTXOItem(c, out UTXOItem uTXOItem))
         {
           for (int cc = 0; cc < Tables.Length; cc += 1)
           {
@@ -72,15 +75,19 @@ namespace BToken.Accounting
         }
       }
     }
-    void SpendUTXOs(UTXOParserData parserData)
+    void SpendUTXOs(UTXOParserData uTXOParserData)
     {
-      for (int t = 0; t < parserData.InputsPerTX.Length; t += 1)
+      for (int t = 0; t < uTXOParserData.InputsPerTX.Length; t += 1)
       {
         int i = 0;
       LoopSpendUTXOs:
-        while (i < parserData.InputsPerTX[t].Length)
+        while (i < uTXOParserData.InputsPerTX[t].Length)
         {
-          TXInput input = parserData.InputsPerTX[t][i];
+          TXInput input = uTXOParserData.InputsPerTX[t][i];
+
+          if (input.TXIDOutput.ToHexString() ==
+            "4385FCF8B14497D0659ADCCFE06AE7E38E0B5DC95FF8A13D7C62035994A0CD79")
+          { }
 
           for (int c = 0; c < Tables.Length; c += 1)
           {

@@ -17,11 +17,15 @@ namespace BToken.Accounting
     {
       class SessionBlockDownload : INetworkSession
       {
-        const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 30;
+        INetworkChannel Channel;
+
+        const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
         UTXOBuilder Builder;
         UTXOParser Parser;
         SHA256 SHA256;
+
+        UTXODownloadBatch DownloadBatch;
 
 
         public SessionBlockDownload(UTXOBuilder builder)
@@ -30,62 +34,66 @@ namespace BToken.Accounting
           Parser = new UTXOParser(Builder.UTXO);
           SHA256 = SHA256.Create();
         }
-
+        
         public async Task RunAsync(INetworkChannel channel)
         {
-          UTXODownloadBatch downloadBatch;
+          Channel = channel;
+
+          if (DownloadBatch != null)
+          {
+            DownloadBatch.Blocks.Clear();
+
+            await DownloadBlocksAsync();
+
+            Builder.BatcherBuffer.Post(DownloadBatch);
+          }
 
           while (true)
           {
             try
             {
-              downloadBatch = await Builder.DownloaderBuffer
+              DownloadBatch = await Builder.DownloaderBuffer
                 .ReceiveAsync(Builder.CancellationBuilder.Token).ConfigureAwait(false);
             }
-            catch(TaskCanceledException)
+            catch (TaskCanceledException)
             {
               return;
             }
-                       
-            await channel.SendMessageAsync(
-              new GetDataMessage(
-                downloadBatch.HeaderHashes
-                .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
-                .ToList()));
 
-            var cancellationGetData = new CancellationTokenSource(
-              TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
-            
-            while (downloadBatch.Blocks.Count < COUNT_BLOCKS_DOWNLOAD_BATCH)
+            await DownloadBlocksAsync();
+
+            Builder.BatcherBuffer.Post(DownloadBatch);
+          }
+        }
+
+        async Task DownloadBlocksAsync()
+        {
+          await Channel.SendMessageAsync(
+            new GetDataMessage(
+              DownloadBatch.HeaderHashes
+              .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
+              .ToList()));
+
+          var cancellationGetData = new CancellationTokenSource(
+            TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
+
+          while (DownloadBatch.Blocks.Count < COUNT_BLOCKS_DOWNLOAD_BATCH)
+          {
+            NetworkMessage networkMessage = await Channel
+              .ReceiveSessionMessageAsync(cancellationGetData.Token)
+              .ConfigureAwait(false);
+
+            if (networkMessage.Command != "block")
             {
-              NetworkMessage networkMessage = await channel
-                .ReceiveSessionMessageAsync(cancellationGetData.Token)
-                .ConfigureAwait(false);
-
-              if (networkMessage.Command != "block")
-              {
-                continue;
-              }
-
-              Block block = new Block(networkMessage.Payload, 0);
-
-              UTXOParser.ParseHeader(
-                block,
-                SHA256);
-
-              UTXOParser.ValidateHeaderHash(
-                block.HeaderHash, 
-                downloadBatch.HeaderHashes[downloadBatch.Blocks.Count]);
-
-              downloadBatch.Blocks.Add(block);
+              continue;
             }
 
-            Console.WriteLine("{0}, {1} Download index {2}",
-              DateTime.Now,
-              channel.GetIdentification(),
-              downloadBatch.BatchIndex);
+            Block block = UTXOParser.ParseBlockHeader(
+              networkMessage.Payload,
+              DownloadBatch.HeaderHashes[DownloadBatch.Blocks.Count],
+              SHA256);
 
-            Builder.BatcherBuffer.Post(downloadBatch);
+            DownloadBatch.Blocks.Add(block);
           }
         }
       }

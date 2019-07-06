@@ -13,13 +13,13 @@ namespace BToken.Accounting
 
       const int PrefixBlockFolderBytes = 2;
 
-      public static async Task ArchiveBatchAsync(List<Block> blocks, int batchIndex)
+      public static async Task ArchiveBatchAsync(UTXOBatch batch)
       {
         try
         {
-          using (FileStream file = CreateFile(batchIndex))
+          using (FileStream file = CreateFile(batch.BatchIndex))
           {
-            foreach (Block block in blocks)
+            foreach (Block block in batch.Blocks)
             {
               await file.WriteAsync(block.Buffer, 0, block.Buffer.Length);
             }

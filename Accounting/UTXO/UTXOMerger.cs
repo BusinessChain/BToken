@@ -37,74 +37,84 @@ namespace BToken.Accounting
 
         public async Task StartAsync()
         {
-          UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-          string pathLogFile = Path.Combine(
-            Directory.CreateDirectory("UTXOBuild").FullName,
-            "UTXOBuild-" + DateTime.Now.ToString("yyyyddM-HHmmss") + ".csv");
-
-          using (StreamWriter logFileWriter = new StreamWriter(
-           new FileStream(
-             pathLogFile,
-             FileMode.Append,
-             FileAccess.Write,
-             FileShare.Read)))
+          try
           {
-            while (true)
+            UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            string pathLogFile = Path.Combine(
+              Directory.CreateDirectory("UTXOBuild").FullName,
+              "UTXOBuild-" + DateTime.Now.ToString("yyyyddM-HHmmss") + ".csv");
+
+            using (StreamWriter logFileWriter = new StreamWriter(
+             new FileStream(
+               pathLogFile,
+               FileMode.Append,
+               FileAccess.Write,
+               FileShare.Read)))
             {
-              UTXOBatch batch = await BatchBuffer
-                .ReceiveAsync(Builder.CancellationBuilder.Token).ConfigureAwait(false);
-
-              if (batch.BatchIndex != BatchIndexNext)
-              {
-                QueueMergeBatch.Add(batch.BatchIndex, batch);
-                continue;
-              }
-
               while (true)
               {
-                //if (!HeaderHashMergedLast.IsEqual(batch.Blocks.First().HeaderHashPrevious))
-                //{
-                //  throw new UTXOException(string.Format(
-                //    "In Batch {0} previous hash {1} is not equal to last merged hash {2}",
-                //    batch.BatchIndex,
-                //    batch.HeaderHashPrevious.ToHexString(),
-                //    HeaderHashMergedLast.ToHexString()));
-                //}
+                UTXOBatch batch = await BatchBuffer
+                  .ReceiveAsync(Builder.CancellationBuilder.Token).ConfigureAwait(false);
 
-                batch.StopwatchMerging.Start();
-                foreach (UTXOParserData parserData in batch.UTXOParserData)
+                if (batch.BatchIndex != BatchIndexNext)
                 {
-                  UTXO.InsertUTXOs(parserData);
-                }
-                foreach (UTXOParserData parserData in batch.UTXOParserData)
-                {
-                  UTXO.SpendUTXOs(parserData);
-                }
-                batch.StopwatchMerging.Stop();
-
-                BatchIndexNext += 1;
-                BlockHeight += batch.Blocks.Count;
-
-                if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0 && batch.BatchIndex > 0)
-                {
-                  await ArchiveUTXOState(batch); // Make Temp folder first
+                  QueueMergeBatch.Add(batch.BatchIndex, batch);
+                  continue;
                 }
 
-                LogCSV(batch, logFileWriter);
-
-                if(batch.IsCancellationBatch)
+                while (true)
                 {
-                  Builder.CancellationBuilder.Cancel();
-                  break;
-                }
+                  //if (!HeaderHashMergedLast.IsEqual(batch.HeaderHashPrevious))
+                  //{
+                  //  throw new UTXOException(string.Format(
+                  //    "In Batch {0} previous hash {1} is not equal to last merged hash {2}",
+                  //    batch.BatchIndex,
+                  //    batch.HeaderHashPrevious.ToHexString(),
+                  //    HeaderHashMergedLast.ToHexString()));
+                  //}
+                  
+                  batch.StopwatchMerging.Start();
+                  foreach (UTXOParserData uTXOParserData in batch.UTXOParserDatasets)
+                  {
+                    UTXO.InsertUTXOs(uTXOParserData);
+                    UTXO.SpendUTXOs(uTXOParserData);
 
-                if (!QueueMergeBatch.TryGetValue(BatchIndexNext, out batch))
-                {
-                  break;
+                    BlockHeight += 1;
+                  }
+                  batch.StopwatchMerging.Stop();
+
+                  BatchIndexNext += 1;
+
+                  if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0 
+                    && batch.BatchIndex > 0)
+                  {
+                    //await ArchiveUTXOState(batch); // Make Temp folder first
+                  }
+
+                  LogCSV(batch, logFileWriter);
+
+                  if (batch.IsCancellationBatch)
+                  {
+                    Builder.CancellationBuilder.Cancel();
+                    break;
+                  }
+
+                  if (QueueMergeBatch.TryGetValue(BatchIndexNext, out batch))
+                  {
+                    QueueMergeBatch.Remove(BatchIndexNext);
+                  }
+                  else
+                  {
+                    break;
+                  }
                 }
               }
             }
+          }
+          catch(Exception ex)
+          {
+            Console.WriteLine(ex.Message);
           }
         }
 
