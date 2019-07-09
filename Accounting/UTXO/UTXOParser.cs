@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 
 using BToken.Chaining;
@@ -29,8 +29,8 @@ namespace BToken.Accounting
       SHA256 SHA256 = SHA256.Create();
 
       public UTXOParserData UTXOParserData;
-      public Headerchain.ChainHeader ChainHeader;
-      
+      public Headerchain.ChainHeader Header;
+
 
       public UTXOParser(UTXO uTXO)
       {
@@ -39,11 +39,13 @@ namespace BToken.Accounting
       
       public UTXOBatch ParseBatch(byte[] buffer, int batchIndex)
       {
+        BatchIndex = batchIndex;
+
         UTXOBatch batch = new UTXOBatch()
         {
-          BatchIndex = batchIndex
+          BatchIndex = BatchIndex
         };
-
+        
         batch.StopwatchParse.Start();
 
         Buffer = buffer;
@@ -55,12 +57,13 @@ namespace BToken.Accounting
               Buffer,
               BufferIndex,
               COUNT_HEADER_BYTES));
-
+        
         BufferIndex += COUNT_HEADER_BYTES;
         TXCount = VarInt.GetInt32(buffer, ref BufferIndex);
 
-        ChainHeader = UTXO.Headerchain.ReadHeader(HeaderHash, SHA256);
-        
+        Header = UTXO.Headerchain.ReadHeader(HeaderHash, SHA256);
+        batch.HeaderPrevious = Header.HeaderPrevious;
+
         ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
         batch.UTXOParserDatasets.Add(UTXOParserData);
 
@@ -72,22 +75,24 @@ namespace BToken.Accounting
                 Buffer,
                 BufferIndex,
                 COUNT_HEADER_BYTES));
-
+          
           int merkleRootIndex = BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
           BufferIndex += COUNT_HEADER_BYTES;
           TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
 
-          ChainHeader = ChainHeader.HeadersNext[0];
+          Header = Header.HeadersNext[0];
 
           ValidateHeaderHash(
             HeaderHash,
-            ChainHeader.GetHeaderHash(SHA256));
+            Header.GetHeaderHash(SHA256));
 
           ParseBlock(merkleRootIndex);
           batch.UTXOParserDatasets.Add(UTXOParserData);
         }
 
-        if(ChainHeader.HeadersNext == null)
+        batch.HeaderLast = Header;
+
+        if (Header.HeadersNext == null)
         {
           batch.IsCancellationBatch = true;
         }
@@ -98,7 +103,7 @@ namespace BToken.Accounting
       }
       
       static void ValidateHeaderHash(
-        byte[] headerHash, 
+        byte[] headerHash,
         byte[] headerHashValidator)
       {
         if (!headerHash.IsEqual(headerHashValidator))
@@ -112,12 +117,13 @@ namespace BToken.Accounting
 
       public static Block ParseBlockHeader(
         byte[] buffer,
-        byte[] headerHashValidator,
+        Headerchain.ChainHeader header,
+        byte[] headerHash,
         SHA256 sHA256)
       {
         int bufferIndex = 0;
 
-        byte[] headerHash =
+        byte[] headerHashParsed =
           sHA256.ComputeHash(
             sHA256.ComputeHash(
               buffer,
@@ -128,12 +134,13 @@ namespace BToken.Accounting
         int tXCount = VarInt.GetInt32(buffer, ref bufferIndex);
 
         ValidateHeaderHash(
-          headerHash,
-          headerHashValidator);
+          headerHashParsed,
+          headerHash);
 
         return new Block(
           buffer,
           bufferIndex,
+          header,
           headerHash,
           tXCount);
       }
@@ -146,6 +153,10 @@ namespace BToken.Accounting
           ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
           batch.UTXOParserDatasets.Add(UTXOParserData);
         }
+
+        batch.HeaderPrevious = batch.Blocks[0].Header.HeaderPrevious;
+        batch.HeaderLast = batch.Blocks.Last().Header;
+
         batch.StopwatchParse.Stop();
       }
       void LoadBlock(Block block, int batchIndex)

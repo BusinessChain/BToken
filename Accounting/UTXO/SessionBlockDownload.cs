@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.Security.Cryptography;
 
+using BToken.Chaining;
 using BToken.Networking;
 
 
@@ -19,7 +20,7 @@ namespace BToken.Accounting
       {
         INetworkChannel Channel;
 
-        const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
+        const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 10;
 
         UTXOBuilder Builder;
         UTXOParser Parser;
@@ -70,8 +71,8 @@ namespace BToken.Accounting
         {
           await Channel.SendMessageAsync(
             new GetDataMessage(
-              DownloadBatch.HeaderHashes
-              .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
+              DownloadBatch.Headers
+              .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.GetHeaderHash(SHA256)))
               .ToList()));
 
           var cancellationGetData = new CancellationTokenSource(
@@ -88,9 +89,12 @@ namespace BToken.Accounting
               continue;
             }
 
+            Headerchain.ChainHeader header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
+
             Block block = UTXOParser.ParseBlockHeader(
               networkMessage.Payload,
-              DownloadBatch.HeaderHashes[DownloadBatch.Blocks.Count],
+              header,
+              header.GetHeaderHash(SHA256),
               SHA256);
 
             DownloadBatch.Blocks.Add(block);

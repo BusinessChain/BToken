@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Security.Cryptography;
+
+using BToken.Chaining;
 
 
 namespace BToken.Accounting
@@ -18,7 +19,7 @@ namespace BToken.Accounting
 
         public int BatchIndex;
 
-        public List<byte[]> HeaderHashes = new List<byte[]>(COUNT_BLOCKS_DOWNLOAD_BATCH);
+        public List<Headerchain.ChainHeader> Headers = new List<Headerchain.ChainHeader>(COUNT_BLOCKS_DOWNLOAD_BATCH);
         public List<Block> Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD_BATCH);
 
         public UTXODownloadBatch(int batchIndex)

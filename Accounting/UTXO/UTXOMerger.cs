@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+
+using BToken.Chaining;
 
 namespace BToken.Accounting
 {
@@ -20,12 +22,14 @@ namespace BToken.Accounting
 
         public int BlockHeight;
         public int BatchIndexNext;
+        public Headerchain.ChainHeader HeaderMergedLast;
         public byte[] HeaderHashMergedLast = new byte[HASH_BYTE_SIZE];
         public BufferBlock<UTXOBatch> BatchBuffer = new BufferBlock<UTXOBatch>();
         Dictionary<int, UTXOBatch> QueueMergeBatch = new Dictionary<int, UTXOBatch>();
 
         long UTCTimeStartMerger;
-        
+        public Stopwatch StopwatchMerging = new Stopwatch();
+
 
         public UTXOMerger(
           UTXO uTXO,
@@ -65,31 +69,31 @@ namespace BToken.Accounting
 
                 while (true)
                 {
-                  //if (!HeaderHashMergedLast.IsEqual(batch.HeaderHashPrevious))
-                  //{
-                  //  throw new UTXOException(string.Format(
-                  //    "In Batch {0} previous hash {1} is not equal to last merged hash {2}",
-                  //    batch.BatchIndex,
-                  //    batch.HeaderHashPrevious.ToHexString(),
-                  //    HeaderHashMergedLast.ToHexString()));
-                  //}
-                  
-                  batch.StopwatchMerging.Start();
+                  if (HeaderMergedLast != batch.HeaderPrevious)
+                  {
+                    throw new UTXOException(
+                      string.Format("HeaderPrevious {0} of Batch {1} not equal to \nHeaderMergedLast {2}",
+                      batch.HeaderPrevious.GetHeaderHash().ToHexString(),
+                      batch.BatchIndex,
+                      HeaderMergedLast.GetHeaderHash().ToHexString()));
+                  }
+
+                  StopwatchMerging.Restart();
                   foreach (UTXOParserData uTXOParserData in batch.UTXOParserDatasets)
                   {
                     UTXO.InsertUTXOs(uTXOParserData);
                     UTXO.SpendUTXOs(uTXOParserData);
-
-                    BlockHeight += 1;
                   }
-                  batch.StopwatchMerging.Stop();
+                  StopwatchMerging.Stop();
 
+                  BlockHeight += batch.UTXOParserDatasets.Count;
                   BatchIndexNext += 1;
-
+                  HeaderMergedLast = batch.HeaderLast;
+                  
                   if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0 
                     && batch.BatchIndex > 0)
                   {
-                    //await ArchiveUTXOState(batch); // Make Temp folder first
+                    //await ArchiveUTXOState(); // Make Temp folder first
                   }
 
                   LogCSV(batch, logFileWriter);
@@ -118,14 +122,14 @@ namespace BToken.Accounting
           }
         }
 
-        async Task ArchiveUTXOState(UTXOBatch batch)
+        async Task ArchiveUTXOState()
         {
           Directory.CreateDirectory(RootPath);
 
           byte[] uTXOState = new byte[40];
           BitConverter.GetBytes(BatchIndexNext).CopyTo(uTXOState, 0);
           BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
-          HeaderHashMergedLast.CopyTo(uTXOState, 8);
+          HeaderMergedLast.GetHeaderHash().CopyTo(uTXOState, 8);
 
           await WriteFileAsync(
             Path.Combine(RootPath, "UTXOState"),
@@ -139,7 +143,7 @@ namespace BToken.Accounting
           long timeParsing = batch.StopwatchParse.ElapsedMilliseconds;
 
           int ratioMergeToParse =
-            (int)((float)batch.StopwatchMerging.ElapsedTicks * 100
+            (int)((float)StopwatchMerging.ElapsedTicks * 100
             / batch.StopwatchParse.ElapsedTicks);
 
           string logCSV = string.Format(

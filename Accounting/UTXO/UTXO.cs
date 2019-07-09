@@ -53,9 +53,6 @@ namespace BToken.Accounting
 
     void InsertUTXOs(UTXOParserData uTXOParserData)
     {
-      if (uTXOParserData.TXCount == 2)
-      { }
-
       for (int c = 0; c < Tables.Length; c += 1)
       {
       LoopUTXOItems:
@@ -84,11 +81,7 @@ namespace BToken.Accounting
         while (i < uTXOParserData.InputsPerTX[t].Length)
         {
           TXInput input = uTXOParserData.InputsPerTX[t][i];
-
-          if (input.TXIDOutput.ToHexString() ==
-            "4385FCF8B14497D0659ADCCFE06AE7E38E0B5DC95FF8A13D7C62035994A0CD79")
-          { }
-
+          
           for (int c = 0; c < Tables.Length; c += 1)
           {
             UTXOTable tablePrimary = Tables[c];
