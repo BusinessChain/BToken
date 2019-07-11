@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.IO;
 using System.Threading;
@@ -18,11 +19,12 @@ namespace BToken.Accounting
     {
       UTXO UTXO;
       UTXOMerger Merger;
+      NetworkLoader NetworkLoader;
       BitcoinGenesisBlock GenesisBlock;
 
       const int COUNT_PARSER_PARALLEL = 6;
       const int COUNT_DOWNLOAD_TASKS_PARALLEL = 6;
-      const int COUNT_BLOCKS_DOWNLOAD_BATCH = 20;
+      const int COUNT_BLOCKS_DOWNLOAD_BATCH = 10;
       const int COUNT_TXS_IN_BATCH_FILE = 10000;
 
       CancellationTokenSource CancellationBuilder 
@@ -33,7 +35,8 @@ namespace BToken.Accounting
       int DownloadBatcherIndex;
       public SHA256 SHA256 = SHA256.Create();
 
-      readonly object LOCK_BatchBuffer = new object();
+      readonly object LOCK_MergerBuffer = new object();
+      readonly object LOCK_BatcherBuffer = new object();
       BufferBlock<UTXODownloadBatch> BatcherBuffer 
         = new BufferBlock<UTXODownloadBatch>();
       BufferBlock<UTXODownloadBatch> DownloaderBuffer
@@ -45,11 +48,22 @@ namespace BToken.Accounting
       Queue<Block> FIFOBlocks = new Queue<Block>();
       int TXCountFIFO;
 
-      BufferBlock<UTXOBatch> BatchParserBuffer = new BufferBlock<UTXOBatch>();
+      BufferBlock<UTXOBatch> ParserBuffer = new BufferBlock<UTXOBatch>();
 
       readonly object LOCK_HeaderSentToMergerLast = new object();
       Headerchain.ChainHeader HeaderSentToMergerLast;
       int BatchIndexSentToMergerLast;
+
+      long BytesDownloaded;
+      long SecondsBytesDownloaded;
+      int DeltaSessionCountPrevious;
+      double DownloadRatePrevious;
+      readonly object LOCK_CountDownloadTasksRunning = new object();
+      int CountDownloadTasksRunning;
+      ConcurrentQueue<UTXODownloadBatch> QueueDownloadBatchesCanceled 
+        = new ConcurrentQueue<UTXODownloadBatch>();
+      const int INIT_COUNTDOWN_DOWNLOADSESSION_CREATION = 500;
+      int CountDownBatchUntilCreateNewSession = INIT_COUNTDOWN_DOWNLOADSESSION_CREATION;
 
 
       public UTXOBuilder(
@@ -72,6 +86,7 @@ namespace BToken.Accounting
         
         if(HeaderSentToMergerLast.HeadersNext != null)
         {
+          NetworkLoader = new NetworkLoader();
           StartNetworkLoader();
         }
 
@@ -181,7 +196,7 @@ namespace BToken.Accounting
 
             lock (LOCK_HeaderSentToMergerLast)
             {
-              Merger.BatchBuffer.Post(batch);
+              Merger.Buffer.Post(batch);
 
               if(batch.BatchIndex > BatchIndexSentToMergerLast)
               {
@@ -206,11 +221,13 @@ namespace BToken.Accounting
         }
 
         Task runBatcherTask = RunBatcherAsync();
-        
+
         for (int i = 0; i < COUNT_DOWNLOAD_TASKS_PARALLEL; i += 1)
         {
-          Task runDownloadTask = UTXO.Network.RunSessionAsync(
+          Task downloadTask = UTXO.Network.RunSessionAsync(
             new SessionBlockDownload(this));
+
+          CountDownloadTasksRunning += 1;
         }
 
         CreateDownloadBatches();
@@ -222,16 +239,16 @@ namespace BToken.Accounting
         
         while(true)
         {
-          UTXOBatch batch = await BatchParserBuffer
+          UTXOBatch batch = await ParserBuffer
             .ReceiveAsync(CancellationBuilder.Token).ConfigureAwait(false);
 
           parser.ParseBatch(batch);
 
           Task archiveBatchTask = BlockArchiver.ArchiveBatchAsync(batch);
 
-          lock (LOCK_BatchBuffer)
+          lock (LOCK_MergerBuffer)
           {
-            Merger.BatchBuffer.Post(batch);
+            Merger.Buffer.Post(batch);
           }
         }
       }
@@ -287,7 +304,7 @@ namespace BToken.Accounting
                 TXCountFIFO -= block.TXCount;
               }
               
-              BatchParserBuffer.Post(batch);
+              ParserBuffer.Post(batch);
             }
 
             DownloadBatcherIndex += 1;
@@ -302,6 +319,36 @@ namespace BToken.Accounting
             }
 
           } while (true);
+        }
+      }
+      void PostDownloadBatch(UTXODownloadBatch downloadBatch)
+      {
+        bool doCreateNewDownloadSession = false;
+
+        lock (LOCK_BatcherBuffer)
+        {
+          BytesDownloaded += downloadBatch.BytesDownloaded;
+
+          BatcherBuffer.Post(downloadBatch);
+
+          CountDownBatchUntilCreateNewSession -= 1;
+
+          if(CountDownBatchUntilCreateNewSession < 0)
+          {
+            doCreateNewDownloadSession = true;
+            CountDownBatchUntilCreateNewSession = INIT_COUNTDOWN_DOWNLOADSESSION_CREATION;
+          }
+        }
+
+        if(doCreateNewDownloadSession)
+        {
+          var downloadTask = UTXO.Network.RunSessionAsync(
+            new SessionBlockDownload(this));
+
+          lock (LOCK_CountDownloadTasksRunning)
+          {
+            CountDownloadTasksRunning += 1;
+          }
         }
       }
 

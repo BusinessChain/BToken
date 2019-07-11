@@ -24,7 +24,7 @@ namespace BToken.Accounting
         public int BatchIndexNext;
         public Headerchain.ChainHeader HeaderMergedLast;
         public byte[] HeaderHashMergedLast = new byte[HASH_BYTE_SIZE];
-        public BufferBlock<UTXOBatch> BatchBuffer = new BufferBlock<UTXOBatch>();
+        public BufferBlock<UTXOBatch> Buffer = new BufferBlock<UTXOBatch>();
         Dictionary<int, UTXOBatch> QueueMergeBatch = new Dictionary<int, UTXOBatch>();
 
         long UTCTimeStartMerger;
@@ -58,7 +58,7 @@ namespace BToken.Accounting
             {
               while (true)
               {
-                UTXOBatch batch = await BatchBuffer
+                UTXOBatch batch = await Buffer
                   .ReceiveAsync(Builder.CancellationBuilder.Token).ConfigureAwait(false);
 
                 if (batch.BatchIndex != BatchIndexNext)

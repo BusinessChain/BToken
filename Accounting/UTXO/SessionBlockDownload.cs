@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Linq;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -20,13 +19,15 @@ namespace BToken.Accounting
       {
         INetworkChannel Channel;
 
-        const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 10;
+        const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 20;
 
         UTXOBuilder Builder;
         UTXOParser Parser;
         SHA256 SHA256;
 
         UTXODownloadBatch DownloadBatch;
+
+        long BytesDownloaded;
 
 
         public SessionBlockDownload(UTXOBuilder builder)
@@ -36,37 +37,6 @@ namespace BToken.Accounting
           SHA256 = SHA256.Create();
         }
         
-        public async Task RunAsync(INetworkChannel channel)
-        {
-          Channel = channel;
-
-          if (DownloadBatch != null)
-          {
-            DownloadBatch.Blocks.Clear();
-
-            await DownloadBlocksAsync();
-
-            Builder.BatcherBuffer.Post(DownloadBatch);
-          }
-
-          while (true)
-          {
-            try
-            {
-              DownloadBatch = await Builder.DownloaderBuffer
-                .ReceiveAsync(Builder.CancellationBuilder.Token).ConfigureAwait(false);
-            }
-            catch (TaskCanceledException)
-            {
-              return;
-            }
-
-            await DownloadBlocksAsync();
-
-            Builder.BatcherBuffer.Post(DownloadBatch);
-          }
-        }
-
         async Task DownloadBlocksAsync()
         {
           await Channel.SendMessageAsync(
@@ -98,6 +68,63 @@ namespace BToken.Accounting
               SHA256);
 
             DownloadBatch.Blocks.Add(block);
+            DownloadBatch.BytesDownloaded += networkMessage.Payload.Length;
+          }
+
+          BytesDownloaded += DownloadBatch.BytesDownloaded;
+
+          Builder.PostDownloadBatch(DownloadBatch);
+        }
+
+        public async Task RunAsync(INetworkChannel channel)
+        {
+          Channel = channel;
+
+          try
+          {
+            if (DownloadBatch != null)
+            {
+              DownloadBatch.Blocks.Clear();
+
+              await DownloadBlocksAsync();
+            }
+
+            while (true)
+            {
+              if (!Builder.QueueDownloadBatchesCanceled.TryDequeue(out DownloadBatch))
+              {
+                try
+                {
+                  DownloadBatch = await Builder.DownloaderBuffer
+                    .ReceiveAsync(Builder.CancellationBuilder.Token).ConfigureAwait(false);
+                }
+                catch(TaskCanceledException)
+                {
+                  return;
+                }
+              }
+
+              await DownloadBlocksAsync();
+            }
+          }
+          catch (TaskCanceledException ex)
+          {
+            lock (Builder.LOCK_CountDownloadTasksRunning)
+            {
+              Console.WriteLine("Count download tasks running: " 
+                + Builder.CountDownloadTasksRunning);
+
+              if (Builder.CountDownloadTasksRunning > 1)
+              {
+                DownloadBatch.Blocks.Clear();
+
+                Builder.QueueDownloadBatchesCanceled.Enqueue(DownloadBatch);
+                Builder.CountDownloadTasksRunning -= 1;
+                return;
+              }
+            }
+
+            throw ex;
           }
         }
       }

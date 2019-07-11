@@ -82,6 +82,7 @@
     <Compile Include="Accounting\UTXO\IBlockLoader.cs" />
     <Compile Include="Accounting\UTXO\Index\UTXOTable.cs" />
     <Compile Include="Accounting\UTXO\Index\UTXOTableUInt32.cs" />
+    <Compile Include="Accounting\UTXO\NetworkLoader.cs" />
     <Compile Include="Accounting\UTXO\UTXOBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOBuilder.cs" />
     <Compile Include="Accounting\UTXO\UTXODownloadBatch.cs" />
