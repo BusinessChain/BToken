@@ -15,7 +15,9 @@ namespace BToken.Accounting
 
     UTXOBuilder Builder;
 
-    protected static string RootPath = "UTXO";
+    static string PathUTXOState = "UTXO";
+    static string PathUTXOStateTemporary = PathUTXOState + "_temp";
+    static string PathUTXOStateOld = PathUTXOState + "_Old";
 
     const int HASH_BYTE_SIZE = 32;
 
@@ -124,35 +126,6 @@ namespace BToken.Accounting
             "Referenced TX {0} not found in UTXO table.",
             input.TXIDOutput.ToHexString()));
         }
-      }
-    }
-    
-    static async Task WriteFileAsync(string filePath, byte[] buffer)
-    {
-      try
-      {
-        string filePathTemp = filePath + "_temp";
-
-        using (FileStream stream = new FileStream(
-           filePathTemp,
-           FileMode.Create,
-           FileAccess.ReadWrite,
-           FileShare.Read,
-           bufferSize: 4096,
-           useAsync: true))
-        {
-          await stream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-        }
-
-        if (File.Exists(filePath))
-        {
-          File.Delete(filePath);
-        }
-        File.Move(filePathTemp, filePath);
-      }
-      catch(Exception ex)
-      {
-        Console.WriteLine(ex.Message);
       }
     }
     

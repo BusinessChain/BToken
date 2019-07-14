@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -15,7 +17,7 @@ namespace BToken.Accounting
     {
       class UTXOMerger
       {
-        const int UTXOSTATE_ARCHIVING_INTERVAL = 50;
+        const int UTXOSTATE_ARCHIVING_INTERVAL = 100;
 
         UTXO UTXO;
         UTXOBuilder Builder;
@@ -89,11 +91,11 @@ namespace BToken.Accounting
                   BlockHeight += batch.UTXOParserDatasets.Count;
                   BatchIndexNext += 1;
                   HeaderMergedLast = batch.HeaderLast;
-                  
-                  if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0 
+
+                  if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0
                     && batch.BatchIndex > 0)
                   {
-                    //await ArchiveUTXOState(); // Make Temp folder first
+                    await ArchiveUTXOStateAsync();
                   }
 
                   LogCSV(batch, logFileWriter);
@@ -116,26 +118,52 @@ namespace BToken.Accounting
               }
             }
           }
-          catch(Exception ex)
+          catch (Exception ex)
           {
             Console.WriteLine(ex.Message);
+            Builder.CancellationBuilder.Cancel();
+            throw ex;
           }
         }
 
-        async Task ArchiveUTXOState()
+        async Task ArchiveUTXOStateAsync()
         {
-          Directory.CreateDirectory(RootPath);
+          Directory.CreateDirectory(PathUTXOStateTemporary);
 
           byte[] uTXOState = new byte[40];
           BitConverter.GetBytes(BatchIndexNext).CopyTo(uTXOState, 0);
           BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
           HeaderMergedLast.GetHeaderHash().CopyTo(uTXOState, 8);
+          
+          using (FileStream stream = new FileStream(
+             Path.Combine(PathUTXOStateTemporary, "UTXOState"),
+             FileMode.Create,
+             FileAccess.ReadWrite,
+             FileShare.Read))
+          {
+            stream.Write(uTXOState, 0, uTXOState.Length);
+          }
 
-          await WriteFileAsync(
-            Path.Combine(RootPath, "UTXOState"),
-            uTXOState);
+          await BackupTablesAsync(PathUTXOStateTemporary);
+        }
 
-          Parallel.ForEach(UTXO.Tables, c => c.BackupToDisk());
+        async Task BackupTablesAsync(string path)
+        {
+          Task[] backupTasks = new Task[UTXO.Tables.Length];
+          Parallel.For(0, UTXO.Tables.Length, i => 
+          {
+            backupTasks[i] = UTXO.Tables[i].BackupToDiskAsync(PathUTXOStateTemporary);
+          });
+
+          await Task.WhenAll(backupTasks);
+                    
+          if (Directory.Exists(PathUTXOState))
+          {
+            Directory.Move(PathUTXOState, PathUTXOStateOld);
+            Directory.Delete(PathUTXOStateOld, true);
+          }
+
+          Directory.Move(PathUTXOStateTemporary, PathUTXOState);
         }
 
         void LogCSV(UTXOBatch batch, StreamWriter logFileWriter)

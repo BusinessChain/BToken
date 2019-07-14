@@ -13,21 +13,24 @@ namespace BToken.Accounting
   {
     partial class UTXOBuilder
     {
-      class UTXODownloadBatch
+      partial class UTXONetworkLoader
       {
-        public bool IsCancellationBatch = false;
-
-        public int BatchIndex;
-
-        public List<Headerchain.ChainHeader> Headers = new List<Headerchain.ChainHeader>(COUNT_BLOCKS_DOWNLOAD_BATCH);
-        public List<Block> Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD_BATCH);
-
-        public long BytesDownloaded;
-
-
-        public UTXODownloadBatch(int batchIndex)
+        class UTXODownloadBatch
         {
-          BatchIndex = batchIndex;
+          public bool IsCancellationBatch = false;
+
+          public int BatchIndex;
+
+          public List<Headerchain.ChainHeader> Headers = new List<Headerchain.ChainHeader>(COUNT_BLOCKS_DOWNLOAD_BATCH);
+          public List<Block> Blocks = new List<Block>(COUNT_BLOCKS_DOWNLOAD_BATCH);
+
+          public long BytesDownloaded;
+
+
+          public UTXODownloadBatch(int batchIndex)
+          {
+            BatchIndex = batchIndex;
+          }
         }
       }
     }
