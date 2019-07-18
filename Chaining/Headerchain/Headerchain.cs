@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.IO;
-using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Security.Cryptography;
 
 using BToken.Networking;
@@ -78,7 +77,7 @@ namespace BToken.Chaining
         catch (ChainException ex)
         {
           Console.WriteLine(string.Format("Insertion of header with hash '{0}' raised ChainException '{1}'.",
-            header.ComputeHash(),
+            header.ComputeHash().ToHexString(),
             ex.Message));
 
           return headersInserted;

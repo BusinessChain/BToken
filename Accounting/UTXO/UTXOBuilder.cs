@@ -15,8 +15,8 @@ namespace BToken.Accounting
   {
     partial class UTXOBuilder
     {
-      const int COUNT_ARCHIVE_PARSER_PARALLEL = 8;
-      const int COUNT_TXS_IN_BATCH_FILE = 10000;
+      const int COUNT_ARCHIVE_PARSER_PARALLEL = 4;
+      const int COUNT_TXS_IN_BATCH_FILE = 20000;
 
       UTXO UTXO;
       UTXOMerger Merger;
@@ -65,6 +65,8 @@ namespace BToken.Accounting
         }
 
         await DelayUntilMergerCancelsBuilderAsync();
+
+        Console.WriteLine("Build completed");
       }
       async Task DelayUntilMergerCancelsBuilderAsync()
       {

@@ -2,7 +2,6 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -17,7 +16,7 @@ namespace BToken.Accounting
     {
       class UTXOMerger
       {
-        const int UTXOSTATE_ARCHIVING_INTERVAL = 100;
+        const int UTXOSTATE_ARCHIVING_INTERVAL = 300;
 
         UTXO UTXO;
         UTXOBuilder Builder;
@@ -25,7 +24,6 @@ namespace BToken.Accounting
         public int BlockHeight;
         public int BatchIndexNext;
         public Headerchain.ChainHeader HeaderMergedLast;
-        public byte[] HeaderHashMergedLast = new byte[HASH_BYTE_SIZE];
         public BufferBlock<UTXOBatch> Buffer = new BufferBlock<UTXOBatch>();
         Dictionary<int, UTXOBatch> QueueMergeBatch = new Dictionary<int, UTXOBatch>();
 
@@ -62,7 +60,7 @@ namespace BToken.Accounting
               {
                 UTXOBatch batch = await Buffer
                   .ReceiveAsync(Builder.CancellationBuilder.Token).ConfigureAwait(false);
-
+                
                 if (batch.BatchIndex != BatchIndexNext)
                 {
                   QueueMergeBatch.Add(batch.BatchIndex, batch);
@@ -95,14 +93,17 @@ namespace BToken.Accounting
                   if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0
                     && batch.BatchIndex > 0)
                   {
-                    await ArchiveUTXOStateAsync();
+                    ArchiveUTXOState();
                   }
 
                   LogCSV(batch, logFileWriter);
 
                   if (batch.IsCancellationBatch)
                   {
+                    Console.WriteLine("Merger cancels builder");
                     Builder.CancellationBuilder.Cancel();
+                    Console.WriteLine("Last merged hash {0}", HeaderMergedLast.GetHeaderHash().ToHexString());
+
                     break;
                   }
 
@@ -126,6 +127,26 @@ namespace BToken.Accounting
           }
         }
 
+        void ArchiveUTXOState()
+        {
+          Directory.CreateDirectory(PathUTXOStateTemporary);
+
+          byte[] uTXOState = new byte[40];
+          BitConverter.GetBytes(BatchIndexNext).CopyTo(uTXOState, 0);
+          BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
+          HeaderMergedLast.GetHeaderHash().CopyTo(uTXOState, 8);
+
+          using (FileStream stream = new FileStream(
+             Path.Combine(PathUTXOStateTemporary, "UTXOState"),
+             FileMode.Create,
+             FileAccess.ReadWrite,
+             FileShare.Read))
+          {
+            stream.Write(uTXOState, 0, uTXOState.Length);
+          }
+
+          BackupTables(PathUTXOStateTemporary);
+        }
         async Task ArchiveUTXOStateAsync()
         {
           Directory.CreateDirectory(PathUTXOStateTemporary);
@@ -147,6 +168,21 @@ namespace BToken.Accounting
           await BackupTablesAsync(PathUTXOStateTemporary);
         }
 
+        void BackupTables(string path)
+        {
+          Parallel.ForEach(UTXO.Tables, t =>
+          {
+            t.BackupToDisk(PathUTXOStateTemporary);
+          });
+
+          if (Directory.Exists(PathUTXOState))
+          {
+            Directory.Move(PathUTXOState, PathUTXOStateOld);
+            Directory.Delete(PathUTXOStateOld, true);
+          }
+
+          Directory.Move(PathUTXOStateTemporary, PathUTXOState);
+        }
         async Task BackupTablesAsync(string path)
         {
           Task[] backupTasks = new Task[UTXO.Tables.Length];

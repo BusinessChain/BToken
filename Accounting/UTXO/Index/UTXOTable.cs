@@ -121,7 +121,31 @@ namespace BToken.Accounting
 
         await Task.WhenAll(writeToFileTasks);
       }
+      public void BackupToDisk(string path)
+      {
+        string directoryPath = Path.Combine(path, Label);
+        Directory.CreateDirectory(directoryPath);
+        
+        WriteFile(
+          Path.Combine(directoryPath, "PrimaryTable"),
+          GetPrimaryData());
 
+        WriteFile(
+          Path.Combine(directoryPath, "CollisionTable"),
+          GetCollisionData());
+      }
+
+      static void WriteFile(string filePath, byte[] buffer)
+      {
+        using (FileStream stream = new FileStream(
+           filePath,
+           FileMode.Create,
+           FileAccess.ReadWrite,
+           FileShare.Read))
+        {
+          stream.Write(buffer, 0, buffer.Length);
+        }
+      }
       static async Task WriteFileAsync(string filePath, byte[] buffer)
       {
         using (FileStream stream = new FileStream(

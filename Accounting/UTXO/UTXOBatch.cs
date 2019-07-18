@@ -13,6 +13,7 @@ namespace BToken.Accounting
 
       public int BatchIndex;
 
+      public int TXCount;
       public List<Block> Blocks = new List<Block>(50);
       public List<UTXOParserData> UTXOParserDatasets = new List<UTXOParserData>(50);
 

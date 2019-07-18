@@ -30,7 +30,7 @@ namespace BToken
 
     private async void button_ping_Click(object sender, EventArgs e)
     {
-      await Program.Node.Network.PingAsync();
+      //await Program.Node.Network.PingAsync();
     }
 
     private async void button_GetBlock_Click(object sender, EventArgs e)
