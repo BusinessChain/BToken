@@ -20,12 +20,10 @@ namespace BToken
     {
       for (int i = 0; i < arr1.Length; i += 1)
       {
-        if (arr1[i] != arr2[startIndex2])
+        if (arr1[i] != arr2[startIndex2 + i])
         {
           return false;
         }
-
-        startIndex2 += 1;
       }
 
       return true;

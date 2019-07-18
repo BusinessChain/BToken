@@ -17,7 +17,7 @@ namespace BToken.Networking
 
 
     public NetworkHeader(
-      UInt32 version, 
+      UInt32 version,
       byte[] hashPrevious,
       byte[] merkleRootHash,
       UInt32 unixTimeSeconds,

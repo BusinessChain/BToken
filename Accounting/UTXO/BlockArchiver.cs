@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 
@@ -9,21 +10,19 @@ namespace BToken.Accounting
   {
     partial class BlockArchiver
     {
-      static string[] ShardPaths = { "J:\\BlockArchivePartitioned" };
+      static string BlockArchivePath = "J:\\BlockArchivePartitioned";
 
       const int PrefixBlockFolderBytes = 2;
 
-      public static async Task ArchiveBlocksAsync(
-        List<Block> blocks,
-        int filePartitionIndex)
+      public static async Task ArchiveBatchAsync(UTXOBatch batch)
       {
         try
         {
-          using (FileStream file = CreateFile(filePartitionIndex))
+          using (FileStream file = CreateFile(batch.BatchIndex))
           {
-            foreach (Block block in blocks)
+            foreach (Block block in batch.Blocks)
             {
-              await file.WriteAsync(block.Buffer, block.StartIndex, block.Length);
+              await file.WriteAsync(block.Buffer, 0, block.Buffer.Length);
             }
           }
         }
@@ -34,9 +33,8 @@ namespace BToken.Accounting
       }
       static FileStream CreateFile(int filePartitionIndex)
       {
-        string shardRootPath = ShardPaths[filePartitionIndex % ShardPaths.Length];
-        Directory.CreateDirectory(shardRootPath);
-        string filePath = Path.Combine(shardRootPath, "p" + filePartitionIndex.ToString());
+        Directory.CreateDirectory(BlockArchivePath);
+        string filePath = Path.Combine(BlockArchivePath, "p" + filePartitionIndex.ToString());
 
         return new FileStream(
           filePath,
@@ -47,15 +45,10 @@ namespace BToken.Accounting
           useAsync: true);
       }
 
-      public static bool Exists(int batchIndex, out string filePath)
+      public static async Task<byte[]> ReadBlockBatchAsync(int batchIndex, CancellationToken cancellationToken)
       {
-        string shardPath = ShardPaths[batchIndex % ShardPaths.Length];
-        filePath = Path.Combine(shardPath, "p" + batchIndex.ToString());
+        string filePath = Path.Combine(BlockArchivePath, "p" + batchIndex);
 
-        return File.Exists(filePath);
-      }
-      public static async Task<byte[]> ReadBlockBatchAsync(string filePath)
-      {
         using (FileStream fileStream = new FileStream(
           filePath,
           FileMode.Open,
@@ -64,11 +57,11 @@ namespace BToken.Accounting
           bufferSize: 4096,
           useAsync: true))
         {
-          return await ReadBytesAsync(fileStream);
+          return await ReadBytesAsync(fileStream, cancellationToken);
         }
       }
 
-      static async Task<byte[]> ReadBytesAsync(Stream stream)
+      static async Task<byte[]> ReadBytesAsync(Stream stream, CancellationToken cancellationToken)
       {
         var buffer = new byte[stream.Length];
 
@@ -76,7 +69,7 @@ namespace BToken.Accounting
         int offset = 0;
         while (bytesToRead > 0)
         {
-          int chunkSize = await stream.ReadAsync(buffer, offset, bytesToRead);
+          int chunkSize = await stream.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
 
           offset += chunkSize;
           bytesToRead -= chunkSize;

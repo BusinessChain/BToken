@@ -2,7 +2,10 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
+using System.Security.Cryptography;
 
+using BToken.Chaining;
 using BToken.Networking;
 
 
@@ -10,70 +13,154 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class SessionBlockDownload : INetworkSession
+    partial class UTXOBuilder
     {
-      UTXO UTXO;
-      byte[][] HeaderHashes;
-
-      UTXOBatch Batch;
-      
-      const int SECONDS_TIMEOUT_BLOCKDOWNLOAD = 30;
-
-
-      public SessionBlockDownload(
-        UTXO uTXO,
-        byte[][] headerHashes,
-        int batchIndex)
+      partial class UTXONetworkLoader
       {
-        UTXO = uTXO;
-        HeaderHashes = headerHashes;
-
-        Batch = new UTXOBatch(batchIndex);
-      }
-
-      public async Task RunAsync(
-        INetworkChannel channel, 
-        CancellationToken cancellationToken)
-      {
-        await channel.SendMessageAsync(
-          new GetDataMessage(
-            HeaderHashes
-            .Skip(Batch.Blocks.Count)
-            .Select(h => new Inventory(InventoryType.MSG_BLOCK, h))
-            .ToList()));
-
-        var cancellationGetBlock =
-          new CancellationTokenSource(TimeSpan.FromSeconds(SECONDS_TIMEOUT_BLOCKDOWNLOAD));
-        
-        while (Batch.Blocks.Count < HeaderHashes.Length)
+        class SessionBlockDownload : INetworkSession
         {
-          NetworkMessage networkMessage =
-            await channel.ReceiveSessionMessageAsync(cancellationGetBlock.Token);
+          INetworkChannel Channel;
 
-          if (networkMessage.Command == "block")
+          const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 30000;
+
+          UTXONetworkLoader Loader;
+          UTXOParser Parser;
+          SHA256 SHA256;
+
+          public UTXODownloadBatch DownloadBatch;
+          public CancellationTokenSource CancellationSession;
+
+          readonly object LOCK_BytesDownloaded = new object();
+          long BytesDownloaded;
+
+          long UTCTimeStartSession;
+
+
+          public SessionBlockDownload(UTXONetworkLoader loader, UTXOParser parser)
           {
-            Batch.Buffer = networkMessage.Payload;
-            Batch.BufferIndex = 0;
+            Loader = loader;
+            Parser = parser;
+            SHA256 = SHA256.Create();
 
-            Batch.StopwatchParse.Start();
-            UTXO.ParseBatch(Batch);
-            Batch.StopwatchParse.Stop();
+            CancellationSession = CancellationTokenSource.CreateLinkedTokenSource(Loader.CancellationToken);
+            UTCTimeStartSession = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+          }
+                    
+          public async Task RunAsync(INetworkChannel channel)
+          {
+            Channel = channel;
 
-            //Console.WriteLine("{0}, {1} Downloaded block {2}",
-            //  DateTime.Now,
-            //  channel.GetIdentification(),
-            //  Batch.Blocks.Last().HeaderHash.ToHexString());
+            try
+            {
+              if (DownloadBatch != null)
+              {
+                await DownloadBlocksAsync();
+
+                Loader.PostDownloadToBatcher(DownloadBatch);
+              }
+
+              while (true)
+              {
+                if (!Loader.QueueDownloadBatchesCanceled.TryDequeue(out DownloadBatch))
+                {
+                  DownloadBatch = await Loader.DownloaderBuffer
+                    .ReceiveAsync(CancellationSession.Token).ConfigureAwait(false);
+                }
+
+                await DownloadBlocksAsync();
+
+                Loader.PostDownloadToBatcher(DownloadBatch);
+              }
+            }
+            catch (TaskCanceledException)
+            {
+              if (DownloadBatch != null)
+              {
+                Loader.QueueDownloadBatchesCanceled.Enqueue(DownloadBatch);
+              }
+
+              lock (Loader.LOCK_DownloadSessions)
+              {
+                Loader.DownloadSessions.Remove(this);
+              }
+
+              Console.WriteLine("Session {0} cancels", GetHashCode());
+
+              return;
+            }
+          }
+          async Task DownloadBlocksAsync()
+          {
+            var cancellationTimeout = new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+            var cancellationDownloadBlocks = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationTimeout.Token,
+            CancellationSession.Token);
+
+            await Channel.SendMessageAsync(
+                new GetDataMessage(
+                  DownloadBatch.Headers
+                  .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.GetHeaderHash(SHA256)))
+                  .ToList()));
+
+            DownloadBatch.Blocks.Clear();
+            DownloadBatch.BytesDownloaded = 0;
+            while (DownloadBatch.Blocks.Count < DownloadBatch.Headers.Count)
+            {
+              NetworkMessage networkMessage = await Channel
+                .ReceiveSessionMessageAsync(cancellationDownloadBlocks.Token)
+                .ConfigureAwait(false);
+
+              if (networkMessage.Command != "block")
+              {
+                continue;
+              }
+
+              Headerchain.ChainHeader header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
+
+              Block block = UTXOParser.ParseBlockHeader(
+                networkMessage.Payload,
+                header,
+                header.GetHeaderHash(SHA256),
+                SHA256);
+
+              DownloadBatch.Blocks.Add(block);
+              DownloadBatch.BytesDownloaded += networkMessage.Payload.Length;
+            }
+
+            lock (LOCK_BytesDownloaded)
+            {
+              BytesDownloaded += DownloadBatch.BytesDownloaded;
+            }
+          }
+
+          public void ResetStats()
+          {
+            lock (LOCK_BytesDownloaded)
+            {
+              BytesDownloaded = 0;
+            }
+
+            UTCTimeStartSession = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+          }
+          public long GetDownloadRatekiloBytePerSecond()
+          {
+            long bytesDownloaded = GetBytesDownloaded();
+            long secondsSinceStartSession = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartSession;
+
+            return bytesDownloaded / secondsSinceStartSession / 1000;
+          }
+          public long GetBytesDownloaded()
+          {
+            long bytesDownloaded;
+
+            lock(LOCK_BytesDownloaded)
+            {
+              bytesDownloaded = BytesDownloaded;
+            }
+
+            return bytesDownloaded;
           }
         }
-
-        Console.WriteLine("{0}, {1} Downloaded batch {2}",
-          DateTime.Now,
-          channel.GetIdentification(),
-          Batch.BatchIndex);
-
-        await UTXO.MergeBatchAsync(
-          Batch,
-          enableBlockArchiving: true);
       }
     }
   }

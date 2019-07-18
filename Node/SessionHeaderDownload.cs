@@ -26,7 +26,7 @@ namespace BToken
         Headerchain = headerchain;
       }
 
-      public async Task RunAsync(INetworkChannel channel, CancellationToken cancellationToken)
+      public async Task RunAsync(INetworkChannel channel)
       {
         Channel = channel;
 

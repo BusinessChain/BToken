@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿
+using BToken.Chaining;
+
 
 namespace BToken.Accounting
 {
@@ -11,59 +9,24 @@ namespace BToken.Accounting
     class Block
     {
       public byte[] Buffer;
-      public int StartIndex;
-      public int Length;
-
+      public int BufferIndex;
+      public Headerchain.ChainHeader Header;
       public byte[] HeaderHash;
-
       public int TXCount;
-      public UTXOItem[][] UTXOItemsPerTable;
-      public int[] IndexesUTXOItems;
-      public TXInput[][] InputsPerTX;
 
       public Block(
-        byte[] buffer,
-        int startIndexBlock,
-        int startIndexTXs,
-        byte[] headerHash,
-        int tXCount)
+        byte[] buffer, 
+        int bufferIndex,
+        Headerchain.ChainHeader header,
+        byte[] headerHash, 
+        int tXcount)
       {
         Buffer = buffer;
-        StartIndex = startIndexBlock;
-        Length = startIndexTXs - startIndexBlock;
+        BufferIndex = bufferIndex;
+        Header = header;
         HeaderHash = headerHash;
-
-        TXCount = tXCount;
-
-        UTXOItemsPerTable = new UTXOItem[][]{
-          new UTXOItemUInt32[tXCount],
-          new UTXOItemULong64[tXCount],
-          new UTXOItemUInt32Array[tXCount]};
-
-        IndexesUTXOItems = new int[UTXOItemsPerTable.Length];
-
-        InputsPerTX = new TXInput[tXCount][];
+        TXCount = tXcount;
       }
-
-      public void PushUTXOItem(int address, UTXOItem uTXOItem)
-      {
-        UTXOItemsPerTable[address][IndexesUTXOItems[address]] = uTXOItem;
-        IndexesUTXOItems[address] += 1;
-      }
-      public bool TryPopUTXOItem(int address, out UTXOItem uTXOItem)
-      {
-        IndexesUTXOItems[address] -= 1;
-
-        if (IndexesUTXOItems[address] < 0)
-        {
-          uTXOItem = null;
-          return false;
-        }
-
-        uTXOItem = UTXOItemsPerTable[address][IndexesUTXOItems[address]];
-        return true;
-      }
-
     }
   }
 }

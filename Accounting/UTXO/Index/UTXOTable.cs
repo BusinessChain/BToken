@@ -33,7 +33,7 @@ namespace BToken.Accounting
           + COUNT_HEADER_BITS 
           + address * COUNT_COLLISION_BITS_PER_TABLE;
 
-        DirectoryPath = Path.Combine(RootPath, Label);
+        DirectoryPath = Path.Combine(PathUTXOState, Label);
       }
 
       public abstract bool TryParseUTXO(
@@ -104,18 +104,60 @@ namespace BToken.Accounting
         return GetCountPrimaryTableItems() + "," + GetCountSecondaryTableItems();
       }
 
-      public void BackupToDisk()
+      public async Task BackupToDiskAsync(string path)
       {
-        string directoryPath = Path.Combine(RootPath, Label);
+        string directoryPath = Path.Combine(path, Label);
         Directory.CreateDirectory(directoryPath);
-        
-        Task writeToFileTask = WriteFileAsync(
-          Path.Combine(directoryPath, "PrimaryTable"), 
+
+        Task[] writeToFileTasks = new Task[2];
+
+        writeToFileTasks[0] = WriteFileAsync(
+          Path.Combine(directoryPath, "PrimaryTable"),
           GetPrimaryData());
 
-        writeToFileTask = WriteFileAsync(
+        writeToFileTasks[1] = WriteFileAsync(
           Path.Combine(directoryPath, "CollisionTable"),
           GetCollisionData());
+
+        await Task.WhenAll(writeToFileTasks);
+      }
+      public void BackupToDisk(string path)
+      {
+        string directoryPath = Path.Combine(path, Label);
+        Directory.CreateDirectory(directoryPath);
+        
+        WriteFile(
+          Path.Combine(directoryPath, "PrimaryTable"),
+          GetPrimaryData());
+
+        WriteFile(
+          Path.Combine(directoryPath, "CollisionTable"),
+          GetCollisionData());
+      }
+
+      static void WriteFile(string filePath, byte[] buffer)
+      {
+        using (FileStream stream = new FileStream(
+           filePath,
+           FileMode.Create,
+           FileAccess.ReadWrite,
+           FileShare.Read))
+        {
+          stream.Write(buffer, 0, buffer.Length);
+        }
+      }
+      static async Task WriteFileAsync(string filePath, byte[] buffer)
+      {
+        using (FileStream stream = new FileStream(
+           filePath,
+           FileMode.Create,
+           FileAccess.ReadWrite,
+           FileShare.Read,
+           bufferSize: 4096,
+           useAsync: true))
+        {
+          await stream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+        }
       }
 
       protected abstract byte[] GetPrimaryData();
@@ -127,14 +169,14 @@ namespace BToken.Accounting
       
       public abstract void Clear();
 
-      public async Task LoadAsync()
+      public void Load()
       {
         LoadPrimaryData(
-          await LoadFileAsync(
+          File.ReadAllBytes(
             Path.Combine(DirectoryPath, "PrimaryTable")));
 
         LoadCollisionData(
-          await LoadFileAsync(
+          File.ReadAllBytes(
             Path.Combine(DirectoryPath, "CollisionTable")));
       }
     }

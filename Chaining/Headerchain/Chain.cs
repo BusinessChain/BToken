@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 
-using BToken.Networking;
-
 namespace BToken.Chaining
 {
   public partial class Headerchain

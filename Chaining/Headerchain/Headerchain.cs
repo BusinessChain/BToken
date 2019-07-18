@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.IO;
-using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Security.Cryptography;
 
 using BToken.Networking;
@@ -63,7 +62,8 @@ namespace BToken.Chaining
       }
     }
     public async Task<List<byte[]>> InsertHeadersAsync(
-      HeaderWriter archiveWriter, List<NetworkHeader> headers)
+      HeaderWriter archiveWriter, 
+      List<NetworkHeader> headers)
     {
       var headersInserted = new List<byte[]>();
 
@@ -71,12 +71,13 @@ namespace BToken.Chaining
       {
         try
         {
-          headersInserted.Add(await InsertHeaderAsync(header));
+          byte[] headerBytes = header.GetBytes();
+          headersInserted.Add(await InsertHeaderAsync(header, headerBytes));
         }
         catch (ChainException ex)
         {
           Console.WriteLine(string.Format("Insertion of header with hash '{0}' raised ChainException '{1}'.",
-            header.ComputeHash(),
+            header.ComputeHash().ToHexString(),
             ex.Message));
 
           return headersInserted;
@@ -86,11 +87,6 @@ namespace BToken.Chaining
       }
 
       return headersInserted;
-    }
-    async Task<byte[]> InsertHeaderAsync(NetworkHeader header)
-    {
-      byte[] headerBytes = header.GetBytes();
-      return await InsertHeaderAsync(header, headerBytes);
     }
     async Task<byte[]> InsertHeaderAsync(NetworkHeader header, byte[] headerBytes)
     {
@@ -151,11 +147,11 @@ namespace BToken.Chaining
 
     public ChainHeader ReadHeader(byte[] headerHash)
     {
-      SHA256 sHA256Generator = SHA256.Create();
+      SHA256 sHA256 = SHA256.Create();
 
-      return ReadHeader(headerHash, sHA256Generator);
+      return ReadHeader(headerHash, sHA256);
     }
-    public ChainHeader ReadHeader(byte[] headerHash, SHA256 sHA256Generator)
+    public ChainHeader ReadHeader(byte[] headerHash, SHA256 sHA256)
     {
       int key = BitConverter.ToInt32(headerHash, 0);
 
@@ -165,7 +161,7 @@ namespace BToken.Chaining
         {
           foreach (ChainHeader header in headers)
           {
-            if (headerHash.IsEqual(header.GetHeaderHash(sHA256Generator)))
+            if (headerHash.IsEqual(header.GetHeaderHash(sHA256)))
             {
               return header;
             }

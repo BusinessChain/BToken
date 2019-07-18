@@ -74,13 +74,13 @@ namespace BToken.Networking
       //Task peerInboundListenerTask = StartPeerInboundListenerAsync();
     }
 
-    public async Task ExecuteSessionAsync(INetworkSession session)
+    public async Task RunSessionAsync(INetworkSession session)
     {
       Peer peer = PeersOutboundAvailable.Receive();
 
       while (true)
       {
-        if (await peer.TryExecuteSessionAsync(session, default(CancellationToken)))
+        if (await peer.TryExecuteSessionAsync(session).ConfigureAwait(false))
         {
           await PeersOutboundAvailable.SendAsync(peer);
           return;
@@ -90,48 +90,8 @@ namespace BToken.Networking
         {
           peer = new Peer(this);
         } while (!await peer.TryConnectAsync());
-
       }
     }
-
-    //public void RemoveChannel(INetworkChannel channel)
-    //{
-    //  Peer peer = (Peer)channel;
-
-    //  if (IsPeerInbound(peer))
-    //  {
-    //    PeersInbound.Remove(peer);
-    //  }
-    //  else
-    //  {
-    //    ReplacePeerOutbound(peer);
-    //  }
-    //}
-    //Peer ReplacePeerOutbound(Peer peer)
-    //{
-    //  var peerNew = new Peer(this);
-
-    //  lock(ListPeersOutboundLOCK)
-    //  {
-    //    int indexPeer = PeersOutbound.FindIndex(p => p == peer);
-    //    if(indexPeer < 0)
-    //    {
-    //      PeersOutbound.Add(peerNew);
-    //    }
-    //    else
-    //    {
-    //      PeersOutbound[indexPeer] = peerNew;
-    //    }
-    //  }
-
-    //  Task startPeerTask = StartPeerAsync(peerNew);
-
-    //  return peerNew;
-    //}
-    //bool IsPeerInbound(Peer peer)
-    //{
-    //  return PeersInbound.Contains(peer);
-    //}
 
     public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
@@ -162,9 +122,6 @@ namespace BToken.Networking
 
     static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-    public async Task PingAsync()
-    {
-    }
     
     public uint GetProtocolVersion()
     {

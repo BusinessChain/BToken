@@ -13,24 +13,7 @@ namespace BToken.Chaining
 
       public ChainHeader HeaderPrevious;
       public ChainHeader[] HeadersNext;
-
-      public ChainHeader(
-        UInt32 version,
-        byte[] hashPrevious,
-        byte[] payloadHash,
-        UInt32 unixTimeSeconds,
-        UInt32 nBits,
-        UInt32 nonce)
-      {
-        NetworkHeader = new NetworkHeader(
-          version,
-          hashPrevious,
-          payloadHash,
-          unixTimeSeconds,
-          nBits,
-          nonce);
-      }
-
+      
       public ChainHeader(NetworkHeader header, ChainHeader headerPrevious)
       {
         NetworkHeader = header;
@@ -42,12 +25,12 @@ namespace BToken.Chaining
 
   public static class NetworkHeaderExtensionMethods
   {
-    public static byte[] GetHeaderHash(this Headerchain.ChainHeader header, SHA256 sHA256Generator)
+    public static byte[] GetHeaderHash(this Headerchain.ChainHeader header, SHA256 sHA256)
     {
       if (header.HeadersNext == null)
       {
-        return sHA256Generator.ComputeHash(
-         sHA256Generator.ComputeHash(
+        return sHA256.ComputeHash(
+         sHA256.ComputeHash(
            header.NetworkHeader.GetBytes()));
       }
 
@@ -56,8 +39,7 @@ namespace BToken.Chaining
 
     public static byte[] GetHeaderHash(this Headerchain.ChainHeader header)
     {
-      SHA256 sHA256Generator = SHA256.Create();
-      return header.GetHeaderHash(sHA256Generator);
+      return header.GetHeaderHash(SHA256.Create());
     }
   }
 }

@@ -225,20 +225,15 @@ namespace BToken.Networking
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      public async Task<bool> TryExecuteSessionAsync(INetworkSession session, CancellationToken cancellationToken)
+      public async Task<bool> TryExecuteSessionAsync(INetworkSession session)
       {
         try
         {
-          await session.RunAsync(this, cancellationToken);
+          await session.RunAsync(this).ConfigureAwait(false);
           return true;
         }
-        catch // (Exception ex)
+        catch
         {
-          //Console.WriteLine("Session '{0}' with peer '{1}' ended with exception: \n'{2}'",
-          //  session.GetType().ToString(),
-          //  IPEndPoint.Address.ToString(),
-          //  ex.Message);
-
           return false;
         }
       }
