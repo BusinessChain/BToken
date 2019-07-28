@@ -56,7 +56,7 @@ namespace BToken.Accounting
               {
                 await DownloadBlocksAsync();
 
-                Loader.PostDownloadToBatcher(DownloadBatch);
+                Loader.PostDownload(DownloadBatch);
               }
 
               while (true)
@@ -69,7 +69,7 @@ namespace BToken.Accounting
 
                 await DownloadBlocksAsync();
 
-                Loader.PostDownloadToBatcher(DownloadBatch);
+                Loader.PostDownload(DownloadBatch);
               }
             }
             catch (TaskCanceledException)

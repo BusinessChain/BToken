@@ -17,6 +17,7 @@ namespace BToken.Accounting
     {
       partial class UTXONetworkLoader
       {
+        const int COUNT_TXS_IN_BATCH_FILE = 10000;
         const int COUNT_BLOCKS_DOWNLOAD_BATCH = 10;
         const int COUNT_NETWORK_PARSER_PARALLEL = 4;
         const int COUNT_DOWNLOAD_TASKS_PARALLEL = 4;
@@ -338,7 +339,7 @@ namespace BToken.Accounting
             } while (true);
           }
         }
-        void PostDownloadToBatcher(UTXODownloadBatch downloadBatch)
+        void PostDownload(UTXODownloadBatch downloadBatch)
         {
           lock (LOCK_CountBytesDownloaded)
           {

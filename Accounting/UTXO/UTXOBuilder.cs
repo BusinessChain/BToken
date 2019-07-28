@@ -15,8 +15,7 @@ namespace BToken.Accounting
   {
     partial class UTXOBuilder
     {
-      const int COUNT_ARCHIVE_PARSER_PARALLEL = 4;
-      const int COUNT_TXS_IN_BATCH_FILE = 20000;
+      const int COUNT_ARCHIVE_PARSER_PARALLEL = 6;
 
       UTXO UTXO;
       UTXOMerger Merger;
@@ -48,7 +47,7 @@ namespace BToken.Accounting
       public async Task RunAsync()
       {
         LoadUTXOState();
-        
+
         Task mergerTask = Merger.StartAsync();
 
         await RunArchiveLoaderAsync();
@@ -110,6 +109,7 @@ namespace BToken.Accounting
 
           Merger.HeaderMergedLast = UTXO.Headerchain.ReadHeader(
             headerHashMergedLast, SHA256);
+          HeaderSentToMergerLast = Merger.HeaderMergedLast;
 
           for (int i = 0; i < UTXO.Tables.Length; i += 1)
           {
@@ -122,26 +122,22 @@ namespace BToken.Accounting
           {
             UTXO.Tables[c].Clear();
           }
+          
+          Merger.BatchIndexNext = 0;
+          Merger.BlockHeight = -1;
 
-          InsertGenesisBlock();
+          var parser = new UTXOParser(UTXO);
 
-          Merger.BatchIndexNext = 1;
-          Merger.BlockHeight = 0;
-          Merger.HeaderMergedLast = UTXO.Headerchain.GenesisHeader;
+          UTXOBatch genesisBatch = parser.ParseBatch(
+            GenesisBlock.BlockBytes, 0);
+
+          HeaderSentToMergerLast = genesisBatch.HeaderLast;
+
+          Merger.Buffer.Post(genesisBatch);
         }
         
-        BatchIndexLoad = Merger.BatchIndexNext;
-        HeaderSentToMergerLast = Merger.HeaderMergedLast;
+        BatchIndexLoad = Merger.BatchIndexNext + 1;
         BatchIndexSentToMergerLast = Merger.BatchIndexNext - 1;
-      }
-      void InsertGenesisBlock()
-      {
-        var parser = new UTXOParser(UTXO);
-
-        UTXOBatch genesisBatch = parser.ParseBatch(
-          GenesisBlock.BlockBytes, 0);
-
-        UTXO.InsertUTXOs(genesisBatch.UTXOParserDatasets.First());
       }
 
       async Task RunArchiveLoaderAsync()

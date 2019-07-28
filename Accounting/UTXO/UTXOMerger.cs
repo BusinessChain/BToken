@@ -79,21 +79,22 @@ namespace BToken.Accounting
                   }
 
                   StopwatchMerging.Restart();
-                  foreach (UTXOParserData uTXOParserData in batch.UTXOParserDatasets)
-                  {
-                    UTXO.InsertUTXOs(uTXOParserData);
-                    UTXO.SpendUTXOs(uTXOParserData);
-                  }
+                  
+                  UTXO.InsertUTXOsUInt32(batch.UTXOsUInt32);
+                  UTXO.InsertUTXOsULong64(batch.UTXOsULong64);
+                  UTXO.InsertUTXOsUInt32Array(batch.UTXOsUInt32Array);
+                  UTXO.SpendUTXOs(batch.Inputs, batch.IndexInputs);
+
                   StopwatchMerging.Stop();
 
-                  BlockHeight += batch.UTXOParserDatasets.Count;
+                  BlockHeight += batch.BlockCount;
                   BatchIndexNext += 1;
                   HeaderMergedLast = batch.HeaderLast;
 
                   if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0
                     && batch.BatchIndex > 0)
                   {
-                    ArchiveUTXOState();
+                    //ArchiveUTXOState();
                   }
 
                   LogCSV(batch, logFileWriter);
@@ -146,26 +147,6 @@ namespace BToken.Accounting
           }
 
           BackupTables(PathUTXOStateTemporary);
-        }
-        async Task ArchiveUTXOStateAsync()
-        {
-          Directory.CreateDirectory(PathUTXOStateTemporary);
-
-          byte[] uTXOState = new byte[40];
-          BitConverter.GetBytes(BatchIndexNext).CopyTo(uTXOState, 0);
-          BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
-          HeaderMergedLast.GetHeaderHash().CopyTo(uTXOState, 8);
-          
-          using (FileStream stream = new FileStream(
-             Path.Combine(PathUTXOStateTemporary, "UTXOState"),
-             FileMode.Create,
-             FileAccess.ReadWrite,
-             FileShare.Read))
-          {
-            stream.Write(uTXOState, 0, uTXOState.Length);
-          }
-
-          await BackupTablesAsync(PathUTXOStateTemporary);
         }
 
         void BackupTables(string path)

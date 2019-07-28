@@ -1,48 +1,46 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.IO;
-using System.Threading.Tasks;
 
 namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class UTXOTableULong64 : UTXOTable
+    class UTXOIndexUInt32Compressed : UTXOIndexCompressed
     {
-      Dictionary<int, ulong> PrimaryTable = new Dictionary<int, ulong>();
-      Dictionary<byte[], ulong> CollisionTable =
-        new Dictionary<byte[], ulong>(new EqualityComparerByteArray());
+      public Dictionary<int, uint> PrimaryTable = new Dictionary<int, uint>();
+      public Dictionary<byte[], uint> CollisionTable =
+        new Dictionary<byte[], uint>(new EqualityComparerByteArray());
 
-      ulong UTXOPrimary;
-      ulong UTXOSecondary;
+      uint UTXOPrimary;
+      uint UTXOCollision;
 
-      const int COUNT_LONG_BITS = 64;
+      const int COUNT_INTEGER_BITS = 32;
 
-      static readonly ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
-      static readonly ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
-      static readonly ulong MaskHeaderBits =
+      static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountNonOutputBits;
+      static readonly uint MaskBatchIndex = ~(uint.MaxValue << COUNT_BATCHINDEX_BITS);
+      static readonly uint MaskHeaderBits =
         ~((uint.MaxValue << (COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS)) | MaskBatchIndex);
 
-      ulong[] MasksCollisionBitsClear = {
-        0xFFFFFFFFFFCFFFFF,
-        0xFFFFFFFFFF3FFFFF,
-        0xFFFFFFFFFCFFFFFF };
-      ulong[] MasksCollisionBitsOne = {
+      public readonly static uint[] MasksCollisionBitsClear = {
+        0xFFCFFFFF,
+        0xFF3FFFFF,
+        0xFCFFFFFF };
+      public readonly static uint[] MasksCollisionBitsOne = {
         0x00100000,
         0x00400000,
         0x01000000 };
-      ulong[] MasksCollisionBitsTwo = {
+      public readonly static uint[] MasksCollisionBitsTwo = {
         0x00200000,
         0x00800000,
         0x02000000 };
-      ulong[] MasksCollisionBitsFull = {
+      public readonly static uint[] MasksCollisionBitsFull = {
         0x00300000,
         0x00C00000,
         0x03000000 };
 
-      public UTXOTableULong64()
-        : base(1, "ULong64")
+      public UTXOIndexUInt32Compressed()
+        : base(0, "UInt32")
       { }
 
       protected override int GetCountPrimaryTableItems()
@@ -59,7 +57,7 @@ namespace BToken.Accounting
       }
       public override void IncrementCollisionBits(int primaryKey, int collisionAddress)
       {
-        ulong collisionBits = PrimaryTable[primaryKey] & MasksCollisionBitsFull[collisionAddress];
+        uint collisionBits = PrimaryTable[primaryKey] & MasksCollisionBitsFull[collisionAddress];
         if (collisionBits == 0)
         {
           PrimaryTable[primaryKey] |= MasksCollisionBitsOne[collisionAddress];
@@ -76,57 +74,18 @@ namespace BToken.Accounting
         if (collisionBits == MasksCollisionBitsTwo[collisionAddress])
         {
           PrimaryTable[primaryKey] |= MasksCollisionBitsFull[collisionAddress];
+          return;
         }
-      }
-      public override void SecondaryTableAddUTXO(UTXOItem uTXODataItem)
-      {
-        CollisionTable.Add(
-          uTXODataItem.Hash,
-          ((UTXOItemULong64)uTXODataItem).UTXOIndex);
-      }
-      public override void PrimaryTableAddUTXO(UTXOItem uTXODataItem)
-      {
-        PrimaryTable.Add(
-          uTXODataItem.PrimaryKey,
-          ((UTXOItemULong64)uTXODataItem).UTXOIndex);
-      }
-      
-      public override bool TryParseUTXO(
-        int batchIndex,
-        byte[] headerHash,
-        int lengthUTXOBits,
-        out UTXOItem item)
-      {
-        if (COUNT_LONG_BITS < lengthUTXOBits)
-        {
-          item = null;
-          return false;
-        }
-
-        ulong uTXOIndex = (uint)batchIndex & MaskBatchIndex;
-        uTXOIndex |= ((uint)headerHash[0] << COUNT_BATCHINDEX_BITS) & MaskHeaderBits;
-        
-        if (COUNT_LONG_BITS > lengthUTXOBits)
-        {
-          uTXOIndex |= (ulong.MaxValue << lengthUTXOBits);
-        }
-
-        item = new UTXOItemULong64
-        {
-          UTXOIndex = uTXOIndex
-        };
-
-        return true;
       }
 
       public override void SpendPrimaryUTXO(TXInput input, out bool areAllOutputpsSpent)
       {
         SpendUTXO(ref UTXOPrimary, input.OutputIndex, out areAllOutputpsSpent);
-        PrimaryTable[input.PrimaryKeyTXIDOutput] = UTXOPrimary;
+        PrimaryTable[PrimaryKey] = UTXOPrimary;
       }
       public override bool TryGetValueInPrimaryTable(int primaryKey)
       {
-        PrimaryKey = primaryKey; // cache
+        PrimaryKey = primaryKey;
         return PrimaryTable.TryGetValue(primaryKey, out UTXOPrimary);
       }
       public override bool HasCollision(int cacheAddress)
@@ -137,41 +96,42 @@ namespace BToken.Accounting
       {
         PrimaryTable.Remove(PrimaryKey);
       }
-      public override void ResolveCollision(UTXOTable tablePrimary)
+      public override uint GetCollisionBits()
       {
-        KeyValuePair<byte[], ulong> collisionItem =
+        return MaskCollisionBits & UTXOPrimary;
+      }
+      public override bool AreCollisionBitsFull()
+      {
+        return (MasksCollisionBitsFull[Address] & UTXOPrimary) == MasksCollisionBitsFull[Address];
+      }
+      public override void ResolveCollision(UTXOIndexCompressed tablePrimary)
+      {
+        KeyValuePair<byte[], uint> collisionItem =
           CollisionTable.First(k => BitConverter.ToInt32(k.Key, 0) == tablePrimary.PrimaryKey);
 
         CollisionTable.Remove(collisionItem.Key);
 
-        if (!tablePrimary.AreCollisionBitsFull()
+        if (!tablePrimary.AreCollisionBitsFull() 
           || !HasCountCollisions(tablePrimary.PrimaryKey, COUNT_COLLISIONS_MAX))
         {
           tablePrimary.DecrementCollisionBits(Address);
         }
 
-        ulong uTXOPrimary = collisionItem.Value | tablePrimary.GetCollisionBits();
+        uint uTXOPrimary = collisionItem.Value | tablePrimary.GetCollisionBits();
         PrimaryTable.Add(tablePrimary.PrimaryKey, uTXOPrimary);
       }
 
-      public override uint GetCollisionBits()
+      protected override void SpendCollisionUTXO(
+        byte[] key, 
+        int outputIndex, 
+        out bool areAllOutputpsSpent)
       {
-        return MaskCollisionBits & (uint)UTXOPrimary;
-      }
-      public override bool AreCollisionBitsFull()
-      {
-        return (MasksCollisionBitsFull[Address] & UTXOPrimary) 
-          == MasksCollisionBitsFull[Address];
-      }
-
-      protected override void SpendCollisionUTXO(byte[] key, int outputIndex, out bool areAllOutputpsSpent)
-      {
-        SpendUTXO(ref UTXOSecondary, outputIndex, out areAllOutputpsSpent);
-        CollisionTable[key] = UTXOSecondary;
+        SpendUTXO(ref UTXOCollision, outputIndex, out areAllOutputpsSpent);
+        CollisionTable[key] = UTXOCollision;
       }
       protected override bool TryGetValueInCollisionTable(byte[] key)
       {
-        return CollisionTable.TryGetValue(key, out UTXOSecondary);
+        return CollisionTable.TryGetValue(key, out UTXOCollision);
       }
       protected override void RemoveCollision(byte[] key)
       {
@@ -181,12 +141,12 @@ namespace BToken.Accounting
       {
         foreach (byte[] key in CollisionTable.Keys)
         {
-          if (BitConverter.ToInt32(key, 0) == primaryKey)
+          if(BitConverter.ToInt32(key, 0) == primaryKey)
           {
             countCollisions -= 1;
-            if (countCollisions == 0)
+            if(countCollisions == 0)
             {
-              return true;
+              return true; 
             }
           }
         }
@@ -194,15 +154,15 @@ namespace BToken.Accounting
         return false;
       }
       public override void DecrementCollisionBits(int tableAddress)
-      {
-        if ((UTXOPrimary & MasksCollisionBitsFull[tableAddress])
+      {        
+        if ((UTXOPrimary & MasksCollisionBitsFull[tableAddress]) 
           == MasksCollisionBitsOne[tableAddress])
         {
           UTXOPrimary &= MasksCollisionBitsClear[tableAddress];
           return;
         }
-
-        if ((UTXOPrimary & MasksCollisionBitsFull[tableAddress])
+        
+        if ((UTXOPrimary & MasksCollisionBitsFull[tableAddress]) 
           == MasksCollisionBitsTwo[tableAddress])
         {
           UTXOPrimary &= MasksCollisionBitsClear[tableAddress];
@@ -210,6 +170,7 @@ namespace BToken.Accounting
           return;
         }
 
+        UTXOPrimary &= MasksCollisionBitsClear[tableAddress];
         UTXOPrimary |= MasksCollisionBitsTwo[tableAddress];
       }
       protected override void UpdateUTXOInTable()
@@ -217,9 +178,9 @@ namespace BToken.Accounting
         PrimaryTable[PrimaryKey] = UTXOPrimary;
       }
 
-      static void SpendUTXO(ref ulong uTXO, int outputIndex, out bool areAllOutputpsSpent)
+      static void SpendUTXO(ref uint uTXO, int outputIndex, out bool areAllOutputpsSpent)
       {
-        ulong mask = (ulong)1 << (CountNonOutputBits + outputIndex);
+        uint mask = (uint)1 << (CountNonOutputBits + outputIndex);
         if ((uTXO & mask) != 0x00)
         {
           throw new UTXOException(string.Format(
@@ -232,46 +193,45 @@ namespace BToken.Accounting
 
       protected override byte[] GetPrimaryData()
       {
-        byte[] buffer = new byte[PrimaryTable.Count * 12];
+        byte[] buffer = new byte[PrimaryTable.Count << 3];
 
         int index = 0;
-        foreach (KeyValuePair<int, ulong> keyValuePair in PrimaryTable)
+        foreach (KeyValuePair<int, uint> keyValuePair in PrimaryTable)
         {
           BitConverter.GetBytes(keyValuePair.Key).CopyTo(buffer, index);
           index += 4;
           BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
-          index += 8;
+          index += 4;
         }
 
         return buffer;
       }
       protected override byte[] GetCollisionData()
       {
-        byte[] buffer = new byte[CollisionTable.Count * (HASH_BYTE_SIZE + 8)];
+        byte[] buffer = new byte[CollisionTable.Count * (HASH_BYTE_SIZE + 4)];
 
         int index = 0;
-        foreach (KeyValuePair<byte[], ulong> keyValuePair in CollisionTable)
+        foreach (KeyValuePair<byte[], uint> keyValuePair in CollisionTable)
         {
           keyValuePair.Key.CopyTo(buffer, index);
           index += HASH_BYTE_SIZE;
           BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
-          index += 8;
+          index += 4;
         }
 
         return buffer;
       }
 
-
       protected override void LoadPrimaryData(byte[] buffer)
       {
         int index = 0;
 
-        while (index < buffer.Length)
+        while(index < buffer.Length)
         {
           int key = BitConverter.ToInt32(buffer, index);
           index += 4;
-          ulong value = BitConverter.ToUInt64(buffer, index);
-          index += 8;
+          uint value = BitConverter.ToUInt32(buffer, index);
+          index += 4;
 
           PrimaryTable.Add(key, value);
         }
@@ -286,8 +246,8 @@ namespace BToken.Accounting
           Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
           index += HASH_BYTE_SIZE;
 
-          ulong value = BitConverter.ToUInt64(buffer, index);
-          index += 8;
+          uint value = BitConverter.ToUInt32(buffer, index);
+          index += 4;
 
           CollisionTable.Add(key, value);
         }
@@ -298,11 +258,6 @@ namespace BToken.Accounting
         PrimaryTable.Clear();
         CollisionTable.Clear();
       }
-    }
-
-    class UTXOItemULong64 : UTXOItem
-    {
-      public ulong UTXOIndex;
     }
   }
 }

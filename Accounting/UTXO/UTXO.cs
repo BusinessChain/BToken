@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 using BToken.Chaining;
@@ -19,6 +19,9 @@ namespace BToken.Accounting
     static string PathUTXOStateTemporary = PathUTXOState + "_temp";
     static string PathUTXOStateOld = PathUTXOState + "_Old";
 
+    const int COUNT_INTEGER_BITS = 32;
+    const int COUNT_LONG_BITS = 64;
+
     const int HASH_BYTE_SIZE = 32;
 
     const int COUNT_BATCHINDEX_BITS = 16;
@@ -26,10 +29,11 @@ namespace BToken.Accounting
     const int COUNT_COLLISION_BITS_PER_TABLE = 2;
     const int COUNT_COLLISIONS_MAX = 3;
 
-    UTXOTable[] Tables = new UTXOTable[]{
-        new UTXOTableUInt32(),
-        new UTXOTableULong64(),
-        new UTXOTableUInt32Array()};
+    UTXOIndexCompressed[] Tables;
+    UTXOIndexUInt32Compressed TableUInt32 = new UTXOIndexUInt32Compressed();
+    UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
+    UTXOIndexUInt32ArrayCompressed TableUInt32Array = new UTXOIndexUInt32ArrayCompressed();
+
 
     static readonly int CountNonOutputBits =
       COUNT_BATCHINDEX_BITS +
@@ -46,6 +50,11 @@ namespace BToken.Accounting
       Network = network;
 
       Builder = new UTXOBuilder(this, genesisBlock);
+
+      Tables = new UTXOIndexCompressed[]{
+        TableUInt32,
+        TableULong64,
+        TableUInt32Array};
     }
 
     public async Task StartAsync()
@@ -53,81 +62,137 @@ namespace BToken.Accounting
       await Builder.RunAsync();
     }
 
-    void InsertUTXOs(UTXOParserData uTXOParserData)
+    void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)
     {
-      for (int c = 0; c < Tables.Length; c += 1)
-      {
-      LoopUTXOItems:
-        while (uTXOParserData.TryPopUTXOItem(c, out UTXOItem uTXOItem))
-        {
-          for (int cc = 0; cc < Tables.Length; cc += 1)
-          {
-            if (Tables[cc].PrimaryTableContainsKey(uTXOItem.PrimaryKey))
-            {
-              Tables[cc].IncrementCollisionBits(uTXOItem.PrimaryKey, c);
+      int i = 0;
 
-              Tables[c].SecondaryTableAddUTXO(uTXOItem);
-              goto LoopUTXOItems;
-            }
+    LoopUTXOItems:
+      while(i < uTXOsUInt32.Length)
+      {
+        int primaryKey = BitConverter.ToInt32(uTXOsUInt32[i].Key, 0);
+        
+        for (int c = 0; c < Tables.Length; c += 1)
+        {
+          if (Tables[c].PrimaryTableContainsKey(primaryKey))
+          {
+            Tables[c].IncrementCollisionBits(primaryKey, 0);
+
+            TableUInt32.CollisionTable.Add(uTXOsUInt32[i].Key, uTXOsUInt32[i].Value);
+
+            i += 1;
+            goto LoopUTXOItems;
           }
-          Tables[c].PrimaryTableAddUTXO(uTXOItem);
         }
+
+        TableUInt32.PrimaryTable.Add(primaryKey, uTXOsUInt32[i].Value);
+
+        i += 1;
       }
     }
-    void SpendUTXOs(UTXOParserData uTXOParserData)
+    void InsertUTXOsULong64(KeyValuePair<byte[], ulong>[] uTXOsULong64)
     {
-      for (int t = 0; t < uTXOParserData.InputsPerTX.Length; t += 1)
+      int i = 0;
+
+    LoopUTXOItems:
+      while (i < uTXOsULong64.Length)
       {
-        int i = 0;
-      LoopSpendUTXOs:
-        while (i < uTXOParserData.InputsPerTX[t].Length)
+        int primaryKey = BitConverter.ToInt32(uTXOsULong64[i].Key, 0);
+        
+        for (int c = 0; c < Tables.Length; c += 1)
         {
-          TXInput input = uTXOParserData.InputsPerTX[t][i];
-          
-          for (int c = 0; c < Tables.Length; c += 1)
+          if (Tables[c].PrimaryTableContainsKey(primaryKey))
           {
-            UTXOTable tablePrimary = Tables[c];
+            Tables[c].IncrementCollisionBits(primaryKey, 1);
 
-            if (tablePrimary.TryGetValueInPrimaryTable(input.PrimaryKeyTXIDOutput))
-            {
-              UTXOTable tableCollision = null;
-              for (int cc = 0; cc < Tables.Length; cc += 1)
-              {
-                if (tablePrimary.HasCollision(cc))
-                {
-                  tableCollision = Tables[cc];
+            TableULong64.CollisionTable.Add(uTXOsULong64[i].Key, uTXOsULong64[i].Value);
 
-                  if (tableCollision.TrySpendCollision(input, tablePrimary))
-                  {
-                    i += 1;
-                    goto LoopSpendUTXOs;
-                  }
-                }
-              }
-
-              tablePrimary.SpendPrimaryUTXO(input, out bool allOutputsSpent);
-
-              if (allOutputsSpent)
-              {
-                tablePrimary.RemovePrimary();
-
-                if (tableCollision != null)
-                {
-                  tableCollision.ResolveCollision(tablePrimary);
-                }
-              }
-
-              i += 1;
-              goto LoopSpendUTXOs;
-            }
+            i += 1;
+            goto LoopUTXOItems;
           }
-
-          throw new UTXOException(string.Format(
-            "Referenced TX {0} not found in UTXO table.",
-            input.TXIDOutput.ToHexString()));
         }
+
+        TableULong64.PrimaryTable.Add(primaryKey, uTXOsULong64[i].Value);
+
+        i += 1;
       }
     }
-    
+    void InsertUTXOsUInt32Array(KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array)
+    {
+      int i = 0;
+
+    LoopUTXOItems:
+      while (i < uTXOsUInt32Array.Length)
+      {
+        int primaryKey = BitConverter.ToInt32(uTXOsUInt32Array[i].Key, 0);
+        
+        for (int c = 0; c < Tables.Length; c += 1)
+        {
+          if (Tables[c].PrimaryTableContainsKey(primaryKey))
+          {
+            Tables[c].IncrementCollisionBits(primaryKey, 2);
+
+            TableUInt32Array.CollisionTable.Add(uTXOsUInt32Array[i].Key, uTXOsUInt32Array[i].Value);
+
+            i += 1;
+            goto LoopUTXOItems;
+          }
+        }
+
+        TableUInt32Array.PrimaryTable.Add(primaryKey, uTXOsUInt32Array[i].Value);
+
+        i += 1;
+      }
+    }
+
+    void SpendUTXOs(TXInput[] inputs, int inputIndex)
+    {
+      int i = 0;
+    LoopSpendUTXOs:
+      while (i < inputIndex)
+      {
+        for (int c = 0; c < Tables.Length; c += 1)
+        {
+          UTXOIndexCompressed tablePrimary = Tables[c];
+
+          if (tablePrimary.TryGetValueInPrimaryTable(inputs[i].PrimaryKeyTXIDOutput))
+          {
+            UTXOIndexCompressed tableCollision = null;
+            for (int cc = 0; cc < Tables.Length; cc += 1)
+            {
+              if (tablePrimary.HasCollision(cc))
+              {
+                tableCollision = Tables[cc];
+
+                if (tableCollision.TrySpendCollision(inputs[i], tablePrimary))
+                {
+                  i += 1;
+                  goto LoopSpendUTXOs;
+                }
+              }
+            }
+
+            tablePrimary.SpendPrimaryUTXO(inputs[i], out bool allOutputsSpent);
+
+            if (allOutputsSpent)
+            {
+              tablePrimary.RemovePrimary();
+
+              if (tableCollision != null)
+              {
+                tableCollision.ResolveCollision(tablePrimary);
+              }
+            }
+
+            i += 1;
+            goto LoopSpendUTXOs;
+          }
+        }
+
+        throw new UTXOException(string.Format(
+          "Referenced TX {0} not found in UTXO table.",
+          inputs[i].TXIDOutput.ToHexString()));
+      }
+    }
+        
   }
 }

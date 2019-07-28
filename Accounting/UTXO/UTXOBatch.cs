@@ -13,9 +13,20 @@ namespace BToken.Accounting
 
       public int BatchIndex;
 
+      public int BlockCount;
       public int TXCount;
+
       public List<Block> Blocks = new List<Block>(50);
-      public List<UTXOParserData> UTXOParserDatasets = new List<UTXOParserData>(50);
+      
+      public TXInput[] Inputs = new TXInput[30000];
+      public int IndexInputs;
+
+      public UTXOIndexUInt32 TableUInt32 = new UTXOIndexUInt32();
+      public KeyValuePair<byte[], uint>[] UTXOsUInt32;
+      public UTXOIndexULong64 TableULong64 = new UTXOIndexULong64();
+      public KeyValuePair<byte[], ulong>[] UTXOsULong64;
+      public UTXOIndexUInt32Array TableUInt32Array = new UTXOIndexUInt32Array();
+      public KeyValuePair<byte[], uint[]>[] UTXOsUInt32Array;
 
       public Headerchain.ChainHeader HeaderPrevious;
       public Headerchain.ChainHeader HeaderLast;

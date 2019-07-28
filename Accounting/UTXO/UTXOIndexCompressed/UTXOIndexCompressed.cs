@@ -8,7 +8,7 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    abstract class UTXOTable
+    abstract class UTXOIndexCompressed
     {
       public int Address;
       public int OffsetCollisionBits;
@@ -21,7 +21,7 @@ namespace BToken.Accounting
       public int PrimaryKey;
 
 
-      protected UTXOTable(
+      protected UTXOIndexCompressed(
         int address,
         string label)
       {
@@ -36,28 +36,20 @@ namespace BToken.Accounting
         DirectoryPath = Path.Combine(PathUTXOState, Label);
       }
 
-      public abstract bool TryParseUTXO(
-        int batchIndex,
-        byte[] headerHash, 
-        int countTXOutputs, 
-        out UTXOItem uTXOIndexDataItem);
-
       public abstract bool PrimaryTableContainsKey(int primaryKey);
       public abstract void IncrementCollisionBits(int primaryKey, int collisionAddress);
-      public abstract void SecondaryTableAddUTXO(UTXOItem uTXODataItem);
-      public abstract void PrimaryTableAddUTXO(UTXOItem uTXODataItem);
 
       public abstract void SpendPrimaryUTXO(TXInput input, out bool areAllOutputpsSpent);
       public abstract bool TryGetValueInPrimaryTable(int primaryKey);
       public abstract bool HasCollision(int cacheAddress);
       public abstract void RemovePrimary();
-      public abstract void ResolveCollision(UTXOTable tablePrimary);
+      public abstract void ResolveCollision(UTXOIndexCompressed tablePrimary);
       public abstract uint GetCollisionBits();
       public abstract bool AreCollisionBitsFull();
 
       public bool TrySpendCollision(
         TXInput input,
-        UTXOTable tablePrimary)
+        UTXOIndexCompressed tablePrimary)
       {
         if (TryGetValueInCollisionTable(input.TXIDOutput))
         {
@@ -179,15 +171,6 @@ namespace BToken.Accounting
           File.ReadAllBytes(
             Path.Combine(DirectoryPath, "CollisionTable")));
       }
-    }
-
-    abstract class UTXOItem
-    {
-      public int PrimaryKey;
-      public byte[] Hash;
-
-      public UTXOItem()
-      { }
     }
   }
 }
