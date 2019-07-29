@@ -19,8 +19,7 @@ namespace BToken.Accounting
       public List<Block> Blocks = new List<Block>(50);
 
       const int AVERAGE_INPUTS_PER_TX = 5;
-      public TXInput[] Inputs = new TXInput[COUNT_TXS_IN_BATCH_FILE * AVERAGE_INPUTS_PER_TX];
-      public int IndexInputs;
+      public List<TXInput> Inputs = new List<TXInput>(COUNT_TXS_IN_BATCH_FILE * AVERAGE_INPUTS_PER_TX);
 
       public UTXOIndexUInt32 TableUInt32 = new UTXOIndexUInt32();
       public KeyValuePair<byte[], uint>[] UTXOsUInt32;

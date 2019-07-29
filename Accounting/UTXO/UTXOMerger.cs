@@ -83,7 +83,7 @@ namespace BToken.Accounting
                   UTXO.InsertUTXOsUInt32(batch.TableUInt32.UTXOItemsUInt32, batch.TableUInt32.IndexUTXOs);
                   UTXO.InsertUTXOsULong64(batch.TableULong64.UTXOItemsULong64, batch.TableULong64.IndexUTXOs);
                   UTXO.InsertUTXOsUInt32Array(batch.TableUInt32Array.UTXOItemsUInt32Array, batch.TableUInt32Array.IndexUTXOs);
-                  UTXO.SpendUTXOs(batch.Inputs, batch.IndexInputs);
+                  UTXO.SpendUTXOs(batch.Inputs);
 
                   StopwatchMerging.Stop();
 
@@ -94,7 +94,7 @@ namespace BToken.Accounting
                   if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0
                     && batch.BatchIndex > 0)
                   {
-                    //ArchiveUTXOState();
+                    ArchiveUTXOState();
                   }
 
                   LogCSV(batch, logFileWriter);

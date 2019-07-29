@@ -111,6 +111,8 @@ namespace BToken.Accounting
             headerHashMergedLast, SHA256);
           HeaderSentToMergerLast = Merger.HeaderMergedLast;
 
+          BatchIndexLoad = Merger.BatchIndexNext;
+
           for (int i = 0; i < UTXO.Tables.Length; i += 1)
           {
             UTXO.Tables[i].Load();
@@ -133,10 +135,11 @@ namespace BToken.Accounting
 
           HeaderSentToMergerLast = genesisBatch.HeaderLast;
 
+          BatchIndexLoad = 1;
+
           Merger.Buffer.Post(genesisBatch);
         }
         
-        BatchIndexLoad = Merger.BatchIndexNext + 1;
         BatchIndexSentToMergerLast = Merger.BatchIndexNext - 1;
       }
 

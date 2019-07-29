@@ -145,11 +145,11 @@ namespace BToken.Accounting
       }
     }
 
-    void SpendUTXOs(TXInput[] inputs, int inputIndex)
+    void SpendUTXOs(List<TXInput> inputs)
     {
       int i = 0;
     LoopSpendUTXOs:
-      while (i < inputIndex)
+      while (i < inputs.Count)
       {
         for (int c = 0; c < Tables.Length; c += 1)
         {

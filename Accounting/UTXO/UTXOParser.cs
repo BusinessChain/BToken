@@ -242,7 +242,7 @@ namespace BToken.Accounting
         {
           for (int i = 0; i < countTXInputs; i += 1)
           {
-            Batch.Inputs[Batch.IndexInputs++] = new TXInput(Buffer, ref BufferIndex);
+            Batch.Inputs.Add(new TXInput(Buffer, ref BufferIndex));
           }
         }
 
