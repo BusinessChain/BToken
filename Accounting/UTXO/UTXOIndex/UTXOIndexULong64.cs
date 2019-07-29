@@ -10,6 +10,10 @@ namespace BToken.Accounting
   {
     class UTXOIndexULong64
     {
+      public KeyValuePair<byte[], ulong>[] UTXOItemsULong64
+        = new KeyValuePair<byte[], ulong>[COUNT_TXS_IN_BATCH_FILE];
+      public int IndexUTXOs;
+
       public Dictionary<byte[], ulong> Table =
         new Dictionary<byte[], ulong>(new EqualityComparerByteArray());
       
@@ -56,7 +60,7 @@ namespace BToken.Accounting
           uTXOIndex |= (ulong.MaxValue << lengthUTXOBits);
         }
 
-        Table.Add(tXHash, uTXOIndex);
+        UTXOItemsULong64[IndexUTXOs++] = new KeyValuePair<byte[], ulong>(tXHash, uTXOIndex);
       }
 
       public bool TrySpend(TXInput input)

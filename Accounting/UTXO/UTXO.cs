@@ -29,12 +29,13 @@ namespace BToken.Accounting
     const int COUNT_COLLISION_BITS_PER_TABLE = 2;
     const int COUNT_COLLISIONS_MAX = 3;
 
+    const int COUNT_TXS_IN_BATCH_FILE = 10000;
+
     UTXOIndexCompressed[] Tables;
     UTXOIndexUInt32Compressed TableUInt32 = new UTXOIndexUInt32Compressed();
     UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
     UTXOIndexUInt32ArrayCompressed TableUInt32Array = new UTXOIndexUInt32ArrayCompressed();
-
-
+    
     static readonly int CountNonOutputBits =
       COUNT_BATCHINDEX_BITS +
       COUNT_HEADER_BITS +
@@ -62,12 +63,12 @@ namespace BToken.Accounting
       await Builder.RunAsync();
     }
 
-    void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)
+    void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32, int index)
     {
       int i = 0;
 
     LoopUTXOItems:
-      while(i < uTXOsUInt32.Length)
+      while(i < index)
       {
         int primaryKey = BitConverter.ToInt32(uTXOsUInt32[i].Key, 0);
         
@@ -89,12 +90,12 @@ namespace BToken.Accounting
         i += 1;
       }
     }
-    void InsertUTXOsULong64(KeyValuePair<byte[], ulong>[] uTXOsULong64)
+    void InsertUTXOsULong64(KeyValuePair<byte[], ulong>[] uTXOsULong64, int index)
     {
       int i = 0;
 
     LoopUTXOItems:
-      while (i < uTXOsULong64.Length)
+      while (i < index)
       {
         int primaryKey = BitConverter.ToInt32(uTXOsULong64[i].Key, 0);
         
@@ -116,12 +117,12 @@ namespace BToken.Accounting
         i += 1;
       }
     }
-    void InsertUTXOsUInt32Array(KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array)
+    void InsertUTXOsUInt32Array(KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array, int index)
     {
       int i = 0;
 
     LoopUTXOItems:
-      while (i < uTXOsUInt32Array.Length)
+      while (i < index)
       {
         int primaryKey = BitConverter.ToInt32(uTXOsUInt32Array[i].Key, 0);
         

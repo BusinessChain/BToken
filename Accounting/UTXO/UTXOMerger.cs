@@ -80,9 +80,9 @@ namespace BToken.Accounting
 
                   StopwatchMerging.Restart();
                   
-                  UTXO.InsertUTXOsUInt32(batch.UTXOsUInt32);
-                  UTXO.InsertUTXOsULong64(batch.UTXOsULong64);
-                  UTXO.InsertUTXOsUInt32Array(batch.UTXOsUInt32Array);
+                  UTXO.InsertUTXOsUInt32(batch.TableUInt32.UTXOItemsUInt32, batch.TableUInt32.IndexUTXOs);
+                  UTXO.InsertUTXOsULong64(batch.TableULong64.UTXOItemsULong64, batch.TableULong64.IndexUTXOs);
+                  UTXO.InsertUTXOsUInt32Array(batch.TableUInt32Array.UTXOItemsUInt32Array, batch.TableUInt32Array.IndexUTXOs);
                   UTXO.SpendUTXOs(batch.Inputs, batch.IndexInputs);
 
                   StopwatchMerging.Stop();
@@ -190,7 +190,7 @@ namespace BToken.Accounting
           int ratioMergeToParse =
             (int)((float)StopwatchMerging.ElapsedTicks * 100
             / batch.StopwatchParse.ElapsedTicks);
-
+          
           string logCSV = string.Format(
             "{0},{1},{2},{3},{4},{5},{6},{7}",
             batch.BatchIndex,

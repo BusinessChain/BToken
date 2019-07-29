@@ -94,11 +94,11 @@ namespace BToken.Accounting
         }
 
         Batch.HeaderLast = Header;
-
+        
         Batch.UTXOsUInt32 = Batch.TableUInt32.Table.ToArray();
         Batch.UTXOsULong64 = Batch.TableULong64.Table.ToArray();
         Batch.UTXOsUInt32Array = Batch.TableUInt32Array.Table.ToArray();
-
+        
         if (Header.HeadersNext == null)
         {
           Batch.IsCancellationBatch = true;
@@ -216,23 +216,6 @@ namespace BToken.Accounting
           throw new UTXOException("Payload merkle root corrupted.");
         }
 
-        int countShiftArray = 0;
-        for (int t = 0; t < Batch.IndexInputs; t += 1)
-        {
-          if (
-            Batch.TableUInt32.TrySpend(Batch.Inputs[t]) ||
-            Batch.TableULong64.TrySpend(Batch.Inputs[t]) ||
-            Batch.TableUInt32Array.TrySpend(Batch.Inputs[t]))
-          {
-            countShiftArray += 1;
-          }
-          else
-          {
-            Batch.Inputs[t - countShiftArray] = Batch.Inputs[t];
-          }
-        }
-        Batch.IndexInputs -= countShiftArray;
-        
         return;
       }
 

@@ -17,10 +17,9 @@ namespace BToken.Accounting
     {
       partial class UTXONetworkLoader
       {
-        const int COUNT_TXS_IN_BATCH_FILE = 10000;
         const int COUNT_BLOCKS_DOWNLOAD_BATCH = 10;
         const int COUNT_NETWORK_PARSER_PARALLEL = 4;
-        const int COUNT_DOWNLOAD_TASKS_PARALLEL = 4;
+        const int COUNT_DOWNLOAD_TASKS_PARALLEL = 10;
 
         const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 60000;
         const int COUNTDOWN_CREATION_NEW_SESSION = 5;
@@ -282,7 +281,6 @@ namespace BToken.Accounting
                 do
                 {
                   Block block = FIFOBlocks.Dequeue();
-
                   batch.Blocks.Add(block);
                   batch.TXCount += block.TXCount;
 
@@ -293,7 +291,9 @@ namespace BToken.Accounting
                     return;
                   }
 
-                  if (batch.TXCount >= COUNT_TXS_IN_BATCH_FILE)
+                  Block nextBlock = FIFOBlocks.Peek();
+
+                  if (batch.TXCount + nextBlock.TXCount > COUNT_TXS_IN_BATCH_FILE)
                   {
                     ParserBuffer.Post(batch);
 
@@ -304,8 +304,7 @@ namespace BToken.Accounting
                   }
                 } while (true);
               }
-
-              
+                            
               while(TXCountFIFO >= COUNT_TXS_IN_BATCH_FILE)
               {
                 UTXOBatch batch = new UTXOBatch()
@@ -313,14 +312,19 @@ namespace BToken.Accounting
                   BatchIndex = batchIndex++,
                 };
 
-                while(batch.TXCount < COUNT_TXS_IN_BATCH_FILE)
+                do
                 {
                   Block block = FIFOBlocks.Dequeue();
-                  TXCountFIFO -= block.TXCount;
-
                   batch.Blocks.Add(block);
                   batch.TXCount += block.TXCount;
-                }
+                  TXCountFIFO -= block.TXCount;
+
+                  if (FIFOBlocks.Count == 0)
+                  {
+                    break;
+                  }
+
+                } while (batch.TXCount + FIFOBlocks.Peek().TXCount <= COUNT_TXS_IN_BATCH_FILE);
 
                 ParserBuffer.Post(batch);
               }
