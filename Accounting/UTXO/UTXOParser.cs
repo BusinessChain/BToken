@@ -93,6 +93,8 @@ namespace BToken.Accounting
           Batch.BlockCount += 1;
         }
 
+        Batch.ConvertTablesToArrays();
+
         Batch.HeaderLast = Header;
                 
         if (Header.HeadersNext == null)
@@ -161,6 +163,8 @@ namespace BToken.Accounting
           ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
           Batch.BlockCount += 1;
         }
+
+        Batch.ConvertTablesToArrays();
 
         batch.HeaderPrevious = batch.Blocks[0].Header.HeaderPrevious;
         batch.HeaderLast = batch.Blocks.Last().Header;

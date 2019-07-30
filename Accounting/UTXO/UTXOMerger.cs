@@ -16,7 +16,7 @@ namespace BToken.Accounting
     {
       class UTXOMerger
       {
-        const int UTXOSTATE_ARCHIVING_INTERVAL = 300;
+        const int UTXOSTATE_ARCHIVING_INTERVAL = 1000;
 
         UTXO UTXO;
         UTXOBuilder Builder;
@@ -80,9 +80,9 @@ namespace BToken.Accounting
 
                   StopwatchMerging.Restart();
                   
-                  UTXO.InsertUTXOsUInt32(batch.TableUInt32.Table.ToArray());
-                  UTXO.InsertUTXOsULong64(batch.TableULong64.Table.ToArray());
-                  UTXO.InsertUTXOsUInt32Array(batch.TableUInt32Array.Table.ToArray());
+                  UTXO.InsertUTXOsUInt32(batch.UTXOsUInt32);
+                  UTXO.InsertUTXOsULong64(batch.UTXOsULong64);
+                  UTXO.InsertUTXOsUInt32Array(batch.UTXOsUInt32Array);
                   UTXO.SpendUTXOs(batch.Inputs);
 
                   StopwatchMerging.Stop();

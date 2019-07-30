@@ -79,7 +79,7 @@ namespace BToken.Accounting
       }
 
 
-      public override void SpendPrimaryUTXO(TXInput input, out bool areAllOutputpsSpent)
+      public override void SpendPrimaryUTXO(in TXInput input, out bool areAllOutputpsSpent)
       {
         SpendUTXO(UTXOPrimary, input.OutputIndex, out areAllOutputpsSpent);
       }

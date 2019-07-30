@@ -39,7 +39,7 @@ namespace BToken.Accounting
       public abstract bool PrimaryTableContainsKey(int primaryKey);
       public abstract void IncrementCollisionBits(int primaryKey, int collisionAddress);
 
-      public abstract void SpendPrimaryUTXO(TXInput input, out bool areAllOutputpsSpent);
+      public abstract void SpendPrimaryUTXO(in TXInput input, out bool areAllOutputpsSpent);
       public abstract bool TryGetValueInPrimaryTable(int primaryKey);
       public abstract bool HasCollision(int cacheAddress);
       public abstract void RemovePrimary();
@@ -48,7 +48,7 @@ namespace BToken.Accounting
       public abstract bool AreCollisionBitsFull();
 
       public bool TrySpendCollision(
-        TXInput input,
+        in TXInput input,
         UTXOIndexCompressed tablePrimary)
       {
         if (TryGetValueInCollisionTable(input.TXIDOutput))

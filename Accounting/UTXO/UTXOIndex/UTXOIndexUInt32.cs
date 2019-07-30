@@ -68,14 +68,22 @@ namespace BToken.Accounting
         }
       }
       
-      public bool TrySpend(TXInput input)
+      public bool TrySpend(in TXInput input)
       {
         if (Table.TryGetValue(input.TXIDOutput, out UTXOItem))
         {
-          SpendUTXO(ref UTXOItem, input.OutputIndex, out bool allOutputsSpent);
+          uint mask = (uint)1 << (CountNonOutputBits + input.OutputIndex);
+          if ((UTXOItem & mask) != 0x00)
+          {
+            throw new UTXOException(string.Format(
+              "Output index {0} already spent.", input.OutputIndex));
+          }
+
+          UTXOItem |= mask;
+          
           Table[input.TXIDOutput] = UTXOItem;
 
-          if (allOutputsSpent)
+          if ((UTXOItem & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent)
           {
             Table.Remove(input.TXIDOutput);
           }
@@ -84,18 +92,6 @@ namespace BToken.Accounting
         }
 
         return false;
-      }
-      static void SpendUTXO(ref uint uTXO, int outputIndex, out bool allOutputsSpent)
-      {
-        uint mask = (uint)1 << (CountNonOutputBits + outputIndex);
-        if ((uTXO & mask) != 0x00)
-        {
-          throw new UTXOException(string.Format(
-            "Output index {0} already spent.", outputIndex));
-        }
-        uTXO |= mask;
-
-        allOutputsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
       }
 
     }

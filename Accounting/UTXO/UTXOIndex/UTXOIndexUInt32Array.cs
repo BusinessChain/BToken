@@ -61,41 +61,43 @@ namespace BToken.Accounting
         Table.Add(tXHash, uTXOIndex);
       }
 
-      public bool TrySpend(TXInput input)
+      public bool TrySpend(in TXInput input)
       {
         if (Table.TryGetValue(input.TXIDOutput, out UTXOItem))
         {
-          SpendUTXO(UTXOItem, input.OutputIndex, out bool allOutputsSpent);
+          int bitOffset = CountNonOutputBits + input.OutputIndex;
+          int uintIndex = bitOffset / 32;
+          int bitIndex = bitOffset % 32;
+
+          uint mask = (uint)1 << bitIndex;
+          if ((UTXOItem[uintIndex] & mask) != 0x00)
+          {
+            throw new UTXOException(string.Format(
+              "Output index {0} already spent.", input.OutputIndex));
+          }
+          UTXOItem[uintIndex] |= mask;
+          
           Table[input.TXIDOutput] = UTXOItem;
 
-          if (allOutputsSpent)
+
+          if ((UTXOItem[0] & MaskAllOutputsBitsInFirstUInt32) != MaskAllOutputsBitsInFirstUInt32)
           {
-            Table.Remove(input.TXIDOutput);
+            return true;
           }
+          for (int intIndex = 1; intIndex < UTXOItem.Length; intIndex += 1)
+          {
+            if (UTXOItem[intIndex] != uint.MaxValue)
+            {
+              return true;
+            }
+          }
+
+          Table.Remove(input.TXIDOutput);
 
           return true;
         }
 
         return false;
-      }
-      static void SpendUTXO(
-        uint[] uTXO, 
-        int outputIndex, 
-        out bool areAllOutputpsSpent)
-      {
-        int bitOffset = CountNonOutputBits + outputIndex;
-        int uintIndex = bitOffset / 32;
-        int bitIndex = bitOffset % 32;
-
-        uint mask = (uint)1 << bitIndex;
-        if ((uTXO[uintIndex] & mask) != 0x00)
-        {
-          throw new UTXOException(string.Format(
-            "Output index {0} already spent.", outputIndex));
-        }
-        uTXO[uintIndex] |= mask;
-
-        areAllOutputpsSpent = AreAllOutputBitsSpent(uTXO);
       }
       static bool AreAllOutputBitsSpent(uint[] uTXO)
       {
