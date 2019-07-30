@@ -80,9 +80,9 @@ namespace BToken.Accounting
 
                   StopwatchMerging.Restart();
                   
-                  UTXO.InsertUTXOsUInt32(batch.TableUInt32.UTXOItemsUInt32, batch.TableUInt32.IndexUTXOs);
-                  UTXO.InsertUTXOsULong64(batch.TableULong64.UTXOItemsULong64, batch.TableULong64.IndexUTXOs);
-                  UTXO.InsertUTXOsUInt32Array(batch.TableUInt32Array.UTXOItemsUInt32Array, batch.TableUInt32Array.IndexUTXOs);
+                  UTXO.InsertUTXOsUInt32(batch.TableUInt32.Table.ToArray());
+                  UTXO.InsertUTXOsULong64(batch.TableULong64.Table.ToArray());
+                  UTXO.InsertUTXOsUInt32Array(batch.TableUInt32Array.Table.ToArray());
                   UTXO.SpendUTXOs(batch.Inputs);
 
                   StopwatchMerging.Stop();

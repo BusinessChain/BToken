@@ -8,12 +8,8 @@ namespace BToken.Accounting
   {
     class UTXOIndexUInt32
     {
-      public KeyValuePair<byte[], uint>[] UTXOItemsUInt32 
-        = new KeyValuePair<byte[], uint>[COUNT_TXS_IN_BATCH_FILE];
-      public int IndexUTXOs;
-
       public Dictionary<byte[], uint> Table =
-        new Dictionary<byte[], uint>(new EqualityComparerByteArray());
+        new Dictionary<byte[], uint>(COUNT_TXS_IN_BATCH_FILE, new EqualityComparerByteArray());
       
       uint UTXOItem;
 
@@ -57,7 +53,19 @@ namespace BToken.Accounting
           uTXOIndex |= (uint.MaxValue << lengthUTXOBits);
         }
 
-        UTXOItemsUInt32[IndexUTXOs++] = new KeyValuePair<byte[], uint>(tXHash, uTXOIndex);
+        try
+        {
+          Table.Add(tXHash, uTXOIndex);
+        }
+        catch (ArgumentException)
+        {
+          // BIP 30
+          if (tXHash.ToHexString() == "D5D27987D2A3DFC724E359870C6644B40E497BDC0589A033220FE15429D88599" ||
+             tXHash.ToHexString() == "E3BF3D07D4B0375638D5F1DB5255FE07BA2C4CB067CD81B84EE974B6585FB468")
+          {
+            Table[tXHash] = uTXOIndex;
+          }
+        }
       }
       
       public bool TrySpend(TXInput input)

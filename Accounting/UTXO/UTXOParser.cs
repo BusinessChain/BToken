@@ -94,11 +94,7 @@ namespace BToken.Accounting
         }
 
         Batch.HeaderLast = Header;
-        
-        Batch.UTXOsUInt32 = Batch.TableUInt32.Table.ToArray();
-        Batch.UTXOsULong64 = Batch.TableULong64.Table.ToArray();
-        Batch.UTXOsUInt32Array = Batch.TableUInt32Array.Table.ToArray();
-        
+                
         if (Header.HeadersNext == null)
         {
           Batch.IsCancellationBatch = true;
@@ -151,6 +147,7 @@ namespace BToken.Accounting
           headerHash,
           tXCount);
       }
+
       public void ParseBatch(UTXOBatch batch)
       {
         Batch = batch;
@@ -167,11 +164,7 @@ namespace BToken.Accounting
 
         batch.HeaderPrevious = batch.Blocks[0].Header.HeaderPrevious;
         batch.HeaderLast = batch.Blocks.Last().Header;
-
-        Batch.UTXOsUInt32 = Batch.TableUInt32.Table.ToArray();
-        Batch.UTXOsULong64 = Batch.TableULong64.Table.ToArray();
-        Batch.UTXOsUInt32Array = Batch.TableUInt32Array.Table.ToArray();
-
+        
         batch.StopwatchParse.Stop();
       }
       void LoadBlock(Block block)
@@ -186,7 +179,7 @@ namespace BToken.Accounting
       {
         if (TXCount == 1)
         {
-          byte[] tXHash = ParseTX(0, true);
+          byte[] tXHash = ParseTX(true);
 
           if (!tXHash.IsEqual(Buffer, merkleRootIndex))
           {
@@ -199,11 +192,11 @@ namespace BToken.Accounting
         int tXsLengthMod2 = TXCount & 1;
         var merkleList = new byte[TXCount + tXsLengthMod2][];
 
-        merkleList[0] = ParseTX(0, true);
+        merkleList[0] = ParseTX(true);
 
         for (int t = 1; t < TXCount; t += 1)
         {
-          merkleList[t] = ParseTX(t, false);
+          merkleList[t] = ParseTX(false);
         }
 
         if (tXsLengthMod2 != 0)
@@ -219,9 +212,7 @@ namespace BToken.Accounting
         return;
       }
 
-      byte[] ParseTX(
-        int tXIndex,
-        bool isCoinbase)
+      byte[] ParseTX(bool isCoinbase)
       {
         int tXStartIndex = BufferIndex;
 
@@ -242,7 +233,15 @@ namespace BToken.Accounting
         {
           for (int i = 0; i < countTXInputs; i += 1)
           {
-            Batch.Inputs.Add(new TXInput(Buffer, ref BufferIndex));
+            TXInput input = new TXInput(Buffer, ref BufferIndex);
+
+            if (
+             !(Batch.TableUInt32.TrySpend(input) ||
+             Batch.TableULong64.TrySpend(input) ||
+             Batch.TableUInt32Array.TrySpend(input)))
+            {
+              Batch.Inputs.Add(input);
+            }
           }
         }
 

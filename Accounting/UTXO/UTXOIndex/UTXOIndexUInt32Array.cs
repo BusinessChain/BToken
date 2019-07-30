@@ -8,12 +8,8 @@ namespace BToken.Accounting
   {
     class UTXOIndexUInt32Array
     {
-      public KeyValuePair<byte[], uint[]>[] UTXOItemsUInt32Array
-        = new KeyValuePair<byte[], uint[]>[COUNT_TXS_IN_BATCH_FILE];
-      public int IndexUTXOs;
-
       public Dictionary<byte[], uint[]> Table =
-        new Dictionary<byte[], uint[]>(new EqualityComparerByteArray());
+        new Dictionary<byte[], uint[]>(COUNT_TXS_IN_BATCH_FILE, new EqualityComparerByteArray());
 
       uint[] UTXOItem;
       
@@ -62,7 +58,7 @@ namespace BToken.Accounting
         uTXOIndex[0] = (uint)batchIndex & MaskBatchIndex;
         uTXOIndex[0] |= ((uint)headerHash[0] << COUNT_BATCHINDEX_BITS) & MaskHeaderBits;
 
-        UTXOItemsUInt32Array[IndexUTXOs++] = new KeyValuePair<byte[], uint[]>(tXHash, uTXOIndex);
+        Table.Add(tXHash, uTXOIndex);
       }
 
       public bool TrySpend(TXInput input)

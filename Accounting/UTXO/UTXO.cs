@@ -15,7 +15,7 @@ namespace BToken.Accounting
 
     UTXOBuilder Builder;
 
-    static string PathUTXOState = "UTXO";
+    static string PathUTXOState = "UTXOArchive";
     static string PathUTXOStateTemporary = PathUTXOState + "_temp";
     static string PathUTXOStateOld = PathUTXOState + "_Old";
 
@@ -63,12 +63,12 @@ namespace BToken.Accounting
       await Builder.RunAsync();
     }
 
-    void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32, int index)
+    void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)
     {
       int i = 0;
 
     LoopUTXOItems:
-      while(i < index)
+      while(i < uTXOsUInt32.Length)
       {
         int primaryKey = BitConverter.ToInt32(uTXOsUInt32[i].Key, 0);
         
@@ -90,12 +90,12 @@ namespace BToken.Accounting
         i += 1;
       }
     }
-    void InsertUTXOsULong64(KeyValuePair<byte[], ulong>[] uTXOsULong64, int index)
+    void InsertUTXOsULong64(KeyValuePair<byte[], ulong>[] uTXOsULong64)
     {
       int i = 0;
 
     LoopUTXOItems:
-      while (i < index)
+      while (i < uTXOsULong64.Length)
       {
         int primaryKey = BitConverter.ToInt32(uTXOsULong64[i].Key, 0);
         
@@ -117,12 +117,12 @@ namespace BToken.Accounting
         i += 1;
       }
     }
-    void InsertUTXOsUInt32Array(KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array, int index)
+    void InsertUTXOsUInt32Array(KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array)
     {
       int i = 0;
 
     LoopUTXOItems:
-      while (i < index)
+      while (i < uTXOsUInt32Array.Length)
       {
         int primaryKey = BitConverter.ToInt32(uTXOsUInt32Array[i].Key, 0);
         

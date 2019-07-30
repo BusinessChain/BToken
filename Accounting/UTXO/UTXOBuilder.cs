@@ -15,7 +15,7 @@ namespace BToken.Accounting
   {
     partial class UTXOBuilder
     {
-      const int COUNT_ARCHIVE_PARSER_PARALLEL = 6;
+      const int COUNT_ARCHIVE_PARSER_PARALLEL = 8;
 
       UTXO UTXO;
       UTXOMerger Merger;
