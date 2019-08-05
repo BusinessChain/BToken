@@ -13,153 +13,150 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    partial class UTXOBuilder
+    partial class UTXONetworkLoader
     {
-      partial class UTXONetworkLoader
+      class SessionBlockDownload : INetworkSession
       {
-        class SessionBlockDownload : INetworkSession
+        INetworkChannel Channel;
+
+        const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 30000;
+
+        UTXONetworkLoader Loader;
+        UTXOParser Parser;
+        SHA256 SHA256;
+
+        public UTXODownloadBatch DownloadBatch;
+        public CancellationTokenSource CancellationSession;
+
+        readonly object LOCK_BytesDownloaded = new object();
+        long BytesDownloaded;
+
+        long UTCTimeStartSession;
+
+
+        public SessionBlockDownload(UTXONetworkLoader loader, UTXOParser parser)
         {
-          INetworkChannel Channel;
+          Loader = loader;
+          Parser = parser;
+          SHA256 = SHA256.Create();
 
-          const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 30000;
+          CancellationSession = CancellationTokenSource.CreateLinkedTokenSource(Loader.CancellationLoader.Token);
+          UTCTimeStartSession = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        }
 
-          UTXONetworkLoader Loader;
-          UTXOParser Parser;
-          SHA256 SHA256;
+        public async Task RunAsync(INetworkChannel channel)
+        {
+          Channel = channel;
 
-          public UTXODownloadBatch DownloadBatch;
-          public CancellationTokenSource CancellationSession;
-
-          readonly object LOCK_BytesDownloaded = new object();
-          long BytesDownloaded;
-
-          long UTCTimeStartSession;
-
-
-          public SessionBlockDownload(UTXONetworkLoader loader, UTXOParser parser)
+          try
           {
-            Loader = loader;
-            Parser = parser;
-            SHA256 = SHA256.Create();
-
-            CancellationSession = CancellationTokenSource.CreateLinkedTokenSource(Loader.CancellationToken);
-            UTCTimeStartSession = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-          }
-                    
-          public async Task RunAsync(INetworkChannel channel)
-          {
-            Channel = channel;
-
-            try
+            if (DownloadBatch != null)
             {
-              if (DownloadBatch != null)
-              {
-                await DownloadBlocksAsync();
+              await DownloadBlocksAsync();
 
-                Loader.PostDownload(DownloadBatch);
+              Loader.PostDownload(DownloadBatch);
+            }
+
+            while (true)
+            {
+              if (!Loader.QueueDownloadBatchesCanceled.TryDequeue(out DownloadBatch))
+              {
+                DownloadBatch = await Loader.DownloaderBuffer
+                  .ReceiveAsync(CancellationSession.Token).ConfigureAwait(false);
               }
 
-              while (true)
-              {
-                if (!Loader.QueueDownloadBatchesCanceled.TryDequeue(out DownloadBatch))
-                {
-                  DownloadBatch = await Loader.DownloaderBuffer
-                    .ReceiveAsync(CancellationSession.Token).ConfigureAwait(false);
-                }
+              await DownloadBlocksAsync();
 
-                await DownloadBlocksAsync();
-
-                Loader.PostDownload(DownloadBatch);
-              }
-            }
-            catch (TaskCanceledException)
-            {
-              if (DownloadBatch != null)
-              {
-                Loader.QueueDownloadBatchesCanceled.Enqueue(DownloadBatch);
-              }
-
-              lock (Loader.LOCK_DownloadSessions)
-              {
-                Loader.DownloadSessions.Remove(this);
-              }
-
-              Console.WriteLine("Session {0} cancels", GetHashCode());
-
-              return;
+              Loader.PostDownload(DownloadBatch);
             }
           }
-          async Task DownloadBlocksAsync()
+          catch (TaskCanceledException)
           {
-            var cancellationTimeout = new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-            var cancellationDownloadBlocks = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationTimeout.Token,
-            CancellationSession.Token);
-
-            await Channel.SendMessageAsync(
-                new GetDataMessage(
-                  DownloadBatch.Headers
-                  .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.GetHeaderHash(SHA256)))
-                  .ToList()));
-
-            DownloadBatch.Blocks.Clear();
-            DownloadBatch.BytesDownloaded = 0;
-            while (DownloadBatch.Blocks.Count < DownloadBatch.Headers.Count)
+            if (DownloadBatch != null)
             {
-              NetworkMessage networkMessage = await Channel
-                .ReceiveSessionMessageAsync(cancellationDownloadBlocks.Token)
-                .ConfigureAwait(false);
-
-              if (networkMessage.Command != "block")
-              {
-                continue;
-              }
-
-              Headerchain.ChainHeader header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
-
-              Block block = UTXOParser.ParseBlockHeader(
-                networkMessage.Payload,
-                header,
-                header.GetHeaderHash(SHA256),
-                SHA256);
-
-              DownloadBatch.Blocks.Add(block);
-              DownloadBatch.BytesDownloaded += networkMessage.Payload.Length;
+              Loader.QueueDownloadBatchesCanceled.Enqueue(DownloadBatch);
             }
 
-            lock (LOCK_BytesDownloaded)
+            lock (Loader.LOCK_DownloadSessions)
             {
-              BytesDownloaded += DownloadBatch.BytesDownloaded;
+              Loader.DownloadSessions.Remove(this);
             }
+
+            Console.WriteLine("Session {0} cancels", GetHashCode());
+
+            return;
           }
+        }
+        async Task DownloadBlocksAsync()
+        {
+          var cancellationTimeout = new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+          var cancellationDownloadBlocks = CancellationTokenSource.CreateLinkedTokenSource(
+          cancellationTimeout.Token,
+          CancellationSession.Token);
 
-          public void ResetStats()
+          await Channel.SendMessageAsync(
+              new GetDataMessage(
+                DownloadBatch.Headers
+                .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.GetHeaderHash(SHA256)))
+                .ToList()));
+
+          DownloadBatch.Blocks.Clear();
+          DownloadBatch.BytesDownloaded = 0;
+          while (DownloadBatch.Blocks.Count < DownloadBatch.Headers.Count)
           {
-            lock (LOCK_BytesDownloaded)
+            NetworkMessage networkMessage = await Channel
+              .ReceiveSessionMessageAsync(cancellationDownloadBlocks.Token)
+              .ConfigureAwait(false);
+
+            if (networkMessage.Command != "block")
             {
-              BytesDownloaded = 0;
+              continue;
             }
 
-            UTCTimeStartSession = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            Headerchain.ChainHeader header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
+
+            Block block = UTXOParser.ParseBlockHeader(
+              networkMessage.Payload,
+              header,
+              header.GetHeaderHash(SHA256),
+              SHA256);
+
+            DownloadBatch.Blocks.Add(block);
+            DownloadBatch.BytesDownloaded += networkMessage.Payload.Length;
           }
-          public long GetDownloadRatekiloBytePerSecond()
+
+          lock (LOCK_BytesDownloaded)
           {
-            long bytesDownloaded = GetBytesDownloaded();
-            long secondsSinceStartSession = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartSession;
-
-            return bytesDownloaded / secondsSinceStartSession / 1000;
+            BytesDownloaded += DownloadBatch.BytesDownloaded;
           }
-          public long GetBytesDownloaded()
+        }
+
+        public void ResetStats()
+        {
+          lock (LOCK_BytesDownloaded)
           {
-            long bytesDownloaded;
-
-            lock(LOCK_BytesDownloaded)
-            {
-              bytesDownloaded = BytesDownloaded;
-            }
-
-            return bytesDownloaded;
+            BytesDownloaded = 0;
           }
+
+          UTCTimeStartSession = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        }
+        public long GetDownloadRatekiloBytePerSecond()
+        {
+          long bytesDownloaded = GetBytesDownloaded();
+          long secondsSinceStartSession = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartSession;
+
+          return bytesDownloaded / secondsSinceStartSession / 1000;
+        }
+        public long GetBytesDownloaded()
+        {
+          long bytesDownloaded;
+
+          lock (LOCK_BytesDownloaded)
+          {
+            bytesDownloaded = BytesDownloaded;
+          }
+
+          return bytesDownloaded;
         }
       }
     }

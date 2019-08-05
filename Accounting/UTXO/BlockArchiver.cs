@@ -45,7 +45,7 @@ namespace BToken.Accounting
           useAsync: true);
       }
 
-      public static async Task<byte[]> ReadBlockBatchAsync(int batchIndex, CancellationToken cancellationToken)
+      public static async Task<byte[]> ReadBlockBatchAsync(int batchIndex)
       {
         string filePath = Path.Combine(BlockArchivePath, "p" + batchIndex);
 
@@ -54,14 +54,14 @@ namespace BToken.Accounting
           FileMode.Open,
           FileAccess.Read,
           FileShare.Read,
-          bufferSize: 4096,
+          bufferSize: 1048576,
           useAsync: true))
         {
-          return await ReadBytesAsync(fileStream, cancellationToken);
+          return await ReadBytesAsync(fileStream);
         }
       }
 
-      static async Task<byte[]> ReadBytesAsync(Stream stream, CancellationToken cancellationToken)
+      static async Task<byte[]> ReadBytesAsync(Stream stream)
       {
         var buffer = new byte[stream.Length];
 
@@ -69,7 +69,7 @@ namespace BToken.Accounting
         int offset = 0;
         while (bytesToRead > 0)
         {
-          int chunkSize = await stream.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
+          int chunkSize = await stream.ReadAsync(buffer, offset, bytesToRead);
 
           offset += chunkSize;
           bytesToRead -= chunkSize;

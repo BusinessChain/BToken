@@ -228,14 +228,15 @@ namespace BToken.Accounting
           BufferIndex += 2;
         }
 
-        int countTXInputs = VarInt.GetInt32(Buffer, ref BufferIndex);
+        int countInputs = VarInt.GetInt32(Buffer, ref BufferIndex);
+
         if (isCoinbase)
         {
           new TXInput(Buffer, ref BufferIndex);
         }
         else
         {
-          for (int i = 0; i < countTXInputs; i += 1)
+          for (int i = 0; i < countInputs; i += 1)
           {
             TXInput input = new TXInput(Buffer, ref BufferIndex);
 
@@ -259,8 +260,8 @@ namespace BToken.Accounting
 
         if (isWitnessFlagPresent)
         {
-          var witnesses = new TXWitness[countTXInputs];
-          for (int i = 0; i < countTXInputs; i += 1)
+          var witnesses = new TXWitness[countInputs];
+          for (int i = 0; i < countInputs; i += 1)
           {
             witnesses[i] = TXWitness.Parse(Buffer, ref BufferIndex);
           }

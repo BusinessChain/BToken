@@ -12,8 +12,8 @@ namespace BToken.Accounting
   {
     Headerchain Headerchain;
     Network Network;
-
-    UTXOBuilder Builder;
+    UTXOMerger Merger;
+    BitcoinGenesisBlock GenesisBlock;
 
     static string PathUTXOState = "UTXOArchive";
     static string PathUTXOStateTemporary = PathUTXOState + "_temp";
@@ -29,7 +29,7 @@ namespace BToken.Accounting
     const int COUNT_COLLISION_BITS_PER_TABLE = 2;
     const int COUNT_COLLISIONS_MAX = 3;
 
-    const int COUNT_TXS_IN_BATCH_FILE = 10000;
+    const int COUNT_TXS_IN_BATCH_FILE = 50000;
 
     UTXOIndexCompressed[] Tables;
     UTXOIndexUInt32Compressed TableUInt32 = new UTXOIndexUInt32Compressed();
@@ -49,20 +49,36 @@ namespace BToken.Accounting
     {
       Headerchain = headerchain;
       Network = network;
-
-      Builder = new UTXOBuilder(this, genesisBlock);
+      GenesisBlock = genesisBlock;
 
       Tables = new UTXOIndexCompressed[]{
         TableUInt32,
         TableULong64,
         TableUInt32Array};
+
+      Merger = new UTXOMerger(this);
     }
 
     public async Task StartAsync()
     {
-      await Builder.RunAsync();
-    }
+      Task mergerTask = Merger.StartAsync();
 
+      var archiveLoader = new UTXOArchiveLoader(this);
+      await archiveLoader.RunAsync();
+            
+      if (archiveLoader.HeaderPostedToMergerLast.HeadersNext != null)
+      {
+        var networkLoader = new UTXONetworkLoader(
+          this,
+          archiveLoader.HeaderPostedToMergerLast.HeadersNext[0],
+          archiveLoader.BatchIndexLoad);
+
+        await networkLoader.RunAsync();
+      }
+
+      Console.WriteLine("Build completed");
+    }
+    
     void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)
     {
       int i = 0;
@@ -144,7 +160,6 @@ namespace BToken.Accounting
         i += 1;
       }
     }
-
     void SpendUTXOs(List<TXInput> inputs)
     {
       int i = 0;
@@ -194,6 +209,5 @@ namespace BToken.Accounting
           inputs[i].TXIDOutput.ToHexString()));
       }
     }
-        
   }
 }

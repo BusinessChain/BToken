@@ -77,6 +77,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Accounting\UTXO\Block.cs" />
+    <Compile Include="Accounting\UTXO\UTXOArchiveLoader.cs" />
     <Compile Include="Accounting\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
     <Compile Include="Accounting\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
     <Compile Include="Accounting\UTXO\UTXOIndex\UTXOIndexULong64.cs" />
@@ -86,7 +87,6 @@
     <Compile Include="Accounting\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
     <Compile Include="Accounting\UTXO\UTXONetworkLoader.cs" />
     <Compile Include="Accounting\UTXO\UTXOBatch.cs" />
-    <Compile Include="Accounting\UTXO\UTXOBuilder.cs" />
     <Compile Include="Accounting\UTXO\UTXODownloadBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOMerger.cs" />
     <Compile Include="Accounting\UTXO\UTXOParser.cs" />
