@@ -14,7 +14,7 @@ namespace BToken.Networking
       {
         "seed.bitcoin.sipa.be",
         "dnsseed.bluematt.me",
-        "dnsseed.bitcoin.dashjr.org",
+        //"dnsseed.bitcoin.dashjr.org",
         "seed.bitcoinstats.com",
         //"seed.bitcoin.jonasschnelli.ch",
         "seed.btc.petertodd.org",

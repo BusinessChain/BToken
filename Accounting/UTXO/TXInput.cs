@@ -9,7 +9,7 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class TXInput
+    struct TXInput
     {
       public byte[] TXIDOutput;
       public int PrimaryKeyTXIDOutput;

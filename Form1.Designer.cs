@@ -35,9 +35,10 @@
       // 
       // getHeadersButton
       // 
-      this.getHeadersButton.Location = new System.Drawing.Point(197, 122);
+      this.getHeadersButton.Location = new System.Drawing.Point(13, 49);
+      this.getHeadersButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
       this.getHeadersButton.Name = "getHeadersButton";
-      this.getHeadersButton.Size = new System.Drawing.Size(75, 23);
+      this.getHeadersButton.Size = new System.Drawing.Size(100, 28);
       this.getHeadersButton.TabIndex = 1;
       this.getHeadersButton.Text = "GetHeaders";
       this.getHeadersButton.UseVisualStyleBackColor = true;
@@ -45,9 +46,10 @@
       // 
       // button_ping
       // 
-      this.button_ping.Location = new System.Drawing.Point(197, 66);
+      this.button_ping.Location = new System.Drawing.Point(13, 13);
+      this.button_ping.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
       this.button_ping.Name = "button_ping";
-      this.button_ping.Size = new System.Drawing.Size(75, 23);
+      this.button_ping.Size = new System.Drawing.Size(100, 28);
       this.button_ping.TabIndex = 3;
       this.button_ping.Text = "Ping!";
       this.button_ping.UseVisualStyleBackColor = true;
@@ -55,9 +57,10 @@
       // 
       // button_GetBlock
       // 
-      this.button_GetBlock.Location = new System.Drawing.Point(197, 184);
+      this.button_GetBlock.Location = new System.Drawing.Point(13, 85);
+      this.button_GetBlock.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
       this.button_GetBlock.Name = "button_GetBlock";
-      this.button_GetBlock.Size = new System.Drawing.Size(75, 23);
+      this.button_GetBlock.Size = new System.Drawing.Size(100, 28);
       this.button_GetBlock.TabIndex = 4;
       this.button_GetBlock.Text = "GetBlock";
       this.button_GetBlock.UseVisualStyleBackColor = true;
@@ -65,13 +68,15 @@
       // 
       // Form1
       // 
-      this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+      this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
       this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-      this.ClientSize = new System.Drawing.Size(467, 262);
+      this.ClientSize = new System.Drawing.Size(140, 116);
       this.Controls.Add(this.button_GetBlock);
       this.Controls.Add(this.button_ping);
       this.Controls.Add(this.getHeadersButton);
+      this.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
       this.Name = "Form1";
+      this.Opacity = 0D;
       this.Text = "Form1";
       this.ResumeLayout(false);
 

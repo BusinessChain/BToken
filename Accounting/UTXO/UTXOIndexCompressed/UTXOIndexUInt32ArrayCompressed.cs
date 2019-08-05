@@ -6,10 +6,10 @@ namespace BToken.Accounting
 {
   public partial class UTXO
   {
-    class UTXOTableUInt32Array : UTXOTable
+    class UTXOIndexUInt32ArrayCompressed : UTXOIndexCompressed
     {
-      Dictionary<int, uint[]> PrimaryTable = new Dictionary<int, uint[]>();
-      Dictionary<byte[], uint[]> CollisionTable =
+      public Dictionary<int, uint[]> PrimaryTable = new Dictionary<int, uint[]>();
+      public Dictionary<byte[], uint[]> CollisionTable =
         new Dictionary<byte[], uint[]>(new EqualityComparerByteArray());
 
       uint[] UTXOPrimary;
@@ -39,7 +39,7 @@ namespace BToken.Accounting
       static readonly uint MaskAllOutputsBitsInFirstUInt32 = uint.MaxValue << CountNonOutputBits;
 
 
-      public UTXOTableUInt32Array() 
+      public UTXOIndexUInt32ArrayCompressed() 
         : base(2, "UInt32Array")
       { }
 
@@ -77,20 +77,9 @@ namespace BToken.Accounting
           PrimaryTable[primaryKey][0] |= MasksCollisionBitsFull[collisionAddress];
         }
       }
-      public override void SecondaryTableAddUTXO(UTXOItem uTXODataItem)
-      {
-        CollisionTable.Add(
-          uTXODataItem.Hash,
-          ((UTXOItemUInt32Array)uTXODataItem).UTXOIndex);
-      }
-      public override void PrimaryTableAddUTXO(UTXOItem uTXODataItem)
-      {
-        PrimaryTable.Add(
-          uTXODataItem.PrimaryKey,
-          ((UTXOItemUInt32Array)uTXODataItem).UTXOIndex);
-      }
 
-      public override void SpendPrimaryUTXO(TXInput input, out bool areAllOutputpsSpent)
+
+      public override void SpendPrimaryUTXO(in TXInput input, out bool areAllOutputpsSpent)
       {
         SpendUTXO(UTXOPrimary, input.OutputIndex, out areAllOutputpsSpent);
       }
@@ -116,7 +105,7 @@ namespace BToken.Accounting
         return (MasksCollisionBitsFull[Address] & UTXOPrimary[0]) 
           == MasksCollisionBitsFull[Address];
       }
-      public override void ResolveCollision(UTXOTable tablePrimary)
+      public override void ResolveCollision(UTXOIndexCompressed tablePrimary)
       {
         KeyValuePair<byte[], uint[]> collisionItem =
           CollisionTable.First(k => BitConverter.ToInt32(k.Key, 0) == tablePrimary.PrimaryKey);
@@ -304,36 +293,6 @@ namespace BToken.Accounting
         PrimaryTable.Clear();
         CollisionTable.Clear();
       }
-
-      public override bool TryParseUTXO(
-        int batchIndex,
-        byte[] headerHash,
-        int lengthUTXOBits,
-        out UTXOItem item)
-      {
-        uint[] uTXOIndex = new uint[(lengthUTXOBits + 31) / 32];
-
-        int countUTXORemainderBits = lengthUTXOBits % 32;
-        if (countUTXORemainderBits > 0)
-        {
-          uTXOIndex[uTXOIndex.Length - 1] |= (uint.MaxValue << countUTXORemainderBits);
-        }
-        
-        uTXOIndex[0] = (uint)batchIndex & MaskBatchIndex;
-        uTXOIndex[0] |= ((uint)headerHash[0] << COUNT_BATCHINDEX_BITS) & MaskHeaderBits;
-                
-        item = new UTXOItemUInt32Array
-        {
-          UTXOIndex = uTXOIndex
-        };
-
-        return true;
-      }
-    }
-
-    class UTXOItemUInt32Array : UTXOItem
-    {
-      public uint[] UTXOIndex;
     }
   }
 }
