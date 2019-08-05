@@ -41,7 +41,7 @@ namespace BToken.Accounting
           FileMode.Create,
           FileAccess.Write,
           FileShare.None,
-          bufferSize: 8192,
+          bufferSize: 1048576,
           useAsync: true);
       }
 
