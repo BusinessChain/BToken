@@ -22,7 +22,8 @@ namespace BToken.Accounting
       public int BatchIndexLoad;
       public int BatchIndexNextOutput;
 
-      readonly object LOCK_OutputStage = new object();
+      readonly object LOCK_IsOutputStageLocked = new object();
+      bool IsOutputStageLocked;
       public Headerchain.ChainHeader HeaderPostedToMergerLast;
       Dictionary<int, UTXOBatch> OutputQueue = new Dictionary<int, UTXOBatch>();
 
@@ -87,8 +88,11 @@ namespace BToken.Accounting
           try
           {
             UTXOBatch batch = parser.ParseBatch(batchBuffer, batchIndex);
-            
-            PostToOutputBuffer(batch);
+
+            batch.StopwatchLock.Start();
+            await PostToOutputBuffer(batch);
+            batch.StopwatchLock.Stop();
+
           }
           catch (UTXOException)
           {
@@ -102,42 +106,61 @@ namespace BToken.Accounting
         }
       }
 
-      public void PostToOutputBuffer(UTXOBatch batch)
+      public async Task PostToOutputBuffer(UTXOBatch batch)
       {
-        lock (LOCK_OutputStage)
+        while(true)
         {
-          if (batch.BatchIndex != BatchIndexNextOutput)
+          lock(LOCK_IsOutputStageLocked)
           {
-            OutputQueue.Add(batch.BatchIndex, batch);
-          }
-          else
-          {
-            while (true)
+            if(!IsOutputStageLocked)
             {
-              if (HeaderPostedToMergerLast != batch.HeaderPrevious)
-              {
-                throw new UTXOException(
-                  string.Format("HeaderPrevious {0} of Batch {1} not equal to \nHeaderMergedLast {2}",
-                  batch.HeaderPrevious.GetHeaderHash().ToHexString(),
-                  batch.BatchIndex,
-                  HeaderPostedToMergerLast.GetHeaderHash().ToHexString()));
-              }
-
-              UTXO.Merger.Buffer.Post(batch);
-
-              BatchIndexNextOutput += 1;
-              HeaderPostedToMergerLast = batch.HeaderLast;
-
-              if (OutputQueue.TryGetValue(BatchIndexNextOutput, out batch))
-              {
-                OutputQueue.Remove(BatchIndexNextOutput);
-              }
-              else
-              {
-                break;
-              }
+              IsOutputStageLocked = true;
+              break;
             }
           }
+
+          await Task.Delay(1000);
+        }
+
+        if (batch.BatchIndex != BatchIndexNextOutput)
+        {
+          OutputQueue.Add(batch.BatchIndex, batch);
+        }
+        else
+        {
+          while (true)
+          {
+            if (HeaderPostedToMergerLast != batch.HeaderPrevious)
+            {
+              throw new UTXOException(
+                string.Format("HeaderPrevious {0} of Batch {1} not equal to \nHeaderMergedLast {2}",
+                batch.HeaderPrevious.GetHeaderHash().ToHexString(),
+                batch.BatchIndex,
+                HeaderPostedToMergerLast.GetHeaderHash().ToHexString()));
+            }
+
+            while (!UTXO.Merger.Buffer.Post(batch))
+            {
+              await Task.Delay(1000);
+            }
+
+            BatchIndexNextOutput += 1;
+            HeaderPostedToMergerLast = batch.HeaderLast;
+
+            if (OutputQueue.TryGetValue(BatchIndexNextOutput, out batch))
+            {
+              OutputQueue.Remove(BatchIndexNextOutput);
+            }
+            else
+            {
+              break;
+            }
+          }
+        }
+
+        lock (LOCK_IsOutputStageLocked)
+        {
+          IsOutputStageLocked = false;
         }
       }
     }
