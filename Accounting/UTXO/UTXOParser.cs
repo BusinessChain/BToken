@@ -48,9 +48,7 @@ namespace BToken.Accounting
         {
           BatchIndex = BatchIndex
         };
-        
-        Batch.StopwatchParse.Start();
-        
+
         Buffer = buffer;
         BufferIndex = 0;
 
@@ -101,9 +99,7 @@ namespace BToken.Accounting
         {
           Batch.IsCancellationBatch = true;
         }
-
-        Batch.StopwatchParse.Stop();
-
+        
         return Batch;
       }
       
@@ -179,8 +175,11 @@ namespace BToken.Accounting
         HeaderHash = block.HeaderHash;
         TXCount = block.TXCount;
       }
+
       void ParseBlock(int merkleRootIndex)
       {
+        Batch.StopwatchParse.Start();
+
         if (TXCount == 1)
         {
           byte[] tXHash = ParseTX(true);
@@ -196,6 +195,7 @@ namespace BToken.Accounting
         int tXsLengthMod2 = TXCount & 1;
         var merkleList = new byte[TXCount + tXsLengthMod2][];
 
+
         merkleList[0] = ParseTX(true);
 
         for (int t = 1; t < TXCount; t += 1)
@@ -203,15 +203,18 @@ namespace BToken.Accounting
           merkleList[t] = ParseTX(false);
         }
 
+
         if (tXsLengthMod2 != 0)
         {
           merkleList[TXCount] = merkleList[TXCount - 1];
         }
-
+        
         if (!GetRoot(merkleList, SHA256).IsEqual(Buffer, merkleRootIndex))
         {
           throw new UTXOException("Payload merkle root corrupted.");
         }
+
+        Batch.StopwatchParse.Stop();
 
         return;
       }
@@ -278,7 +281,7 @@ namespace BToken.Accounting
            tXLength));
         
         int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
-
+        
         if (COUNT_INTEGER_BITS >= lengthUTXOBits)
         {
           Batch.TableUInt32.ParseUTXO(
@@ -303,7 +306,7 @@ namespace BToken.Accounting
             lengthUTXOBits,
             tXHash);
         }
-
+        
         return tXHash;
       }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
 
 namespace BToken.Accounting
 {
@@ -47,7 +48,7 @@ namespace BToken.Accounting
       {
         return PrimaryTable.Count;
       }
-      protected override int GetCountSecondaryTableItems()
+      protected override int GetCountCollisionTableItems()
       {
         return CollisionTable.Count;
       }

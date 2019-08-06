@@ -18,22 +18,6 @@ namespace BToken.Accounting
       static readonly uint MaskHeaderBits =
         ~((uint.MaxValue << (COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS)) | MaskBatchIndex);
 
-      public readonly static uint[] MasksCollisionBitsClear = {
-        0xFFCFFFFF,
-        0xFF3FFFFF,
-        0xFCFFFFFF };
-      public readonly static uint[] MasksCollisionBitsOne = {
-        0x00100000,
-        0x00400000,
-        0x01000000 };
-      public readonly static uint[] MasksCollisionBitsTwo = {
-        0x00200000,
-        0x00800000,
-        0x02000000 };
-      public readonly static uint[] MasksCollisionBitsFull = {
-        0x00300000,
-        0x00C00000,
-        0x03000000 };
 
 
       public UTXOIndexUInt32()

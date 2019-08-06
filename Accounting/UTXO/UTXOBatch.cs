@@ -34,7 +34,6 @@ namespace BToken.Accounting
       public Headerchain.ChainHeader HeaderLast;
 
       public Stopwatch StopwatchParse = new Stopwatch();
-      public Stopwatch StopwatchLock = new Stopwatch();
 
       public void ConvertTablesToArrays()
       {

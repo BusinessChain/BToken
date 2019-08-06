@@ -89,10 +89,7 @@ namespace BToken.Accounting
           {
             UTXOBatch batch = parser.ParseBatch(batchBuffer, batchIndex);
 
-            batch.StopwatchLock.Start();
             await PostToOutputBuffer(batch);
-            batch.StopwatchLock.Stop();
-
           }
           catch (UTXOException)
           {
