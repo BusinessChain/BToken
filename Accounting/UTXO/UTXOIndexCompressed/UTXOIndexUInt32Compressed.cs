@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
 
 namespace BToken.Accounting
 {
@@ -9,8 +10,8 @@ namespace BToken.Accounting
     class UTXOIndexUInt32Compressed : UTXOIndexCompressed
     {
       public Dictionary<int, uint> PrimaryTable = new Dictionary<int, uint>();
-      public Dictionary<byte[], uint> CollisionTable =
-        new Dictionary<byte[], uint>(new EqualityComparerByteArray());
+      const int COUNT_COLLISION_TABLE_PARTITIONS = 256;
+      public Dictionary<byte[], uint>[] CollisionTables = new Dictionary<byte[], uint>[COUNT_COLLISION_TABLE_PARTITIONS];
 
       uint UTXOPrimary;
       uint UTXOCollision;
@@ -41,15 +42,20 @@ namespace BToken.Accounting
 
       public UTXOIndexUInt32Compressed()
         : base(0, "UInt32")
-      { }
+      {
+        for(int i = 0; i < COUNT_COLLISION_TABLE_PARTITIONS; i += 1)
+        {
+          CollisionTables[i] = new Dictionary<byte[], uint>(new EqualityComparerByteArray());
+        }
+      }
 
       protected override int GetCountPrimaryTableItems()
       {
         return PrimaryTable.Count;
       }
-      protected override int GetCountSecondaryTableItems()
+      protected override int GetCountCollisionTableItems()
       {
-        return CollisionTable.Count;
+        return CollisionTables.Sum(t => t.Count);
       }
       public override bool PrimaryTableContainsKey(int primaryKey)
       {
@@ -107,9 +113,9 @@ namespace BToken.Accounting
       public override void ResolveCollision(UTXOIndexCompressed tablePrimary)
       {
         KeyValuePair<byte[], uint> collisionItem =
-          CollisionTable.First(k => BitConverter.ToInt32(k.Key, 0) == tablePrimary.PrimaryKey);
+          CollisionTables[(byte)tablePrimary.PrimaryKey].First(k => BitConverter.ToInt32(k.Key, 0) == tablePrimary.PrimaryKey);
 
-        CollisionTable.Remove(collisionItem.Key);
+        CollisionTables[(byte)tablePrimary.PrimaryKey].Remove(collisionItem.Key);
 
         if (!tablePrimary.AreCollisionBitsFull() 
           || !HasCountCollisions(tablePrimary.PrimaryKey, COUNT_COLLISIONS_MAX))
@@ -127,19 +133,19 @@ namespace BToken.Accounting
         out bool areAllOutputpsSpent)
       {
         SpendUTXO(ref UTXOCollision, outputIndex, out areAllOutputpsSpent);
-        CollisionTable[key] = UTXOCollision;
+        CollisionTables[key[0]][key] = UTXOCollision;
       }
       protected override bool TryGetValueInCollisionTable(byte[] key)
       {
-        return CollisionTable.TryGetValue(key, out UTXOCollision);
+        return CollisionTables[key[0]].TryGetValue(key, out UTXOCollision);
       }
       protected override void RemoveCollision(byte[] key)
       {
-        CollisionTable.Remove(key);
+        CollisionTables[key[0]].Remove(key);
       }
       protected override bool HasCountCollisions(int primaryKey, uint countCollisions)
       {
-        foreach (byte[] key in CollisionTable.Keys)
+        foreach (byte[] key in CollisionTables[(byte)primaryKey].Keys)
         {
           if(BitConverter.ToInt32(key, 0) == primaryKey)
           {
@@ -208,15 +214,18 @@ namespace BToken.Accounting
       }
       protected override byte[] GetCollisionData()
       {
-        byte[] buffer = new byte[CollisionTable.Count * (HASH_BYTE_SIZE + 4)];
+        byte[] buffer = new byte[GetCountCollisionTableItems() * (HASH_BYTE_SIZE + 4)];
 
-        int index = 0;
-        foreach (KeyValuePair<byte[], uint> keyValuePair in CollisionTable)
+        for(int i = 0; i < COUNT_COLLISION_TABLE_PARTITIONS; i += 1)
         {
-          keyValuePair.Key.CopyTo(buffer, index);
-          index += HASH_BYTE_SIZE;
-          BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
-          index += 4;
+          int index = 0;
+          foreach (KeyValuePair<byte[], uint> keyValuePair in CollisionTables[i])
+          {
+            keyValuePair.Key.CopyTo(buffer, index);
+            index += HASH_BYTE_SIZE;
+            BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
+            index += 4;
+          }
         }
 
         return buffer;
@@ -249,14 +258,14 @@ namespace BToken.Accounting
           uint value = BitConverter.ToUInt32(buffer, index);
           index += 4;
 
-          CollisionTable.Add(key, value);
+          CollisionTables[key[0]].Add(key, value);
         }
       }
 
       public override void Clear()
       {
         PrimaryTable.Clear();
-        CollisionTable.Clear();
+        CollisionTables.ToList().ForEach(t => t.Clear());
       }
     }
   }

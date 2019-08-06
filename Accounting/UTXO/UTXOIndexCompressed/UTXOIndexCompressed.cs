@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
-using System.Linq;
+using System.Diagnostics;
 
 namespace BToken.Accounting
 {
@@ -89,11 +89,11 @@ namespace BToken.Accounting
       protected abstract void UpdateUTXOInTable();
 
       protected abstract int GetCountPrimaryTableItems();
-      protected abstract int GetCountSecondaryTableItems();
+      protected abstract int GetCountCollisionTableItems();
 
       public string GetMetricsCSV()
       {
-        return GetCountPrimaryTableItems() + "," + GetCountSecondaryTableItems();
+        return GetCountPrimaryTableItems() + "," + GetCountCollisionTableItems();
       }
 
       public async Task BackupToDiskAsync(string path)

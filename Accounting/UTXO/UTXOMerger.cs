@@ -15,7 +15,7 @@ namespace BToken.Accounting
   {
     class UTXOMerger
     {
-      const int UTXOSTATE_ARCHIVING_INTERVAL = 300;
+      const int UTXOSTATE_ARCHIVING_INTERVAL = 1000;
 
       UTXO UTXO;
 
@@ -115,20 +115,12 @@ namespace BToken.Accounting
                 .ReceiveAsync().ConfigureAwait(false);
               
               StopwatchMerging.Restart();
-              StopwatchMergingOutputs.Restart();
 
               UTXO.InsertUTXOsUInt32(batch.UTXOsUInt32);
               UTXO.InsertUTXOsULong64(batch.UTXOsULong64);
-              UTXO.InsertUTXOsUInt32Array(batch.UTXOsUInt32Array);
-
-              StopwatchMergingOutputs.Stop();
-
-
-              StopwatchMergingInputs.Restart();
-
+              UTXO.InsertUTXOsUInt32Array(batch.UTXOsUInt32Array);              
               UTXO.SpendUTXOs(batch.Inputs);
 
-              StopwatchMergingInputs.Stop();
               StopwatchMerging.Stop();
 
 
@@ -210,30 +202,25 @@ namespace BToken.Accounting
 
       void LogCSV(UTXOBatch batch, StreamWriter logFileWriter)
       {
-        long timeParsing = batch.StopwatchParse.ElapsedMilliseconds;
-
         int ratioMergeToParse =
           (int)((float)StopwatchMerging.ElapsedTicks * 100
           / batch.StopwatchParse.ElapsedTicks);
 
         string logCSV = string.Format(
-          "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
+          "{0},{1},{2},{3},{4},{5},{6},{7}",
           batch.BatchIndex,
           BlockHeight,
           DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
-          timeParsing,
+          batch.StopwatchParse.ElapsedMilliseconds,
           ratioMergeToParse,
           UTXO.Tables[0].GetMetricsCSV(),
           UTXO.Tables[1].GetMetricsCSV(),
-          UTXO.Tables[2].GetMetricsCSV(),
-          StopwatchMergingOutputs.ElapsedMilliseconds, 
-          StopwatchMergingInputs.ElapsedMilliseconds);
+          UTXO.Tables[2].GetMetricsCSV());
 
         Console.WriteLine(logCSV);
         logFileWriter.WriteLine(logCSV);
       }
-
-
+      
     }
   }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 using BToken.Chaining;
@@ -94,7 +95,7 @@ namespace BToken.Accounting
           {
             Tables[c].IncrementCollisionBits(primaryKey, 0);
 
-            TableUInt32.CollisionTable.Add(uTXOsUInt32[i].Key, uTXOsUInt32[i].Value);
+            TableUInt32.CollisionTables[uTXOsUInt32[i].Key[0]].Add(uTXOsUInt32[i].Key, uTXOsUInt32[i].Value);
 
             i += 1;
             goto LoopUTXOItems;
