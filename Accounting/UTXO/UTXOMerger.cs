@@ -15,7 +15,7 @@ namespace BToken.Accounting
   {
     class UTXOMerger
     {
-      const int UTXOSTATE_ARCHIVING_INTERVAL = 1000;
+      const int UTXOSTATE_ARCHIVING_INTERVAL = 300;
 
       UTXO UTXO;
 
@@ -23,10 +23,14 @@ namespace BToken.Accounting
       public int BatchIndexNext;
       public int BatchIndexMergedLast;
       public Headerchain.ChainHeader HeaderMergedLast;
-      public BufferBlock<UTXOBatch> Buffer = new BufferBlock<UTXOBatch>();
+      public BufferBlock<UTXOBatch> Buffer = new BufferBlock<UTXOBatch>(
+        new DataflowBlockOptions {
+          BoundedCapacity = 10});
       
       long UTCTimeStartMerger;
       public Stopwatch StopwatchMerging = new Stopwatch();
+      public Stopwatch StopwatchMergingOutputs = new Stopwatch();
+      public Stopwatch StopwatchMergingInputs = new Stopwatch();
 
 
       public UTXOMerger(UTXO uTXO)
@@ -111,13 +115,22 @@ namespace BToken.Accounting
                 .ReceiveAsync().ConfigureAwait(false);
               
               StopwatchMerging.Restart();
+              StopwatchMergingOutputs.Restart();
 
               UTXO.InsertUTXOsUInt32(batch.UTXOsUInt32);
               UTXO.InsertUTXOsULong64(batch.UTXOsULong64);
               UTXO.InsertUTXOsUInt32Array(batch.UTXOsUInt32Array);
+
+              StopwatchMergingOutputs.Stop();
+
+
+              StopwatchMergingInputs.Restart();
+
               UTXO.SpendUTXOs(batch.Inputs);
 
+              StopwatchMergingInputs.Stop();
               StopwatchMerging.Stop();
+
 
               BlockHeight += batch.BlockCount;
               BatchIndexMergedLast = batch.BatchIndex;
@@ -203,12 +216,8 @@ namespace BToken.Accounting
           (int)((float)StopwatchMerging.ElapsedTicks * 100
           / batch.StopwatchParse.ElapsedTicks);
 
-        int ratioBatchInputSpend =
-          (int)((float)StopwatchMerging.ElapsedTicks * 100
-          / batch.StopwatchParse.ElapsedTicks);
-
         string logCSV = string.Format(
-          "{0},{1},{2},{3},{4},{5},{6},{7}",
+          "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
           batch.BatchIndex,
           BlockHeight,
           DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
@@ -216,7 +225,9 @@ namespace BToken.Accounting
           ratioMergeToParse,
           UTXO.Tables[0].GetMetricsCSV(),
           UTXO.Tables[1].GetMetricsCSV(),
-          UTXO.Tables[2].GetMetricsCSV());
+          UTXO.Tables[2].GetMetricsCSV(),
+          StopwatchMergingOutputs.ElapsedMilliseconds, 
+          StopwatchMergingInputs.ElapsedMilliseconds);
 
         Console.WriteLine(logCSV);
         logFileWriter.WriteLine(logCSV);
