@@ -208,106 +208,113 @@ namespace BToken.Accounting
         {
           merkleList[TXCount] = merkleList[TXCount - 1];
         }
-        
+
         if (!GetRoot(merkleList, SHA256).IsEqual(Buffer, merkleRootIndex))
         {
-          throw new UTXOException("Payload merkle root corrupted.");
+          throw new ChainException("Payload merkle root corrupted.");
         }
 
         Batch.StopwatchParse.Stop();
 
-        return;
+        return;        
       }
 
       byte[] ParseTX(bool isCoinbase)
       {
-        int tXStartIndex = BufferIndex;
-
-        BufferIndex += BYTE_LENGTH_VERSION;
-
-        bool isWitnessFlagPresent = Buffer[BufferIndex] == 0x00;
-        if (isWitnessFlagPresent)
+        try
         {
-          BufferIndex += 2;
-        }
+          int tXStartIndex = BufferIndex;
 
-        int countInputs = VarInt.GetInt32(Buffer, ref BufferIndex);
+          BufferIndex += BYTE_LENGTH_VERSION;
 
-        if (isCoinbase)
-        {
-          new TXInput(Buffer, ref BufferIndex);
-        }
-        else
-        {
-          for (int i = 0; i < countInputs; i += 1)
+          bool isWitnessFlagPresent = Buffer[BufferIndex] == 0x00;
+          if (isWitnessFlagPresent)
           {
-            TXInput input = new TXInput(Buffer, ref BufferIndex);
+            BufferIndex += 2;
+          }
 
-            if (
-             !(Batch.TableUInt32.TrySpend(input) ||
-             Batch.TableULong64.TrySpend(input) ||
-             Batch.TableUInt32Array.TrySpend(input)))
+          int countInputs = VarInt.GetInt32(Buffer, ref BufferIndex);
+
+          if (isCoinbase)
+          {
+            new TXInput(Buffer, ref BufferIndex);
+          }
+          else
+          {
+            for (int i = 0; i < countInputs; i += 1)
             {
-              Batch.Inputs.Add(input);
+              TXInput input = new TXInput(Buffer, ref BufferIndex);
+
+              if (
+               !(Batch.TableUInt32.TrySpend(input) ||
+               Batch.TableULong64.TrySpend(input) ||
+               Batch.TableUInt32Array.TrySpend(input)))
+              {
+                Batch.Inputs.Add(input);
+              }
             }
           }
-        }
 
-        int countTXOutputs = VarInt.GetInt32(Buffer, ref BufferIndex);
-        for (int i = 0; i < countTXOutputs; i += 1)
-        {
-          BufferIndex += BYTE_LENGTH_OUTPUT_VALUE;
-          int lengthLockingScript = VarInt.GetInt32(Buffer, ref BufferIndex);
-          BufferIndex += lengthLockingScript;
-        }
-
-        if (isWitnessFlagPresent)
-        {
-          var witnesses = new TXWitness[countInputs];
-          for (int i = 0; i < countInputs; i += 1)
+          int countTXOutputs = VarInt.GetInt32(Buffer, ref BufferIndex);
+          for (int i = 0; i < countTXOutputs; i += 1)
           {
-            witnesses[i] = TXWitness.Parse(Buffer, ref BufferIndex);
+            BufferIndex += BYTE_LENGTH_OUTPUT_VALUE;
+            int lengthLockingScript = VarInt.GetInt32(Buffer, ref BufferIndex);
+            BufferIndex += lengthLockingScript;
           }
-        }
 
-        BufferIndex += BYTE_LENGTH_LOCK_TIME;
+          if (isWitnessFlagPresent)
+          {
+            var witnesses = new TXWitness[countInputs];
+            for (int i = 0; i < countInputs; i += 1)
+            {
+              witnesses[i] = TXWitness.Parse(Buffer, ref BufferIndex);
+            }
+          }
 
-        int tXLength = BufferIndex - tXStartIndex;
+          BufferIndex += BYTE_LENGTH_LOCK_TIME;
 
-        byte[] tXHash = SHA256.ComputeHash(
-         SHA256.ComputeHash(
-           Buffer,
-           tXStartIndex,
-           tXLength));
-        
-        int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
-        
-        if (COUNT_INTEGER_BITS >= lengthUTXOBits)
-        {
-          Batch.TableUInt32.ParseUTXO(
-            BatchIndex,
-            HeaderHash,
-            lengthUTXOBits,
-            tXHash);
+          int tXLength = BufferIndex - tXStartIndex;
+
+          byte[] tXHash = SHA256.ComputeHash(
+           SHA256.ComputeHash(
+             Buffer,
+             tXStartIndex,
+             tXLength));
+
+          int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
+
+          if (COUNT_INTEGER_BITS >= lengthUTXOBits)
+          {
+            Batch.TableUInt32.ParseUTXO(
+              BatchIndex,
+              HeaderHash,
+              lengthUTXOBits,
+              tXHash);
+          }
+          else if (COUNT_LONG_BITS >= lengthUTXOBits)
+          {
+            Batch.TableULong64.ParseUTXO(
+              BatchIndex,
+              HeaderHash,
+              lengthUTXOBits,
+              tXHash);
+          }
+          else
+          {
+            Batch.TableUInt32Array.ParseUTXO(
+              BatchIndex,
+              HeaderHash,
+              lengthUTXOBits,
+              tXHash);
+          }
+
+          return tXHash;
         }
-        else if (COUNT_LONG_BITS >= lengthUTXOBits)
+        catch (ArgumentOutOfRangeException)
         {
-          Batch.TableULong64.ParseUTXO(
-            BatchIndex,
-            HeaderHash,
-            lengthUTXOBits,
-            tXHash);
+          throw new ChainException();
         }
-        else
-        {
-          Batch.TableUInt32Array.ParseUTXO(
-            BatchIndex,
-            HeaderHash,
-            lengthUTXOBits,
-            tXHash);
-        }
-        
-        return tXHash;
       }
 
       static byte[] GetRoot(
