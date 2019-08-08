@@ -91,15 +91,9 @@ namespace BToken.Accounting
           Batch.BlockCount += 1;
         }
 
-        Batch.ConvertTablesToArrays();
-
         Batch.HeaderLast = Header;
-                
-        if (Header.HeadersNext == null)
-        {
-          Batch.IsCancellationBatch = true;
-        }
-        
+        Batch.ConvertTablesToArrays();
+                     
         return Batch;
       }
       

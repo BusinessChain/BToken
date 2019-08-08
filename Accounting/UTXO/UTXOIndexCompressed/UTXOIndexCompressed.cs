@@ -145,7 +145,7 @@ namespace BToken.Accounting
            FileMode.Create,
            FileAccess.ReadWrite,
            FileShare.Read,
-           bufferSize: 4096,
+           bufferSize: 1048576,
            useAsync: true))
         {
           await stream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
@@ -154,8 +154,7 @@ namespace BToken.Accounting
 
       protected abstract byte[] GetPrimaryData();
       protected abstract byte[] GetCollisionData();
-
-
+      
       protected abstract void LoadPrimaryData(byte[] buffer);
       protected abstract void LoadCollisionData(byte[] buffer);
       

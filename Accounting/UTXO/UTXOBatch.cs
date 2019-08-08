@@ -10,8 +10,6 @@ namespace BToken.Accounting
   {
     class UTXOBatch
     {
-      public bool IsCancellationBatch;
-
       public int BatchIndex;
 
       public int BlockCount;

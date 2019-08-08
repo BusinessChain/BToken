@@ -25,7 +25,7 @@ namespace BToken.Accounting
         UTXOParser Parser;
         SHA256 SHA256;
 
-        public UTXODownloadBatch DownloadBatch;
+        public BlockDownload DownloadBatch;
         public CancellationTokenSource CancellationSession;
 
         readonly object LOCK_BytesDownloaded = new object();

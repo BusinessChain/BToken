@@ -87,7 +87,7 @@
     <Compile Include="Accounting\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
     <Compile Include="Accounting\UTXO\UTXONetworkLoader.cs" />
     <Compile Include="Accounting\UTXO\UTXOBatch.cs" />
-    <Compile Include="Accounting\UTXO\UTXODownloadBatch.cs" />
+    <Compile Include="Accounting\UTXO\BlockDownload.cs" />
     <Compile Include="Accounting\UTXO\UTXOMerger.cs" />
     <Compile Include="Accounting\UTXO\UTXOParser.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />

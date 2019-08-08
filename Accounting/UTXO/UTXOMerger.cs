@@ -15,7 +15,7 @@ namespace BToken.Accounting
   {
     class UTXOMerger
     {
-      const int UTXOSTATE_ARCHIVING_INTERVAL = 1000;
+      const int UTXOSTATE_ARCHIVING_INTERVAL = 300;
 
       UTXO UTXO;
 
@@ -69,10 +69,7 @@ namespace BToken.Accounting
           Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
           HeaderMergedLast = UTXO.Headerchain.ReadHeader(headerHashMergedLast);
 
-          for (int i = 0; i < UTXO.Tables.Length; i += 1)
-          {
-            UTXO.Tables[i].Load();
-          }
+          Parallel.ForEach(UTXO.Tables, t => t.Load());
         }
         catch
         {
@@ -92,10 +89,10 @@ namespace BToken.Accounting
 
         UTXOBatch batch;
 
+        UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
         try
         {
-          UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
           while (true)
           {
             batch = await Buffer
@@ -109,8 +106,7 @@ namespace BToken.Accounting
             UTXO.SpendUTXOs(batch.Inputs);
 
             StopwatchMerging.Stop();
-
-
+            
             BlockHeight += batch.BlockCount;
             BatchIndexMergedLast = batch.BatchIndex;
             HeaderMergedLast = batch.HeaderLast;
