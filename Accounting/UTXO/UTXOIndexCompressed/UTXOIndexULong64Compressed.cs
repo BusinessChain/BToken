@@ -235,6 +235,7 @@ namespace BToken.Accounting
           PrimaryTable.Add(key, value);
         }
       }
+
       protected override void LoadCollisionData(byte[] buffer)
       {
         int index = 0;

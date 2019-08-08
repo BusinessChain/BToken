@@ -88,10 +88,10 @@ namespace BToken.Accounting
           try
           {
             UTXOBatch batch = parser.ParseBatch(batchBuffer, batchIndex);
-
-            await PostToOutputBuffer(batch);
+            
+            await PostToOutputStage(batch);
           }
-          catch (UTXOException)
+          catch (ChainException)
           {
             lock (LOCK_BatchIndexLoad)
             {
@@ -103,7 +103,7 @@ namespace BToken.Accounting
         }
       }
 
-      public async Task PostToOutputBuffer(UTXOBatch batch)
+      public async Task PostToOutputStage(UTXOBatch batch)
       {
         while(true)
         {
@@ -121,7 +121,10 @@ namespace BToken.Accounting
 
         if (batch.BatchIndex != BatchIndexNextOutput)
         {
-          OutputQueue.Add(batch.BatchIndex, batch);
+          if(!OutputQueue.ContainsKey(batch.BatchIndex))
+          {
+            OutputQueue.Add(batch.BatchIndex, batch);
+          }
         }
         else
         {
@@ -129,7 +132,7 @@ namespace BToken.Accounting
           {
             if (HeaderPostedToMergerLast != batch.HeaderPrevious)
             {
-              throw new UTXOException(
+              throw new ChainException(
                 string.Format("HeaderPrevious {0} of Batch {1} not equal to \nHeaderMergedLast {2}",
                 batch.HeaderPrevious.GetHeaderHash().ToHexString(),
                 batch.BatchIndex,

@@ -66,18 +66,13 @@ namespace BToken.Accounting
 
       var archiveLoader = new UTXOArchiveLoader(this);
       await archiveLoader.RunAsync();
-            
-      if (archiveLoader.HeaderPostedToMergerLast.HeadersNext != null)
-      {
-        var networkLoader = new UTXONetworkLoader(
-          this,
-          archiveLoader.HeaderPostedToMergerLast.HeadersNext[0],
-          archiveLoader.BatchIndexLoad);
 
-        await networkLoader.RunAsync();
-      }
+      var networkLoader = new UTXONetworkLoader(
+        this,
+        archiveLoader.HeaderPostedToMergerLast,
+        archiveLoader.BatchIndexLoad);
 
-      Console.WriteLine("Build completed");
+      Task networkLoaderTask = networkLoader.RunAsync();
     }
     
     void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)
