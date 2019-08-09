@@ -15,28 +15,9 @@ namespace BToken.Accounting
       
       ulong UTXOItem;
 
-      static readonly ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
-      static readonly ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
-      static readonly ulong MaskHeaderBits =
-        ~((uint.MaxValue << (COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS)) | MaskBatchIndex);
-
-      ulong[] MasksCollisionBitsClear = {
-        0xFFFFFFFFFFCFFFFF,
-        0xFFFFFFFFFF3FFFFF,
-        0xFFFFFFFFFCFFFFFF };
-      ulong[] MasksCollisionBitsOne = {
-        0x00100000,
-        0x00400000,
-        0x01000000 };
-      ulong[] MasksCollisionBitsTwo = {
-        0x00200000,
-        0x00800000,
-        0x02000000 };
-      ulong[] MasksCollisionBitsFull = {
-        0x00300000,
-        0x00C00000,
-        0x03000000 };
-
+      ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
+      ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
+      
 
       public UTXOIndexULong64()
       { }
@@ -44,12 +25,10 @@ namespace BToken.Accounting
 
       public void ParseUTXO(
         int batchIndex,
-        byte[] headerHash,
         int lengthUTXOBits,
         byte[] tXHash)
       {
         ulong uTXOIndex = (uint)batchIndex & MaskBatchIndex;
-        uTXOIndex |= ((uint)headerHash[0] << COUNT_BATCHINDEX_BITS) & MaskHeaderBits;
 
         if (COUNT_LONG_BITS > lengthUTXOBits)
         {
