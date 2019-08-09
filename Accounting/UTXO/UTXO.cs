@@ -24,7 +24,7 @@ namespace BToken.Accounting
 
     const int HASH_BYTE_SIZE = 32;
 
-    const int COUNT_BATCHINDEX_BITS = 8;
+    const int COUNT_BATCHINDEX_BITS = 16;
     const int COUNT_COLLISION_BITS_PER_TABLE = 2;
     const int COUNT_COLLISIONS_MAX = 2 ^ COUNT_COLLISION_BITS_PER_TABLE - 1;
 
@@ -94,7 +94,7 @@ namespace BToken.Accounting
           }
         }
 
-        TableUInt32.PrimaryTable.Add(primaryKey, uTXOsUInt32[i].Value);
+        TableUInt32.PrimaryTables[(byte)primaryKey].Add(primaryKey, uTXOsUInt32[i].Value);
 
         i += 1;
       }
