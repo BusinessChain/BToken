@@ -238,7 +238,7 @@ namespace BToken.Accounting
             for (int i = 0; i < countInputs; i += 1)
             {
               TXInput input = new TXInput(Buffer, ref BufferIndex);
-
+              
               if (
                !(Batch.TableUInt32.TrySpend(input) ||
                Batch.TableULong64.TrySpend(input) ||
@@ -277,12 +277,11 @@ namespace BToken.Accounting
              tXLength));
 
           int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
-
+          
           if (COUNT_INTEGER_BITS >= lengthUTXOBits)
           {
             Batch.TableUInt32.ParseUTXO(
               BatchIndex,
-              HeaderHash,
               lengthUTXOBits,
               tXHash);
           }
@@ -290,7 +289,6 @@ namespace BToken.Accounting
           {
             Batch.TableULong64.ParseUTXO(
               BatchIndex,
-              HeaderHash,
               lengthUTXOBits,
               tXHash);
           }
@@ -298,7 +296,6 @@ namespace BToken.Accounting
           {
             Batch.TableUInt32Array.ParseUTXO(
               BatchIndex,
-              HeaderHash,
               lengthUTXOBits,
               tXHash);
           }

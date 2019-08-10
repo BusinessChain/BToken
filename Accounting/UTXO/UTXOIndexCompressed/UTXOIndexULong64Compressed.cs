@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Diagnostics;
+using System.IO;
 
 namespace BToken.Accounting
 {
@@ -19,26 +19,23 @@ namespace BToken.Accounting
       const int COUNT_LONG_BITS = 64;
 
       static readonly ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
-      static readonly ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
-      static readonly ulong MaskHeaderBits =
-        ~((uint.MaxValue << (COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS)) | MaskBatchIndex);
 
       ulong[] MasksCollisionBitsClear = {
-        0xFFFFFFFFFFCFFFFF,
-        0xFFFFFFFFFF3FFFFF,
-        0xFFFFFFFFFCFFFFFF };
+        ~(ulong)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0),
+        ~(ulong)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1),
+        ~(ulong)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2)};
       ulong[] MasksCollisionBitsOne = {
-        0x00100000,
-        0x00400000,
-        0x01000000 };
+        1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0,
+        1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1,
+        1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2};
       ulong[] MasksCollisionBitsTwo = {
-        0x00200000,
-        0x00800000,
-        0x02000000 };
+        2 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0,
+        2 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1,
+        2 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2};
       ulong[] MasksCollisionBitsFull = {
-        0x00300000,
-        0x00C00000,
-        0x03000000 };
+        3 << (COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0),
+        3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1,
+        3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2};
 
       public UTXOIndexULong64Compressed()
         : base(1, "ULong64")
@@ -189,40 +186,40 @@ namespace BToken.Accounting
         areAllOutputpsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
       }
 
-      protected override byte[] GetPrimaryData()
+      public override void BackupToDisk(string path)
       {
-        byte[] buffer = new byte[PrimaryTable.Count * 12];
-
-        int index = 0;
-        foreach (KeyValuePair<int, ulong> keyValuePair in PrimaryTable)
+        string directoryPath = Path.Combine(path, Label);
+        Directory.CreateDirectory(directoryPath);
+        
+        using (FileStream stream = new FileStream(
+           Path.Combine(directoryPath, "PrimaryTable"),
+           FileMode.Create,
+           FileAccess.Write,
+           FileShare.None))
         {
-          BitConverter.GetBytes(keyValuePair.Key).CopyTo(buffer, index);
-          index += 4;
-          BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
-          index += 8;
+          foreach (KeyValuePair<int, ulong> keyValuePair in PrimaryTable)
+          {
+            stream.Write(BitConverter.GetBytes(keyValuePair.Key), 0, 4);
+            stream.Write(BitConverter.GetBytes(keyValuePair.Value), 0, 8);
+          }
         }
 
-        return buffer;
-      }
-      protected override byte[] GetCollisionData()
-      {
-        byte[] buffer = new byte[CollisionTable.Count * (HASH_BYTE_SIZE + 8)];
-
-        int index = 0;
-        foreach (KeyValuePair<byte[], ulong> keyValuePair in CollisionTable)
+        using (FileStream stream = new FileStream(
+           Path.Combine(directoryPath, "CollisionTable"),
+           FileMode.Create,
+           FileAccess.Write,
+           FileShare.None))
         {
-          keyValuePair.Key.CopyTo(buffer, index);
-          index += HASH_BYTE_SIZE;
-          BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
-          index += 8;
+          foreach (KeyValuePair<byte[], ulong> keyValuePair in CollisionTable)
+          {
+            stream.Write(keyValuePair.Key, 0, HASH_BYTE_SIZE);
+            stream.Write(BitConverter.GetBytes(keyValuePair.Value), 0, 8);
+          }
         }
-
-        return buffer;
       }
-
-
-      protected override void LoadPrimaryData(byte[] buffer)
+      public override void Load() 
       {
+        byte[] buffer = File.ReadAllBytes(Path.Combine(DirectoryPath, "PrimaryTable"));
         int index = 0;
 
         while (index < buffer.Length)
@@ -234,11 +231,9 @@ namespace BToken.Accounting
 
           PrimaryTable.Add(key, value);
         }
-      }
 
-      protected override void LoadCollisionData(byte[] buffer)
-      {
-        int index = 0;
+        buffer = File.ReadAllBytes( Path.Combine(DirectoryPath, "CollisionTable"));
+        index = 0;
 
         while (index < buffer.Length)
         {

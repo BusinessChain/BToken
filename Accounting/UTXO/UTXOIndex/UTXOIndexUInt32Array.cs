@@ -12,28 +12,8 @@ namespace BToken.Accounting
         new Dictionary<byte[], uint[]>(COUNT_TXS_IN_BATCH_FILE, new EqualityComparerByteArray());
 
       uint[] UTXOItem;
-      
-      uint[] MasksCollisionBitsClear = {
-        0xFFCFFFFF,
-        0xFF3FFFFF,
-        0xFCFFFFFF };
-      uint[] MasksCollisionBitsOne = {
-        0x00100000,
-        0x00400000,
-        0x01000000 };
-      uint[] MasksCollisionBitsTwo = {
-        0x00200000,
-        0x00800000,
-        0x02000000 };
-      uint[] MasksCollisionBitsFull = {
-        0x00300000,
-        0x00C00000,
-        0x03000000 };
 
       static readonly uint MaskBatchIndex = ~(uint.MaxValue << COUNT_BATCHINDEX_BITS);
-      static readonly uint MaskHeaderBits =
-        ~((uint.MaxValue << (COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS)) | MaskBatchIndex);
-
       static readonly uint MaskAllOutputsBitsInFirstUInt32 = uint.MaxValue << CountNonOutputBits;
 
 
@@ -43,7 +23,6 @@ namespace BToken.Accounting
 
       public void ParseUTXO(
         int batchIndex,
-        byte[] headerHash,
         int lengthUTXOBits,
         byte[] tXHash)
       {
@@ -56,7 +35,6 @@ namespace BToken.Accounting
         }
 
         uTXOIndex[0] = (uint)batchIndex & MaskBatchIndex;
-        uTXOIndex[0] |= ((uint)headerHash[0] << COUNT_BATCHINDEX_BITS) & MaskHeaderBits;
 
         Table.Add(tXHash, uTXOIndex);
       }

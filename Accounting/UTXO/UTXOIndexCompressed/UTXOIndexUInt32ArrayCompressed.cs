@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Diagnostics;
+using System.IO;
 
 namespace BToken.Accounting
 {
@@ -15,27 +15,23 @@ namespace BToken.Accounting
 
       uint[] UTXOPrimary;
       uint[] UTXOCollision;
-      
-      uint[] MasksCollisionBitsClear = {
-        0xFFCFFFFF,
-        0xFF3FFFFF,
-        0xFCFFFFFF };
-      uint[] MasksCollisionBitsOne = {
-        0x00100000,
-        0x00400000,
-        0x01000000 };
-      uint[] MasksCollisionBitsTwo = {
-        0x00200000,
-        0x00800000,
-        0x02000000 };
-      uint[] MasksCollisionBitsFull = {
-        0x00300000,
-        0x00C00000,
-        0x03000000 };
 
-      static readonly uint MaskBatchIndex = ~(uint.MaxValue << COUNT_BATCHINDEX_BITS);
-      static readonly uint MaskHeaderBits =
-        ~((uint.MaxValue << (COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS)) | MaskBatchIndex);
+      uint[] MasksCollisionBitsClear = {
+        ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0),
+        ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1),
+        ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2)};
+      uint[] MasksCollisionBitsOne = {
+        1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0,
+        1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1,
+        1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2};
+      uint[] MasksCollisionBitsTwo = {
+        2 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0,
+        2 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1,
+        2 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2};
+      uint[] MasksCollisionBitsFull = {
+        3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0,
+        3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1,
+        3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2};
 
       static readonly uint MaskAllOutputsBitsInFirstUInt32 = uint.MaxValue << CountNonOutputBits;
 
@@ -210,8 +206,11 @@ namespace BToken.Accounting
         return true;
       }
 
-      protected override byte[] GetPrimaryData()
+      public override void BackupToDisk(string path)
       {
+        string directoryPath = Path.Combine(path, Label);
+        Directory.CreateDirectory(directoryPath);
+
         var byteList = new List<byte>();
 
         foreach (KeyValuePair<int, uint[]> keyValuePair in PrimaryTable)
@@ -225,11 +224,18 @@ namespace BToken.Accounting
           byteList.AddRange(byteArray);
         }
 
-        return byteList.ToArray();
-      }
-      protected override byte[] GetCollisionData()
-      {
-        var byteList = new List<byte>();
+        byte[] bytes = byteList.ToArray();
+
+        using (FileStream stream = new FileStream(
+           Path.Combine(directoryPath, "PrimaryTable"),
+           FileMode.Create,
+           FileAccess.Write,
+           FileShare.None))
+        {
+          stream.Write(bytes, 0, bytes.Length);
+        }
+
+        byteList.Clear();
 
         foreach (KeyValuePair<byte[], uint[]> keyValuePair in CollisionTable)
         {
@@ -242,10 +248,26 @@ namespace BToken.Accounting
           byteList.AddRange(byteArray);
         }
 
-        return byteList.ToArray();
-      }
+         bytes = byteList.ToArray();
 
-      protected override void LoadPrimaryData(byte[] buffer)
+        using (FileStream stream = new FileStream(
+           Path.Combine(directoryPath, "CollisionTable"),
+           FileMode.Create,
+           FileAccess.Write,
+           FileShare.None))
+        {
+          stream.Write(bytes, 0, bytes.Length);
+        }
+      }
+      public override void Load()
+      {
+        LoadPrimaryData(File.ReadAllBytes(
+          Path.Combine(DirectoryPath, "PrimaryTable")));
+
+        LoadCollisionData(File.ReadAllBytes(
+          Path.Combine(DirectoryPath, "CollisionTable")));
+      }
+      void LoadPrimaryData(byte[] buffer)
       {
         int index = 0;
 
@@ -267,7 +289,7 @@ namespace BToken.Accounting
           PrimaryTable.Add(key, value);
         }
       }
-      protected override void LoadCollisionData(byte[] buffer)
+      void LoadCollisionData(byte[] buffer)
       {
         int index = 0;
         int uintLength;

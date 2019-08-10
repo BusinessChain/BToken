@@ -15,9 +15,6 @@ namespace BToken.Accounting
 
       static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountNonOutputBits;
       static readonly uint MaskBatchIndex = ~(uint.MaxValue << COUNT_BATCHINDEX_BITS);
-      static readonly uint MaskHeaderBits =
-        ~((uint.MaxValue << (COUNT_BATCHINDEX_BITS + COUNT_HEADER_BITS)) | MaskBatchIndex);
-
 
 
       public UTXOIndexUInt32()
@@ -25,12 +22,10 @@ namespace BToken.Accounting
 
       public void ParseUTXO(
         int batchIndex,
-        byte[] headerHash,
         int lengthUTXOBits,
         byte[] tXHash)
       {
         uint uTXOIndex = (uint)batchIndex & MaskBatchIndex;
-        uTXOIndex |= ((uint)headerHash[0] << COUNT_BATCHINDEX_BITS) & MaskHeaderBits;
 
         if (COUNT_INTEGER_BITS > lengthUTXOBits)
         {

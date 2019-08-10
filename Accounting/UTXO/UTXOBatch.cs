@@ -14,7 +14,7 @@ namespace BToken.Accounting
 
       public int BlockCount;
       public int TXCount;
-
+      
       public List<Block> Blocks = new List<Block>(50);
 
       const int AVERAGE_INPUTS_PER_TX = 5;

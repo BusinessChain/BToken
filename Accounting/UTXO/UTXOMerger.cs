@@ -15,17 +15,16 @@ namespace BToken.Accounting
   {
     class UTXOMerger
     {
-      const int UTXOSTATE_ARCHIVING_INTERVAL = 300;
+      const int UTXOSTATE_ARCHIVING_INTERVAL = 100;
 
       UTXO UTXO;
 
       public int BlockHeight;
       public int BatchIndexNext;
-      public int BatchIndexMergedLast;
+      int BatchIndexMergedLast;
       public Headerchain.ChainHeader HeaderMergedLast;
       public BufferBlock<UTXOBatch> Buffer = new BufferBlock<UTXOBatch>(
-        new DataflowBlockOptions {
-          BoundedCapacity = 10});
+        new DataflowBlockOptions { BoundedCapacity = 10});
       
       long UTCTimeStartMerger;
       public Stopwatch StopwatchMerging = new Stopwatch();
@@ -37,52 +36,7 @@ namespace BToken.Accounting
       {
         UTXO = uTXO;
       }
-
-      void LoadState()
-      {
-        try
-        {
-          if (Directory.Exists(PathUTXOState))
-          {
-            if (Directory.Exists(PathUTXOStateTemporary))
-            {
-              Directory.Delete(PathUTXOStateTemporary, true);
-            }
-          }
-          else
-          {
-            if (Directory.Exists(PathUTXOStateOld))
-            {
-              Directory.Delete(PathUTXOStateOld, true);
-            }
-
-            Directory.Move(PathUTXOStateTemporary, PathUTXOState);
-          }
-
-          byte[] uTXOState = File.ReadAllBytes(Path.Combine(PathUTXOState, "UTXOState"));
-
-          BatchIndexMergedLast = BitConverter.ToInt32(uTXOState, 0);
-          BatchIndexNext = BatchIndexMergedLast + 1;
-          BlockHeight = BitConverter.ToInt32(uTXOState, 4);
-
-          byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
-          Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
-          HeaderMergedLast = UTXO.Headerchain.ReadHeader(headerHashMergedLast);
-
-          Parallel.ForEach(UTXO.Tables, t => t.Load());
-        }
-        catch
-        {
-          for (int c = 0; c < UTXO.Tables.Length; c += 1)
-          {
-            UTXO.Tables[c].Clear();
-          }
-
-          BatchIndexNext = 0;
-          BlockHeight = -1;
-        }
-      }
-
+      
       public async Task StartAsync()
       {
         LoadState();
@@ -99,7 +53,7 @@ namespace BToken.Accounting
               .ReceiveAsync().ConfigureAwait(false);
 
             StopwatchMerging.Restart();
-
+                        
             UTXO.InsertUTXOsUInt32(batch.UTXOsUInt32);
             UTXO.InsertUTXOsULong64(batch.UTXOsULong64);
             UTXO.InsertUTXOsUInt32Array(batch.UTXOsUInt32Array);
@@ -129,7 +83,16 @@ namespace BToken.Accounting
       
       void ArchiveState()
       {
-        Directory.CreateDirectory(PathUTXOStateTemporary);
+        if (Directory.Exists(PathUTXOState))
+        {
+          if (Directory.Exists(PathUTXOStateOld))
+          {
+            Directory.Delete(PathUTXOStateOld, true);
+          }
+          Directory.Move(PathUTXOState, PathUTXOStateOld);
+        }
+
+        Directory.CreateDirectory(PathUTXOState);
 
         byte[] uTXOState = new byte[40];
         BitConverter.GetBytes(BatchIndexMergedLast).CopyTo(uTXOState, 0);
@@ -137,7 +100,7 @@ namespace BToken.Accounting
         HeaderMergedLast.GetHeaderHash().CopyTo(uTXOState, 8);
 
         using (FileStream stream = new FileStream(
-           Path.Combine(PathUTXOStateTemporary, "UTXOState"),
+           Path.Combine(PathUTXOState, "UTXOState"),
            FileMode.Create,
            FileAccess.ReadWrite,
            FileShare.Read))
@@ -145,41 +108,66 @@ namespace BToken.Accounting
           stream.Write(uTXOState, 0, uTXOState.Length);
         }
 
-        BackupTables(PathUTXOStateTemporary);
-      }
-
-      void BackupTables(string path)
-      {
         Parallel.ForEach(UTXO.Tables, t =>
         {
-          t.BackupToDisk(PathUTXOStateTemporary);
+          t.BackupToDisk(PathUTXOState);
         });
-
-        if (Directory.Exists(PathUTXOState))
-        {
-          Directory.Move(PathUTXOState, PathUTXOStateOld);
-          Directory.Delete(PathUTXOStateOld, true);
-        }
-
-        Directory.Move(PathUTXOStateTemporary, PathUTXOState);
       }
-      async Task BackupTablesAsync(string path)
+
+      void LoadState()
       {
-        Task[] backupTasks = new Task[UTXO.Tables.Length];
-        Parallel.For(0, UTXO.Tables.Length, i =>
-        {
-          backupTasks[i] = UTXO.Tables[i].BackupToDiskAsync(PathUTXOStateTemporary);
-        });
-
-        await Task.WhenAll(backupTasks);
-
         if (Directory.Exists(PathUTXOState))
         {
-          Directory.Move(PathUTXOState, PathUTXOStateOld);
-          Directory.Delete(PathUTXOStateOld, true);
-        }
+          if (!TryLoadUTXOState())
+          {
+            Directory.Delete(PathUTXOState, true);
 
-        Directory.Move(PathUTXOStateTemporary, PathUTXOState);
+            if (Directory.Exists(PathUTXOStateOld))
+            {
+              Directory.Move(PathUTXOStateOld, PathUTXOState);
+
+              if (TryLoadUTXOState())
+              {
+                return;
+              }
+
+              Directory.Delete(PathUTXOState, true);
+            }
+          }
+        }
+      }
+      bool TryLoadUTXOState()
+      {
+        try
+        {
+          byte[] uTXOState = File.ReadAllBytes(Path.Combine(PathUTXOState, "UTXOState"));
+
+          BatchIndexMergedLast = BitConverter.ToInt32(uTXOState, 0);
+          BatchIndexNext = BatchIndexMergedLast + 1;
+          BlockHeight = BitConverter.ToInt32(uTXOState, 4);
+
+          byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
+          Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
+          HeaderMergedLast = UTXO.Headerchain.ReadHeader(headerHashMergedLast);
+
+          Parallel.ForEach(UTXO.Tables, t => t.Load());
+
+          return true;
+        }
+        catch (Exception ex)
+        {
+          for (int c = 0; c < UTXO.Tables.Length; c += 1)
+          {
+            UTXO.Tables[c].Clear();
+          }
+
+          BatchIndexNext = 0;
+          BlockHeight = -1;
+          HeaderMergedLast = null;
+
+          Console.WriteLine("Exception when loading UTXO state {0}", ex.Message);
+          return false;
+        }
       }
 
       void LogCSV(UTXOBatch batch)
@@ -201,7 +189,6 @@ namespace BToken.Accounting
 
         Console.WriteLine(logCSV);
       }
-      
     }
   }
 }

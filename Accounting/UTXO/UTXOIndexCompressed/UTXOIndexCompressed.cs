@@ -11,13 +11,16 @@ namespace BToken.Accounting
     abstract class UTXOIndexCompressed
     {
       public int Address;
-      public int OffsetCollisionBits;
       protected string Label;
 
-      string DirectoryPath;
+      protected string DirectoryPath;
 
-      protected static readonly uint MaskCollisionBits = 0x03F00000;
-      
+      protected uint MaskCollisionBits =
+        (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0) |
+        (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1) |
+        (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2);
+
+
       public int PrimaryKey;
 
 
@@ -27,11 +30,6 @@ namespace BToken.Accounting
       {
         Address = address;
         Label = label;
-
-        OffsetCollisionBits = 
-          COUNT_BATCHINDEX_BITS 
-          + COUNT_HEADER_BITS 
-          + address * COUNT_COLLISION_BITS_PER_TABLE;
 
         DirectoryPath = Path.Combine(PathUTXOState, Label);
       }
@@ -96,80 +94,11 @@ namespace BToken.Accounting
         return GetCountPrimaryTableItems() + "," + GetCountCollisionTableItems();
       }
 
-      public async Task BackupToDiskAsync(string path)
-      {
-        string directoryPath = Path.Combine(path, Label);
-        Directory.CreateDirectory(directoryPath);
+      public abstract void BackupToDisk(string path);
+      public abstract void Load();
 
-        Task[] writeToFileTasks = new Task[2];
-
-        writeToFileTasks[0] = WriteFileAsync(
-          Path.Combine(directoryPath, "PrimaryTable"),
-          GetPrimaryData());
-
-        writeToFileTasks[1] = WriteFileAsync(
-          Path.Combine(directoryPath, "CollisionTable"),
-          GetCollisionData());
-
-        await Task.WhenAll(writeToFileTasks);
-      }
-      public void BackupToDisk(string path)
-      {
-        string directoryPath = Path.Combine(path, Label);
-        Directory.CreateDirectory(directoryPath);
-        
-        WriteFile(
-          Path.Combine(directoryPath, "PrimaryTable"),
-          GetPrimaryData());
-
-        WriteFile(
-          Path.Combine(directoryPath, "CollisionTable"),
-          GetCollisionData());
-      }
-
-      static void WriteFile(string filePath, byte[] buffer)
-      {
-        using (FileStream stream = new FileStream(
-           filePath,
-           FileMode.Create,
-           FileAccess.ReadWrite,
-           FileShare.Read))
-        {
-          stream.Write(buffer, 0, buffer.Length);
-        }
-      }
-      static async Task WriteFileAsync(string filePath, byte[] buffer)
-      {
-        using (FileStream stream = new FileStream(
-           filePath,
-           FileMode.Create,
-           FileAccess.ReadWrite,
-           FileShare.Read,
-           bufferSize: 1048576,
-           useAsync: true))
-        {
-          await stream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-        }
-      }
-
-      protected abstract byte[] GetPrimaryData();
-      protected abstract byte[] GetCollisionData();
-      
-      protected abstract void LoadPrimaryData(byte[] buffer);
-      protected abstract void LoadCollisionData(byte[] buffer);
-      
       public abstract void Clear();
 
-      public void Load()
-      {
-        LoadPrimaryData(
-          File.ReadAllBytes(
-            Path.Combine(DirectoryPath, "PrimaryTable")));
-
-        LoadCollisionData(
-          File.ReadAllBytes(
-            Path.Combine(DirectoryPath, "CollisionTable")));
-      }
     }
   }
 }

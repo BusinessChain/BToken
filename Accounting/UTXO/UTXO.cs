@@ -17,7 +17,6 @@ namespace BToken.Accounting
     BitcoinGenesisBlock GenesisBlock;
 
     static string PathUTXOState = "UTXOArchive";
-    static string PathUTXOStateTemporary = PathUTXOState + "_temp";
     static string PathUTXOStateOld = PathUTXOState + "_Old";
 
     const int COUNT_INTEGER_BITS = 32;
@@ -26,9 +25,8 @@ namespace BToken.Accounting
     const int HASH_BYTE_SIZE = 32;
 
     const int COUNT_BATCHINDEX_BITS = 16;
-    const int COUNT_HEADER_BITS = 4;
     const int COUNT_COLLISION_BITS_PER_TABLE = 2;
-    const int COUNT_COLLISIONS_MAX = 3;
+    const int COUNT_COLLISIONS_MAX = 2 ^ COUNT_COLLISION_BITS_PER_TABLE - 1;
 
     const int COUNT_TXS_IN_BATCH_FILE = 50000;
 
@@ -39,7 +37,6 @@ namespace BToken.Accounting
     
     static readonly int CountNonOutputBits =
       COUNT_BATCHINDEX_BITS +
-      COUNT_HEADER_BITS +
       COUNT_COLLISION_BITS_PER_TABLE * 3;
         
 
@@ -56,7 +53,7 @@ namespace BToken.Accounting
         TableUInt32,
         TableULong64,
         TableUInt32Array};
-
+      
       Merger = new UTXOMerger(this);
     }
 
@@ -97,7 +94,7 @@ namespace BToken.Accounting
           }
         }
 
-        TableUInt32.PrimaryTable.Add(primaryKey, uTXOsUInt32[i].Value);
+        TableUInt32.PrimaryTables[(byte)primaryKey].Add(primaryKey, uTXOsUInt32[i].Value);
 
         i += 1;
       }
@@ -182,7 +179,7 @@ namespace BToken.Accounting
                 }
               }
             }
-
+            
             tablePrimary.SpendPrimaryUTXO(inputs[i], out bool allOutputsSpent);
 
             if (allOutputsSpent)
