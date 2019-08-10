@@ -13,7 +13,7 @@ namespace BToken.Accounting
       public int Address;
       protected string Label;
 
-      string DirectoryPath;
+      protected string DirectoryPath;
 
       protected uint MaskCollisionBits =
         (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0) |
@@ -94,52 +94,11 @@ namespace BToken.Accounting
         return GetCountPrimaryTableItems() + "," + GetCountCollisionTableItems();
       }
 
-      public void BackupToDisk(string path)
-      {
-        string directoryPath = Path.Combine(path, Label);
-        Directory.CreateDirectory(directoryPath);
+      public abstract void BackupToDisk(string path);
+      public abstract void Load();
 
-        byte[] bufferPrimaryTable = GetPrimaryData();
-
-        using (FileStream stream = new FileStream(
-           Path.Combine(directoryPath, "PrimaryTable"),
-           FileMode.Create,
-           FileAccess.ReadWrite,
-           FileShare.Read))
-        {
-          stream.Write(bufferPrimaryTable, 0, bufferPrimaryTable.Length);
-        }
-
-        byte[] bufferCollisionTable = GetCollisionData();
-
-        using (FileStream stream = new FileStream(
-           Path.Combine(directoryPath, "CollisionTable"),
-           FileMode.Create,
-           FileAccess.ReadWrite,
-           FileShare.Read))
-        {
-          stream.Write(bufferCollisionTable, 0, bufferCollisionTable.Length);
-        }
-      }
-
-      protected abstract byte[] GetPrimaryData();
-      protected abstract byte[] GetCollisionData();
-      
-      protected abstract void LoadPrimaryData(byte[] buffer);
-      protected abstract void LoadCollisionData(byte[] buffer);
-      
       public abstract void Clear();
 
-      public void Load()
-      {
-        LoadPrimaryData(
-          File.ReadAllBytes(
-            Path.Combine(DirectoryPath, "PrimaryTable")));
-
-        LoadCollisionData(
-          File.ReadAllBytes(
-            Path.Combine(DirectoryPath, "CollisionTable")));
-      }
     }
   }
 }

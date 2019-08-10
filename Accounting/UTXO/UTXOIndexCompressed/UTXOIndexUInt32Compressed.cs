@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace BToken.Accounting
 {
@@ -199,44 +200,62 @@ namespace BToken.Accounting
         areAllOutputpsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
       }
 
-      protected override byte[] GetPrimaryData()
+      public override void BackupToDisk(string path)
       {
-        byte[] buffer = new byte[GetCountPrimaryTableItems() << 3];
-        int index = 0;
+        string directoryPath = Path.Combine(path, Label);
+        Directory.CreateDirectory(directoryPath);
 
-        for (int i = 0; i < COUNT_TABLE_PARTITIONS; i += 1)
+        Parallel.For(0, COUNT_TABLE_PARTITIONS, i =>
         {
-          foreach (KeyValuePair<int, uint> keyValuePair in PrimaryTables[i])
+          using (FileStream stream = new FileStream(
+             Path.Combine(directoryPath, "PrimaryTable" + i),
+             FileMode.Create,
+             FileAccess.Write,
+             FileShare.None))
           {
-            BitConverter.GetBytes(keyValuePair.Key).CopyTo(buffer, index);
-            index += 4;
-            BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
-            index += 4;
+            foreach (KeyValuePair<int, uint> keyValuePair in PrimaryTables[i])
+            {
+              stream.Write(BitConverter.GetBytes(keyValuePair.Key), 0, 4);
+              stream.Write(BitConverter.GetBytes(keyValuePair.Value), 0, 4);
+            }
           }
-        }
-
-        return buffer;
-      }
-      protected override byte[] GetCollisionData()
-      {
-        byte[] buffer = new byte[GetCountCollisionTableItems() * (HASH_BYTE_SIZE + sizeof(uint))];
+        });
+                
+        byte[] bufferCollisionTable = new byte[GetCountCollisionTableItems() * (HASH_BYTE_SIZE + sizeof(uint))];
         int index = 0;
 
         for (int i = 0; i < COUNT_TABLE_PARTITIONS; i += 1)
         {
           foreach (KeyValuePair<byte[], uint> keyValuePair in CollisionTables[i])
           {
-            keyValuePair.Key.CopyTo(buffer, index);
+            keyValuePair.Key.CopyTo(bufferCollisionTable, index);
             index += HASH_BYTE_SIZE;
-            BitConverter.GetBytes(keyValuePair.Value).CopyTo(buffer, index);
+            BitConverter.GetBytes(keyValuePair.Value).CopyTo(bufferCollisionTable, index);
             index += 4;
           }
         }
-
-        return buffer;
+        
+        using (FileStream stream = new FileStream(
+           Path.Combine(directoryPath, "CollisionTable"),
+           FileMode.Create,
+           FileAccess.Write,
+           FileShare.None))
+        {
+          stream.Write(bufferCollisionTable, 0, bufferCollisionTable.Length);
+        }
       }
 
-      protected override void LoadPrimaryData(byte[] buffer)
+      public override void Load()
+      {
+        Parallel.For(0, COUNT_TABLE_PARTITIONS, i => {
+          LoadPrimaryData(
+            File.ReadAllBytes(Path.Combine(DirectoryPath, "PrimaryTable" + i)),
+            PrimaryTables[i]);});
+        
+        LoadCollisionData(File.ReadAllBytes(
+          Path.Combine(DirectoryPath, "CollisionTable")));
+      }
+      void LoadPrimaryData(byte[] buffer, Dictionary<int, uint> table)
       {
         int index = 0;
 
@@ -247,10 +266,10 @@ namespace BToken.Accounting
           uint value = BitConverter.ToUInt32(buffer, index);
           index += 4;
 
-          PrimaryTables[(byte)key].Add(key, value);
+          table.Add(key, value);
         }
       }
-      protected override void LoadCollisionData(byte[] buffer)
+      void LoadCollisionData(byte[] buffer)
       {
         int index = 0;
 

@@ -15,7 +15,7 @@ namespace BToken.Accounting
   {
     class UTXOMerger
     {
-      const int UTXOSTATE_ARCHIVING_INTERVAL = 500;
+      const int UTXOSTATE_ARCHIVING_INTERVAL = 100;
 
       UTXO UTXO;
 
@@ -156,7 +156,6 @@ namespace BToken.Accounting
         }
         catch (Exception ex)
         {
-
           for (int c = 0; c < UTXO.Tables.Length; c += 1)
           {
             UTXO.Tables[c].Clear();

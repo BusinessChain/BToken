@@ -53,7 +53,7 @@ namespace BToken.Accounting
         TableUInt32,
         TableULong64,
         TableUInt32Array};
-
+      
       Merger = new UTXOMerger(this);
     }
 

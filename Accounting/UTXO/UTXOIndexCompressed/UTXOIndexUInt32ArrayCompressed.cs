@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Diagnostics;
+using System.IO;
 
 namespace BToken.Accounting
 {
@@ -206,8 +206,11 @@ namespace BToken.Accounting
         return true;
       }
 
-      protected override byte[] GetPrimaryData()
+      public override void BackupToDisk(string path)
       {
+        string directoryPath = Path.Combine(path, Label);
+        Directory.CreateDirectory(directoryPath);
+
         var byteList = new List<byte>();
 
         foreach (KeyValuePair<int, uint[]> keyValuePair in PrimaryTable)
@@ -221,11 +224,18 @@ namespace BToken.Accounting
           byteList.AddRange(byteArray);
         }
 
-        return byteList.ToArray();
-      }
-      protected override byte[] GetCollisionData()
-      {
-        var byteList = new List<byte>();
+        byte[] bytes = byteList.ToArray();
+
+        using (FileStream stream = new FileStream(
+           Path.Combine(directoryPath, "PrimaryTable"),
+           FileMode.Create,
+           FileAccess.Write,
+           FileShare.None))
+        {
+          stream.Write(bytes, 0, bytes.Length);
+        }
+
+        byteList.Clear();
 
         foreach (KeyValuePair<byte[], uint[]> keyValuePair in CollisionTable)
         {
@@ -238,10 +248,26 @@ namespace BToken.Accounting
           byteList.AddRange(byteArray);
         }
 
-        return byteList.ToArray();
-      }
+         bytes = byteList.ToArray();
 
-      protected override void LoadPrimaryData(byte[] buffer)
+        using (FileStream stream = new FileStream(
+           Path.Combine(directoryPath, "CollisionTable"),
+           FileMode.Create,
+           FileAccess.Write,
+           FileShare.None))
+        {
+          stream.Write(bytes, 0, bytes.Length);
+        }
+      }
+      public override void Load()
+      {
+        LoadPrimaryData(File.ReadAllBytes(
+          Path.Combine(DirectoryPath, "PrimaryTable")));
+
+        LoadCollisionData(File.ReadAllBytes(
+          Path.Combine(DirectoryPath, "CollisionTable")));
+      }
+      void LoadPrimaryData(byte[] buffer)
       {
         int index = 0;
 
@@ -263,7 +289,7 @@ namespace BToken.Accounting
           PrimaryTable.Add(key, value);
         }
       }
-      protected override void LoadCollisionData(byte[] buffer)
+      void LoadCollisionData(byte[] buffer)
       {
         int index = 0;
         int uintLength;
