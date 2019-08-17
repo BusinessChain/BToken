@@ -188,8 +188,7 @@ namespace BToken.Accounting
 
         int tXsLengthMod2 = TXCount & 1;
         var merkleList = new byte[TXCount + tXsLengthMod2][];
-
-
+        
         merkleList[0] = ParseTX(true);
 
         for (int t = 1; t < TXCount; t += 1)
@@ -197,17 +196,16 @@ namespace BToken.Accounting
           merkleList[t] = ParseTX(false);
         }
 
-
         if (tXsLengthMod2 != 0)
         {
           merkleList[TXCount] = merkleList[TXCount - 1];
         }
 
-        if (!GetRoot(merkleList, SHA256).IsEqual(Buffer, merkleRootIndex))
+        if (!GetRoot(merkleList).IsEqual(Buffer, merkleRootIndex))
         {
           throw new ChainException("Payload merkle root corrupted.");
         }
-
+        
         Batch.StopwatchParse.Stop();
 
         return;        
@@ -224,7 +222,8 @@ namespace BToken.Accounting
           bool isWitnessFlagPresent = Buffer[BufferIndex] == 0x00;
           if (isWitnessFlagPresent)
           {
-            BufferIndex += 2;
+            throw new NotImplementedException("Parsing of segwit txs not implemented");
+            //BufferIndex += 2;
           }
 
           int countInputs = VarInt.GetInt32(Buffer, ref BufferIndex);
@@ -250,6 +249,7 @@ namespace BToken.Accounting
           }
 
           int countTXOutputs = VarInt.GetInt32(Buffer, ref BufferIndex);
+          
           for (int i = 0; i < countTXOutputs; i += 1)
           {
             BufferIndex += BYTE_LENGTH_OUTPUT_VALUE;
@@ -257,14 +257,14 @@ namespace BToken.Accounting
             BufferIndex += lengthLockingScript;
           }
 
-          if (isWitnessFlagPresent)
-          {
-            var witnesses = new TXWitness[countInputs];
-            for (int i = 0; i < countInputs; i += 1)
-            {
-              witnesses[i] = TXWitness.Parse(Buffer, ref BufferIndex);
-            }
-          }
+          //if (isWitnessFlagPresent)
+          //{
+            //var witnesses = new TXWitness[countInputs];
+            //for (int i = 0; i < countInputs; i += 1)
+            //{
+            //  witnesses[i] = TXWitness.Parse(Buffer, ref BufferIndex);
+            //}
+          //}
 
           BufferIndex += BYTE_LENGTH_LOCK_TIME;
 
@@ -308,9 +308,8 @@ namespace BToken.Accounting
         }
       }
 
-      static byte[] GetRoot(
-        byte[][] merkleList,
-        SHA256 sHA256Generator)
+      byte[] GetRoot(
+        byte[][] merkleList)
       {
         int merkleIndex = merkleList.Length;
 
@@ -320,10 +319,11 @@ namespace BToken.Accounting
 
           if (merkleIndex == 1)
           {
-            return ComputeNextMerkleList(merkleList, merkleIndex, sHA256Generator)[0];
+            ComputeNextMerkleList(merkleList, merkleIndex);
+            return merkleList[0];
           }
 
-          merkleList = ComputeNextMerkleList(merkleList, merkleIndex, sHA256Generator);
+          ComputeNextMerkleList(merkleList, merkleIndex);
 
           if ((merkleIndex & 1) != 0)
           {
@@ -331,13 +331,11 @@ namespace BToken.Accounting
             merkleIndex += 1;
           }
         }
-
       }
 
-      static byte[][] ComputeNextMerkleList(
+      void ComputeNextMerkleList(
         byte[][] merkleList,
-        int merkleIndex,
-        SHA256 sHA256Generator)
+        int merkleIndex)
       {
         byte[] leafPair = new byte[TWICE_HASH_BYTE_SIZE];
 
@@ -347,12 +345,9 @@ namespace BToken.Accounting
           merkleList[i2].CopyTo(leafPair, 0);
           merkleList[i2 + 1].CopyTo(leafPair, HASH_BYTE_SIZE);
 
-          merkleList[i] = sHA256Generator.ComputeHash(
-            sHA256Generator.ComputeHash(
-              leafPair));
+          merkleList[i] = SHA256.ComputeHash(
+            SHA256.ComputeHash(leafPair));
         }
-
-        return merkleList;
       }
           
     }

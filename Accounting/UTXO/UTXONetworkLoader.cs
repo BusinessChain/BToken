@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
 using BToken.Chaining;
+using BToken.Networking;
 
 namespace BToken.Accounting
 {
@@ -15,15 +16,15 @@ namespace BToken.Accounting
   {
     partial class UTXONetworkLoader
     {
-      const int COUNT_BLOCKS_DOWNLOAD_BATCH = 20;
+      const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
       const int COUNT_NETWORK_PARSER_PARALLEL = 4;
-      const int COUNT_DOWNLOAD_TASKS_PARALLEL = 8;
-
-      const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 60000;
-      const int COUNTDOWN_CREATION_NEW_SESSION = 5;
+      const int COUNT_DOWNLOAD_SESSIONS = 4;
 
       UTXO UTXO;
-      Headerchain.ChainHeader HeaderPostedToMergerLast;
+
+      readonly object LOCK_HeaderLoad = new object();
+      Headerchain.ChainHeader HeaderLoadedLast;
+      int IndexDownloadBatch;
       int StartBatchIndex;
       CancellationTokenSource CancellationLoader = new CancellationTokenSource();
 
@@ -31,20 +32,18 @@ namespace BToken.Accounting
       public BufferBlock<UTXOBatch> OutputBuffer = new BufferBlock<UTXOBatch>();
 
       readonly object LOCK_CountBytesDownloaded = new object();
-      BufferBlock<BlockDownload> BatcherBuffer
-        = new BufferBlock<BlockDownload>();
+      BufferBlock<DownloadBatch> BatcherBuffer
+        = new BufferBlock<DownloadBatch>();
       int DownloadBatcherIndex;
 
-      ConcurrentQueue<BlockDownload> QueueDownloadBatchesCanceled
-        = new ConcurrentQueue<BlockDownload>();
+      ConcurrentQueue<DownloadBatch> QueueBatchesCanceled
+        = new ConcurrentQueue<DownloadBatch>();
 
-
+      enum SESSION_STATE { IDLE, DOWNLOADING, CANCELED };
       readonly object LOCK_DownloadSessions = new object();
       List<SessionBlockDownload> DownloadSessions = new List<SessionBlockDownload>();
-      BufferBlock<BlockDownload> DownloaderBuffer
-        = new BufferBlock<BlockDownload>();
-      Dictionary<int, BlockDownload> QueueDownloadBatch
-        = new Dictionary<int, BlockDownload>();
+      BufferBlock<DownloadBatch> DownloaderBuffer = new BufferBlock<DownloadBatch>();
+      Dictionary<int, DownloadBatch> QueueDownloadBatch = new Dictionary<int, DownloadBatch>();
 
       Queue<Block> FIFOBlocks = new Queue<Block>();
       int TXCountFIFO;
@@ -58,174 +57,90 @@ namespace BToken.Accounting
         int startBatchIndex)
       {
         UTXO = uTXO;
-        HeaderPostedToMergerLast = headerPostedToMergerLast;
+        HeaderLoadedLast = headerPostedToMergerLast;
         StartBatchIndex = startBatchIndex;
         BatchIndexNextOutput = startBatchIndex;
+
       }
 
-      public async Task RunAsync()
+      public void Start()
       {
         for (int i = 0; i < COUNT_NETWORK_PARSER_PARALLEL; i += 1)
         {
-          Task parserTasks = RunParserAsync();
+          StartParserAsync();
         }
 
-        Task runBatcherTask = RunBatcherAsync();
+        StartBatcherAsync();
 
-        CreateDownloadBatches();
-
-        await RunDownloadControllerAsync();
+        StartSessionControlAsync();
       }
-
-      async Task RunDownloadControllerAsync()
+      async Task StartSessionControlAsync()
       {
-        long countBytesDownloaded = 0;
-        long countBytesDownloadedIntervalNew;
-        long countBytesDownloadedIntervalOld = 0;
-        int countDownloadSessionsNew = 0;
-        int countDownloadSessionsOld = 0;
-        int countDownCreationNewSession = 10;
-
-        do
-        {
-          lock (LOCK_CountBytesDownloaded)
-          {
-            countBytesDownloadedIntervalNew = CountBytesDownloaded - countBytesDownloaded;
-            countBytesDownloaded = CountBytesDownloaded;
-          }
-
-          lock (LOCK_DownloadSessions)
-          {
-            countDownloadSessionsNew = DownloadSessions.Count;
-
-            foreach (SessionBlockDownload session in DownloadSessions)
-            {
-              Console.WriteLine("Session {0} has download rate {1} kByte/s",
-                session.GetHashCode(),
-                session.GetDownloadRatekiloBytePerSecond());
-            }
-          }
-
-          Console.WriteLine("NetworkLoader downloaded {0} MB in total", countBytesDownloaded / 1000000);
-          Console.WriteLine("download sessions running: {0}", countDownloadSessionsNew);
-          Console.WriteLine("countBytesDownloadedIntervalNew: {0} MB", countBytesDownloadedIntervalNew / 1000000);
-          Console.WriteLine("countDownloadSessionsNew: {0} ", countDownloadSessionsNew);
-          Console.WriteLine("countBytesDownloadedIntervalOld: {0} MB", countBytesDownloadedIntervalOld / 1000000);
-          Console.WriteLine("countDownloadSessionsOld: {0} ", countDownloadSessionsOld);
-
-          if (countDownloadSessionsNew == 0)
-          {
-            for (int i = 0; i < COUNT_DOWNLOAD_TASKS_PARALLEL; i += 1)
-            {
-              StartDownloadSession();
-            }
-          }
-          else
-          {
-            if (countBytesDownloadedIntervalNew < countBytesDownloadedIntervalOld * 0.9)
-            {
-              countDownCreationNewSession = COUNTDOWN_CREATION_NEW_SESSION;
-
-              if (countDownloadSessionsNew > countDownloadSessionsOld)
-              {
-                CancelSessionSlowest();
-              }
-              else if (countDownloadSessionsNew < countDownloadSessionsOld)
-              {
-                StartDownloadSession();
-              }
-              else
-              {
-                CancelSessionSlowest();
-              }
-            }
-            else if (countBytesDownloadedIntervalNew > countBytesDownloadedIntervalOld * 1.1)
-            {
-              countDownCreationNewSession = COUNTDOWN_CREATION_NEW_SESSION;
-
-              if (countDownloadSessionsNew > countDownloadSessionsOld)
-              {
-                StartDownloadSession();
-              }
-              else if (countDownloadSessionsNew < countDownloadSessionsOld)
-              {
-                CancelSessionSlowest();
-              }
-              else
-              {
-                StartDownloadSession();
-              }
-            }
-            else
-            {
-              if (countDownCreationNewSession == 0)
-              {
-                StartDownloadSession();
-                countDownCreationNewSession = COUNTDOWN_CREATION_NEW_SESSION;
-              }
-              else
-              {
-                countDownCreationNewSession -= 1;
-              }
-            }
-          }
-
-
-          lock (LOCK_DownloadSessions)
-          {
-            foreach (SessionBlockDownload session in DownloadSessions)
-            {
-              session.ResetStats();
-            }
-          }
-
-          countBytesDownloadedIntervalOld = countBytesDownloadedIntervalNew;
-          countDownloadSessionsOld = countDownloadSessionsNew;
-
-          await Task.Delay(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS).ConfigureAwait(false);
-        } while (true);
-      }
-
-      void StartDownloadSession()
-      {
-        var session = new SessionBlockDownload(
-          this,
-          new UTXOParser(UTXO));
-
-        Task downloadTask = UTXO.Network.RunSessionAsync(session);
-
         lock (LOCK_DownloadSessions)
         {
-          DownloadSessions.Add(session);
+          for (int i = 0; i < COUNT_DOWNLOAD_SESSIONS; i += 1)
+          {
+            var session = new SessionBlockDownload(
+              UTXO.Network,
+              this,
+              new UTXOParser(UTXO));
+
+            DownloadSessions.Add(session);
+
+            session.StartAsync();
+          }
         }
 
-        Console.WriteLine("Start new session {0}", session.GetHashCode());
-      }
-      void CancelSessionSlowest()
-      {
-        SessionBlockDownload downloadSessionSlowest;
-
-        lock (LOCK_DownloadSessions)
+        while (true)
         {
-          if (DownloadSessions.Count == 1)
+          await Task.Delay(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS);
+
+          Console.WriteLine();
+          Console.WriteLine("Download session metrics:");
+
+          DownloadSessions.ForEach(s => s.PrintDownloadMetrics(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS));
+          Console.WriteLine();
+        }
+      }
+
+      bool TryGetDownloadBatch(out DownloadBatch downloadBatch, int countHeaders)
+      {
+        if(QueueBatchesCanceled.TryDequeue(out downloadBatch))
+        {
+          return true;
+        }
+
+        lock(LOCK_HeaderLoad)
+        {
+          if (HeaderLoadedLast.HeadersNext == null)
           {
-            return;
+            downloadBatch = null;
+            return false;
           }
 
-          double minimumDownloadRate = DownloadSessions.Min(d => d.GetBytesDownloaded());
+          downloadBatch = new DownloadBatch(IndexDownloadBatch++);
 
-          downloadSessionSlowest = DownloadSessions.Find(
-            d => d.GetBytesDownloaded() == minimumDownloadRate);
+          var header = HeaderLoadedLast;
+
+          for (int i = 0; i < countHeaders; i += 1)
+          {
+            header = header.HeadersNext[0];
+
+            downloadBatch.Headers.Add(header);
+
+            if (header.HeadersNext == null)
+            {
+              downloadBatch.IsAtTipOfChain = true;
+              break;
+            }
+          }
+
+          HeaderLoadedLast = header;
+          return true;
         }
-
-        Console.WriteLine("Cancels slowest session {0} with download rate {1}",
-          downloadSessionSlowest.GetHashCode(),
-          downloadSessionSlowest.GetDownloadRatekiloBytePerSecond());
-
-        downloadSessionSlowest.CancellationSession.Cancel();
       }
-
-      async Task RunParserAsync()
+      
+      async Task StartParserAsync()
       {
         UTXOParser parser = new UTXOParser(UTXO);
 
@@ -245,7 +160,6 @@ namespace BToken.Accounting
       readonly object LOCK_OutputStage = new object();
       public int BatchIndexNextOutput;
       Dictionary<int, UTXOBatch> OutputQueue = new Dictionary<int, UTXOBatch>();
-
       public void PostToOutputBuffer(UTXOBatch batch)
       {
         lock (LOCK_OutputStage)
@@ -274,32 +188,30 @@ namespace BToken.Accounting
           }
         }
       }
+      
 
-
-
-      BlockDownload Download;
-      UTXOBatch Batch;
-
-      async Task RunBatcherAsync()
+      DownloadBatch DownloadBatch;
+      UTXOBatch UTXOBatch;
+      async Task StartBatcherAsync()
       {
-        Batch = new UTXOBatch()
+        UTXOBatch = new UTXOBatch()
         {
           BatchIndex = StartBatchIndex,
         };
 
         while (true)
         {
-          Download = await BatcherBuffer.ReceiveAsync().ConfigureAwait(false);
+          DownloadBatch = await BatcherBuffer.ReceiveAsync().ConfigureAwait(false);
 
-          if (Download.Index != DownloadBatcherIndex)
+          if (DownloadBatch.Index != DownloadBatcherIndex)
           {
-            QueueDownloadBatch.Add(Download.Index, Download);
+            QueueDownloadBatch.Add(DownloadBatch.Index, DownloadBatch);
             continue;
           }
                    
           do
           {
-            foreach (Block block in Download.Blocks)
+            foreach (Block block in DownloadBatch.Blocks)
             {
               if (block.TXCount > COUNT_TXS_IN_BATCH_FILE)
               {
@@ -317,7 +229,7 @@ namespace BToken.Accounting
             
             DownloadBatcherIndex += 1;
 
-            if (QueueDownloadBatch.TryGetValue(DownloadBatcherIndex, out Download))
+            if (QueueDownloadBatch.TryGetValue(DownloadBatcherIndex, out DownloadBatch))
             {
               QueueDownloadBatch.Remove(DownloadBatcherIndex);
             }
@@ -329,10 +241,9 @@ namespace BToken.Accounting
           } while (true);
         }
       }
-
       void DequeueBatches()
       {
-        if (Batch.TXCount + FIFOBlocks.Peek().TXCount > COUNT_TXS_IN_BATCH_FILE)
+        if (UTXOBatch.TXCount + FIFOBlocks.Peek().TXCount > COUNT_TXS_IN_BATCH_FILE)
         {
           PostBatch();
         }
@@ -342,13 +253,13 @@ namespace BToken.Accounting
           do
           {
             Block block = FIFOBlocks.Dequeue();
-            Batch.Blocks.Add(block);
-            Batch.TXCount += block.TXCount;
+            UTXOBatch.Blocks.Add(block);
+            UTXOBatch.TXCount += block.TXCount;
             TXCountFIFO -= block.TXCount;
 
             if (FIFOBlocks.Count == 0)
             {
-              if (Download.IsSingle)
+              if (DownloadBatch.IsAtTipOfChain)
               {
                 PostBatch();
               }
@@ -356,7 +267,7 @@ namespace BToken.Accounting
               return;
             }
 
-            if (Batch.TXCount + FIFOBlocks.Peek().TXCount > COUNT_TXS_IN_BATCH_FILE)
+            if (UTXOBatch.TXCount + FIFOBlocks.Peek().TXCount > COUNT_TXS_IN_BATCH_FILE)
             {
               PostBatch();
               break;
@@ -366,56 +277,14 @@ namespace BToken.Accounting
       }
       void PostBatch()
       {
-        ParserBuffer.Post(Batch);
+        ParserBuffer.Post(UTXOBatch);
 
-        Batch = new UTXOBatch()
+        UTXOBatch = new UTXOBatch()
         {
-          BatchIndex = Batch.BatchIndex + 1,
+          BatchIndex = UTXOBatch.BatchIndex + 1,
         };
       }
 
-      void PostDownload(BlockDownload downloadBatch)
-      {
-        lock (LOCK_CountBytesDownloaded)
-        {
-          CountBytesDownloaded += downloadBatch.BytesDownloaded;
-        }
-
-        BatcherBuffer.Post(downloadBatch);
-      }
-
-      void CreateDownloadBatches()
-      {
-        int indexDownloadBatch = 0;
-
-        if(HeaderPostedToMergerLast.HeadersNext != null)
-        {
-          Headerchain.ChainHeader header = HeaderPostedToMergerLast.HeadersNext[0];
-
-          while (true)
-          {
-            var downloadBatch = new BlockDownload(indexDownloadBatch++);
-
-            for (int i = 0; i < COUNT_BLOCKS_DOWNLOAD_BATCH; i += 1)
-            {
-              downloadBatch.Headers.Add(header);
-
-              if (header.HeadersNext == null)
-              {
-                downloadBatch.IsSingle = true;
-                DownloaderBuffer.Post(downloadBatch);
-                return;
-              }
-
-              header = header.HeadersNext[0];
-            }
-
-            DownloaderBuffer.Post(downloadBatch);
-          }
-        }
-        
-      }
-      
     }
   }
 }

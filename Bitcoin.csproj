@@ -41,6 +41,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <LangVersion>latest</LangVersion>
+    <NoWarn>CS4014</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -87,7 +88,7 @@
     <Compile Include="Accounting\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
     <Compile Include="Accounting\UTXO\UTXONetworkLoader.cs" />
     <Compile Include="Accounting\UTXO\UTXOBatch.cs" />
-    <Compile Include="Accounting\UTXO\BlockDownload.cs" />
+    <Compile Include="Accounting\UTXO\DownloadBatch.cs" />
     <Compile Include="Accounting\UTXO\UTXOMerger.cs" />
     <Compile Include="Accounting\UTXO\UTXOParser.cs" />
     <Compile Include="Chaining\Headerchain\HeaderWriter.cs" />

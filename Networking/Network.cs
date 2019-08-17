@@ -35,14 +35,14 @@ namespace BToken.Networking
 
     public Network()
     {
-      Nonce = createNonce();
+      Nonce = CreateNonce();
       AddressPool = new NetworkAddressPool();
       
       TcpListener = new TcpListener(IPAddress.Any, Port);
 
       CreatePeers();
     }
-    static ulong createNonce()
+    static ulong CreateNonce()
     {
       Random rnd = new Random();
 
@@ -93,6 +93,18 @@ namespace BToken.Networking
       }
     }
 
+    public async Task<INetworkChannel> RequestChannelAsync()
+    {
+      Peer peer = new Peer(this);
+      while(!await peer.TryConnectAsync())
+      {
+        await Task.Delay(3000);
+        peer = new Peer(this);
+      }
+
+      return peer;
+    }
+
     public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
       Peer peer;
@@ -118,11 +130,9 @@ namespace BToken.Networking
         Task startPeerTask = peer.StartAsync();
       }
     }
-
-
-    static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
     
+    static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        
     public uint GetProtocolVersion()
     {
       return ProtocolVersion;

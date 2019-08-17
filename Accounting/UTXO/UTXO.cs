@@ -59,7 +59,7 @@ namespace BToken.Accounting
 
     public async Task StartAsync()
     {
-      Task mergerTask = Merger.StartAsync();
+      Merger.StartAsync();
 
       var archiveLoader = new UTXOArchiveLoader(this);
       await archiveLoader.RunAsync();
@@ -69,7 +69,7 @@ namespace BToken.Accounting
         archiveLoader.HeaderPostedToMergerLast,
         archiveLoader.BatchIndexLoad);
 
-      Task networkLoaderTask = networkLoader.RunAsync();
+      networkLoader.Start();
     }
     
     void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)

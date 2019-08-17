@@ -43,9 +43,9 @@ namespace BToken
 
       await UTXO.StartAsync();
 
-      Task NetworkListenerTask = StartNetworkListenerAsync();
+      //Task NetworkListenerTask = StartNetworkListenerAsync();
 
-      Wallet.GeneratePublicKey();
+      //Wallet.GeneratePublicKey();
     }
 
     async Task StartNetworkListenerAsync()

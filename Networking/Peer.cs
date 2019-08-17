@@ -80,7 +80,6 @@ namespace BToken.Networking
       {
         try
         {
-
           IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
           IPEndPoint = new IPEndPoint(iPAddress, Port);
           

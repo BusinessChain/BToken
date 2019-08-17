@@ -15,7 +15,7 @@ namespace BToken.Accounting
   {
     class UTXOMerger
     {
-      const int UTXOSTATE_ARCHIVING_INTERVAL = 100;
+      const int UTXOSTATE_ARCHIVING_INTERVAL = 500;
 
       UTXO UTXO;
 
