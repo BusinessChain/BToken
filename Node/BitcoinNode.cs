@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using BToken.Accounting;
 using BToken.Chaining;
 using BToken.Networking;
 
@@ -11,8 +10,7 @@ namespace BToken
   public partial class BitcoinNode
   {
     public Network Network { get; private set; }
-    Headerchain Headerchain;
-    UTXO UTXO;
+    Blockchain Blockchain;
     Wallet Wallet;
 
     BitcoinGenesisBlock GenesisBlock = new BitcoinGenesisBlock();
@@ -26,22 +24,15 @@ namespace BToken
     public BitcoinNode()
     {
       Network = new Network();
-      Headerchain = new Headerchain(GenesisBlock.Header, Checkpoints);
-      UTXO = new UTXO(GenesisBlock, Headerchain, Network);
-      Wallet = new Wallet(UTXO);
+      Blockchain = new Blockchain(GenesisBlock, Checkpoints, Network);
+      Wallet = new Wallet(Blockchain);
     }
 
     public async Task StartAsync()
     {
       Network.Start();
 
-      await Headerchain.LoadFromArchiveAsync();
-      Console.WriteLine("Loaded headerchain from archive, height '{0}'", Headerchain.GetHeight());
-
-      await Network.RunSessionAsync(new SessionHeaderDownload(Headerchain));
-      Console.WriteLine("downloaded headerchain from network, height '{0}'", Headerchain.GetHeight());
-
-      await UTXO.StartAsync();
+      await Blockchain.StartAsync();
 
       //Task NetworkListenerTask = StartNetworkListenerAsync();
 
@@ -73,7 +64,7 @@ namespace BToken
 
               case "headers":
                 var headersMessage = new HeadersMessage(inboundMessage);
-                List<byte[]> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
+                //List<byte[]> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
                 //await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
                 break;
 

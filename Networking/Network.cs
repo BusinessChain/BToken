@@ -17,7 +17,6 @@ namespace BToken.Networking
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
-    const int PEERS_COUNT_OUTBOUND = 8;
     const int PEERS_COUNT_INBOUND = 8;
 
     static UInt64 Nonce;
@@ -39,8 +38,6 @@ namespace BToken.Networking
       AddressPool = new NetworkAddressPool();
       
       TcpListener = new TcpListener(IPAddress.Any, Port);
-
-      CreatePeers();
     }
     static ulong CreateNonce()
     {
@@ -50,49 +47,13 @@ namespace BToken.Networking
       number = number << 32;
       return number |= (uint)rnd.Next();
     }
-    void CreatePeers()
-    {
-      for (int i = 0; i < PEERS_COUNT_OUTBOUND; i++)
-      {
-        Task createPeerTask = CreatePeerAsync();
-      }
-    }
-    async Task CreatePeerAsync()
-    {
-      Peer peer;
 
-      do
-      {
-        peer = new Peer(this);
-      } while (!await peer.TryConnectAsync());
-
-      PeersOutboundAvailable.Post(peer);
-    }
 
     public void Start()
     {
       //Task peerInboundListenerTask = StartPeerInboundListenerAsync();
     }
-
-    public async Task RunSessionAsync(INetworkSession session)
-    {
-      Peer peer = PeersOutboundAvailable.Receive();
-
-      while (true)
-      {
-        if (await peer.TryExecuteSessionAsync(session).ConfigureAwait(false))
-        {
-          await PeersOutboundAvailable.SendAsync(peer);
-          return;
-        }
-
-        do
-        {
-          peer = new Peer(this);
-        } while (!await peer.TryConnectAsync());
-      }
-    }
-
+    
     public async Task<INetworkChannel> RequestChannelAsync()
     {
       Peer peer = new Peer(this);

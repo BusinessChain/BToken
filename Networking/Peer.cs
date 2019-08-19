@@ -86,7 +86,7 @@ namespace BToken.Networking
           await ConnectTCPAsync();
           await HandshakeAsync();
 
-          Task processNetworkMessagesTask = ProcessNetworkMessagesAsync();
+          ProcessNetworkMessagesAsync();
           
           return true;
         }
@@ -107,12 +107,13 @@ namespace BToken.Networking
       {
         while (true)
         {
-          NetworkMessage message = await NetworkMessageStreamer.ReadAsync(default(CancellationToken)).ConfigureAwait(false);
+          NetworkMessage message = await NetworkMessageStreamer
+            .ReadAsync(default).ConfigureAwait(false);
 
           switch (message.Command)
           {
             case "version":
-              await ProcessVersionMessageAsync(message, default(CancellationToken)).ConfigureAwait(false);
+              await ProcessVersionMessageAsync(message, default).ConfigureAwait(false);
               break;
             case "ping":
               Task processPingMessageTask = ProcessPingMessageAsync(message);
@@ -224,18 +225,6 @@ namespace BToken.Networking
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      public async Task<bool> TryExecuteSessionAsync(INetworkSession session)
-      {
-        try
-        {
-          await session.RunAsync(this).ConfigureAwait(false);
-          return true;
-        }
-        catch
-        {
-          return false;
-        }
-      }
       
       public uint GetProtocolVersion()
       {
