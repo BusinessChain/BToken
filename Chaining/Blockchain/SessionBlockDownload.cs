@@ -13,7 +13,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class UTXONetworkLoader
+    partial class NetworkBlockLoader
     {
       class SessionBlockDownload
       {
@@ -23,9 +23,9 @@ namespace BToken.Chaining
         const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
         const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
-        UTXONetworkLoader Loader;
+        NetworkBlockLoader Loader;
         Network Network;
-        UTXOParser Parser;
+        BlockParser Parser;
         SHA256 SHA256;
 
         public SESSION_STATE State = SESSION_STATE.IDLE;
@@ -42,7 +42,7 @@ namespace BToken.Chaining
 
         public DateTimeOffset TimeStartChannelInterval;
 
-        public SessionBlockDownload(Network network, UTXONetworkLoader loader, UTXOParser parser)
+        public SessionBlockDownload(Network network, NetworkBlockLoader loader, BlockParser parser)
         {
           Network = network;
           Loader = loader;
@@ -140,7 +140,7 @@ namespace BToken.Chaining
 
             ChainHeader header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
 
-            Block block = UTXOParser.ParseBlockHeader(
+            Block block = BlockParser.ParseBlockHeader(
               networkMessage.Payload,
               header,
               header.GetHeaderHash(SHA256),

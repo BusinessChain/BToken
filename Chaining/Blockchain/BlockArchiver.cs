@@ -14,7 +14,7 @@ namespace BToken.Chaining
 
       const int PrefixBlockFolderBytes = 2;
 
-      public static async Task ArchiveBatchAsync(UTXOBatch batch)
+      public static async Task ArchiveBatchAsync(UTXOTable.UTXOBatch batch)
       {
         try
         {

@@ -10,7 +10,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    class UTXOArchiveLoader
+    class ArchiveBlockLoader
     {
       const int COUNT_ARCHIVE_PARSER_PARALLEL = 8;
 
@@ -22,19 +22,19 @@ namespace BToken.Chaining
       readonly object LOCK_IsOutputStageLocked = new object();
       bool IsOutputStageLocked;
       public ChainHeader HeaderPostedToMergerLast;
-      Dictionary<int, UTXOBatch> OutputQueue = new Dictionary<int, UTXOBatch>();
+      Dictionary<int, UTXOTable.UTXOBatch> OutputQueue = new Dictionary<int, UTXOTable.UTXOBatch>();
 
 
-      public UTXOArchiveLoader(Blockchain blockchain)
+      public ArchiveBlockLoader(Blockchain blockchain)
       {
         Blockchain = blockchain;
       }
 
       public async Task RunAsync()
       {
-        BatchIndexLoad = Blockchain.Merger.BatchIndexNext;
-        BatchIndexNextOutput = Blockchain.Merger.BatchIndexNext;
-        HeaderPostedToMergerLast = Blockchain.Merger.HeaderMergedLast;
+        BatchIndexLoad = Blockchain.UTXO.BatchIndexNext;
+        BatchIndexNextOutput = Blockchain.UTXO.BatchIndexNext;
+        HeaderPostedToMergerLast = Blockchain.UTXO.HeaderMergedLast;
 
 
         Task[] archiveLoaderTasks = new Task[COUNT_ARCHIVE_PARSER_PARALLEL];
@@ -48,7 +48,7 @@ namespace BToken.Chaining
 
       async Task LoadBatchesAsync()
       {
-        UTXOParser parser = new UTXOParser(Blockchain);
+        var parser = new BlockParser(Blockchain);
         
         byte[] batchBuffer;
         int batchIndex;
@@ -94,7 +94,7 @@ namespace BToken.Chaining
 
           try
           {
-            UTXOBatch batch = parser.ParseBatch(batchBuffer, batchIndex);
+            var batch = parser.ParseBatch(batchBuffer, batchIndex);
 
             await PostToOutputStage(batch);
           }
@@ -119,7 +119,7 @@ namespace BToken.Chaining
         
       }
 
-      public async Task PostToOutputStage(UTXOBatch batch)
+      public async Task PostToOutputStage(UTXOTable.UTXOBatch batch)
       {
         while(true)
         {
@@ -161,11 +161,13 @@ namespace BToken.Chaining
 
               throw ex;
             }
-
-            while (!Blockchain.Merger.Buffer.Post(batch))
+            
+            while (!Blockchain.UTXO.BatchBuffer.Post(batch))
             {
               await Task.Delay(1000);
             }
+
+            //await Blockchain.UTXO.Buffer.SendAsync(batch);
 
             BatchIndexNextOutput += 1;
             HeaderPostedToMergerLast = batch.HeaderLast;

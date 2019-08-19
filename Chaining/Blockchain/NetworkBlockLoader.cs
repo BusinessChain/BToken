@@ -11,7 +11,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class UTXONetworkLoader
+    partial class NetworkBlockLoader
     {
       const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
       const int COUNT_NETWORK_PARSER_PARALLEL = 4;
@@ -25,8 +25,8 @@ namespace BToken.Chaining
       int StartBatchIndex;
       CancellationTokenSource CancellationLoader = new CancellationTokenSource();
 
-      BufferBlock<UTXOBatch> ParserBuffer = new BufferBlock<UTXOBatch>();
-      public BufferBlock<UTXOBatch> OutputBuffer = new BufferBlock<UTXOBatch>();
+      BufferBlock<UTXOTable.UTXOBatch> ParserBuffer = new BufferBlock<UTXOTable.UTXOBatch>();
+      public BufferBlock<UTXOTable.UTXOBatch> OutputBuffer = new BufferBlock<UTXOTable.UTXOBatch>();
 
       readonly object LOCK_CountBytesDownloaded = new object();
       BufferBlock<DownloadBatch> BatcherBuffer
@@ -46,7 +46,7 @@ namespace BToken.Chaining
       int TXCountFIFO;
 
 
-      public UTXONetworkLoader(Blockchain blockchain)
+      public NetworkBlockLoader(Blockchain blockchain)
       {
         Blockchain = blockchain;
       }
@@ -75,7 +75,7 @@ namespace BToken.Chaining
             var session = new SessionBlockDownload(
               Blockchain.Network,
               this,
-              new UTXOParser(Blockchain));
+              new BlockParser(Blockchain));
 
             DownloadSessions.Add(session);
 
@@ -134,11 +134,11 @@ namespace BToken.Chaining
       
       async Task StartParserAsync()
       {
-        UTXOParser parser = new UTXOParser(Blockchain);
+        var parser = new BlockParser(Blockchain);
 
         while (true)
         {
-          UTXOBatch batch = await ParserBuffer
+          UTXOTable.UTXOBatch batch = await ParserBuffer
             .ReceiveAsync(CancellationLoader.Token).ConfigureAwait(false);
 
           parser.ParseBatch(batch);
@@ -151,8 +151,8 @@ namespace BToken.Chaining
 
       readonly object LOCK_OutputStage = new object();
       public int BatchIndexNextOutput;
-      Dictionary<int, UTXOBatch> OutputQueue = new Dictionary<int, UTXOBatch>();
-      public void PostToOutputBuffer(UTXOBatch batch)
+      Dictionary<int, UTXOTable.UTXOBatch> OutputQueue = new Dictionary<int, UTXOTable.UTXOBatch>();
+      public void PostToOutputBuffer(UTXOTable.UTXOBatch batch)
       {
         lock (LOCK_OutputStage)
         {
@@ -164,7 +164,7 @@ namespace BToken.Chaining
           {
             while (true)
             {
-              Blockchain.Merger.Buffer.Post(batch);
+              Blockchain.UTXO.BatchBuffer.Post(batch);
 
               BatchIndexNextOutput += 1;
 
@@ -183,10 +183,10 @@ namespace BToken.Chaining
       
 
       DownloadBatch DownloadBatch;
-      UTXOBatch UTXOBatch;
+      UTXOTable.UTXOBatch UTXOBatch;
       async Task StartBatcherAsync()
       {
-        UTXOBatch = new UTXOBatch()
+        UTXOBatch = new UTXOTable.UTXOBatch()
         {
           BatchIndex = StartBatchIndex,
         };
@@ -271,7 +271,7 @@ namespace BToken.Chaining
       {
         ParserBuffer.Post(UTXOBatch);
 
-        UTXOBatch = new UTXOBatch()
+        UTXOBatch = new UTXOTable.UTXOBatch()
         {
           BatchIndex = UTXOBatch.BatchIndex + 1,
         };

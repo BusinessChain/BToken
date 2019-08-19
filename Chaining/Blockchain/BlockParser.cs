@@ -6,9 +6,8 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    class UTXOParser
+    class BlockParser
     {
-
       public const int COUNT_HEADER_BYTES = 80;
       const int BYTE_LENGTH_VERSION = 4;
       const int BYTE_LENGTH_OUTPUT_VALUE = 8;
@@ -27,22 +26,22 @@ namespace BToken.Chaining
 
       SHA256 SHA256;
 
-      UTXOBatch Batch;
-      
+      UTXOTable.UTXOBatch Batch;
+
       public ChainHeader Header;
 
 
-      public UTXOParser(Blockchain blockchain)
+      public BlockParser(Blockchain blockchain)
       {
         Blockchain = blockchain;
         SHA256 = SHA256.Create();
       }
-      
-      public UTXOBatch ParseBatch(byte[] buffer, int batchIndex)
+
+      public UTXOTable.UTXOBatch ParseBatch(byte[] buffer, int batchIndex)
       {
         BatchIndex = batchIndex;
 
-        Batch = new UTXOBatch()
+        Batch = new UTXOTable.UTXOBatch()
         {
           BatchIndex = BatchIndex
         };
@@ -56,7 +55,7 @@ namespace BToken.Chaining
               Buffer,
               BufferIndex,
               COUNT_HEADER_BYTES));
-        
+
         BufferIndex += COUNT_HEADER_BYTES;
         TXCount = VarInt.GetInt32(buffer, ref BufferIndex);
 
@@ -74,7 +73,7 @@ namespace BToken.Chaining
                 Buffer,
                 BufferIndex,
                 COUNT_HEADER_BYTES));
-          
+
           int merkleRootIndex = BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
           BufferIndex += COUNT_HEADER_BYTES;
           TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
@@ -91,10 +90,10 @@ namespace BToken.Chaining
 
         Batch.HeaderLast = Header;
         Batch.ConvertTablesToArrays();
-                     
+
         return Batch;
       }
-      
+
       static void ValidateHeaderHash(
         byte[] headerHash,
         byte[] headerHashValidator)
@@ -138,7 +137,7 @@ namespace BToken.Chaining
           tXCount);
       }
 
-      public void ParseBatch(UTXOBatch batch)
+      public void ParseBatch(UTXOTable.UTXOBatch batch)
       {
         Batch = batch;
 
@@ -156,7 +155,7 @@ namespace BToken.Chaining
 
         batch.HeaderPrevious = batch.Blocks[0].Header.HeaderPrevious;
         batch.HeaderLast = batch.Blocks.Last().Header;
-        
+
         batch.StopwatchParse.Stop();
       }
       void LoadBlock(Block block)
@@ -178,7 +177,7 @@ namespace BToken.Chaining
 
           if (!tXHash.IsEqual(Buffer, merkleRootIndex))
           {
-            throw new UTXOException("Payload merkle root corrupted");
+            throw new ChainException("Payload merkle root corrupted");
           }
 
           return;
@@ -186,7 +185,7 @@ namespace BToken.Chaining
 
         int tXsLengthMod2 = TXCount & 1;
         var merkleList = new byte[TXCount + tXsLengthMod2][];
-        
+
         merkleList[0] = ParseTX(true);
 
         for (int t = 1; t < TXCount; t += 1)
@@ -203,10 +202,10 @@ namespace BToken.Chaining
         {
           throw new ChainException("Payload merkle root corrupted.");
         }
-        
+
         Batch.StopwatchParse.Stop();
 
-        return;        
+        return;
       }
 
       byte[] ParseTX(bool isCoinbase)
@@ -235,19 +234,13 @@ namespace BToken.Chaining
             for (int i = 0; i < countInputs; i += 1)
             {
               TXInput input = new TXInput(Buffer, ref BufferIndex);
-              
-              if (
-               !(Batch.TableUInt32.TrySpend(input) ||
-               Batch.TableULong64.TrySpend(input) ||
-               Batch.TableUInt32Array.TrySpend(input)))
-              {
-                Batch.Inputs.Add(input);
-              }
+
+              Batch.AddInput(input);
             }
           }
 
           int countTXOutputs = VarInt.GetInt32(Buffer, ref BufferIndex);
-          
+
           for (int i = 0; i < countTXOutputs; i += 1)
           {
             BufferIndex += BYTE_LENGTH_OUTPUT_VALUE;
@@ -257,11 +250,11 @@ namespace BToken.Chaining
 
           //if (isWitnessFlagPresent)
           //{
-            //var witnesses = new TXWitness[countInputs];
-            //for (int i = 0; i < countInputs; i += 1)
-            //{
-            //  witnesses[i] = TXWitness.Parse(Buffer, ref BufferIndex);
-            //}
+          //var witnesses = new TXWitness[countInputs];
+          //for (int i = 0; i < countInputs; i += 1)
+          //{
+          //  witnesses[i] = TXWitness.Parse(Buffer, ref BufferIndex);
+          //}
           //}
 
           BufferIndex += BYTE_LENGTH_LOCK_TIME;
@@ -274,29 +267,7 @@ namespace BToken.Chaining
              tXStartIndex,
              tXLength));
 
-          int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
-          
-          if (COUNT_INTEGER_BITS >= lengthUTXOBits)
-          {
-            Batch.TableUInt32.ParseUTXO(
-              BatchIndex,
-              lengthUTXOBits,
-              tXHash);
-          }
-          else if (COUNT_LONG_BITS >= lengthUTXOBits)
-          {
-            Batch.TableULong64.ParseUTXO(
-              BatchIndex,
-              lengthUTXOBits,
-              tXHash);
-          }
-          else
-          {
-            Batch.TableUInt32Array.ParseUTXO(
-              BatchIndex,
-              lengthUTXOBits,
-              tXHash);
-          }
+          Batch.AddOutput(tXHash, BatchIndex, countTXOutputs);
 
           return tXHash;
         }
@@ -347,7 +318,7 @@ namespace BToken.Chaining
             SHA256.ComputeHash(leafPair));
         }
       }
-          
+
     }
   }
 }
