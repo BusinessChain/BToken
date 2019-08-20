@@ -15,7 +15,7 @@ namespace BToken.Chaining
 
       public int Index;
 
-      public List<ChainHeader> Headers = new List<ChainHeader>();
+      public List<Header> Headers = new List<Header>();
       public List<Block> Blocks = new List<Block>();
 
       public long BytesDownloaded;

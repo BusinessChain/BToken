@@ -11,7 +11,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class NetworkBlockLoader
+    partial class BlockchainNetworkGateway
     {
       const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
       const int COUNT_NETWORK_PARSER_PARALLEL = 4;
@@ -20,7 +20,7 @@ namespace BToken.Chaining
       Blockchain Blockchain;
 
       readonly object LOCK_HeaderLoad = new object();
-      ChainHeader HeaderLoadedLast;
+      Header HeaderLoadedLast;
       int IndexDownloadBatch;
       int StartBatchIndex;
       CancellationTokenSource CancellationLoader = new CancellationTokenSource();
@@ -46,7 +46,7 @@ namespace BToken.Chaining
       int TXCountFIFO;
 
 
-      public NetworkBlockLoader(Blockchain blockchain)
+      public BlockchainNetworkGateway(Blockchain blockchain)
       {
         Blockchain = blockchain;
       }

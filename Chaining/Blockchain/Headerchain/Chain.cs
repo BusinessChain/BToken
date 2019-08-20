@@ -10,31 +10,31 @@ namespace BToken.Chaining
     {
       class Chain
       {
-        public ChainHeader HeaderTip { get; private set; }
+        public Header HeaderTip { get; private set; }
         public byte[] HeaderTipHash { get; private set; }
         public int Height { get; private set; }
         public double AccumulatedDifficulty { get; private set; }
-        public ChainHeader HeaderRoot { get; private set; }
+        public Header HeaderRoot { get; private set; }
 
 
         public Chain(
-          ChainHeader headerRoot,
+          Header headerRoot,
           int height,
           double accumulatedDifficultyPrevious)
         {
           HeaderTip = headerRoot;
-          HeaderTipHash = headerRoot.GetHeaderHash();
+          HeaderTipHash = headerRoot.HeaderHash;
           Height = height;
           HeaderRoot = headerRoot;
-          AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerRoot.NetworkHeader.NBits);
+          AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerRoot.NBits);
         }
 
-        public void ExtendChain(ChainHeader header, byte[] headerHash)
+        public void ExtendChain(Header header)
         {
           HeaderTip = header;
-          HeaderTipHash = headerHash;
+          HeaderTipHash = header.HeaderHash;
           Height++;
-          AccumulatedDifficulty += TargetManager.GetDifficulty(header.NetworkHeader.NBits);
+          AccumulatedDifficulty += TargetManager.GetDifficulty(header.NBits);
         }
 
         public bool IsStrongerThan(Chain chain) => chain == null ? true : AccumulatedDifficulty > chain.AccumulatedDifficulty;

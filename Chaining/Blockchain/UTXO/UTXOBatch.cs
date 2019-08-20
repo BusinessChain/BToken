@@ -27,8 +27,8 @@ namespace BToken.Chaining
         public UTXOIndexUInt32Array TableUInt32Array = new UTXOIndexUInt32Array();
         public KeyValuePair<byte[], uint[]>[] UTXOsUInt32Array;
 
-        public ChainHeader HeaderPrevious;
-        public ChainHeader HeaderLast;
+        public Header HeaderPrevious;
+        public Header HeaderLast;
 
         public Stopwatch StopwatchParse = new Stopwatch();
 

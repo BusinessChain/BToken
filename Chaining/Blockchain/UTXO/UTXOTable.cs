@@ -36,7 +36,7 @@ namespace BToken.Chaining
       public int BlockHeight;
       public int BatchIndexNext;
       int BatchIndexMergedLast;
-      public ChainHeader HeaderMergedLast;
+      public Header HeaderMergedLast;
       public BufferBlock<UTXOBatch> BatchBuffer = new BufferBlock<UTXOBatch>(
         new DataflowBlockOptions { BoundedCapacity = 10 });
 
@@ -52,6 +52,8 @@ namespace BToken.Chaining
         TableUInt32,
         TableULong64,
         TableUInt32Array};
+
+        StartAsync();
       }
 
       void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)
@@ -188,9 +190,7 @@ namespace BToken.Chaining
       public async Task StartAsync()
       {
         UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-        LoadState();        
-
+        
         try
         {
           while (true)
@@ -243,7 +243,7 @@ namespace BToken.Chaining
         byte[] uTXOState = new byte[40];
         BitConverter.GetBytes(BatchIndexMergedLast).CopyTo(uTXOState, 0);
         BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
-        HeaderMergedLast.GetHeaderHash().CopyTo(uTXOState, 8);
+        HeaderMergedLast.HeaderHash.CopyTo(uTXOState, 8);
 
         using (FileStream stream = new FileStream(
            Path.Combine(PathUTXOState, "UTXOState"),
@@ -260,7 +260,13 @@ namespace BToken.Chaining
         });
       }
 
-      void LoadState()
+      public async Task LoadAsync()
+      {
+        LoadImage();
+
+        await Blockchain.ArchiveLoader.RunAsync();
+      }
+      void LoadImage()
       {
         if (Directory.Exists(PathUTXOState))
         {
@@ -295,6 +301,7 @@ namespace BToken.Chaining
           byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
           Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
           HeaderMergedLast = Blockchain.Chain.ReadHeader(headerHashMergedLast);
+
 
           Parallel.ForEach(Tables, t => t.Load());
 

@@ -86,7 +86,7 @@
     <Compile Include="Chaining\Blockchain\UTXO\UTXOIndexCompressed\UTXOIndexULong64Compressed.cs" />
     <Compile Include="Chaining\Blockchain\UTXO\UTXOIndexCompressed\UTXOIndexCompressed.cs" />
     <Compile Include="Chaining\Blockchain\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
-    <Compile Include="Chaining\Blockchain\NetworkBlockLoader.cs" />
+    <Compile Include="Chaining\Blockchain\BlockchainNetworkGateway.cs" />
     <Compile Include="Chaining\Blockchain\UTXO\UTXOBatch.cs" />
     <Compile Include="Chaining\Blockchain\DownloadBatch.cs" />
     <Compile Include="Chaining\Blockchain\BlockParser.cs" />
@@ -104,7 +104,6 @@
     <Compile Include="Chaining\Blockchain\Headerchain\HeaderLocator.cs" />
     <Compile Include="Chaining\Blockchain\Headerchain\HeaderLocation.cs" />
     <Compile Include="Chaining\Blockchain\Headerchain\ChainProbe.cs" />
-    <Compile Include="Chaining\Blockchain\Headerchain\HeaderReader.cs" />
     <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
     <Compile Include="Chaining\Blockchain\SessionBlockDownload.cs" />
     <Compile Include="Chaining\Blockchain\SessionHeaderDownload.cs" />
@@ -122,7 +121,7 @@
     <Compile Include="Networking\Messages\FeeFilterMessage.cs" />
     <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\Inventory.cs" />
-    <Compile Include="Networking\NetworkHeader.cs" />
+    <Compile Include="DataTypes\Header.cs" />
     <Compile Include="DataTypes\VarString.cs" />
     <Compile Include="DataTypes\VarInt.cs" />
     <Compile Include="Form1.cs">

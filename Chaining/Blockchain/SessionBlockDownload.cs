@@ -13,7 +13,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class NetworkBlockLoader
+    partial class BlockchainNetworkGateway
     {
       class SessionBlockDownload
       {
@@ -23,7 +23,7 @@ namespace BToken.Chaining
         const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
         const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
-        NetworkBlockLoader Loader;
+        BlockchainNetworkGateway Loader;
         Network Network;
         BlockParser Parser;
         SHA256 SHA256;
@@ -42,7 +42,7 @@ namespace BToken.Chaining
 
         public DateTimeOffset TimeStartChannelInterval;
 
-        public SessionBlockDownload(Network network, NetworkBlockLoader loader, BlockParser parser)
+        public SessionBlockDownload(Network network, BlockchainNetworkGateway loader, BlockParser parser)
         {
           Network = network;
           Loader = loader;
@@ -124,7 +124,7 @@ namespace BToken.Chaining
           await Channel.SendMessageAsync(
             new GetDataMessage(
               DownloadBatch.Headers.Skip(DownloadBatch.Blocks.Count)
-              .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.GetHeaderHash(SHA256)))
+              .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.HeaderHash))
               .ToList()));
 
           while (DownloadBatch.Blocks.Count < DownloadBatch.Headers.Count)
@@ -138,12 +138,12 @@ namespace BToken.Chaining
               continue;
             }
 
-            ChainHeader header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
+            Header header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
 
             Block block = BlockParser.ParseBlockHeader(
               networkMessage.Payload,
               header,
-              header.GetHeaderHash(SHA256),
+              header.HeaderHash,
               SHA256);
 
             DownloadBatch.Blocks.Add(block);

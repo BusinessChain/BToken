@@ -51,7 +51,7 @@ namespace BToken.Chaining
           throw new IOException(string.Format("File '{0}' cannot be accessed because it is blocked by another process.", fullPath));
         }
 
-        public void StoreHeader(NetworkHeader header)
+        public void StoreHeader(Header header)
         {
           byte[] headerBytes = header.GetBytes();
           FileStream.Write(headerBytes, 0, headerBytes.Length);

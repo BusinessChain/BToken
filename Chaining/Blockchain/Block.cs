@@ -9,14 +9,14 @@ namespace BToken.Chaining
     {
       public byte[] Buffer;
       public int BufferIndex;
-      public ChainHeader Header;
+      public Header Header;
       public byte[] HeaderHash;
       public int TXCount;
 
       public Block(
         byte[] buffer, 
         int bufferIndex,
-        ChainHeader header,
+        Header header,
         byte[] headerHash, 
         int tXcount)
       {

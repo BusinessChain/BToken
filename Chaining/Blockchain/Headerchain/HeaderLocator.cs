@@ -30,7 +30,7 @@ namespace BToken.Chaining
           BlockLocations = new List<HeaderLocation>() { new HeaderLocation(height, hash) };
 
 
-          ChainHeader block = Headerchain.MainChain.HeaderTip;
+          Header header = Headerchain.MainChain.HeaderTip;
           uint depth = 0;
           uint nextLocationDepth = 1;
 
@@ -44,9 +44,9 @@ namespace BToken.Chaining
 
             depth++;
             height--;
-            hash = block.NetworkHeader.HashPrevious;
+            hash = header.HashPrevious;
 
-            block = block.HeaderPrevious;
+            header = header.HeaderPrevious;
           } while (height > 0);
 
           BlockLocations.Add(new HeaderLocation(height, hash)); // must be Genesis Location

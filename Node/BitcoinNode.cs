@@ -63,7 +63,7 @@ namespace BToken
                 break;
 
               case "headers":
-                var headersMessage = new HeadersMessage(inboundMessage);
+                //var headersMessage = new HeadersMessage(inboundMessage);
                 //List<byte[]> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
                 //await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
                 break;

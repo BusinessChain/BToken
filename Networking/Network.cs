@@ -23,8 +23,7 @@ namespace BToken.Networking
 
     NetworkAddressPool AddressPool;
     TcpListener TcpListener;
-
-
+    
     readonly object ListPeersOutboundLOCK = new object();
     BufferBlock<Peer> PeersOutboundAvailable = new BufferBlock<Peer>();
     List<Peer> PeersInbound = new List<Peer>();

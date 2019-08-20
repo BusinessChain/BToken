@@ -8,7 +8,6 @@ namespace BToken.Chaining
   {
     class BlockParser
     {
-      public const int COUNT_HEADER_BYTES = 80;
       const int BYTE_LENGTH_VERSION = 4;
       const int BYTE_LENGTH_OUTPUT_VALUE = 8;
       const int BYTE_LENGTH_LOCK_TIME = 4;
@@ -28,7 +27,7 @@ namespace BToken.Chaining
 
       UTXOTable.UTXOBatch Batch;
 
-      public ChainHeader Header;
+      public Header Header;
 
 
       public BlockParser(Blockchain blockchain)
@@ -82,7 +81,7 @@ namespace BToken.Chaining
 
           ValidateHeaderHash(
             HeaderHash,
-            Header.GetHeaderHash(SHA256));
+            Header.HeaderHash);
 
           ParseBlock(merkleRootIndex);
           Batch.BlockCount += 1;
@@ -109,7 +108,7 @@ namespace BToken.Chaining
 
       public static Block ParseBlockHeader(
         byte[] buffer,
-        ChainHeader header,
+        Header header,
         byte[] headerHash,
         SHA256 sHA256)
       {

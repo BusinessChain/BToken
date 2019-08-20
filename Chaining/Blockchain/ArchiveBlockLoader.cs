@@ -21,7 +21,7 @@ namespace BToken.Chaining
 
       readonly object LOCK_IsOutputStageLocked = new object();
       bool IsOutputStageLocked;
-      public ChainHeader HeaderPostedToMergerLast;
+      public Header HeaderPostedToMergerLast;
       Dictionary<int, UTXOTable.UTXOBatch> OutputQueue = new Dictionary<int, UTXOTable.UTXOBatch>();
 
 
@@ -150,9 +150,9 @@ namespace BToken.Chaining
             {
               var ex = new ChainException(
                 string.Format("HeaderPrevious {0} of Batch {1} not equal to \nHeaderMergedLast {2}",
-                batch.HeaderPrevious.GetHeaderHash().ToHexString(),
+                batch.HeaderPrevious.HeaderHash.ToHexString(),
                 batch.BatchIndex,
-                HeaderPostedToMergerLast.GetHeaderHash().ToHexString()));
+                HeaderPostedToMergerLast.HeaderHash.ToHexString()));
 
               lock (LOCK_IsOutputStageLocked)
               {

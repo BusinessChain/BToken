@@ -15,10 +15,11 @@ namespace BToken.Chaining
     Headerchain Chain;
     Network Network;
     ArchiveBlockLoader ArchiveLoader;
-    NetworkBlockLoader NetworkLoader;
+    BlockchainNetworkGateway NetworkGateway;
     BitcoinGenesisBlock GenesisBlock;
     
     const int HASH_BYTE_SIZE = 32;
+    const int COUNT_HEADER_BYTES = 80;
     const int COUNT_TXS_IN_BATCH_FILE = 50000;
         
 
@@ -35,18 +36,21 @@ namespace BToken.Chaining
 
       UTXO = new UTXOTable(this);
       ArchiveLoader = new ArchiveBlockLoader(this);
-      NetworkLoader = new NetworkBlockLoader(this);
+      NetworkGateway = new BlockchainNetworkGateway(this);
     }
 
     public async Task StartAsync()
     {
-      await Chain.StartAsync();
-      
-      UTXO.StartAsync();
+      await LoadAsync();
 
-      await ArchiveLoader.RunAsync();
+      NetworkGateway.Start();
+    }
+    async Task LoadAsync()
+    {
+      Task loadChainTask = Chain.LoadAsync();
+      Task loadUTXOTask = UTXO.LoadAsync();
 
-      NetworkLoader.Start();
+      await Task.WhenAll(new Task[] { loadChainTask, loadUTXOTask });
     }
   }
 }

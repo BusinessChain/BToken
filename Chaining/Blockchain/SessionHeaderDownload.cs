@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Security.Cryptography;
 
 using BToken.Networking;
 
@@ -20,6 +21,7 @@ namespace BToken.Chaining
 
       const double SECONDS_TIMEOUT_GETHEADERS = 2;
 
+      SHA256 SHA256 = SHA256.Create();
 
       public SessionHeaderDownload(Headerchain headerchain, Network network)
       {
@@ -31,7 +33,7 @@ namespace BToken.Chaining
       {
         Channel = await Network.RequestChannelAsync();
 
-        List<NetworkHeader> headers = await GetHeadersAsync(Headerchain.Locator.ToList());
+        List<Header> headers = await GetHeadersAsync(Headerchain.Locator.ToList());
 
         using (var archiveWriter = new Headerchain.HeaderWriter())
         {
@@ -42,7 +44,7 @@ namespace BToken.Chaining
           }
         }
       }
-      async Task<List<NetworkHeader>> GetHeadersAsync(List<byte[]> headerLocator)
+      async Task<List<Header>> GetHeadersAsync(List<byte[]> headerLocator)
       {
         await Channel.SendMessageAsync(new GetHeadersMessage(headerLocator, Channel.GetProtocolVersion()));
 
@@ -55,7 +57,7 @@ namespace BToken.Chaining
 
             if (networkMessage.Command == "headers")
             {
-              return new HeadersMessage(networkMessage).Headers;
+              return new HeadersMessage(networkMessage, SHA256).Headers;
             }
           }
         }

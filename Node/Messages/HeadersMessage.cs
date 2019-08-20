@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Security.Cryptography;
 
 using BToken.Networking;
 
@@ -9,10 +10,10 @@ namespace BToken
 {
   class HeadersMessage : NetworkMessage
   {
-    public List<NetworkHeader> Headers { get; private set; } = new List<NetworkHeader>();
+    public List<Header> Headers { get; private set; } = new List<Header>();
 
 
-    public HeadersMessage(List<NetworkHeader> headers) : base("headers")
+    public HeadersMessage(List<Header> headers) : base("headers")
     {
       Headers = headers;
       SerializePayload();
@@ -23,7 +24,7 @@ namespace BToken
 
       payload.AddRange(VarInt.GetBytes(Headers.Count));
 
-      foreach(NetworkHeader header in Headers)
+      foreach(Header header in Headers)
       {
         payload.AddRange(header.GetBytes());
         payload.Add(0);
@@ -32,7 +33,7 @@ namespace BToken
       Payload = payload.ToArray();
     }
 
-    public HeadersMessage(NetworkMessage message) 
+    public HeadersMessage(NetworkMessage message, SHA256 sHA256) 
       : base("headers", message.Payload)
     {
       int startIndex = 0;
@@ -40,7 +41,7 @@ namespace BToken
       int headersCount = VarInt.GetInt32(Payload, ref startIndex);
       for (int i = 0; i < headersCount; i += 1)
       {
-        Headers.Add(NetworkHeader.ParseHeader(Payload, ref startIndex));
+        Headers.Add(Header.ParseHeader(Payload, ref startIndex, sHA256));
 
         startIndex += 1; // skip txCount (always a zero-byte)
       }

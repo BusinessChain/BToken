@@ -15,7 +15,7 @@ namespace BToken.Chaining
         static readonly UInt256 DIFFICULTY_1_TARGET = new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000");
         const double MAX_TARGET = 2.695994666715064E67;
 
-        public static uint GetNextTargetBits(ChainHeader header, uint nextHeight)
+        public static uint GetNextTargetBits(Header header, uint nextHeight)
         {
           uint nextTargetBits;
 
@@ -26,23 +26,23 @@ namespace BToken.Chaining
           }
           else
           {
-            nextTargetBits = header.NetworkHeader.NBits;
+            nextTargetBits = header.NBits;
           }
 
           return nextTargetBits;
 
         }
-        static UInt256 GetNextTarget(ChainHeader header)
+        static UInt256 GetNextTarget(Header header)
         {
-          ChainHeader headerIntervalStart = GetBlockPrevious(header, RETARGETING_BLOCK_INTERVAL - 1);
-          ulong actualTimespan = Limit(header.NetworkHeader.UnixTimeSeconds - headerIntervalStart.NetworkHeader.UnixTimeSeconds);
-          UInt256 targetOld = UInt256.ParseFromCompact(header.NetworkHeader.NBits);
+          Header headerIntervalStart = GetBlockPrevious(header, RETARGETING_BLOCK_INTERVAL - 1);
+          ulong actualTimespan = Limit(header.UnixTimeSeconds - headerIntervalStart.UnixTimeSeconds);
+          UInt256 targetOld = UInt256.ParseFromCompact(header.NBits);
 
           UInt256 targetNew = targetOld.MultiplyBy(actualTimespan).DivideBy(RETARGETING_TIMESPAN_INTERVAL_SECONDS);
 
           return UInt256.Min(DIFFICULTY_1_TARGET, targetNew);
         }
-        static ChainHeader GetBlockPrevious(ChainHeader block, uint depth)
+        static Header GetBlockPrevious(Header block, uint depth)
         {
           if (depth == 0 || block.HeaderPrevious == null)
           {
