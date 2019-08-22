@@ -12,8 +12,8 @@ namespace BToken.Chaining
   {
     List<HeaderLocation> Checkpoints;
     UTXOTable UTXO;
+    readonly object LOCK_Chain = new object();
     Headerchain Chain;
-    Network Network;
     ArchiveBlockLoader ArchiveLoader;
     BlockchainNetworkGateway NetworkGateway;
     BitcoinGenesisBlock GenesisBlock;
@@ -29,28 +29,38 @@ namespace BToken.Chaining
       Network network)
     {
       Checkpoints = checkpoints;
-      Network = network;
       GenesisBlock = genesisBlock;
 
       Chain = new Headerchain(genesisBlock.Header, checkpoints, network);
 
       UTXO = new UTXOTable(this);
       ArchiveLoader = new ArchiveBlockLoader(this);
-      NetworkGateway = new BlockchainNetworkGateway(this);
+      NetworkGateway = new BlockchainNetworkGateway(this, network);
     }
 
     public async Task StartAsync()
     {
-      await LoadAsync();
+      Chain.Load();
+
+      await UTXO.LoadAsync();
 
       NetworkGateway.Start();
     }
-    async Task LoadAsync()
-    {
-      Task loadChainTask = Chain.LoadAsync();
-      Task loadUTXOTask = UTXO.LoadAsync();
 
-      await Task.WhenAll(new Task[] { loadChainTask, loadUTXOTask });
+    List<byte[]> GetChainLocator()
+    {
+      lock(LOCK_Chain)
+      {
+        return Chain.Locator.GetHeaderHashes();
+      }
+    }
+
+    void InsertHeaders(List<Header> headers)
+    {
+      lock (LOCK_Chain)
+      {
+        Chain.InsertHeaders(headers);
+      }
     }
   }
 }

@@ -14,20 +14,22 @@ namespace BToken.Chaining
 
 
       public ChainException()
-      {
-      }
+      { }
 
       public ChainException(string message)
           : base(message)
-      {
-      }
+      { }
 
       public ChainException(string message, Exception inner)
           : base(message, inner)
-      {
-      }
+      { }
 
       public ChainException(ChainCode errorCode)
+      {
+        ErrorCode = errorCode;
+      }
+      public ChainException(string message, ChainCode errorCode) 
+        : base(message)
       {
         ErrorCode = errorCode;
       }

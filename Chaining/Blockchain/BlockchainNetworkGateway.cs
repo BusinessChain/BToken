@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
+using BToken.Networking;
+
 namespace BToken.Chaining
 {
   public partial class Blockchain
@@ -15,15 +17,21 @@ namespace BToken.Chaining
     {
       const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
       const int COUNT_NETWORK_PARSER_PARALLEL = 4;
-      const int COUNT_DOWNLOAD_SESSIONS = 8;
+      const int COUNT_NETWORK_SESSIONS = 8;
 
       Blockchain Blockchain;
-
+      Network Network;
+      
       readonly object LOCK_HeaderLoad = new object();
       Header HeaderLoadedLast;
       int IndexDownloadBatch;
       int StartBatchIndex;
       CancellationTokenSource CancellationLoader = new CancellationTokenSource();
+
+      readonly object LOCK_IsSyncingChain = new object();
+      bool IsSyncingChain;
+      TaskCompletionSource<object> ChainSyncingCompleted 
+        = new TaskCompletionSource<object>();
 
       BufferBlock<UTXOTable.UTXOBatch> ParserBuffer = new BufferBlock<UTXOTable.UTXOBatch>();
       public BufferBlock<UTXOTable.UTXOBatch> OutputBuffer = new BufferBlock<UTXOTable.UTXOBatch>();
@@ -38,7 +46,7 @@ namespace BToken.Chaining
 
       enum SESSION_STATE { IDLE, DOWNLOADING, CANCELED };
       readonly object LOCK_DownloadSessions = new object();
-      List<SessionBlockDownload> DownloadSessions = new List<SessionBlockDownload>();
+      List<NetworkSession> DownloadSessions = new List<NetworkSession>();
       BufferBlock<DownloadBatch> DownloaderBuffer = new BufferBlock<DownloadBatch>();
       Dictionary<int, DownloadBatch> QueueDownloadBatch = new Dictionary<int, DownloadBatch>();
 
@@ -46,9 +54,10 @@ namespace BToken.Chaining
       int TXCountFIFO;
 
 
-      public BlockchainNetworkGateway(Blockchain blockchain)
+      public BlockchainNetworkGateway(Blockchain blockchain, Network network )
       {
         Blockchain = blockchain;
+        Network = network;
       }
 
       public void Start()
@@ -68,19 +77,18 @@ namespace BToken.Chaining
       }
       async Task StartSessionControlAsync()
       {
-        lock (LOCK_DownloadSessions)
+        for (int i = 0; i < COUNT_NETWORK_SESSIONS; i += 1)
         {
-          for (int i = 0; i < COUNT_DOWNLOAD_SESSIONS; i += 1)
+          var session = new NetworkSession(
+            this,
+            new BlockParser(Blockchain));
+
+          lock (LOCK_DownloadSessions)
           {
-            var session = new SessionBlockDownload(
-              Blockchain.Network,
-              this,
-              new BlockParser(Blockchain));
-
             DownloadSessions.Add(session);
-
-            session.StartAsync();
           }
+
+          session.StartAsync();
         }
 
         while (true)
@@ -276,7 +284,6 @@ namespace BToken.Chaining
           BatchIndex = UTXOBatch.BatchIndex + 1,
         };
       }
-
     }
   }
 }

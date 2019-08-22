@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
-namespace BToken.Accounting
+namespace BToken.Chaining
 {
   class TXWitness
   {

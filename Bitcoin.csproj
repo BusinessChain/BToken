@@ -105,8 +105,7 @@
     <Compile Include="Chaining\Blockchain\Headerchain\HeaderLocation.cs" />
     <Compile Include="Chaining\Blockchain\Headerchain\ChainProbe.cs" />
     <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
-    <Compile Include="Chaining\Blockchain\SessionBlockDownload.cs" />
-    <Compile Include="Chaining\Blockchain\SessionHeaderDownload.cs" />
+    <Compile Include="Chaining\Blockchain\NetworkSession.cs" />
     <Compile Include="Chaining\Blockchain\ChainException.cs" />
     <Compile Include="Chaining\Blockchain\Headerchain\Chain.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
@@ -132,15 +131,15 @@
     </Compile>
     <Compile Include="Chaining\Blockchain\Headerchain\Headerchain.cs" />
     <Compile Include="Networking\MessageStreamer.cs" />
-    <Compile Include="Node\Messages\GetHeadersMessage.cs" />
-    <Compile Include="Node\Messages\HeadersMessage.cs" />
+    <Compile Include="Networking\Messages\GetHeadersMessage.cs" />
+    <Compile Include="Networking\Messages\HeadersMessage.cs" />
     <Compile Include="Networking\Messages\NetworkMessage.cs" />
     <Compile Include="Networking\Messages\PingMessage.cs" />
     <Compile Include="Networking\Messages\PongMessage.cs" />
     <Compile Include="Networking\Messages\SendHeadersMessage.cs" />
     <Compile Include="Networking\Network.cs" />
-    <Compile Include="Node\Messages\GetBlocksMessage.cs" />
-    <Compile Include="Chaining\Blockchain\Messages\GetDataMessage.cs" />
+    <Compile Include="Networking\Messages\GetBlocksMessage.cs" />
+    <Compile Include="Networking\Messages\GetDataMessage.cs" />
     <Compile Include="Networking\Messages\InvMessage.cs" />
     <Compile Include="Networking\Messages\RejectMessage.cs" />
     <Compile Include="Networking\Messages\VerAckMessage.cs" />
@@ -149,7 +148,7 @@
     <Compile Include="Networking\PeerHandshakeManager.cs" />
     <Compile Include="Networking\Peer.cs" />
     <Compile Include="Networking\ProtocolVersion.cs" />
-    <Compile Include="Node\BitcoinNode.cs" />
+    <Compile Include="BitcoinNode.cs" />
     <Compile Include="Networking\ServiceFlags.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

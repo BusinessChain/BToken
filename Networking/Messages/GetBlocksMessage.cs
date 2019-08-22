@@ -4,9 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using BToken.Networking;
 
-namespace BToken
+namespace BToken.Networking
 {
   class GetBlocksMessage : NetworkMessage
   {

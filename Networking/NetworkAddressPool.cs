@@ -12,7 +12,7 @@ namespace BToken.Networking
     {
       List<string> DnsSeeds = new List<string>
       {
-        "seed.bitcoin.sipa.be",
+        //"seed.bitcoin.sipa.be",
         "dnsseed.bluematt.me",
         //"dnsseed.bitcoin.dashjr.org",
         "seed.bitcoinstats.com",

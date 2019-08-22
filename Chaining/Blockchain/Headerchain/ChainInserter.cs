@@ -13,7 +13,7 @@ namespace BToken.Chaining
   {
     public partial class Headerchain
     {
-      class ChainInserter : IDisposable
+      class ChainInserter
       {
         Headerchain Headerchain;
         ChainProbe Probe;
@@ -118,15 +118,15 @@ namespace BToken.Chaining
           bool nextHeightBelowHighestCheckpoint = nextHeaderHeight <= highestCheckpointHight;
           if (mainChainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
           {
-            throw new ChainException(ChainCode.INVALID);
+            throw new ChainException(ChainCode.INVALID.ToString(), ChainCode.INVALID);
           }
 
-          if (!ValidateBlockLocation(nextHeaderHeight, headerHash))
+          if (!TryValidateBlockLocation(nextHeaderHeight, headerHash))
           {
-            throw new ChainException(ChainCode.INVALID);
+            throw new ChainException(ChainCode.INVALID.ToString(), ChainCode.INVALID);
           }
         }
-        bool ValidateBlockLocation(int height, byte[] hash)
+        bool TryValidateBlockLocation(int height, byte[] hash)
         {
           HeaderLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
           if (checkpoint != null)
@@ -141,14 +141,14 @@ namespace BToken.Chaining
           int nextHeight = Probe.GetHeight() + 1;
           if (nBits != TargetManager.GetNextTargetBits(Probe.Header, (uint)nextHeight))
           {
-            throw new ChainException(ChainCode.INVALID);
+            throw new ChainException(ChainCode.INVALID.ToString(), ChainCode.INVALID);
           }
         }
         void ValidateTimeStamp(uint unixTimeSeconds)
         {
           if (unixTimeSeconds <= GetMedianTimePast(Probe.Header))
           {
-            throw new ChainException(ChainCode.INVALID);
+            throw new ChainException(ChainCode.INVALID.ToString(), ChainCode.INVALID);
           }
         }
         void ValidateUniqueness(byte[] hash)
@@ -157,7 +157,7 @@ namespace BToken.Chaining
             Probe.Header.HeadersNext != null &&
             Probe.Header.HeadersNext.Select(h => Probe.GetHeaderHash(h)).Contains(hash, new EqualityComparerByteArray()))
           {
-            throw new ChainException(ChainCode.DUPLICATE);
+            throw new ChainException(ChainCode.DUPLICATE.ToString(), ChainCode.DUPLICATE);
           }
         }
         uint GetMedianTimePast(Header header)
@@ -183,27 +183,6 @@ namespace BToken.Chaining
           return timestampsPast[timestampsPast.Count / 2];
         }
 
-        public bool TryDispatch()
-        {
-          lock (IsDispatchedLOCK)
-          {
-            if (IsDispatched)
-            {
-              return false;
-            }
-
-            IsDispatched = true;
-            return true;
-          }
-        }
-        public void Dispose()
-        {
-          lock (IsDispatchedLOCK)
-          {
-            IsDispatched = false;
-            Headerchain.SignalInserterAvailable.Post(true);
-          }
-        }
       }
     }
   }

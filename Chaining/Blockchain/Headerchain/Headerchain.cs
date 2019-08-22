@@ -26,7 +26,7 @@ namespace BToken.Chaining
       readonly object HeaderIndexLOCK = new object();
       Dictionary<int, List<Header>> HeaderIndex;
 
-      public HeaderLocator Locator { get; private set; }
+      public HeaderLocator Locator;
 
       BufferBlock<bool> SignalInserterAvailable = new BufferBlock<bool>();
       ChainInserter Inserter;
@@ -55,31 +55,16 @@ namespace BToken.Chaining
         UpdateHeaderIndex(GenesisHeader);
 
         Locator = new HeaderLocator(this);
-
         Inserter = new ChainInserter(this);
       }
-
-
-      public async Task StartAsync()
-      {
-        var headerSession = new SessionHeaderDownload(this, Network);
-        await headerSession.StartAsync();
-
-        Console.WriteLine("downloaded headerchain from network, height '{0}'",
-          GetHeight());
-      }
          
-      public async Task InsertHeadersAsync(
-        HeaderWriter archiveWriter,
-        List<Header> headers)
+      public void InsertHeaders(List<Header> headers)
       {
-        var headersInserted = new List<byte[]>();
-
         foreach (Header header in headers)
         {
           try
           {
-            await InsertHeaderAsync(header);
+            InsertHeader(header);
           }
           catch (ChainException ex)
           {
@@ -87,39 +72,21 @@ namespace BToken.Chaining
               header.HeaderHash.ToHexString(),
               ex.Message));
 
-            return;
+            throw ex;
           }
-
-          archiveWriter.StoreHeader(header);
         }
 
         return;
       }
-      async Task InsertHeaderAsync(Header header)
+      void InsertHeader(Header header)
       {
         ValidateHeader(header);
 
-        using (var inserter = await DispatchInserterAsync())
-        {
-          Chain rivalChain = inserter.InsertHeader(header);
+        Chain rivalChain = Inserter.InsertHeader(header);
 
-          if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
-          {
-            ReorganizeChain(rivalChain);
-          }
-        }
-      }
-      async Task<ChainInserter> DispatchInserterAsync()
-      {
-        await SignalInserterAvailable.ReceiveAsync();
-
-        if (Inserter.TryDispatch())
+        if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
         {
-          return Inserter;
-        }
-        else
-        {
-          throw new ChainException("Received signal available but could not dispatch inserter.");
+          ReorganizeChain(rivalChain);
         }
       }
       static void ValidateHeader(Header header)
@@ -189,7 +156,7 @@ namespace BToken.Chaining
         }
       }
 
-      public async Task LoadAsync()
+      public void Load()
       {
         try
         {
@@ -201,22 +168,21 @@ namespace BToken.Chaining
 
           while (index < headerBuffer.Length)
           {
-            await InsertHeaderAsync(
+            InsertHeader(
               Header.ParseHeader(
                 headerBuffer,
                 ref index,
                 sHA256));
           }
+
+          Console.WriteLine("Loaded chain, hight {0}, hash: {1}", 
+            MainChain.Height,
+            MainChain.HeaderTipHash.ToHexString());
         }
         catch (Exception ex)
         {
           Console.WriteLine(ex.Message);
         }
-      }
-
-      public int GetHeight()
-      {
-        return MainChain.Height;
       }
     }
   }

@@ -52,7 +52,10 @@ namespace BToken
       return headerSerialized.ToArray();
     }
 
-    public static Header ParseHeader(byte[] buffer, ref int index, SHA256 sHA256)
+    public static Header ParseHeader(
+      byte[] buffer, 
+      ref int index, 
+      SHA256 sHA256)
     {
       byte[] headerHash =
         sHA256.ComputeHash(

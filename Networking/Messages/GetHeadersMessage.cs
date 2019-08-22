@@ -4,17 +4,16 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using BToken.Networking;
 
-namespace BToken
+namespace BToken.Networking
 {
   class GetHeadersMessage : NetworkMessage
   {
-    public UInt32 ProtocolVersion { get; private set; }
+    public uint ProtocolVersion { get; private set; }
     public List<byte[]> HeaderLocator { get; private set; } = new List<byte[]>();
     public UInt256 StopHash { get; private set; }
 
-    public GetHeadersMessage(List<byte[]> headerLocator, uint protocolVersion) 
+    public GetHeadersMessage(List<byte[]> headerLocator, uint protocolVersion)
       : base("getheaders")
     {
       ProtocolVersion = protocolVersion;
@@ -41,7 +40,7 @@ namespace BToken
     }
 
 
-    public GetHeadersMessage(NetworkMessage message) 
+    public GetHeadersMessage(NetworkMessage message)
       : base("getheaders", message.Payload)
     {
       int startIndex = 0;

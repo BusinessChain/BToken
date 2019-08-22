@@ -13,8 +13,9 @@ namespace BToken.Networking
     List<NetworkMessage> GetInboundRequestMessages();
     Task SendMessageAsync(NetworkMessage message);
     Task<NetworkMessage> ReceiveSessionMessageAsync(CancellationToken cancellationToken);
-    uint GetProtocolVersion();
 
+    Task<byte[]> GetHeadersAsync(List<byte[]> locatorHashes);
+    
     string GetIdentification();
   }
 }

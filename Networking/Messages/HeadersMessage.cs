@@ -4,16 +4,18 @@ using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
 
-using BToken.Networking;
 
-namespace BToken
+namespace BToken.Networking
 {
   class HeadersMessage : NetworkMessage
   {
     public List<Header> Headers { get; private set; } = new List<Header>();
 
 
-    public HeadersMessage(List<Header> headers) : base("headers")
+    public HeadersMessage(
+      List<Header> headers, 
+      SHA256 sHA256) 
+      : base("headers")
     {
       Headers = headers;
       SerializePayload();

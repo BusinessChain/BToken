@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+using System.Security.Cryptography;
 
 namespace BToken.Networking
 {
@@ -15,6 +16,8 @@ namespace BToken.Networking
   {
     partial class Peer : INetworkChannel
     {
+      const int TIMEOUT_GETHEADERS_MILLISECONDS = 10000;
+
       Network Network;
 
       IPEndPoint IPEndPoint;
@@ -225,11 +228,26 @@ namespace BToken.Networking
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      
-      public uint GetProtocolVersion()
+      public async Task<byte[]> GetHeadersAsync(List<byte[]> locatorHashes)
       {
-        return ProtocolVersion;
+        await NetworkMessageStreamer.WriteAsync(
+          new GetHeadersMessage(
+            locatorHashes, 
+            ProtocolVersion));
+
+        CancellationTokenSource cancellation = new CancellationTokenSource(TIMEOUT_GETHEADERS_MILLISECONDS);
+
+        while (true)
+        {
+          NetworkMessage networkMessage = await ReceiveSessionMessageAsync(cancellation.Token);
+
+          if (networkMessage.Command == "headers")
+          {
+            return networkMessage.Payload;
+          }
+        }
       }
+
       public string GetIdentification()
       {
         return IPEndPoint.Address.ToString();

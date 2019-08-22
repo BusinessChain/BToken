@@ -60,7 +60,7 @@ namespace BToken.Chaining
 
           AddLocation(height, hash);
         }
-        public List<byte[]> ToList()
+        public List<byte[]> GetHeaderHashes()
         {
           return BlockLocations.Select(b => b.Hash).ToList();
         }
@@ -69,9 +69,8 @@ namespace BToken.Chaining
         {
           BlockLocations.Insert(0, new HeaderLocation(height, hash));
 
-          SortLocator();
+          SortLocatorRecursive(1);
         }
-        void SortLocator() => SortLocatorRecursive(1);
         void SortLocatorRecursive(int startIndex)
         {
           if (startIndex >= BlockLocations.Count - 2)

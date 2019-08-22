@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,7 +16,7 @@ namespace BToken.Chaining
   {
     partial class BlockchainNetworkGateway
     {
-      class SessionBlockDownload
+      class NetworkSession
       {
         public INetworkChannel Channel;
 
@@ -23,13 +24,13 @@ namespace BToken.Chaining
         const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
         const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
-        BlockchainNetworkGateway Loader;
-        Network Network;
+        BlockchainNetworkGateway Gateway;
         BlockParser Parser;
         SHA256 SHA256;
 
         public SESSION_STATE State = SESSION_STATE.IDLE;
         readonly object LOCK_State = new object();
+        bool IsSyncingChain;
 
         Stopwatch StopwatchDownload = new Stopwatch();
         public int CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
@@ -42,41 +43,110 @@ namespace BToken.Chaining
 
         public DateTimeOffset TimeStartChannelInterval;
 
-        public SessionBlockDownload(Network network, BlockchainNetworkGateway loader, BlockParser parser)
+        public NetworkSession(BlockchainNetworkGateway gateway, BlockParser parser)
         {
-          Network = network;
-          Loader = loader;
+          Gateway = gateway;
           Parser = parser;
           SHA256 = SHA256.Create();
 
           CancellationSession = CancellationTokenSource.CreateLinkedTokenSource(
-            Loader.CancellationLoader.Token);
+            Gateway.CancellationLoader.Token);
         }
         
         public async Task StartAsync()
         {
           while(true)
           {
-            Channel = await Network.RequestChannelAsync();
+            Channel = await Gateway.Network.RequestChannelAsync();
 
             try
             {
-              await SynchronizeToNetworkAsync();
+              await SynchronizeChainAsync();
+
+              await Gateway.ChainSyncingCompleted.Task;
+
+              await SynchronizeUTXOAsync();
+              await RunListenerAsync();
 
               Console.WriteLine("session {0} ends synchronizing, starts listening.", GetHashCode());
-
-              await RunListenerAsync();
             }
             catch (Exception ex)
             {
               Console.WriteLine("Exception: '{0}' in session {1} with channel {2}", 
-                ex.Message, 
+                ex.Message,
                 GetHashCode(),
                 Channel == null ? "" : Channel.GetIdentification());
+
+              if(IsSyncingChain)
+              {
+                lock (Gateway.LOCK_IsSyncingChain)
+                {
+                  IsSyncingChain = false;
+                  Gateway.IsSyncingChain = false;
+                }
+              }
             }
           }
         }
-        async Task SynchronizeToNetworkAsync()
+
+        async Task SynchronizeChainAsync()
+        {
+          byte[] headerBytes = await Channel.GetHeadersAsync(
+            Gateway.Blockchain.GetChainLocator());
+
+          List<Header> headers = ParseHeaders(headerBytes);
+          int countHeaders = headers.Count;
+
+          lock (Gateway.LOCK_IsSyncingChain)
+          {
+            if (Gateway.IsSyncingChain)
+            {
+              return;
+            }
+            
+            IsSyncingChain = true;
+            Gateway.IsSyncingChain = true;
+          }
+
+          Console.WriteLine("session {0} enters header syncing", GetHashCode());
+
+          List<byte[]> headerBatchesBytes = new List<byte[]>();
+          headerBatchesBytes.Add(headerBytes);
+
+          while (headers.Any())
+          {
+            headerBytes = await Channel.GetHeadersAsync(
+              new List<byte[]> { headers.Last().HeaderHash });
+
+            headers = ParseHeaders(headerBytes);
+            headerBatchesBytes.Add(headerBytes);
+
+            countHeaders += headers.Count;
+
+            Console.WriteLine("downloaded {0} headers", countHeaders);
+          }
+
+          Console.WriteLine("session {0} completes syncing", GetHashCode());
+          Gateway.ChainSyncingCompleted.SetResult(null);
+        }
+
+        List<Header> ParseHeaders(byte[] headersBytes)
+        {
+          int startIndex = 0;
+          var headers = new List<Header>();
+
+          int headersCount = VarInt.GetInt32(headersBytes, ref startIndex);
+          for (int i = 0; i < headersCount; i += 1)
+          {
+            headers.Add(Header.ParseHeader(headersBytes, ref startIndex, SHA256));
+
+            startIndex += 1; // skip txCount (always a zero-byte)
+          }
+
+          return headers;
+        }
+
+        async Task SynchronizeUTXOAsync()
         {
           TimeStartChannelInterval = DateTimeOffset.UtcNow;
           BytesDownloaded = 0;
@@ -84,7 +154,7 @@ namespace BToken.Chaining
 
           try
           {
-            while (Loader.TryGetDownloadBatch(
+            while (Gateway.TryGetDownloadBatch(
               out DownloadBatch,
               CountBlocksDownloadBatch))
             {
@@ -95,7 +165,7 @@ namespace BToken.Chaining
           }
           catch (Exception ex)
           {
-            Loader.QueueBatchesCanceled.Enqueue(DownloadBatch);
+            Gateway.QueueBatchesCanceled.Enqueue(DownloadBatch);
 
             CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
@@ -151,7 +221,7 @@ namespace BToken.Chaining
             DownloadBatch.BytesDownloaded += networkMessage.Payload.Length;
           }
 
-          Loader.BatcherBuffer.Post(DownloadBatch);
+          Gateway.BatcherBuffer.Post(DownloadBatch);
 
           StopwatchDownload.Stop();
 
