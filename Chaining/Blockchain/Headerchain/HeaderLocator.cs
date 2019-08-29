@@ -8,7 +8,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public partial class Headerchain
+    partial class Headerchain
     {
       public class HeaderLocator
       {
@@ -60,9 +60,9 @@ namespace BToken.Chaining
 
           AddLocation(height, hash);
         }
-        public List<byte[]> GetHeaderHashes()
+        public IEnumerable<byte[]> GetHeaderHashes()
         {
-          return BlockLocations.Select(b => b.Hash).ToList();
+          return BlockLocations.Select(b => b.Hash);
         }
 
         void AddLocation(int height, byte[] hash)

@@ -16,8 +16,6 @@ namespace BToken.Networking
   {
     partial class Peer : INetworkChannel
     {
-      const int TIMEOUT_GETHEADERS_MILLISECONDS = 10000;
-
       Network Network;
 
       IPEndPoint IPEndPoint;
@@ -228,22 +226,42 @@ namespace BToken.Networking
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      public async Task<byte[]> GetHeadersAsync(List<byte[]> locatorHashes)
+      public async Task<byte[]> GetHeadersAsync(
+        IEnumerable<byte[]> locatorHashes,
+        CancellationToken cancellationToken)
       {
         await NetworkMessageStreamer.WriteAsync(
           new GetHeadersMessage(
-            locatorHashes, 
+            locatorHashes,
             ProtocolVersion));
-
-        CancellationTokenSource cancellation = new CancellationTokenSource(TIMEOUT_GETHEADERS_MILLISECONDS);
 
         while (true)
         {
-          NetworkMessage networkMessage = await ReceiveSessionMessageAsync(cancellation.Token);
+          NetworkMessage networkMessage = await ReceiveSessionMessageAsync(cancellationToken);
 
           if (networkMessage.Command == "headers")
           {
             return networkMessage.Payload;
+          }
+        }
+      }
+
+      public async Task RequestBlocksAsync(IEnumerable<byte[]> headerHashes)
+      {
+        await SendMessageAsync(
+          new GetDataMessage(
+            headerHashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h))));
+      }
+      public async Task<byte[]> ReceiveBlockAsync(CancellationToken cancellationToken)
+      {
+        while(true)
+        {
+          NetworkMessage networkMessage = await ReceiveSessionMessageAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+          if (networkMessage.Command != "block")
+          {
+            continue;
           }
         }
       }

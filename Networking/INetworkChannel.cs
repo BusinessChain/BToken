@@ -11,11 +11,14 @@ namespace BToken.Networking
   public interface INetworkChannel
   {
     List<NetworkMessage> GetInboundRequestMessages();
-    Task SendMessageAsync(NetworkMessage message);
-    Task<NetworkMessage> ReceiveSessionMessageAsync(CancellationToken cancellationToken);
 
-    Task<byte[]> GetHeadersAsync(List<byte[]> locatorHashes);
+    Task<byte[]> GetHeadersAsync(
+      IEnumerable<byte[]> locatorHashes, 
+      CancellationToken cancellationToken);
     
+    Task RequestBlocksAsync(IEnumerable<byte[]> headerHashes);
+    Task<byte[]> ReceiveBlockAsync(CancellationToken cancellationToken);
+
     string GetIdentification();
   }
 }

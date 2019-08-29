@@ -13,25 +13,25 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class BlockchainNetworkGateway
+    partial class GatewayBlockchainNetwork
     {
       const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
       const int COUNT_NETWORK_PARSER_PARALLEL = 4;
-      const int COUNT_NETWORK_SESSIONS = 8;
+      const int COUNT_NETWORK_SESSIONS = 1;
 
       Blockchain Blockchain;
       Network Network;
-      
+
+      BatchDataPipe HeaderBatchDataPipe;
       readonly object LOCK_HeaderLoad = new object();
       Header HeaderLoadedLast;
       int IndexDownloadBatch;
       int StartBatchIndex;
       CancellationTokenSource CancellationLoader = new CancellationTokenSource();
 
-      readonly object LOCK_IsSyncingChain = new object();
-      bool IsSyncingChain;
-      TaskCompletionSource<object> ChainSyncingCompleted 
-        = new TaskCompletionSource<object>();
+      readonly object LOCK_IsSyncing = new object();
+      bool IsSyncing;
+      bool IsSyncingCompleted;
 
       BufferBlock<UTXOTable.UTXOBatch> ParserBuffer = new BufferBlock<UTXOTable.UTXOBatch>();
       public BufferBlock<UTXOTable.UTXOBatch> OutputBuffer = new BufferBlock<UTXOTable.UTXOBatch>();
@@ -54,14 +54,21 @@ namespace BToken.Chaining
       int TXCountFIFO;
 
 
-      public BlockchainNetworkGateway(Blockchain blockchain, Network network )
+      public GatewayBlockchainNetwork(
+        Blockchain blockchain, 
+        Network network, 
+        Headerchain headerchain)
       {
         Blockchain = blockchain;
         Network = network;
+
+        HeaderBatchDataPipe = new BatchDataPipe(headerchain);
       }
 
       public void Start()
       {
+        HeaderBatchDataPipe.Start();
+
         HeaderLoadedLast = Blockchain.ArchiveLoader.HeaderPostedToMergerLast;
         StartBatchIndex = Blockchain.ArchiveLoader.BatchIndexLoad;
         BatchIndexNextOutput = Blockchain.ArchiveLoader.BatchIndexLoad;
@@ -75,6 +82,26 @@ namespace BToken.Chaining
 
         StartSessionControlAsync();
       }
+
+
+
+      const int COUNT_HEADER_SESSIONS = 8;
+
+      public async Task SyncHeaderchain()
+      {
+        Task[] syncHeaderchainTasks = new Task[COUNT_HEADER_SESSIONS];
+
+        for (int i = 0; i < COUNT_HEADER_SESSIONS; i += 1)
+        {
+          var session = new SyncHeaderchainSession(this);
+          syncHeaderchainTasks[i] = session.Start();
+        }
+
+        await Task.WhenAll(syncHeaderchainTasks);
+      }
+
+
+
       async Task StartSessionControlAsync()
       {
         for (int i = 0; i < COUNT_NETWORK_SESSIONS; i += 1)
@@ -95,11 +122,32 @@ namespace BToken.Chaining
         {
           await Task.Delay(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS);
 
-          Console.WriteLine();
-          Console.WriteLine("Download session metrics:");
+          //Console.WriteLine();
+          //Console.WriteLine("Download session metrics:");
 
-          DownloadSessions.ForEach(s => s.PrintDownloadMetrics(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS));
-          Console.WriteLine();
+          //DownloadSessions.ForEach(s => s.PrintDownloadMetrics(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS));
+          //Console.WriteLine();
+        }
+      }
+
+
+
+      readonly object LOCK_LocatorHashes = new object();
+      IEnumerable<byte[]> LocatorHashes;
+      IEnumerable<byte[]> GetLocatorHashes()
+      {
+        lock(LOCK_LocatorHashes)
+        {
+          LocatorHashes = LocatorHashes ?? Blockchain.GetLocatorHashes();
+          return LocatorHashes;
+        }
+      }
+      IEnumerable<byte[]> SetLocatorHashes(IEnumerable<byte[]> locatorHashes)
+      {
+        lock (LOCK_LocatorHashes)
+        {
+          LocatorHashes = locatorHashes;
+          return locatorHashes;
         }
       }
 
@@ -153,7 +201,7 @@ namespace BToken.Chaining
 
           PostToOutputBuffer(batch);
 
-          Task archiveBatchTask = BlockArchiver.ArchiveBatchAsync(batch);          
+          //Task archiveBatchTask = BlockArchiver.ArchiveBatchAsync(batch);          
         }
       }
 
@@ -172,7 +220,7 @@ namespace BToken.Chaining
           {
             while (true)
             {
-              Blockchain.UTXO.BatchBuffer.Post(batch);
+              Blockchain.UTXO.InputBuffer.Post(batch);
 
               BatchIndexNextOutput += 1;
 

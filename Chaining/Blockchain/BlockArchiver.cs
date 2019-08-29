@@ -10,11 +10,11 @@ namespace BToken.Chaining
   {
     partial class BlockArchiver
     {
-      static string BlockArchivePath = "J:\\BlockArchivePartitioned";
+      string BlockArchivePath = "J:\\BlockArchivePartitioned";
 
       const int PrefixBlockFolderBytes = 2;
 
-      public static async Task ArchiveBatchAsync(UTXOTable.UTXOBatch batch)
+      public async Task ArchiveBatchAsync(UTXOTable.UTXOBatch batch)
       {
         try
         {
@@ -31,7 +31,7 @@ namespace BToken.Chaining
           Console.WriteLine(ex.Message);
         }
       }
-      static FileStream CreateFile(int filePartitionIndex)
+      FileStream CreateFile(int filePartitionIndex)
       {
         Directory.CreateDirectory(BlockArchivePath);
         string filePath = Path.Combine(BlockArchivePath, "p" + filePartitionIndex.ToString());
@@ -45,7 +45,7 @@ namespace BToken.Chaining
           useAsync: true);
       }
 
-      public static async Task<byte[]> ReadBlockBatchAsync(int batchIndex)
+      public async Task<byte[]> ReadBlockBatchAsync(int batchIndex)
       {
         string filePath = Path.Combine(BlockArchivePath, "p" + batchIndex);
 

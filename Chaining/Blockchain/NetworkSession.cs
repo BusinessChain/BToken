@@ -14,7 +14,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class BlockchainNetworkGateway
+    partial class GatewayBlockchainNetwork
     {
       class NetworkSession
       {
@@ -22,15 +22,17 @@ namespace BToken.Chaining
 
         const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
         const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
+
+        const int TIMEOUT_GETHEADERS_MILLISECONDS = 10000;
         const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
-        BlockchainNetworkGateway Gateway;
+        GatewayBlockchainNetwork Gateway;
         BlockParser Parser;
         SHA256 SHA256;
 
         public SESSION_STATE State = SESSION_STATE.IDLE;
         readonly object LOCK_State = new object();
-        bool IsSyncingChain;
+        bool IsSyncing;
 
         Stopwatch StopwatchDownload = new Stopwatch();
         public int CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
@@ -43,7 +45,7 @@ namespace BToken.Chaining
 
         public DateTimeOffset TimeStartChannelInterval;
 
-        public NetworkSession(BlockchainNetworkGateway gateway, BlockParser parser)
+        public NetworkSession(GatewayBlockchainNetwork gateway, BlockParser parser)
         {
           Gateway = gateway;
           Parser = parser;
@@ -63,71 +65,127 @@ namespace BToken.Chaining
             {
               await SynchronizeChainAsync();
 
-              await Gateway.ChainSyncingCompleted.Task;
-
-              await SynchronizeUTXOAsync();
-              await RunListenerAsync();
-
-              Console.WriteLine("session {0} ends synchronizing, starts listening.", GetHashCode());
+              Console.WriteLine("session {0} ends chain syncing.", GetHashCode());
             }
             catch (Exception ex)
             {
-              Console.WriteLine("Exception: '{0}' in session {1} with channel {2}", 
+              Console.WriteLine("Exception in chain syncing: '{0}' in session {1} with channel {2}", 
                 ex.Message,
                 GetHashCode(),
                 Channel == null ? "" : Channel.GetIdentification());
-
-              if(IsSyncingChain)
+                           
+              lock (Gateway.LOCK_IsSyncing)
               {
-                lock (Gateway.LOCK_IsSyncingChain)
+                if (IsSyncing)
                 {
-                  IsSyncingChain = false;
-                  Gateway.IsSyncingChain = false;
+                  IsSyncing = false;
+                  Gateway.IsSyncing = false;
+                }
+
+                if (!Gateway.IsSyncingCompleted)
+                {
+                  continue;
                 }
               }
             }
+
+            try
+            {
+              await SynchronizeUTXOAsync();
+              //await RunListenerAsync();
+            }
+            catch (Exception ex)
+            {
+              Console.WriteLine("Exception in utxo syncing: '{0}' in session {1} with channel {2}",
+                ex.Message,
+                GetHashCode(),
+                Channel == null ? "" : Channel.GetIdentification());
+            }
+
           }
         }
 
+
+        HeaderBatch HeaderBatchOld = null;
+        HeaderBatch HeaderBatch = null;
+        int HeaderBatchIndex = 0;
+
         async Task SynchronizeChainAsync()
         {
+          CancellationTokenSource cancellation = new CancellationTokenSource(TIMEOUT_GETHEADERS_MILLISECONDS);
+
+          IEnumerable<byte[]> locatorHashes = Gateway.GetLocatorHashes();
+
           byte[] headerBytes = await Channel.GetHeadersAsync(
-            Gateway.Blockchain.GetChainLocator());
+            locatorHashes,
+            cancellation.Token);
 
           List<Header> headers = ParseHeaders(headerBytes);
-          int countHeaders = headers.Count;
+          
+          HeaderBatch = new HeaderBatch(
+            headers, 
+            headerBytes,
+            HeaderBatchIndex++);
 
-          lock (Gateway.LOCK_IsSyncingChain)
+          while(true)
           {
-            if (Gateway.IsSyncingChain)
+            lock (Gateway.LOCK_IsSyncing)
             {
-              return;
+              if(Gateway.IsSyncingCompleted)
+              {
+                return;
+              }
+
+              if (!Gateway.IsSyncing)
+              {
+                Gateway.IsSyncing = true;
+                IsSyncing = true;
+                break;
+              }
             }
-            
-            IsSyncingChain = true;
-            Gateway.IsSyncingChain = true;
+
+            await Task.Delay(3000);
           }
 
           Console.WriteLine("session {0} enters header syncing", GetHashCode());
 
-          List<byte[]> headerBatchesBytes = new List<byte[]>();
-          headerBatchesBytes.Add(headerBytes);
-
           while (headers.Any())
           {
-            headerBytes = await Channel.GetHeadersAsync(
+            if (HeaderBatchOld != null)
+            {
+              await Gateway.HeaderBatchDataPipe.InputBuffer.SendAsync(HeaderBatchOld);
+            }
+
+            HeaderBatchOld = HeaderBatch;
+            
+            locatorHashes = Gateway.SetLocatorHashes(
               new List<byte[]> { headers.Last().HeaderHash });
 
+            cancellation.CancelAfter(TIMEOUT_GETHEADERS_MILLISECONDS);
+            headerBytes = await Channel.GetHeadersAsync(
+              locatorHashes,
+              cancellation.Token);
+
             headers = ParseHeaders(headerBytes);
-            headerBatchesBytes.Add(headerBytes);
 
-            countHeaders += headers.Count;
-
-            Console.WriteLine("downloaded {0} headers", countHeaders);
+            HeaderBatch = new HeaderBatch(
+                headers,
+                headerBytes,
+                HeaderBatchIndex++);
           }
 
-          Console.WriteLine("session {0} completes syncing", GetHashCode());
-          Gateway.ChainSyncingCompleted.SetResult(null);
+          if (HeaderBatchOld != null)
+          {
+            HeaderBatchOld.IsLastBatch = true;
+            await Gateway.HeaderBatchDataPipe.InputBuffer.SendAsync(HeaderBatchOld);
+          }
+
+          Console.WriteLine("session {0} completes chain syncing", GetHashCode());
+
+          lock(Gateway.LOCK_IsSyncing)
+          {
+            Gateway.IsSyncingCompleted = true;
+          }
         }
 
         List<Header> ParseHeaders(byte[] headersBytes)
@@ -139,7 +197,6 @@ namespace BToken.Chaining
           for (int i = 0; i < headersCount; i += 1)
           {
             headers.Add(Header.ParseHeader(headersBytes, ref startIndex, SHA256));
-
             startIndex += 1; // skip txCount (always a zero-byte)
           }
 
@@ -191,34 +248,27 @@ namespace BToken.Chaining
             cancellationTimeout.Token,
             CancellationSession.Token);
 
-          await Channel.SendMessageAsync(
-            new GetDataMessage(
-              DownloadBatch.Headers.Skip(DownloadBatch.Blocks.Count)
-              .Select(h => new Inventory(InventoryType.MSG_BLOCK, h.HeaderHash))
-              .ToList()));
-
+          await Channel.RequestBlocksAsync(
+            DownloadBatch.Headers.Skip(DownloadBatch.Blocks.Count)
+            .Select(h => h.HeaderHash));
+                    
           while (DownloadBatch.Blocks.Count < DownloadBatch.Headers.Count)
           {
-            NetworkMessage networkMessage = await Channel
-              .ReceiveSessionMessageAsync(cancellationDownloadBlocks.Token)
+            byte[] blockBytes = await Channel
+              .ReceiveBlockAsync(cancellationDownloadBlocks.Token)
               .ConfigureAwait(false);
-
-            if (networkMessage.Command != "block")
-            {
-              continue;
-            }
 
             Header header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
 
             Block block = BlockParser.ParseBlockHeader(
-              networkMessage.Payload,
+              blockBytes,
               header,
               header.HeaderHash,
               SHA256);
 
             DownloadBatch.Blocks.Add(block);
             CountBlocksDownloaded += 1;
-            DownloadBatch.BytesDownloaded += networkMessage.Payload.Length;
+            DownloadBatch.BytesDownloaded += blockBytes.Length;
           }
 
           Gateway.BatcherBuffer.Post(DownloadBatch);

@@ -12,7 +12,7 @@ namespace BToken.Networking
     public IEnumerable<Inventory> Inventories { get; private set; }
 
 
-    public GetDataMessage(List<Inventory> inventories) : base("getdata")
+    public GetDataMessage(IEnumerable<Inventory> inventories) : base("getdata")
     {
       Inventories = inventories;
 

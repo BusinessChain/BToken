@@ -32,7 +32,7 @@ namespace BToken
     {
       Network.Start();
 
-      await Blockchain.StartAsync();
+      await Blockchain.Start();
 
       //Task NetworkListenerTask = StartNetworkListenerAsync();
 

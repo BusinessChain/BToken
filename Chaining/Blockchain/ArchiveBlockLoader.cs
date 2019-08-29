@@ -12,7 +12,7 @@ namespace BToken.Chaining
   {
     class ArchiveBlockLoader
     {
-      const int COUNT_ARCHIVE_PARSER_PARALLEL = 8;
+      const int COUNT_ARCHIVE_PARSER_PARALLEL = 4;
 
       Blockchain Blockchain;
       readonly object LOCK_BatchIndexLoad = new object();
@@ -63,9 +63,11 @@ namespace BToken.Chaining
 
           try
           {
-            batchBuffer = await BlockArchiver
-              .ReadBlockBatchAsync(batchIndex)
-              .ConfigureAwait(false);
+            batchBuffer = null;
+
+            //batchBuffer = await BlockArchiver
+            //  .ReadBlockBatchAsync(batchIndex)
+            //  .ConfigureAwait(false);
           }
           catch (IOException)
           {
@@ -162,7 +164,7 @@ namespace BToken.Chaining
               throw ex;
             }
             
-            while (!Blockchain.UTXO.BatchBuffer.Post(batch))
+            while (!Blockchain.UTXO.InputBuffer.Post(batch))
             {
               await Task.Delay(1000);
             }

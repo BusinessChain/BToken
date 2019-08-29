@@ -10,19 +10,19 @@ namespace BToken.Networking
   class GetHeadersMessage : NetworkMessage
   {
     public uint ProtocolVersion { get; private set; }
-    public List<byte[]> HeaderLocator { get; private set; } = new List<byte[]>();
+    public IEnumerable<byte[]> HeaderLocator { get; private set; } = new List<byte[]>();
     public UInt256 StopHash { get; private set; }
 
-    public GetHeadersMessage(List<byte[]> headerLocator, uint protocolVersion)
+    public GetHeadersMessage(IEnumerable<byte[]> headerLocator, uint protocolVersion)
       : base("getheaders")
     {
       ProtocolVersion = protocolVersion;
       HeaderLocator = headerLocator;
       StopHash = new UInt256("0000000000000000000000000000000000000000000000000000000000000000");
 
-      serializePayload();
+      SerializePayload();
     }
-    void serializePayload()
+    void SerializePayload()
     {
       List<byte> payload = new List<byte>();
 

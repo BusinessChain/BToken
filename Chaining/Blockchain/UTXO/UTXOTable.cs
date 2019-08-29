@@ -37,7 +37,7 @@ namespace BToken.Chaining
       public int BatchIndexNext;
       int BatchIndexMergedLast;
       public Header HeaderMergedLast;
-      public BufferBlock<UTXOBatch> BatchBuffer = new BufferBlock<UTXOBatch>(
+      public BufferBlock<UTXOBatch> InputBuffer = new BufferBlock<UTXOBatch>(
         new DataflowBlockOptions { BoundedCapacity = 10 });
 
       long UTCTimeStartMerger;
@@ -195,7 +195,7 @@ namespace BToken.Chaining
         {
           while (true)
           {
-            UTXOBatch batch = await BatchBuffer
+            UTXOBatch batch = await InputBuffer
               .ReceiveAsync().ConfigureAwait(false);
 
             StopwatchMerging.Restart();
@@ -262,15 +262,13 @@ namespace BToken.Chaining
 
       public async Task LoadAsync()
       {
-        LoadImage();
-
         await Blockchain.ArchiveLoader.RunAsync();
       }
-      void LoadImage()
+      public int LoadImage()
       {
         if (Directory.Exists(PathUTXOState))
         {
-          if (!TryLoadUTXOState())
+          if (!TryLoadUTXOState(out int batchIndexMergedLast))
           {
             Directory.Delete(PathUTXOState, true);
 
@@ -278,23 +276,27 @@ namespace BToken.Chaining
             {
               Directory.Move(PathUTXOStateOld, PathUTXOState);
 
-              if (TryLoadUTXOState())
+              if (TryLoadUTXOState(out batchIndexMergedLast))
               {
-                return;
+                return batchIndexMergedLast;
               }
 
               Directory.Delete(PathUTXOState, true);
             }
           }
         }
+
+        return 0;
       }
-      bool TryLoadUTXOState()
+
+      bool TryLoadUTXOState(out int batchIndexMergedLast)
       {
         try
         {
           byte[] uTXOState = File.ReadAllBytes(Path.Combine(PathUTXOState, "UTXOState"));
 
           BatchIndexMergedLast = BitConverter.ToInt32(uTXOState, 0);
+          batchIndexMergedLast = BatchIndexMergedLast;
           BatchIndexNext = BatchIndexMergedLast + 1;
           BlockHeight = BitConverter.ToInt32(uTXOState, 4);
 
@@ -314,6 +316,7 @@ namespace BToken.Chaining
             Tables[c].Clear();
           }
 
+          batchIndexMergedLast = 0;
           BatchIndexNext = 0;
           BlockHeight = -1;
           HeaderMergedLast = null;

@@ -11,7 +11,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public partial class Headerchain
+    partial class Headerchain
     {
       class ChainInserter
       {
