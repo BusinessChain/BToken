@@ -55,7 +55,7 @@ namespace BToken.Chaining
 
 
       public GatewayBlockchainNetwork(
-        Blockchain blockchain, 
+        Blockchain blockchain,
         Network network, 
         Headerchain headerchain)
       {
@@ -93,8 +93,8 @@ namespace BToken.Chaining
 
         for (int i = 0; i < COUNT_HEADER_SESSIONS; i += 1)
         {
-          var session = new SyncHeaderchainSession(this);
-          syncHeaderchainTasks[i] = session.Start();
+          syncHeaderchainTasks[i] = 
+            new SyncHeaderchainSession(this).Start();
         }
 
         await Task.WhenAll(syncHeaderchainTasks);

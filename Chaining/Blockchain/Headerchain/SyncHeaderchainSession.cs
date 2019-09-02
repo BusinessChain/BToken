@@ -106,19 +106,18 @@ namespace BToken.Chaining
 
               if (HeaderBatchOld != null)
               {
-                HeaderBatchOld.IsLastBatch = true;
+                HeaderBatchOld.IsFinalBatch = true;
+
                 await Gateway.Blockchain.HeaderchainDataPipe.InputBuffer
                   .SendAsync(HeaderBatchOld);
               }
-
-              Console.WriteLine("session {0} completes chain syncing", GetHashCode());
 
               lock (Gateway.LOCK_IsSyncing)
               {
                 Gateway.IsSyncingCompleted = true;
               }
 
-              Console.WriteLine("session {0} ends chain syncing.", GetHashCode());
+              Console.WriteLine("session {0} completes chain syncing.", GetHashCode());
 
               return;
             }

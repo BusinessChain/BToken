@@ -25,6 +25,7 @@ namespace BToken.Chaining
     public override void Parse()
     {
       // HeaderBatch is already fully parsed at its creation
+      IsValid = true;
     }
 
     public byte[] GetHeaderHashPrevious()

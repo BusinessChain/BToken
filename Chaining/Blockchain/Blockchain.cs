@@ -60,7 +60,13 @@ namespace BToken.Chaining
     {      
       await HeaderchainDataPipe.Start();
 
+      Console.WriteLine("Chain loaded to hight {0}", 
+        Chain.GetHeight());
+
       await NetworkGateway.SyncHeaderchain();
+
+      Console.WriteLine("Chain synced to hight {0}",
+        Chain.GetHeight());
 
       //await UTXODataPipe.Start();
       //await SyncUTXO();

@@ -176,7 +176,7 @@ namespace BToken.Chaining
 
           if (HeaderBatchOld != null)
           {
-            HeaderBatchOld.IsLastBatch = true;
+            HeaderBatchOld.IsFinalBatch = true;
             await Gateway.HeaderBatchDataPipe.InputBuffer.SendAsync(HeaderBatchOld);
           }
 

@@ -8,10 +8,11 @@ namespace BToken.Chaining
 {
   public abstract class DataBatch
   {
+    public bool IsValid;
     public int Index;
     public List<ItemBatchContainer> ItemBatchContainers;
     public int CountItems;
-    public bool IsLastBatch;
+    public bool IsFinalBatch;
 
     public DataBatch(int index)
     {

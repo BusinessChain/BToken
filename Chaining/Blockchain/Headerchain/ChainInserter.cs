@@ -18,16 +18,12 @@ namespace BToken.Chaining
         Headerchain Headerchain;
         ChainProbe Probe;
         public double AccumulatedDifficulty;
-
-        readonly object IsDispatchedLOCK = new object();
-        bool IsDispatched = false;
-
-
+        
+        
         public ChainInserter(Headerchain headerchain)
         {
           Headerchain = headerchain;
           Probe = new ChainProbe(headerchain.MainChain);
-          Headerchain.SignalInserterAvailable.Post(true);
         }
 
         public void Initialize()

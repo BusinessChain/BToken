@@ -23,6 +23,7 @@ namespace BToken.Chaining
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
     public int BatchIndexLoad;
     int BatchIndexOutputQueue;
+    bool InvalidBatchEncountered;
 
     public async Task Start()
     {
@@ -32,9 +33,13 @@ namespace BToken.Chaining
       Parallel.For(
         0,
         COUNT_ARCHIVE_LOADER_PARALLEL,
-        i => ArchiveLoaderTasks[i] = StartArchiveLoaderAsync());
+        i => ArchiveLoaderTasks[i] = StartArchiveLoaderAsync(i));
 
       await Task.WhenAll(ArchiveLoaderTasks);
+
+      OutputQueue.Clear();
+      InvalidBatchEncountered = false;
+
 
       for (int i = 0; i < COUNT_NETWORK_PARSER_PARALLEL; i += 1)
       {
@@ -58,12 +63,12 @@ namespace BToken.Chaining
 
     async Task StartBatcherAsync()
     {
-      OutputBatch = Database.CreateBatch();
+      OutputBatch = Database.CreateBatch(BatchIndexOutputQueue);
 
       while (true)
       {
         InputBatch = await InputBuffer.ReceiveAsync().ConfigureAwait(false);
-
+        
         if (InputBatch.Index != InputBatchIndex)
         {
           QueueDownloadBatch.Add(InputBatch.Index, InputBatch);
@@ -112,7 +117,7 @@ namespace BToken.Chaining
       if (OutputBatch.CountItems + FIFOItems.Peek().CountItems > SIZE_OUTPUT_BATCH)
       {
         await ParserBuffer.SendAsync(OutputBatch);
-        OutputBatch = Database.CreateBatch();
+        OutputBatch = Database.CreateBatch(OutputBatch.Index + 1);
       }
 
       while (true)
@@ -126,7 +131,7 @@ namespace BToken.Chaining
 
           if (FIFOItems.Count == 0)
           {
-            if (InputBatch.IsLastBatch)
+            if (InputBatch.IsFinalBatch)
             {
               await ParserBuffer.SendAsync(OutputBatch);
             }
@@ -137,7 +142,7 @@ namespace BToken.Chaining
           if (OutputBatch.CountItems + FIFOItems.Peek().CountItems > SIZE_OUTPUT_BATCH)
           {
             await ParserBuffer.SendAsync(OutputBatch);
-            OutputBatch = Database.CreateBatch();
+            OutputBatch = Database.CreateBatch(OutputBatch.Index + 1);
             break;
           }
         } while (true);
@@ -158,6 +163,8 @@ namespace BToken.Chaining
         DataBatch batch = await ParserBuffer.ReceiveAsync()
           .ConfigureAwait(false);
 
+        Console.WriteLine("parse batch {0}", batch.Index);
+
         batch.Parse();
 
         Task archiveBatchTask = Database.ArchiveBatchAsync(batch);
@@ -171,81 +178,62 @@ namespace BToken.Chaining
     readonly object LOCK_BatchIndexLoad = new object();
     readonly object LOCK_OutputQueue = new object();
     readonly object LOCK_OccurredExceptionInAnyLoader = new object();
-    bool OccurredExceptionInAnyLoader;
 
-    async Task StartArchiveLoaderAsync()
+    async Task StartArchiveLoaderAsync(int loaderIndex)
     {
       int batchIndex;
-      while (true)
-      {
-        lock(LOCK_OccurredExceptionInAnyLoader)
-        {
-          if (OccurredExceptionInAnyLoader)
-          {
-            return;
-          }
-        }
+      DataBatch batch;
 
+      do
+      {
         lock (LOCK_BatchIndexLoad)
         {
           batchIndex = BatchIndexLoad;
           BatchIndexLoad += 1;
         }
 
-        try
-        {
-          DataBatch batch = Database.LoadBatchFromArchive(batchIndex);
-          await SendToOutputQueue(batch);
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine("Exception: '{0}' in data pipe with batch {1}",
-            ex.Message,
-            batchIndex);
+        batch = Database.LoadBatchFromArchive(batchIndex);
 
-          lock (LOCK_BatchIndexLoad)
-          {
-            if(OccurredExceptionInAnyLoader)
-            {
-              return;
-            }
-
-            OccurredExceptionInAnyLoader = true;
-            BatchIndexLoad = batchIndex;
-          }
-
-          return;
-        }
-      }
+      } while (await SendToOutputQueue(batch));
     }
 
 
-
-    async Task SendToOutputQueue(DataBatch batch)
+    
+    async Task<bool> SendToOutputQueue(DataBatch batch)
     {
       while (true)
       {
-        if (OutputQueue.Count < 10)
+        if(InvalidBatchEncountered)
         {
-          break;
+          return false;
         }
 
+        lock (LOCK_OutputQueue)
+        {
+          if (batch.Index == BatchIndexOutputQueue)
+          {
+            break;
+          }
+
+          if (OutputQueue.Count < 10)
+          {
+            OutputQueue.Add(batch.Index, batch);
+            return batch.IsValid;
+          }
+        }
+        
         await Task.Delay(2000).ConfigureAwait(false);
-      }
-
-      lock (LOCK_OutputQueue)
-      {
-        if (batch.Index != BatchIndexOutputQueue)
-        {
-          OutputQueue.Add(batch.Index, batch);
-
-          return;
-        }
       }
 
       while (true)
       {
-        Database.InsertBatch(batch);
+        if(
+          !batch.IsValid || 
+          !Database.TryInsertBatch(batch))
+        {
+          InvalidBatchEncountered = true;
+          return false;
+        }
 
         lock (LOCK_OutputQueue)
         {
@@ -257,7 +245,7 @@ namespace BToken.Chaining
           }
           else
           {
-            break;
+            return true;
           }
         }
       }

@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
+using System.Linq;
 using System.IO;
+using System.Threading.Tasks;
 using System.Security.Cryptography;
 
 using BToken.Networking;
-using BToken.Hashing;
 
 
 namespace BToken.Chaining
@@ -30,7 +29,6 @@ namespace BToken.Chaining
 
       public HeaderLocator Locator;
 
-      BufferBlock<bool> SignalInserterAvailable = new BufferBlock<bool>();
       ChainInserter Inserter;
 
       const int HEADERS_COUNT_MAX = 2000;
@@ -69,25 +67,25 @@ namespace BToken.Chaining
       }
 
 
-
-      int IndexBatchCreation = 1;
-
-      public DataBatch CreateBatch()
+      
+      public DataBatch CreateBatch(int index)
       {
-        return new HeaderBatch(IndexBatchCreation++);
+        return new HeaderBatch(index);
       }
 
 
       
-      public void InsertBatch(DataBatch batch)
+      public bool TryInsertBatch(DataBatch batch)
       {
         if (!HeaderHashInsertedLast.IsEqual(((HeaderBatch)batch).GetHeaderHashPrevious()))
         {
-          throw new ChainException(
-            string.Format("HeaderPrevious {0} of Batch {1} not equal to \nHeaderMergedLast {2}",
+          Console.WriteLine(
+            string.Format("HeaderHashPrevious {0} of Batch {1} not equal to \nHeaderHashInsertedLast {2}",
             ((HeaderBatch)batch).GetHeaderHashPrevious().ToHexString(),
             batch.Index,
             HeaderHashInsertedLast.ToHexString()));
+
+          return false;
         }
 
         foreach (HeaderBatchContainer headerBatchContainer in batch.ItemBatchContainers)
@@ -100,16 +98,19 @@ namespace BToken.Chaining
             }
             catch (ChainException ex)
             {
-              Console.WriteLine(string.Format("Insertion of header with hash '{0}' raised ChainException '{1}'.",
+              Console.WriteLine(string.Format("Insertion of header with hash '{0}' raised ChainException\n '{1}'.",
                 header.HeaderHash.ToHexString(),
                 ex.Message));
 
-              throw ex;
+              RollBackHeaderBatchInsertion((HeaderBatch)batch, header);
+
+              return false;
             }
           }
         }
 
         HeaderHashInsertedLast = ((HeaderBatch)batch).GetHeaderHashLast();
+        return true;
       }
 
       void InsertHeader(Header header)
@@ -127,14 +128,22 @@ namespace BToken.Chaining
       {
         if (header.HeaderHash.IsGreaterThan(header.NBits))
         {
-          throw new ChainException(ChainCode.INVALID);
+          throw new ChainException(
+            string.Format("header hash greater than NBits {1}",
+              header.HeaderHash.ToHexString(),
+              header.NBits),
+            ChainCode.INVALID);
         }
 
         const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-        bool IsTimestampPremature = header.UnixTimeSeconds > (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
+        bool IsTimestampPremature = header.UnixTimeSeconds > 
+          (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
         if (IsTimestampPremature)
         {
-          throw new ChainException(ChainCode.INVALID);
+          throw new ChainException(
+            string.Format("Timestamp premature {0}", 
+              new DateTime(header.UnixTimeSeconds).Date),
+            ChainCode.INVALID);
         }
       }
       void ReorganizeChain(Chain chain)
@@ -144,6 +153,24 @@ namespace BToken.Chaining
         MainChain = chain;
 
         Locator.Reorganize();
+      }
+
+      void RollBackHeaderBatchInsertion(
+        HeaderBatch headerBatch, 
+        Header stopHeader)
+      {
+        foreach (HeaderBatchContainer headerBatchContainer in headerBatch.ItemBatchContainers)
+        {
+          foreach (Header header in headerBatchContainer.Headers)
+          {
+            if(header == stopHeader)
+            {
+              return;
+            }
+
+
+          }
+        }
       }
 
       public Header ReadHeader(byte[] headerHash)
@@ -192,28 +219,44 @@ namespace BToken.Chaining
 
       public DataBatch LoadBatchFromArchive(int batchIndex)
       {
-        byte[] headerBytes = File.ReadAllBytes(FilePath + batchIndex);
-
+        var headerBatch = new HeaderBatch(batchIndex);
         int startIndex = 0;
-        var headers = new List<Header>();
-
         SHA256 sHA256 = SHA256.Create();
-        int headersCount = VarInt.GetInt32(headerBytes, ref startIndex);
-        for (int i = 0; i < headersCount; i += 1)
-        {
-          headers.Add(
-            Header.ParseHeader(
-              headerBytes, 
-              ref startIndex, 
-              sHA256));
 
-          startIndex += 1; // skip txCount (always a zero-byte)
+        try
+        {
+          byte[] headerBytes = File.ReadAllBytes(FilePath + batchIndex);
+
+          while (startIndex < headerBytes.Length)
+          {
+            var headers = new List<Header>();
+            int headersCount = VarInt.GetInt32(headerBytes, ref startIndex);
+            for (int i = 0; i < headersCount; i += 1)
+            {
+              headers.Add(
+                Header.ParseHeader(
+                  headerBytes,
+                  ref startIndex,
+                  sHA256));
+
+              startIndex += 1; // skip txCount (always a zero-byte)
+            }
+
+            headerBatch.ItemBatchContainers.Add(
+              new HeaderBatchContainer(headers, null));
+          }
+
+          headerBatch.IsValid = true;
+        }
+        catch (IOException) { }
+        catch (Exception ex)
+        {
+          Console.WriteLine("Exception in archive load of batch {0}: {1}",
+            batchIndex,
+            ex.Message);
         }
 
-        return new HeaderBatch(
-          headers, 
-          headerBytes, 
-          batchIndex);
+        return headerBatch;
       }
 
       public async Task ArchiveBatchAsync(DataBatch batch)
@@ -234,6 +277,11 @@ namespace BToken.Chaining
               batchContainer.Buffer.Length);
           }
         }
+      }
+
+      public int GetHeight()
+      {
+        return MainChain.Height;
       }
     }
   }
