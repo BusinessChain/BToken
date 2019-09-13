@@ -7,7 +7,7 @@ namespace BToken
   public class Header
   {
     public Header HeaderPrevious;
-    public Header[] HeadersNext;
+    public List<Header> HeadersNext = new List<Header>();
     
     const int COUNT_HEADER_BYTES = 80;
 

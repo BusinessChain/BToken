@@ -10,29 +10,26 @@ namespace BToken.Chaining
     {
       class Chain
       {
-        public Header HeaderTip { get; private set; }
-        public byte[] HeaderTipHash { get; private set; }
-        public int Height { get; private set; }
-        public double AccumulatedDifficulty { get; private set; }
-        public Header HeaderRoot { get; private set; }
+        public Header HeaderTip;
+        public int Height;
+        public double AccumulatedDifficulty;
+        public Header HeaderRoot;
 
 
         public Chain(
           Header headerRoot,
           int height,
-          double accumulatedDifficultyPrevious)
+          double accumulatedDifficulty)
         {
           HeaderTip = headerRoot;
-          HeaderTipHash = headerRoot.HeaderHash;
           Height = height;
           HeaderRoot = headerRoot;
-          AccumulatedDifficulty = accumulatedDifficultyPrevious + TargetManager.GetDifficulty(headerRoot.NBits);
+          AccumulatedDifficulty = accumulatedDifficulty;
         }
 
         public void ExtendChain(Header header)
         {
           HeaderTip = header;
-          HeaderTipHash = header.HeaderHash;
           Height++;
           AccumulatedDifficulty += TargetManager.GetDifficulty(header.NBits);
         }

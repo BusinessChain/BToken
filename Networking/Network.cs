@@ -56,6 +56,7 @@ namespace BToken.Networking
     public async Task<INetworkChannel> RequestChannelAsync()
     {
       Peer peer = new Peer(this);
+
       while(!await peer.TryConnectAsync())
       {
         await Task.Delay(3000);

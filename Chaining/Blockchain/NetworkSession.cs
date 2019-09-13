@@ -63,7 +63,7 @@ namespace BToken.Chaining
 
             try
             {
-              await SynchronizeChainAsync();
+              //await SynchronizeChainAsync();
 
               Console.WriteLine("session {0} ends chain syncing.", GetHashCode());
             }
@@ -106,103 +106,6 @@ namespace BToken.Chaining
         }
 
 
-        HeaderBatch HeaderBatchOld = null;
-        HeaderBatch HeaderBatch = null;
-        int HeaderBatchIndex = 0;
-
-        async Task SynchronizeChainAsync()
-        {
-          CancellationTokenSource cancellation = new CancellationTokenSource(TIMEOUT_GETHEADERS_MILLISECONDS);
-
-          IEnumerable<byte[]> locatorHashes = Gateway.GetLocatorHashes();
-
-          byte[] headerBytes = await Channel.GetHeadersAsync(
-            locatorHashes,
-            cancellation.Token);
-
-          List<Header> headers = ParseHeaders(headerBytes);
-          
-          HeaderBatch = new HeaderBatch(
-            headers, 
-            headerBytes,
-            HeaderBatchIndex++);
-
-          while(true)
-          {
-            lock (Gateway.LOCK_IsSyncing)
-            {
-              if(Gateway.IsSyncingCompleted)
-              {
-                return;
-              }
-
-              if (!Gateway.IsSyncing)
-              {
-                Gateway.IsSyncing = true;
-                IsSyncing = true;
-                break;
-              }
-            }
-
-            await Task.Delay(3000);
-          }
-
-          Console.WriteLine("session {0} enters header syncing", GetHashCode());
-
-          while (headers.Any())
-          {
-            if (HeaderBatchOld != null)
-            {
-              await Gateway.HeaderBatchDataPipe.InputBuffer.SendAsync(HeaderBatchOld);
-            }
-
-            HeaderBatchOld = HeaderBatch;
-            
-            locatorHashes = Gateway.SetLocatorHashes(
-              new List<byte[]> { headers.Last().HeaderHash });
-
-            cancellation.CancelAfter(TIMEOUT_GETHEADERS_MILLISECONDS);
-            headerBytes = await Channel.GetHeadersAsync(
-              locatorHashes,
-              cancellation.Token);
-
-            headers = ParseHeaders(headerBytes);
-
-            HeaderBatch = new HeaderBatch(
-                headers,
-                headerBytes,
-                HeaderBatchIndex++);
-          }
-
-          if (HeaderBatchOld != null)
-          {
-            HeaderBatchOld.IsFinalBatch = true;
-            await Gateway.HeaderBatchDataPipe.InputBuffer.SendAsync(HeaderBatchOld);
-          }
-
-          Console.WriteLine("session {0} completes chain syncing", GetHashCode());
-
-          lock(Gateway.LOCK_IsSyncing)
-          {
-            Gateway.IsSyncingCompleted = true;
-          }
-        }
-
-        List<Header> ParseHeaders(byte[] headersBytes)
-        {
-          int startIndex = 0;
-          var headers = new List<Header>();
-
-          int headersCount = VarInt.GetInt32(headersBytes, ref startIndex);
-          for (int i = 0; i < headersCount; i += 1)
-          {
-            headers.Add(Header.ParseHeader(headersBytes, ref startIndex, SHA256));
-            startIndex += 1; // skip txCount (always a zero-byte)
-          }
-
-          return headers;
-        }
-
         async Task SynchronizeUTXOAsync()
         {
           TimeStartChannelInterval = DateTimeOffset.UtcNow;
@@ -239,7 +142,7 @@ namespace BToken.Chaining
           }
         }
 
-        public async Task StartBlockDownloadAsync()
+        async Task StartBlockDownloadAsync()
         {
           StopwatchDownload.Restart();
 
@@ -283,7 +186,7 @@ namespace BToken.Chaining
           }
         }
 
-        public void CalculateNewCountBlocks()
+        void CalculateNewCountBlocks()
         {
           const float safetyFactorTimeout = 10;
           const float marginFactorResetCountBlocksDownload = 5;

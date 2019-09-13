@@ -8,8 +8,7 @@ namespace BToken.Chaining
 {
   interface IDatabase
   {
-    DataBatch CreateBatch(int index);
-    bool TryInsertBatch(DataBatch batch);
+    bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid);
     Task ArchiveBatchAsync(DataBatch batch);
     DataBatch LoadBatchFromArchive(int batchIndex);
     int LoadImage();

@@ -12,25 +12,22 @@ namespace BToken.Chaining
         const int RETARGETING_BLOCK_INTERVAL = 2016;
         const ulong RETARGETING_TIMESPAN_INTERVAL_SECONDS = 14 * 24 * 60 * 60;
 
-        static readonly UInt256 DIFFICULTY_1_TARGET = new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000");
+        static readonly UInt256 DIFFICULTY_1_TARGET =
+          new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000");
+
         const double MAX_TARGET = 2.695994666715064E67;
 
-        public static uint GetNextTargetBits(Header header, uint nextHeight)
+        public static uint GetNextTargetBits(Header header, uint height)
         {
-          uint nextTargetBits;
-
-          if ((nextHeight % RETARGETING_BLOCK_INTERVAL) == 0)
+          if ((height % RETARGETING_BLOCK_INTERVAL) == 0)
           {
             UInt256 nextTarget = GetNextTarget(header);
-            nextTargetBits = nextTarget.GetCompact();
+            return nextTarget.GetCompact();
           }
           else
           {
-            nextTargetBits = header.NBits;
+            return header.NBits;
           }
-
-          return nextTargetBits;
-
         }
         static UInt256 GetNextTarget(Header header)
         {

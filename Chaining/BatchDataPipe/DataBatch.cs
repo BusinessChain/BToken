@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public abstract class DataBatch
+  public class DataBatch
   {
     public bool IsValid;
     public int Index;
@@ -20,21 +20,37 @@ namespace BToken.Chaining
       ItemBatchContainers = new List<ItemBatchContainer>();
     }
 
-    public abstract void Parse();
+    public void Parse()
+    {
+      foreach(ItemBatchContainer container in ItemBatchContainers)
+      {
+        container.Parse();
+        CountItems += container.CountItems;
+      }
+    }
   }
 
   public abstract class ItemBatchContainer
   {
-    public string Label;
+    public DataBatch Batch;
     public int CountItems;
     public byte[] Buffer;
 
     protected ItemBatchContainer(
-      int countItems,
+      DataBatch batch,
       byte[] buffer)
     {
-      CountItems = countItems;
+      Batch = batch;
       Buffer = buffer;
     }
+
+    protected ItemBatchContainer(
+      DataBatch batch)
+    {
+      Batch = batch;
+    }
+
+
+    public abstract void Parse();
   }
 }

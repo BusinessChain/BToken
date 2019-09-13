@@ -24,7 +24,7 @@ namespace BToken.Chaining
 
         public void Reorganize()
         {
-          byte[] hash = Headerchain.MainChain.HeaderTipHash;
+          byte[] hash = Headerchain.MainChain.HeaderTip.HeaderHash;
           int height = Headerchain.MainChain.Height;
 
           BlockLocations = new List<HeaderLocation>() { new HeaderLocation(height, hash) };
@@ -56,7 +56,7 @@ namespace BToken.Chaining
         public void Update()
         {
           int height = Headerchain.MainChain.Height;
-          byte[] hash = Headerchain.MainChain.HeaderTipHash;
+          byte[] hash = Headerchain.MainChain.HeaderTip.HeaderHash;
 
           AddLocation(height, hash);
         }

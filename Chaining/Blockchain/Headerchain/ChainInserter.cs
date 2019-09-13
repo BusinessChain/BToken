@@ -37,32 +37,77 @@ namespace BToken.Chaining
           AccumulatedDifficulty -= TargetManager.GetDifficulty(Probe.Header.NBits);
         }
 
-        public Chain InsertHeader(Header header)
+        List<Header> ValidateChain(Header headerRoot)
         {
-          FindPreviousHeader(header);
-
-          ValidateHeader(header);
-
-          header.HeaderPrevious = Probe.Header;
-
-          if (Probe.Header.HeadersNext == null)
+          var headersValidated = new List<Header>();
+          Header header = headerRoot;
+          
+          while (true)
           {
-            Probe.Header.HeadersNext = new Header[1] { header };
+            uint medianTimePast = GetMedianTimePast(header.HeaderPrevious);
+            if (header.UnixTimeSeconds < medianTimePast)
+            {
+              throw new ChainException(
+                string.Format("header {0} with unix time {1} older than median time past {2}",
+                header.HeaderHash.ToHexString(),
+                DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
+                DateTimeOffset.FromUnixTimeSeconds(medianTimePast)));
+            }
+
+            ValidateCheckpoint(header.HeaderHash, Probe.GetHeight() + headersValidated.Count + 1);
+
+            uint targetBits = TargetManager.GetNextTargetBits(
+                header.HeaderPrevious,
+                (uint)(Probe.GetHeight() + headersValidated.Count + 1));
+
+            if (header.NBits != targetBits)
+            {
+              throw new ChainException(
+                string.Format("In header {0} nBits {1} not equal to target nBits {2}",
+                header.HeaderHash.ToHexString(),
+                header.NBits,
+                targetBits));
+            }
+
+            headersValidated.Add(header);
+
+            if(header.HeadersNext.Any())
+            {
+              header = header.HeadersNext[0];
+            }
+            else
+            {
+              return headersValidated;
+            }
           }
-          else
+        }
+
+        public Chain InsertChain(Header headerRoot)
+        {
+          FindPreviousHeader(headerRoot);
+
+          if (Probe.Header.HeadersNext.Any(h => h.HeaderHash.IsEqual(headerRoot.HeaderHash)))
           {
-            var headersNextNew = new Header[Probe.Header.HeadersNext.Length + 1];
-            Probe.Header.HeadersNext.CopyTo(headersNextNew, 0);
-            headersNextNew[Probe.Header.HeadersNext.Length] = header;
-
-            Probe.Header.HeadersNext = headersNextNew;
+            throw new ChainException(
+              string.Format("duplicate header {0} \n attempting to connect to header {1}",
+              headerRoot.HeaderHash.ToHexString(),
+              headerRoot.HashPrevious.ToHexString()));
           }
 
-          Headerchain.UpdateHeaderIndex(header);
+          headerRoot.HeaderPrevious = Probe.Header;
+
+          List<Header> headersValidated = ValidateChain(headerRoot);
+
+          Probe.Header.HeadersNext.Add(headerRoot);
+          
+          headersValidated.ForEach(h => Headerchain.UpdateHeaderIndex(h));
 
           if (Probe.IsTip())
           {
-            Probe.Chain.ExtendChain(header);
+            Probe.Chain.HeaderTip = headersValidated.Last();
+            Probe.Chain.Height += headersValidated.Count;
+            Probe.Chain.AccumulatedDifficulty += headersValidated
+              .Sum(h => TargetManager.GetDifficulty(h.NBits));
 
             if (Probe.Chain == Headerchain.MainChain)
             {
@@ -74,14 +119,51 @@ namespace BToken.Chaining
           }
           else
           {
-            Chain chainForked = new Chain(
-              headerRoot: header,
-              height: Probe.GetHeight() + 1,
-              accumulatedDifficultyPrevious: AccumulatedDifficulty);
+            Chain chainFork = new Chain(
+              headerRoot: headerRoot,
+              height: Probe.GetHeight() + headersValidated.Count,
+              accumulatedDifficulty: AccumulatedDifficulty + headersValidated
+              .Sum(h => TargetManager.GetDifficulty(h.NBits)));
 
-            Headerchain.SecondaryChains.Add(chainForked);
+            Headerchain.SecondaryChains.Add(chainFork);
 
-            return chainForked;
+            return chainFork;
+          }
+        }
+        void TryValidateChain(Header headerRoot, int height)
+        {
+          Header header = headerRoot;
+          double accumulatedDifficulty = 0;
+
+          for (int i = 0; i < height; i += 1)
+          {
+            uint medianTimePast = GetMedianTimePast(header.HeaderPrevious);
+            if (header.UnixTimeSeconds < medianTimePast)
+            {
+              throw new ChainException(
+                string.Format("header {0} with unix time {1} older than median time past {2}",
+                header.HeaderHash.ToHexString(),
+                DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
+                DateTimeOffset.FromUnixTimeSeconds(medianTimePast)));
+            }
+
+            ValidateCheckpoint(header.HeaderHash, Probe.GetHeight() + i + 1);
+
+            uint targetBits = TargetManager.GetNextTargetBits(
+                header.HeaderPrevious,
+                (uint)(Probe.GetHeight() + i + 1));
+
+            if (header.NBits != targetBits)
+            {
+              throw new ChainException(
+                string.Format("In header {0} nBits {1} not equal to target nBits {2}",
+                header.HeaderHash.ToHexString(),
+                header.NBits,
+                targetBits));
+            }
+
+            header = header.HeadersNext[0];
+            accumulatedDifficulty += TargetManager.GetDifficulty(header.NBits);
           }
         }
         void FindPreviousHeader(Header header)
@@ -96,65 +178,36 @@ namespace BToken.Chaining
             if (Probe.GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
           }
 
-          throw new ChainException(ChainCode.ORPHAN);
+          throw new ChainException(
+            string.Format("previous header {0}\n of header {1} not found in headerchain",
+            header.HashPrevious.ToHexString(),
+            header.HeaderHash.ToHexString()));
         }
-        void ValidateHeader(Header header)
+        void ValidateCheckpoint(byte[] headerHash, int headerHeight)
         {
-          ValidateTimeStamp(header.UnixTimeSeconds);
-          ValidateCheckpoint(header.HeaderHash);
-          ValidateUniqueness(header.HeaderHash);
-          ValidateProofOfWork(header.NBits);
-        }
-        void ValidateCheckpoint(byte[] headerHash)
-        {
-          int nextHeaderHeight = Probe.GetHeight() + 1;
+          int hightHighestCheckpoint = Headerchain.Checkpoints.Max(x => x.Height);
 
-          int highestCheckpointHight = Headerchain.Checkpoints.Max(x => x.Height);
-          bool mainChainLongerThanHighestCheckpoint = highestCheckpointHight <= Headerchain.MainChain.Height;
-          bool nextHeightBelowHighestCheckpoint = nextHeaderHeight <= highestCheckpointHight;
-          if (mainChainLongerThanHighestCheckpoint && nextHeightBelowHighestCheckpoint)
-          {
-            throw new ChainException(ChainCode.INVALID.ToString(), ChainCode.INVALID);
-          }
-
-          if (!TryValidateBlockLocation(nextHeaderHeight, headerHash))
-          {
-            throw new ChainException(ChainCode.INVALID.ToString(), ChainCode.INVALID);
-          }
-        }
-        bool TryValidateBlockLocation(int height, byte[] hash)
-        {
-          HeaderLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == height);
-          if (checkpoint != null)
-          {
-            return checkpoint.Hash.IsEqual(hash);
-          }
-
-          return true;
-        }
-        void ValidateProofOfWork(uint nBits)
-        {
-          int nextHeight = Probe.GetHeight() + 1;
-          if (nBits != TargetManager.GetNextTargetBits(Probe.Header, (uint)nextHeight))
-          {
-            throw new ChainException(ChainCode.INVALID.ToString(), ChainCode.INVALID);
-          }
-        }
-        void ValidateTimeStamp(uint unixTimeSeconds)
-        {
-          if (unixTimeSeconds <= GetMedianTimePast(Probe.Header))
-          {
-            throw new ChainException(ChainCode.INVALID.ToString(), ChainCode.INVALID);
-          }
-        }
-        void ValidateUniqueness(byte[] hash)
-        {
           if (
-            Probe.Header.HeadersNext != null &&
-            Probe.Header.HeadersNext.Select(h => Probe.GetHeaderHash(h)).Contains(hash, new EqualityComparerByteArray()))
+            hightHighestCheckpoint <= Headerchain.MainChain.Height && 
+            headerHeight <= hightHighestCheckpoint)
           {
-            throw new ChainException(ChainCode.DUPLICATE.ToString(), ChainCode.DUPLICATE);
+            throw new ChainException(
+              string.Format("Attempt to insert header {0} at hight {1} prior to checkpoint hight {2}",
+              headerHash.ToHexString(),
+              headerHeight,
+              hightHighestCheckpoint));
           }
+
+          HeaderLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == headerHeight);
+          if (checkpoint != null && !checkpoint.Hash.IsEqual(headerHash))
+          {
+            throw new ChainException(
+              string.Format("Header {0} at hight {1} not equal to checkpoint hash {2}",
+              headerHash.ToHexString(),
+              headerHeight,
+              checkpoint.Hash.ToHexString()));
+          }
+
         }
         uint GetMedianTimePast(Header header)
         {

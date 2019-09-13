@@ -13,7 +13,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class GatewayBlockchainNetwork
+    partial class GatewayBlockchainNetwork : IGateway
     {
       const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
       const int COUNT_NETWORK_PARSER_PARALLEL = 4;
@@ -21,8 +21,7 @@ namespace BToken.Chaining
 
       Blockchain Blockchain;
       Network Network;
-
-      BatchDataPipe HeaderBatchDataPipe;
+      
       readonly object LOCK_HeaderLoad = new object();
       Header HeaderLoadedLast;
       int IndexDownloadBatch;
@@ -61,14 +60,10 @@ namespace BToken.Chaining
       {
         Blockchain = blockchain;
         Network = network;
-
-        HeaderBatchDataPipe = new BatchDataPipe(headerchain);
       }
 
       public void Start()
       {
-        HeaderBatchDataPipe.Start();
-
         HeaderLoadedLast = Blockchain.ArchiveLoader.HeaderPostedToMergerLast;
         StartBatchIndex = Blockchain.ArchiveLoader.BatchIndexLoad;
         BatchIndexNextOutput = Blockchain.ArchiveLoader.BatchIndexLoad;
@@ -87,7 +82,7 @@ namespace BToken.Chaining
 
       const int COUNT_HEADER_SESSIONS = 8;
 
-      public async Task SyncHeaderchain()
+      public async Task Synchronize()
       {
         Task[] syncHeaderchainTasks = new Task[COUNT_HEADER_SESSIONS];
 
@@ -132,24 +127,47 @@ namespace BToken.Chaining
 
 
 
+      public void ReportInvalidBatch(DataBatch batch)
+      {
+        throw new NotImplementedException();
+      }
+
+
       readonly object LOCK_LocatorHashes = new object();
       IEnumerable<byte[]> LocatorHashes;
-      IEnumerable<byte[]> GetLocatorHashes()
+      int HeaderBatchIndex;
+      DataBatch HeaderBatchOld;
+      TaskCompletionSource<object> SignalStartHeaderSyncSession =
+        new TaskCompletionSource<object>();
+
+      DataBatch CreateHeaderBatch()
       {
-        lock(LOCK_LocatorHashes)
+        int batchIndex;
+        IEnumerable<byte[]> locatorHashes;
+
+        lock (LOCK_IsSyncing)
         {
-          LocatorHashes = LocatorHashes ?? Blockchain.GetLocatorHashes();
-          return LocatorHashes;
+          batchIndex = HeaderBatchIndex;
+
+          if (LocatorHashes == null)
+          {
+            LocatorHashes = Blockchain.GetLocatorHashes();
+          }
+
+          locatorHashes = LocatorHashes;
         }
+
+        var headerBatch = new DataBatch(batchIndex);
+
+        headerBatch.ItemBatchContainers.Add(
+          new HeaderBatchContainer(
+            headerBatch,
+            locatorHashes));
+
+        return headerBatch;
       }
-      IEnumerable<byte[]> SetLocatorHashes(IEnumerable<byte[]> locatorHashes)
-      {
-        lock (LOCK_LocatorHashes)
-        {
-          LocatorHashes = locatorHashes;
-          return locatorHashes;
-        }
-      }
+
+
 
       bool TryGetDownloadBatch(out DownloadBatch downloadBatch, int countHeaders)
       {

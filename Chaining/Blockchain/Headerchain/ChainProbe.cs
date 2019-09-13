@@ -31,7 +31,7 @@ namespace BToken.Chaining
         public void Initialize()
         {
           Header = Chain.HeaderTip;
-          Hash = Chain.HeaderTipHash;
+          Hash = Chain.HeaderTip.HeaderHash;
           Depth = 0;
         }
 
@@ -69,7 +69,7 @@ namespace BToken.Chaining
           }
           else if (header == Chain.HeaderTip)
           {
-            return Chain.HeaderTipHash;
+            return Chain.HeaderTip.HeaderHash;
           }
           else
           {

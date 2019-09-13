@@ -22,8 +22,6 @@ namespace BToken.Chaining
       public Header GenesisHeader;
       List<HeaderLocation> Checkpoints;
 
-      byte[] HeaderHashInsertedLast;
-
       readonly object HeaderIndexLOCK = new object();
       Dictionary<int, List<Header>> HeaderIndex;
 
@@ -49,8 +47,7 @@ namespace BToken.Chaining
         Network = network;
         GenesisHeader = genesisHeader;
         Checkpoints = checkpoints;
-        MainChain = new Chain(GenesisHeader, 0, 0);
-        HeaderHashInsertedLast = GenesisHeader.HeaderHash;
+        MainChain = new Chain(GenesisHeader, 0, TargetManager.GetDifficulty(GenesisHeader.NBits));
 
         HeaderIndex = new Dictionary<int, List<Header>>();
         UpdateHeaderIndex(GenesisHeader);
@@ -68,84 +65,47 @@ namespace BToken.Chaining
 
 
       
-      public DataBatch CreateBatch(int index)
+      byte[] GetHeaderHashPrevious(DataBatch dataBatch)
       {
-        return new HeaderBatch(index);
+        HeaderBatchContainer firstContainer = 
+          (HeaderBatchContainer)dataBatch.ItemBatchContainers.First();
+
+        return firstContainer.HeaderRoot.HeaderHash;
       }
 
-
-      
-      public bool TryInsertBatch(DataBatch batch)
+      public bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid)
       {
-        if (!HeaderHashInsertedLast.IsEqual(((HeaderBatch)batch).GetHeaderHashPrevious()))
-        {
-          Console.WriteLine(
-            string.Format("HeaderHashPrevious {0} of Batch {1} not equal to \nHeaderHashInsertedLast {2}",
-            ((HeaderBatch)batch).GetHeaderHashPrevious().ToHexString(),
-            batch.Index,
-            HeaderHashInsertedLast.ToHexString()));
+        Chain rivalChain;
 
-          return false;
-        }
-
-        foreach (HeaderBatchContainer headerBatchContainer in batch.ItemBatchContainers)
+        foreach(HeaderBatchContainer headerContainer in batch.ItemBatchContainers)
         {
-          foreach (Header header in headerBatchContainer.Headers)
+          try
           {
-            try
-            {
-              InsertHeader(header);
-            }
-            catch (ChainException ex)
-            {
-              Console.WriteLine(string.Format("Insertion of header with hash '{0}' raised ChainException\n '{1}'.",
-                header.HeaderHash.ToHexString(),
-                ex.Message));
+            rivalChain = Inserter.InsertChain(headerContainer.HeaderRoot);
+          }
+          catch (ChainException ex)
+          {
+            Console.WriteLine(
+              "Insertion of batch {0} raised ChainException:\n {1}.",
+              batch.Index,
+              ex.Message);
 
-              RollBackHeaderBatchInsertion((HeaderBatch)batch, header);
+            containerInvalid = headerContainer;
+            return false;
+          }
 
-              return false;
-            }
+          if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
+          {
+            ReorganizeChain(rivalChain);
           }
         }
 
-        HeaderHashInsertedLast = ((HeaderBatch)batch).GetHeaderHashLast();
+        Console.WriteLine("Inserted batch {0} in headerchain", batch.Index);
+
+        containerInvalid = null;
         return true;
       }
-
-      void InsertHeader(Header header)
-      {
-        ValidateHeader(header);
-
-        Chain rivalChain = Inserter.InsertHeader(header);
-
-        if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
-        {
-          ReorganizeChain(rivalChain);
-        }
-      }
-      static void ValidateHeader(Header header)
-      {
-        if (header.HeaderHash.IsGreaterThan(header.NBits))
-        {
-          throw new ChainException(
-            string.Format("header hash greater than NBits {1}",
-              header.HeaderHash.ToHexString(),
-              header.NBits),
-            ChainCode.INVALID);
-        }
-
-        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-        bool IsTimestampPremature = header.UnixTimeSeconds > 
-          (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
-        if (IsTimestampPremature)
-        {
-          throw new ChainException(
-            string.Format("Timestamp premature {0}", 
-              new DateTime(header.UnixTimeSeconds).Date),
-            ChainCode.INVALID);
-        }
-      }
+      
       void ReorganizeChain(Chain chain)
       {
         SecondaryChains.Remove(chain);
@@ -153,24 +113,6 @@ namespace BToken.Chaining
         MainChain = chain;
 
         Locator.Reorganize();
-      }
-
-      void RollBackHeaderBatchInsertion(
-        HeaderBatch headerBatch, 
-        Header stopHeader)
-      {
-        foreach (HeaderBatchContainer headerBatchContainer in headerBatch.ItemBatchContainers)
-        {
-          foreach (Header header in headerBatchContainer.Headers)
-          {
-            if(header == stopHeader)
-            {
-              return;
-            }
-
-
-          }
-        }
       }
 
       public Header ReadHeader(byte[] headerHash)
@@ -219,34 +161,19 @@ namespace BToken.Chaining
 
       public DataBatch LoadBatchFromArchive(int batchIndex)
       {
-        var headerBatch = new HeaderBatch(batchIndex);
-        int startIndex = 0;
-        SHA256 sHA256 = SHA256.Create();
-
+        var batch = new DataBatch(batchIndex);
+        
         try
         {
-          byte[] headerBytes = File.ReadAllBytes(FilePath + batchIndex);
+          batch.ItemBatchContainers.Add(new HeaderBatchContainer(
+            batch,
+            File.ReadAllBytes(FilePath + batchIndex)));
 
-          while (startIndex < headerBytes.Length)
-          {
-            var headers = new List<Header>();
-            int headersCount = VarInt.GetInt32(headerBytes, ref startIndex);
-            for (int i = 0; i < headersCount; i += 1)
-            {
-              headers.Add(
-                Header.ParseHeader(
-                  headerBytes,
-                  ref startIndex,
-                  sHA256));
+          batch.Parse();
 
-              startIndex += 1; // skip txCount (always a zero-byte)
-            }
+          batch.IsValid = true;
 
-            headerBatch.ItemBatchContainers.Add(
-              new HeaderBatchContainer(headers, null));
-          }
-
-          headerBatch.IsValid = true;
+          return batch;
         }
         catch (IOException) { }
         catch (Exception ex)
@@ -256,7 +183,7 @@ namespace BToken.Chaining
             ex.Message);
         }
 
-        return headerBatch;
+        return batch;
       }
 
       public async Task ArchiveBatchAsync(DataBatch batch)
@@ -272,8 +199,8 @@ namespace BToken.Chaining
           foreach (HeaderBatchContainer batchContainer in batch.ItemBatchContainers)
           {
             await fileStream.WriteAsync(
-              batchContainer.Buffer, 
-              0, 
+              batchContainer.Buffer,
+              0,
               batchContainer.Buffer.Length);
           }
         }

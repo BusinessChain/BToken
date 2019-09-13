@@ -80,9 +80,10 @@
     <Compile Include="Chaining\BatchDataPipe\BatchDataPipe.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
     <Compile Include="Chaining\BatchDataPipe\IDatabase.cs" />
+    <Compile Include="Chaining\BatchDataPipe\IGateway.cs" />
     <Compile Include="Chaining\Blockchain\Block.cs" />
     <Compile Include="Chaining\Blockchain\ArchiveBlockLoader.cs" />
-    <Compile Include="Chaining\Blockchain\Headerchain\HeaderBatch.cs" />
+    <Compile Include="Chaining\Blockchain\Headerchain\HeaderBatchContainer.cs" />
     <Compile Include="Chaining\Blockchain\Headerchain\SyncHeaderchainSession.cs" />
     <Compile Include="Chaining\Blockchain\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
     <Compile Include="Chaining\Blockchain\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />

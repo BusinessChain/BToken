@@ -42,8 +42,6 @@ namespace BToken.Chaining
         checkpoints, 
         network);
 
-      HeaderchainDataPipe = new BatchDataPipe(Chain);
-
       UTXO = new UTXOTable(this);
 
       ArchiveLoader = new ArchiveBlockLoader(this);
@@ -52,6 +50,8 @@ namespace BToken.Chaining
         this, 
         network, 
         Chain);
+
+      HeaderchainDataPipe = new BatchDataPipe(Chain, NetworkGateway);
     }
 
 
@@ -60,10 +60,7 @@ namespace BToken.Chaining
     {      
       await HeaderchainDataPipe.Start();
 
-      Console.WriteLine("Chain loaded to hight {0}", 
-        Chain.GetHeight());
-
-      await NetworkGateway.SyncHeaderchain();
+      await Task.Delay(3000);
 
       Console.WriteLine("Chain synced to hight {0}",
         Chain.GetHeight());
