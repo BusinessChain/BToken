@@ -82,7 +82,8 @@
     <Compile Include="Chaining\BatchDataPipe\IDatabase.cs" />
     <Compile Include="Chaining\BatchDataPipe\IGateway.cs" />
     <Compile Include="Chaining\Blockchain\Block.cs" />
-    <Compile Include="Chaining\Blockchain\ArchiveBlockLoader.cs" />
+    <Compile Include="Chaining\Blockchain\BlockBatchContainer.cs" />
+    <Compile Include="Chaining\Blockchain\GatewayUTXO.cs" />
     <Compile Include="Chaining\Blockchain\Headerchain\HeaderBatchContainer.cs" />
     <Compile Include="Chaining\Blockchain\Headerchain\SyncHeaderchainSession.cs" />
     <Compile Include="Chaining\Blockchain\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
@@ -92,7 +93,7 @@
     <Compile Include="Chaining\Blockchain\UTXO\UTXOIndexCompressed\UTXOIndexULong64Compressed.cs" />
     <Compile Include="Chaining\Blockchain\UTXO\UTXOIndexCompressed\UTXOIndexCompressed.cs" />
     <Compile Include="Chaining\Blockchain\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
-    <Compile Include="Chaining\Blockchain\GatewayBlockchainNetwork.cs" />
+    <Compile Include="Chaining\Blockchain\GatewayHeaderchain.cs" />
     <Compile Include="Chaining\Blockchain\UTXO\UTXOBatch.cs" />
     <Compile Include="Chaining\Blockchain\DownloadBatch.cs" />
     <Compile Include="Chaining\Blockchain\BlockParser.cs" />

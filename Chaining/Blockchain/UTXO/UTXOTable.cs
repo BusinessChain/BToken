@@ -9,7 +9,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class UTXOTable
+    partial class UTXOTable : IDatabase
     {
       Blockchain Blockchain;
 
@@ -260,10 +260,6 @@ namespace BToken.Chaining
         });
       }
 
-      public async Task LoadAsync()
-      {
-        await Blockchain.ArchiveLoader.RunAsync();
-      }
       public int LoadImage()
       {
         if (Directory.Exists(PathUTXOState))
@@ -286,7 +282,55 @@ namespace BToken.Chaining
           }
         }
 
-        return 0;
+        return 1;
+      }
+
+
+
+      public bool TryInsertDataContainer(ItemBatchContainer dataContainer)
+      {
+        throw new NotImplementedException();
+      }
+
+      public bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid)
+      {
+        throw new NotImplementedException();
+      }
+      public Task ArchiveBatchAsync(DataBatch batch)
+      {
+        throw new NotImplementedException();
+      }
+
+
+
+      string FilePath = "J:\\BlockArchivePartitioned\\p";
+
+      public ItemBatchContainer LoadDataArchive(int batchIndex)
+      {
+        var batch = new DataBatch(batchIndex);
+
+        try
+        {
+          batch.ItemBatchContainers.Add(new BlockBatchContainer(
+            new BlockParser(Blockchain.Chain),
+            batch,
+            File.ReadAllBytes(FilePath + batchIndex)));
+
+          batch.Parse();
+
+          batch.IsValid = true;
+
+          return null;
+        }
+        catch (IOException) { }
+        catch (Exception ex)
+        {
+          Console.WriteLine("Exception in archive load of batch {0}: {1}",
+            batchIndex,
+            ex.Message);
+        }
+
+        return null;
       }
 
       bool TryLoadUTXOState(out int batchIndexMergedLast)

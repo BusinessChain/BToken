@@ -22,19 +22,19 @@ namespace BToken.Chaining
 
     const int COUNT_ARCHIVE_LOADER_PARALLEL = 4;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
-    public int BatchIndexLoad;
+    public int ArchiveIndexLoad;
     int BatchIndexOutputQueue;
     bool InvalidBatchEncountered;
 
     public async Task Start()
     {
-      BatchIndexLoad = Database.LoadImage();
-      BatchIndexOutputQueue = BatchIndexLoad;
+      ArchiveIndexLoad = Database.LoadImage();
+      BatchIndexOutputQueue = ArchiveIndexLoad;
 
       Parallel.For(
         0,
         COUNT_ARCHIVE_LOADER_PARALLEL,
-        i => ArchiveLoaderTasks[i] = StartArchiveLoaderAsync(i));
+        i => ArchiveLoaderTasks[i] = StartArchiveLoaderAsync());
 
       await Task.WhenAll(ArchiveLoaderTasks);
 
@@ -170,48 +170,65 @@ namespace BToken.Chaining
     readonly object LOCK_OutputQueue = new object();
     readonly object LOCK_OccurredExceptionInAnyLoader = new object();
 
-    async Task StartArchiveLoaderAsync(int loaderIndex)
+    async Task StartArchiveLoaderAsync()
     {
-      int batchIndex;
-      DataBatch batch;
+      ItemBatchContainer dataConstainer;
+      int archiveIndex;
 
       do
       {
         lock (LOCK_BatchIndexLoad)
         {
-          batchIndex = BatchIndexLoad;
-          BatchIndexLoad += 1;
+          archiveIndex = ArchiveIndexLoad;
+          ArchiveIndexLoad += 1;
         }
 
-        batch = Database.LoadBatchFromArchive(batchIndex);
+        try
+        {
+          dataConstainer = Database.LoadDataArchive(archiveIndex);
+          dataConstainer.Parse();
+          dataConstainer.IsValid = true;
+        }
+        catch(IOException)
+        {
+          return;
+        }
+        catch(Exception ex)
+        {
+          Console.WriteLine("Exception in archive load of batch {0}: {1}",
+            archiveIndex,
+            ex.Message);
 
-      } while (await SendToOutputQueue(batch));
+          return;
+        }
+
+      } while (await SendToOutputQueue(dataConstainer));
     }
 
 
 
-    Dictionary<int, DataBatch> OutputQueue = new Dictionary<int, DataBatch>();
+    Dictionary<int, ItemBatchContainer> OutputQueue = new Dictionary<int, ItemBatchContainer>();
 
-    async Task<bool> SendToOutputQueue(DataBatch batch)
+    async Task<bool> SendToOutputQueue(ItemBatchContainer itemBatchContainer)
     {
       while (true)
       {
-        if(InvalidBatchEncountered)
-        {
-          return false;
-        }
-
         lock (LOCK_OutputQueue)
         {
-          if (batch.Index == BatchIndexOutputQueue)
+          if(InvalidBatchEncountered)
+          {
+            return false;
+          }
+
+          if (itemBatchContainer.Index == BatchIndexOutputQueue)
           {
             break;
           }
 
           if (OutputQueue.Count < 10)
           {
-            OutputQueue.Add(batch.Index, batch);
-            return batch.IsValid;
+            OutputQueue.Add(itemBatchContainer.Index, itemBatchContainer);
+            return true;
           }
         }
         
@@ -221,11 +238,9 @@ namespace BToken.Chaining
       while (true)
       {
         if(
-          !batch.IsValid || 
-          !Database.TryInsertBatch(batch, out ItemBatchContainer containerInvalid))
-        {
-          Console.WriteLine("invalid batch {0} encountered", batch.Index);
-          
+          !itemBatchContainer.IsValid ||
+          !Database.TryInsertDataContainer(itemBatchContainer))
+        {          
           InvalidBatchEncountered = true;
           return false;
         }
@@ -234,7 +249,7 @@ namespace BToken.Chaining
         {
           BatchIndexOutputQueue += 1;
           
-          if (OutputQueue.TryGetValue(BatchIndexOutputQueue, out batch))
+          if (OutputQueue.TryGetValue(BatchIndexOutputQueue, out itemBatchContainer))
           {
             OutputQueue.Remove(BatchIndexOutputQueue);
           }

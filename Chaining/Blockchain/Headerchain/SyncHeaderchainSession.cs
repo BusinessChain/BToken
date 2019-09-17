@@ -12,13 +12,13 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class GatewayBlockchainNetwork
+    partial class GatewayHeaderchain
     {
       class SyncHeaderchainSession
       {
-        GatewayBlockchainNetwork Gateway;
+        GatewayHeaderchain Gateway;
 
-        public SyncHeaderchainSession(GatewayBlockchainNetwork gateway)
+        public SyncHeaderchainSession(GatewayHeaderchain gateway)
         {
           Gateway = gateway;
         }

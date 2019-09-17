@@ -14,7 +14,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class GatewayBlockchainNetwork
+    partial class GatewayHeaderchain
     {
       class NetworkSession
       {
@@ -26,8 +26,7 @@ namespace BToken.Chaining
         const int TIMEOUT_GETHEADERS_MILLISECONDS = 10000;
         const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
-        GatewayBlockchainNetwork Gateway;
-        BlockParser Parser;
+        GatewayHeaderchain Gateway;
         SHA256 SHA256;
 
         public SESSION_STATE State = SESSION_STATE.IDLE;
@@ -45,10 +44,9 @@ namespace BToken.Chaining
 
         public DateTimeOffset TimeStartChannelInterval;
 
-        public NetworkSession(GatewayBlockchainNetwork gateway, BlockParser parser)
+        public NetworkSession(GatewayHeaderchain gateway)
         {
           Gateway = gateway;
-          Parser = parser;
           SHA256 = SHA256.Create();
 
           CancellationSession = CancellationTokenSource.CreateLinkedTokenSource(
@@ -163,15 +161,15 @@ namespace BToken.Chaining
 
             Header header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
 
-            Block block = BlockParser.ParseBlockHeader(
-              blockBytes,
-              header,
-              header.HeaderHash,
-              SHA256);
+            //Block block = BlockParser.ParseBlockHeader(
+            //  blockBytes,
+            //  header,
+            //  header.HeaderHash,
+            //  SHA256);
 
-            DownloadBatch.Blocks.Add(block);
-            CountBlocksDownloaded += 1;
-            DownloadBatch.BytesDownloaded += blockBytes.Length;
+            //DownloadBatch.Blocks.Add(block);
+            //CountBlocksDownloaded += 1;
+            //DownloadBatch.BytesDownloaded += blockBytes.Length;
           }
 
           Gateway.BatcherBuffer.Post(DownloadBatch);

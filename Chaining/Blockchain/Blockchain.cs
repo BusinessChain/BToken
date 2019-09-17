@@ -10,17 +10,14 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    Network Network;
-    List<HeaderLocation> Checkpoints;
-
     BatchDataPipe UTXODataPipe;
     UTXOTable UTXO;
     readonly object LOCK_Chain = new object();
 
     BatchDataPipe HeaderchainDataPipe;
+
     Headerchain Chain;
-    ArchiveBlockLoader ArchiveLoader;
-    GatewayBlockchainNetwork NetworkGateway;
+    
     BitcoinGenesisBlock GenesisBlock;
     
     const int HASH_BYTE_SIZE = 32;
@@ -33,25 +30,22 @@ namespace BToken.Chaining
       List<HeaderLocation> checkpoints, 
       Network network)
     {
-      Checkpoints = checkpoints;
       GenesisBlock = genesisBlock;
-      Network = network;
 
       Chain = new Headerchain(
-        genesisBlock.Header, 
-        checkpoints, 
-        network);
+        genesisBlock.Header,
+        checkpoints);
+      
+      HeaderchainDataPipe = new BatchDataPipe(
+        Chain,
+        new GatewayHeaderchain(this, network, Chain));
+
 
       UTXO = new UTXOTable(this);
 
-      ArchiveLoader = new ArchiveBlockLoader(this);
-
-      NetworkGateway = new GatewayBlockchainNetwork(
-        this, 
-        network, 
-        Chain);
-
-      HeaderchainDataPipe = new BatchDataPipe(Chain, NetworkGateway);
+      UTXODataPipe = new BatchDataPipe(
+        UTXO,
+        new GatewayUTXO(this, network, UTXO));
     }
 
 
@@ -59,14 +53,7 @@ namespace BToken.Chaining
     public async Task Start()
     {      
       await HeaderchainDataPipe.Start();
-
-      await Task.Delay(3000);
-
-      Console.WriteLine("Chain synced to hight {0}",
-        Chain.GetHeight());
-
-      //await UTXODataPipe.Start();
-      //await SyncUTXO();
+      await UTXODataPipe.Start();
     }
 
 

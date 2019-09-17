@@ -16,7 +16,6 @@ namespace BToken.Chaining
     
     partial class Headerchain : IDatabase
     {
-      Network Network;
       Chain MainChain;
       List<Chain> SecondaryChains = new List<Chain>();
       public Header GenesisHeader;
@@ -35,19 +34,23 @@ namespace BToken.Chaining
         AppDomain.CurrentDomain.BaseDirectory,
         "HeaderArchive");
 
-      static DirectoryInfo RootDirectory = Directory.CreateDirectory(ArchiveRootPath);
-      static string FilePath = Path.Combine(RootDirectory.Name, "h");
+      static DirectoryInfo RootDirectory = 
+        Directory.CreateDirectory(ArchiveRootPath);
+
+      string FilePath = Path.Combine(RootDirectory.Name, "h");
 
 
       public Headerchain(
         Header genesisHeader,
-        List<HeaderLocation> checkpoints,
-        Network network)
+        List<HeaderLocation> checkpoints)
       {
-        Network = network;
         GenesisHeader = genesisHeader;
         Checkpoints = checkpoints;
-        MainChain = new Chain(GenesisHeader, 0, TargetManager.GetDifficulty(GenesisHeader.NBits));
+
+        MainChain = new Chain(
+          GenesisHeader, 
+          0, 
+          TargetManager.GetDifficulty(GenesisHeader.NBits));
 
         HeaderIndex = new Dictionary<int, List<Header>>();
         UpdateHeaderIndex(GenesisHeader);
@@ -71,6 +74,35 @@ namespace BToken.Chaining
           (HeaderBatchContainer)dataBatch.ItemBatchContainers.First();
 
         return firstContainer.HeaderRoot.HeaderHash;
+      }
+
+      public bool TryInsertDataContainer(ItemBatchContainer dataContainer)
+      {
+        Chain rivalChain;
+
+        try
+        {
+          rivalChain = Inserter.InsertChain(((HeaderBatchContainer)dataContainer).HeaderRoot);
+        }
+        catch (ChainException ex)
+        {
+          Console.WriteLine(
+            "Insertion of headerBatchContainer {0} raised ChainException:\n {1}.",
+            dataContainer.Index,
+            ex.Message);
+
+          return false;
+        }
+
+        if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
+        {
+          ReorganizeChain(rivalChain);
+        }
+
+        Console.WriteLine("Inserted headerBatchContainer {0} in headerchain", 
+          dataContainer.Index);
+
+        return true;
       }
 
       public bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid)
@@ -159,31 +191,11 @@ namespace BToken.Chaining
         }
       }
 
-      public DataBatch LoadBatchFromArchive(int batchIndex)
+      public ItemBatchContainer LoadDataArchive(int archiveIndex)
       {
-        var batch = new DataBatch(batchIndex);
-        
-        try
-        {
-          batch.ItemBatchContainers.Add(new HeaderBatchContainer(
-            batch,
-            File.ReadAllBytes(FilePath + batchIndex)));
-
-          batch.Parse();
-
-          batch.IsValid = true;
-
-          return batch;
-        }
-        catch (IOException) { }
-        catch (Exception ex)
-        {
-          Console.WriteLine("Exception in archive load of batch {0}: {1}",
-            batchIndex,
-            ex.Message);
-        }
-
-        return batch;
+        return new HeaderBatchContainer(
+          archiveIndex,
+          File.ReadAllBytes(FilePath + archiveIndex));
       }
 
       public async Task ArchiveBatchAsync(DataBatch batch)

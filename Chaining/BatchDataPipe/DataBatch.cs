@@ -32,6 +32,8 @@ namespace BToken.Chaining
 
   public abstract class ItemBatchContainer
   {
+    public bool IsValid;
+    public int Index;
     public DataBatch Batch;
     public int CountItems;
     public byte[] Buffer;
@@ -41,6 +43,12 @@ namespace BToken.Chaining
       byte[] buffer)
     {
       Batch = batch;
+      Buffer = buffer;
+    }
+
+    protected ItemBatchContainer(int index, byte[] buffer)
+    {
+      Index = index;
       Buffer = buffer;
     }
 

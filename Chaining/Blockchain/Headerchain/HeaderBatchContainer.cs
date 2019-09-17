@@ -27,6 +27,14 @@ namespace BToken.Chaining
       { }
 
 
+
+      public HeaderBatchContainer(
+        int index,
+        byte[] headerBytes)
+        : base(index, headerBytes)
+      { }
+
+
       public HeaderBatchContainer(
         DataBatch batch,
         IEnumerable<byte[]> locatorHashes)
@@ -41,9 +49,9 @@ namespace BToken.Chaining
 
       public override void Parse()
       {
-        int startIndex = 0;
+        int bufferIndex = 0;
 
-        int headersCount = VarInt.GetInt32(Buffer, ref startIndex);
+        int headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
 
         if (headersCount == 0)
         {
@@ -52,8 +60,8 @@ namespace BToken.Chaining
 
         CountItems += headersCount;
 
-        HeaderRoot = Header.ParseHeader(Buffer, ref startIndex, SHA256);
-        startIndex += 1; // skip txCount
+        HeaderRoot = Header.ParseHeader(Buffer, ref bufferIndex, SHA256);
+        bufferIndex += 1; // skip txCount
 
         ValidateHeader(HeaderRoot);
 
@@ -61,16 +69,16 @@ namespace BToken.Chaining
 
         HeaderTip = HeaderRoot;
 
-        ParseHeaders(ref startIndex, headersCount);
+        ParseHeaders(ref bufferIndex, headersCount);
         
 
-        while (startIndex < Buffer.Length)
+        while (bufferIndex < Buffer.Length)
         {
-          headersCount = VarInt.GetInt32(Buffer, ref startIndex);
+          headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
           
           CountItems += headersCount;
 
-          ParseHeaders(ref startIndex, headersCount);
+          ParseHeaders(ref bufferIndex, headersCount);
         }
       }
 

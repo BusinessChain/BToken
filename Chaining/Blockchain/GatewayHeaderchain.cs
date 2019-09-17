@@ -13,7 +13,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class GatewayBlockchainNetwork : IGateway
+    partial class GatewayHeaderchain : IGateway
     {
       const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
       const int COUNT_NETWORK_PARSER_PARALLEL = 4;
@@ -53,7 +53,7 @@ namespace BToken.Chaining
       int TXCountFIFO;
 
 
-      public GatewayBlockchainNetwork(
+      public GatewayHeaderchain(
         Blockchain blockchain,
         Network network, 
         Headerchain headerchain)
@@ -61,23 +61,7 @@ namespace BToken.Chaining
         Blockchain = blockchain;
         Network = network;
       }
-
-      public void Start()
-      {
-        HeaderLoadedLast = Blockchain.ArchiveLoader.HeaderPostedToMergerLast;
-        StartBatchIndex = Blockchain.ArchiveLoader.BatchIndexLoad;
-        BatchIndexNextOutput = Blockchain.ArchiveLoader.BatchIndexLoad;
-
-        for (int i = 0; i < COUNT_NETWORK_PARSER_PARALLEL; i += 1)
-        {
-          StartParserAsync();
-        }
-
-        StartBatcherAsync();
-
-        StartSessionControlAsync();
-      }
-
+      
 
 
       const int COUNT_HEADER_SESSIONS = 8;
@@ -93,39 +77,14 @@ namespace BToken.Chaining
         }
 
         await Task.WhenAll(syncHeaderchainTasks);
+
+        await Task.Delay(3000);
+
+        Console.WriteLine("Chain synced to hight {0}",
+          Blockchain.Chain.GetHeight());
       }
 
-
-
-      async Task StartSessionControlAsync()
-      {
-        for (int i = 0; i < COUNT_NETWORK_SESSIONS; i += 1)
-        {
-          var session = new NetworkSession(
-            this,
-            new BlockParser(Blockchain));
-
-          lock (LOCK_DownloadSessions)
-          {
-            DownloadSessions.Add(session);
-          }
-
-          session.StartAsync();
-        }
-
-        while (true)
-        {
-          await Task.Delay(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS);
-
-          //Console.WriteLine();
-          //Console.WriteLine("Download session metrics:");
-
-          //DownloadSessions.ForEach(s => s.PrintDownloadMetrics(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS));
-          //Console.WriteLine();
-        }
-      }
-
-
+           
 
       public void ReportInvalidBatch(DataBatch batch)
       {
@@ -206,22 +165,7 @@ namespace BToken.Chaining
         }
       }
       
-      async Task StartParserAsync()
-      {
-        var parser = new BlockParser(Blockchain);
 
-        while (true)
-        {
-          UTXOTable.UTXOBatch batch = await ParserBuffer
-            .ReceiveAsync(CancellationLoader.Token).ConfigureAwait(false);
-
-          parser.ParseBatch(batch);
-
-          PostToOutputBuffer(batch);
-
-          //Task archiveBatchTask = BlockArchiver.ArchiveBatchAsync(batch);          
-        }
-      }
 
       readonly object LOCK_OutputStage = new object();
       public int BatchIndexNextOutput;
