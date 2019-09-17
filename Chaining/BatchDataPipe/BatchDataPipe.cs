@@ -20,7 +20,7 @@ namespace BToken.Chaining
 
 
 
-    const int COUNT_ARCHIVE_LOADER_PARALLEL = 1;
+    const int COUNT_ARCHIVE_LOADER_PARALLEL = 4;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
     public int ArchiveIndexLoad;
     int BatchIndexOutputQueue;
@@ -163,8 +163,7 @@ namespace BToken.Chaining
       }
     }
 
-        
-
+      
 
     readonly object LOCK_BatchIndexLoad = new object();
     readonly object LOCK_OutputQueue = new object();

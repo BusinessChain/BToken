@@ -53,7 +53,7 @@ namespace BToken.Chaining
           TableULong64,
           TableUInt32Array };
 
-        StartAsync();
+        UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
       }
 
       void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)
@@ -186,47 +186,7 @@ namespace BToken.Chaining
             inputs[i].TXIDOutput.ToHexString()));
         }
       }
-
-      public async Task StartAsync()
-      {
-        UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        
-        try
-        {
-          while (true)
-          {
-            UTXOBatch batch = await InputBuffer
-              .ReceiveAsync().ConfigureAwait(false);
-
-            StopwatchMerging.Restart();
-
-            InsertUTXOsUInt32(batch.UTXOsUInt32);
-            InsertUTXOsULong64(batch.UTXOsULong64);
-            InsertUTXOsUInt32Array(batch.UTXOsUInt32Array);
-            SpendUTXOs(batch.Inputs);
-
-            StopwatchMerging.Stop();
-
-            BlockHeight += batch.BlockCount;
-            BatchIndexMergedLast = batch.BatchIndex;
-            HeaderMergedLast = batch.HeaderLast;
-
-            if (batch.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0
-              && batch.BatchIndex > 0)
-            {
-              ArchiveState();
-            }
-
-            LogCSV(batch);
-          }
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine(ex.Message);
-          throw ex;
-        }
-      }
-
+      
       void ArchiveState()
       {
         if (Directory.Exists(PathUTXOState))
@@ -282,14 +242,68 @@ namespace BToken.Chaining
           }
         }
 
+        BlockBatchContainer genesisBlockContainer = new BlockBatchContainer(
+          new BlockParser(Blockchain.Chain),
+          0,
+          Blockchain.GenesisBlock.BlockBytes);
+
+        genesisBlockContainer.Parse();
+
+        TryInsertDataContainer(genesisBlockContainer);
+
         return 1;
       }
 
 
+      bool TryLoadUTXOState(out int batchIndexMergedLast)
+      {
+        try
+        {
+          byte[] uTXOState = File.ReadAllBytes(Path.Combine(PathUTXOState, "UTXOState"));
+
+          BatchIndexMergedLast = BitConverter.ToInt32(uTXOState, 0);
+          batchIndexMergedLast = BatchIndexMergedLast;
+          BatchIndexNext = BatchIndexMergedLast + 1;
+          BlockHeight = BitConverter.ToInt32(uTXOState, 4);
+
+          byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
+          Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
+          HeaderMergedLast = Blockchain.Chain.ReadHeader(headerHashMergedLast);
+
+          Parallel.ForEach(Tables, t => t.Load());
+
+          return true;
+        }
+        catch (Exception ex)
+        {
+          for (int c = 0; c < Tables.Length; c += 1)
+          {
+            Tables[c].Clear();
+          }
+
+          batchIndexMergedLast = 0;
+          BatchIndexNext = 0;
+          BlockHeight = -1;
+          HeaderMergedLast = null;
+
+          Console.WriteLine("Exception when loading UTXO state {0}", ex.Message);
+          return false;
+        }
+      }
 
       public bool TryInsertDataContainer(ItemBatchContainer dataContainer)
       {
         BlockBatchContainer blockBatchContainer = (BlockBatchContainer)dataContainer;
+        
+        if (blockBatchContainer.HeaderPrevious != HeaderMergedLast)
+        {
+          Console.WriteLine("HeaderPrevious {0} of blockBatchContainer {1} not equal to \nHeaderMergedLast {2}",
+            blockBatchContainer.HeaderPrevious.HeaderHash.ToHexString(),
+            blockBatchContainer.Index,
+            HeaderMergedLast.HeaderHash.ToHexString());
+
+          return false;
+        }
 
         try
         {
@@ -312,8 +326,8 @@ namespace BToken.Chaining
         BatchIndexMergedLast = blockBatchContainer.Index;
         HeaderMergedLast = blockBatchContainer.HeaderLast;
 
-        if (blockBatchContainer.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0
-          && blockBatchContainer.BatchIndex > 0)
+        if (blockBatchContainer.Index % UTXOSTATE_ARCHIVING_INTERVAL == 0
+          && blockBatchContainer.Index > 0)
         {
           ArchiveState();
         }
@@ -344,55 +358,19 @@ namespace BToken.Chaining
           File.ReadAllBytes(FilePath + archiveIndex));
       }
 
-      bool TryLoadUTXOState(out int batchIndexMergedLast)
-      {
-        try
-        {
-          byte[] uTXOState = File.ReadAllBytes(Path.Combine(PathUTXOState, "UTXOState"));
 
-          BatchIndexMergedLast = BitConverter.ToInt32(uTXOState, 0);
-          batchIndexMergedLast = BatchIndexMergedLast;
-          BatchIndexNext = BatchIndexMergedLast + 1;
-          BlockHeight = BitConverter.ToInt32(uTXOState, 4);
-
-          byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
-          Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
-          HeaderMergedLast = Blockchain.Chain.ReadHeader(headerHashMergedLast);
-
-
-          Parallel.ForEach(Tables, t => t.Load());
-
-          return true;
-        }
-        catch (Exception ex)
-        {
-          for (int c = 0; c < Tables.Length; c += 1)
-          {
-            Tables[c].Clear();
-          }
-
-          batchIndexMergedLast = 0;
-          BatchIndexNext = 0;
-          BlockHeight = -1;
-          HeaderMergedLast = null;
-
-          Console.WriteLine("Exception when loading UTXO state {0}", ex.Message);
-          return false;
-        }
-      }
-
-      void LogCSV(UTXOBatch batch)
+      void LogCSV(BlockBatchContainer blockBatchContainer)
       {
         int ratioMergeToParse =
           (int)((float)StopwatchMerging.ElapsedTicks * 100
-          / batch.StopwatchParse.ElapsedTicks);
+          / blockBatchContainer.StopwatchParse.ElapsedTicks);
 
         string logCSV = string.Format(
           "{0},{1},{2},{3},{4},{5},{6},{7}",
-          batch.BatchIndex,
+          blockBatchContainer.Index,
           BlockHeight,
           DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
-          batch.StopwatchParse.ElapsedMilliseconds,
+          blockBatchContainer.StopwatchParse.ElapsedMilliseconds,
           ratioMergeToParse,
           Tables[0].GetMetricsCSV(),
           Tables[1].GetMetricsCSV(),

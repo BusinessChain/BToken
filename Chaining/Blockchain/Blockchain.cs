@@ -10,6 +10,8 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
+    BitcoinGenesisBlock GenesisBlock;
+
     BatchDataPipe UTXODataPipe;
     UTXOTable UTXO;
     readonly object LOCK_Chain = new object();
@@ -26,6 +28,8 @@ namespace BToken.Chaining
       List<HeaderLocation> checkpoints, 
       Network network)
     {
+      GenesisBlock = genesisBlock;
+
       Chain = new Headerchain(
         genesisBlock.Header,
         checkpoints);
