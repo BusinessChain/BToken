@@ -15,13 +15,9 @@ namespace BToken.Chaining
     readonly object LOCK_Chain = new object();
 
     BatchDataPipe HeaderchainDataPipe;
-
     Headerchain Chain;
-    
-    BitcoinGenesisBlock GenesisBlock;
-    
+        
     const int HASH_BYTE_SIZE = 32;
-    const int COUNT_HEADER_BYTES = 80;
     const int COUNT_TXS_IN_BATCH_FILE = 50000;
         
 
@@ -30,8 +26,6 @@ namespace BToken.Chaining
       List<HeaderLocation> checkpoints, 
       Network network)
     {
-      GenesisBlock = genesisBlock;
-
       Chain = new Headerchain(
         genesisBlock.Header,
         checkpoints);
@@ -64,11 +58,6 @@ namespace BToken.Chaining
       {
         return Chain.Locator.GetHeaderHashes();
       }
-    }
-
-    async Task SyncUTXO()
-    {
-      // channel verwaltung für utxosync
     }
 
   }

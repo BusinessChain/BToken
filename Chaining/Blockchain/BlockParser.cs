@@ -11,6 +11,8 @@ namespace BToken.Chaining
     {
       class BlockParser
       {
+        const int COUNT_HEADER_BYTES = 80;
+
         const int BYTE_LENGTH_VERSION = 4;
         const int BYTE_LENGTH_OUTPUT_VALUE = 8;
         const int BYTE_LENGTH_LOCK_TIME = 4;
@@ -42,7 +44,7 @@ namespace BToken.Chaining
         {
           BlockBatchContainer = blockBatchContainer;
 
-          BatchIndex = blockBatchContainer.Batch.Index;
+          BatchIndex = blockBatchContainer.Index;
 
           Buffer = blockBatchContainer.Buffer;
           BufferIndex = 0;

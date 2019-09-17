@@ -49,9 +49,9 @@ namespace BToken.Chaining
         Blockchain = blockchain;
 
         Tables = new UTXOIndexCompressed[]{
-        TableUInt32,
-        TableULong64,
-        TableUInt32Array};
+          TableUInt32,
+          TableULong64,
+          TableUInt32Array };
 
         StartAsync();
       }
@@ -289,7 +289,38 @@ namespace BToken.Chaining
 
       public bool TryInsertDataContainer(ItemBatchContainer dataContainer)
       {
-        throw new NotImplementedException();
+        BlockBatchContainer blockBatchContainer = (BlockBatchContainer)dataContainer;
+
+        try
+        {
+          InsertUTXOsUInt32(blockBatchContainer.UTXOsUInt32);
+          InsertUTXOsULong64(blockBatchContainer.UTXOsULong64);
+          InsertUTXOsUInt32Array(blockBatchContainer.UTXOsUInt32Array);
+          SpendUTXOs(blockBatchContainer.Inputs);
+        }
+        catch (ChainException ex)
+        {
+          Console.WriteLine(
+            "Insertion of headerBatchContainer {0} raised ChainException:\n {1}.",
+            dataContainer.Index,
+            ex.Message);
+
+          return false;
+        }
+
+        BlockHeight += blockBatchContainer.BlockCount;
+        BatchIndexMergedLast = blockBatchContainer.Index;
+        HeaderMergedLast = blockBatchContainer.HeaderLast;
+
+        if (blockBatchContainer.BatchIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0
+          && blockBatchContainer.BatchIndex > 0)
+        {
+          ArchiveState();
+        }
+
+        LogCSV(blockBatchContainer);
+
+        return true;
       }
 
       public bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid)
@@ -305,32 +336,12 @@ namespace BToken.Chaining
 
       string FilePath = "J:\\BlockArchivePartitioned\\p";
 
-      public ItemBatchContainer LoadDataArchive(int batchIndex)
+      public ItemBatchContainer LoadDataArchive(int archiveIndex)
       {
-        var batch = new DataBatch(batchIndex);
-
-        try
-        {
-          batch.ItemBatchContainers.Add(new BlockBatchContainer(
-            new BlockParser(Blockchain.Chain),
-            batch,
-            File.ReadAllBytes(FilePath + batchIndex)));
-
-          batch.Parse();
-
-          batch.IsValid = true;
-
-          return null;
-        }
-        catch (IOException) { }
-        catch (Exception ex)
-        {
-          Console.WriteLine("Exception in archive load of batch {0}: {1}",
-            batchIndex,
-            ex.Message);
-        }
-
-        return null;
+        return new BlockBatchContainer(
+          new BlockParser(Blockchain.Chain),
+          archiveIndex,
+          File.ReadAllBytes(FilePath + archiveIndex));
       }
 
       bool TryLoadUTXOState(out int batchIndexMergedLast)

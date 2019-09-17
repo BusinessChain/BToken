@@ -20,7 +20,7 @@ namespace BToken.Chaining
 
 
 
-    const int COUNT_ARCHIVE_LOADER_PARALLEL = 4;
+    const int COUNT_ARCHIVE_LOADER_PARALLEL = 1;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
     public int ArchiveIndexLoad;
     int BatchIndexOutputQueue;

@@ -82,7 +82,8 @@ namespace BToken.Chaining
 
         try
         {
-          rivalChain = Inserter.InsertChain(((HeaderBatchContainer)dataContainer).HeaderRoot);
+          rivalChain = Inserter.InsertChain(
+            ((HeaderBatchContainer)dataContainer).HeaderRoot);
         }
         catch (ChainException ex)
         {

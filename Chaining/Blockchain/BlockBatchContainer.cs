@@ -37,10 +37,10 @@ namespace BToken.Chaining
 
         public BlockBatchContainer(
           BlockParser blockParser,
-          DataBatch batch,
+          int archiveIndex,
           byte[] blockBytes)
           : base(
-              batch,
+              archiveIndex,
               blockBytes)
         {
           BlockParser = blockParser;
