@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -36,16 +35,11 @@ namespace BToken.Chaining
       public BufferBlock<UTXOTable.UTXOBatch> OutputBuffer = new BufferBlock<UTXOTable.UTXOBatch>();
 
       readonly object LOCK_CountBytesDownloaded = new object();
-      BufferBlock<DownloadBatch> BatcherBuffer
-        = new BufferBlock<DownloadBatch>();
+      BufferBlock<DownloadBatch> BatcherBuffer = new BufferBlock<DownloadBatch>();
       int DownloadBatcherIndex;
-
-      ConcurrentQueue<DownloadBatch> QueueBatchesCanceled
-        = new ConcurrentQueue<DownloadBatch>();
-
+            
       enum SESSION_STATE { IDLE, DOWNLOADING, CANCELED };
       readonly object LOCK_DownloadSessions = new object();
-      List<NetworkSession> DownloadSessions = new List<NetworkSession>();
       BufferBlock<DownloadBatch> DownloaderBuffer = new BufferBlock<DownloadBatch>();
       Dictionary<int, DownloadBatch> QueueDownloadBatch = new Dictionary<int, DownloadBatch>();
 
@@ -64,7 +58,7 @@ namespace BToken.Chaining
       
 
 
-      const int COUNT_HEADER_SESSIONS = 8;
+      const int COUNT_HEADER_SESSIONS = 4;
 
       public async Task Synchronize()
       {
@@ -94,7 +88,7 @@ namespace BToken.Chaining
 
       readonly object LOCK_LocatorHashes = new object();
       IEnumerable<byte[]> LocatorHashes;
-      int HeaderBatchIndex;
+      int IndexHeaderBatch;
       DataBatch HeaderBatchOld;
       TaskCompletionSource<object> SignalStartHeaderSyncSession =
         new TaskCompletionSource<object>();
@@ -106,7 +100,7 @@ namespace BToken.Chaining
 
         lock (LOCK_IsSyncing)
         {
-          batchIndex = HeaderBatchIndex;
+          batchIndex = IndexHeaderBatch;
 
           if (LocatorHashes == null)
           {
@@ -126,47 +120,8 @@ namespace BToken.Chaining
         return headerBatch;
       }
 
-
-
-      bool TryGetDownloadBatch(out DownloadBatch downloadBatch, int countHeaders)
-      {
-        if(QueueBatchesCanceled.TryDequeue(out downloadBatch))
-        {
-          return true;
-        }
-
-        lock(LOCK_HeaderLoad)
-        {
-          if (HeaderLoadedLast.HeadersNext == null)
-          {
-            downloadBatch = null;
-            return false;
-          }
-
-          downloadBatch = new DownloadBatch(IndexDownloadBatch++);
-
-          var header = HeaderLoadedLast;
-
-          for (int i = 0; i < countHeaders; i += 1)
-          {
-            header = header.HeadersNext[0];
-
-            downloadBatch.Headers.Add(header);
-
-            if (header.HeadersNext == null)
-            {
-              downloadBatch.IsAtTipOfChain = true;
-              break;
-            }
-          }
-
-          HeaderLoadedLast = header;
-          return true;
-        }
-      }
       
-
-
+      
       readonly object LOCK_OutputStage = new object();
       public int BatchIndexNextOutput;
       Dictionary<int, UTXOTable.UTXOBatch> OutputQueue = new Dictionary<int, UTXOTable.UTXOBatch>();

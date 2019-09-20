@@ -61,9 +61,10 @@ namespace BToken.Chaining
 
 
       
-      public int LoadImage()
+      public void LoadImage(out int batchIndexMergedLast)
       {
-        return 1;
+        batchIndexMergedLast = 1;
+        return;
       }
 
 

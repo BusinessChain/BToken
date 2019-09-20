@@ -17,16 +17,7 @@ namespace BToken.Chaining
       public Header HeaderTip;
 
 
-
-      public HeaderBatchContainer(
-        DataBatch batch,
-        byte[] headerBytes)
-        : base(
-            batch,
-            headerBytes)
-      { }
-
-
+           
 
       public HeaderBatchContainer(
         int index, 

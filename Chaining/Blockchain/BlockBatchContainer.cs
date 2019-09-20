@@ -9,9 +9,9 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class UTXOTable
+    partial class UTXOTable : IDatabase
     {
-      class BlockBatchContainer : ItemBatchContainer
+      public class BlockBatchContainer : ItemBatchContainer
       {
         public List<Block> Blocks = new List<Block>(50);
 
@@ -26,6 +26,7 @@ namespace BToken.Chaining
         public KeyValuePair<byte[], uint[]>[] UTXOsUInt32Array;
 
         public Header HeaderPrevious;
+        public Header HeaderRoot;
         public Header HeaderLast;
 
         public int BlockCount;
@@ -47,6 +48,15 @@ namespace BToken.Chaining
         }
 
 
+        public BlockBatchContainer(
+          DataBatch batch,
+          Header header)
+          : base(batch)
+        {
+          Header = header;
+        }
+
+
 
         public override void Parse()
         {
@@ -65,9 +75,10 @@ namespace BToken.Chaining
 
         public void AddInput(TXInput input)
         {
-          if (!(TableUInt32.TrySpend(input) ||
-                 TableULong64.TrySpend(input) ||
-                 TableUInt32Array.TrySpend(input)))
+          if (
+            !TableUInt32.TrySpend(input) &&
+            !TableULong64.TrySpend(input) &&
+            !TableUInt32Array.TrySpend(input))
           {
             Inputs.Add(input);
           }
@@ -75,7 +86,10 @@ namespace BToken.Chaining
 
 
 
-        public void AddOutput(byte[] tXHash, int batchIndex, int countTXOutputs)
+        public void AddOutput(
+          byte[] tXHash,
+          int batchIndex,
+          int countTXOutputs)
         {
           int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
 

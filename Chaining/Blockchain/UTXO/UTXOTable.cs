@@ -12,15 +12,15 @@ namespace BToken.Chaining
     partial class UTXOTable : IDatabase
     {
       Blockchain Blockchain;
+      
+      const int COUNT_BATCHINDEX_BITS = 16;
+      const int COUNT_COLLISION_BITS_PER_TABLE = 2;
+      const int COUNT_COLLISIONS_MAX = 2 ^ COUNT_COLLISION_BITS_PER_TABLE - 1;
 
       const int LENGTH_BITS_UINT = 32;
       const int LENGTH_BITS_ULONG = 64;
 
-      const int COUNT_BATCHINDEX_BITS = 16;
-      const int COUNT_COLLISION_BITS_PER_TABLE = 2;
-      const int COUNT_COLLISIONS_MAX = 2 ^ COUNT_COLLISION_BITS_PER_TABLE - 1;
-      
-      static readonly int CountNonOutputBits =
+      public static readonly int CountNonOutputBits =
         COUNT_BATCHINDEX_BITS +
         COUNT_COLLISION_BITS_PER_TABLE * 3;
 
@@ -34,14 +34,14 @@ namespace BToken.Chaining
       static string PathUTXOStateOld = PathUTXOState + "_Old";
 
       public int BlockHeight;
-      public int BatchIndexNext;
-      int BatchIndexMergedLast;
-      public Header HeaderMergedLast;
       public BufferBlock<UTXOBatch> InputBuffer = new BufferBlock<UTXOBatch>(
         new DataflowBlockOptions { BoundedCapacity = 10 });
 
+      int ArchiveIndexNext;
+      Header HeaderMergedLast;
+
       long UTCTimeStartMerger;
-      public Stopwatch StopwatchMerging = new Stopwatch();
+      Stopwatch StopwatchMerging = new Stopwatch();
 
 
       public UTXOTable(Blockchain blockchain)
@@ -52,8 +52,6 @@ namespace BToken.Chaining
           TableUInt32,
           TableULong64,
           TableUInt32Array };
-
-        UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
       }
 
       void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)
@@ -201,7 +199,7 @@ namespace BToken.Chaining
         Directory.CreateDirectory(PathUTXOState);
 
         byte[] uTXOState = new byte[40];
-        BitConverter.GetBytes(BatchIndexMergedLast).CopyTo(uTXOState, 0);
+        BitConverter.GetBytes(ArchiveIndexNext).CopyTo(uTXOState, 0);
         BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
         HeaderMergedLast.HeaderHash.CopyTo(uTXOState, 8);
 
@@ -220,57 +218,64 @@ namespace BToken.Chaining
         });
       }
 
-      public int LoadImage()
+      public void LoadImage(out int archiveIndexNext)
       {
+        if(TryLoadUTXOState())
+        {
+          archiveIndexNext = ArchiveIndexNext;
+          return;
+        }
+
         if (Directory.Exists(PathUTXOState))
         {
-          if (!TryLoadUTXOState(out int batchIndexMergedLast))
+          Directory.Delete(PathUTXOState, true);
+        }
+
+        if (Directory.Exists(PathUTXOStateOld))
+        {
+          Directory.Move(PathUTXOStateOld, PathUTXOState);
+
+          if (TryLoadUTXOState())
           {
-            Directory.Delete(PathUTXOState, true);
-
-            if (Directory.Exists(PathUTXOStateOld))
-            {
-              Directory.Move(PathUTXOStateOld, PathUTXOState);
-
-              if (TryLoadUTXOState(out batchIndexMergedLast))
-              {
-                return batchIndexMergedLast;
-              }
-
-              Directory.Delete(PathUTXOState, true);
-            }
+            archiveIndexNext = ArchiveIndexNext;
+            return;
           }
+
+          Directory.Delete(PathUTXOState, true);
         }
 
         BlockBatchContainer genesisBlockContainer = new BlockBatchContainer(
           new BlockParser(Blockchain.Chain),
-          0,
+          ArchiveIndexNext,
           Blockchain.GenesisBlock.BlockBytes);
 
         genesisBlockContainer.Parse();
 
         TryInsertDataContainer(genesisBlockContainer);
 
-        return 1;
+        archiveIndexNext = ArchiveIndexNext;
+        return;
       }
 
 
-      bool TryLoadUTXOState(out int batchIndexMergedLast)
+
+      bool TryLoadUTXOState()
       {
         try
         {
           byte[] uTXOState = File.ReadAllBytes(Path.Combine(PathUTXOState, "UTXOState"));
 
-          BatchIndexMergedLast = BitConverter.ToInt32(uTXOState, 0);
-          batchIndexMergedLast = BatchIndexMergedLast;
-          BatchIndexNext = BatchIndexMergedLast + 1;
+          ArchiveIndexNext = BitConverter.ToInt32(uTXOState, 0);
           BlockHeight = BitConverter.ToInt32(uTXOState, 4);
 
           byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
           Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
           HeaderMergedLast = Blockchain.Chain.ReadHeader(headerHashMergedLast);
 
-          Parallel.ForEach(Tables, t => t.Load());
+          for (int c = 0; c < Tables.Length; c += 1)
+          {
+            Tables[c].Load();
+          }
 
           return true;
         }
@@ -281,8 +286,7 @@ namespace BToken.Chaining
             Tables[c].Clear();
           }
 
-          batchIndexMergedLast = 0;
-          BatchIndexNext = 0;
+          ArchiveIndexNext = 0;
           BlockHeight = -1;
           HeaderMergedLast = null;
 
@@ -323,7 +327,7 @@ namespace BToken.Chaining
         }
 
         BlockHeight += blockBatchContainer.BlockCount;
-        BatchIndexMergedLast = blockBatchContainer.Index;
+        ArchiveIndexNext += 1;
         HeaderMergedLast = blockBatchContainer.HeaderLast;
 
         if (blockBatchContainer.Index % UTXOSTATE_ARCHIVING_INTERVAL == 0
@@ -359,8 +363,62 @@ namespace BToken.Chaining
       }
 
 
+
+      readonly object LOCK_HeaderLoad = new object();
+      int IndexLoad;
+
+      public bool TryLoadBatch(
+        ItemBatchContainer itemBatchContainerInsertedLast,
+        out DataBatch uTXOBatch,
+        int countHeaders)
+      {
+        BlockBatchContainer blockContainerInsertedLast = 
+          (BlockBatchContainer)itemBatchContainerInsertedLast;
+        
+        lock (LOCK_HeaderLoad)
+        {
+          if (blockContainerInsertedLast
+            .HeaderLast
+            .HeadersNext == null)
+          {
+            uTXOBatch = null;
+            return false;
+          }
+
+          uTXOBatch = new DataBatch(IndexLoad++);
+
+          var header = blockContainerInsertedLast.HeaderLast;
+
+          for (int i = 0; i < countHeaders; i += 1)
+          {
+            BlockBatchContainer blockContainer =
+              new BlockBatchContainer(
+                new BlockParser(Blockchain),);
+
+            header = header.HeadersNext[0];
+
+            uTXOBatch.Headers.Add(header);
+
+            if (header.HeadersNext == null)
+            {
+              uTXOBatch.IsAtTipOfChain = true;
+              break;
+            }
+          }
+
+          HeaderLoadedLast = header;
+          return true;
+        }
+      }
+
+
       void LogCSV(BlockBatchContainer blockBatchContainer)
       {
+        if(UTCTimeStartMerger == 0)
+        {
+          UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        }
+
         int ratioMergeToParse =
           (int)((float)StopwatchMerging.ElapsedTicks * 100
           / blockBatchContainer.StopwatchParse.ElapsedTicks);

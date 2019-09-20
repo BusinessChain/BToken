@@ -7,9 +7,9 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class UTXOTable
+    partial class UTXOTable : IDatabase
     {
-      class BlockParser
+      public class BlockParser
       {
         const int COUNT_HEADER_BYTES = 80;
 
@@ -59,7 +59,19 @@ namespace BToken.Chaining
           BufferIndex += COUNT_HEADER_BYTES;
           TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
 
-          Header = Chain.ReadHeader(HeaderHash, SHA256);
+          if(blockBatchContainer.HeaderRoot == null)
+          {
+            Header = Chain.ReadHeader(HeaderHash, SHA256);
+          }
+          else
+          {
+            Header = blockBatchContainer.HeaderRoot;
+
+            ValidateHeaderHash(
+              HeaderHash,
+              Header.HeaderHash);
+          }
+
           blockBatchContainer.HeaderPrevious = Header.HeaderPrevious;
 
           ParseBlock(OFFSET_INDEX_MERKLE_ROOT);

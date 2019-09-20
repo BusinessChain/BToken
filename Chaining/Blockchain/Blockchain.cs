@@ -18,7 +18,7 @@ namespace BToken.Chaining
 
     BatchDataPipe HeaderchainDataPipe;
     Headerchain Chain;
-        
+    
     const int HASH_BYTE_SIZE = 32;
     const int COUNT_TXS_IN_BATCH_FILE = 50000;
         
@@ -37,8 +37,7 @@ namespace BToken.Chaining
       HeaderchainDataPipe = new BatchDataPipe(
         Chain,
         new GatewayHeaderchain(this, network, Chain));
-
-
+      
       UTXO = new UTXOTable(this);
 
       UTXODataPipe = new BatchDataPipe(

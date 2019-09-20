@@ -16,6 +16,6 @@ namespace BToken.Chaining
 
     ItemBatchContainer LoadDataArchive(int archiveIndex);
 
-    int LoadImage();
+    void LoadImage(out int archiveIndexNext);
   }
 }

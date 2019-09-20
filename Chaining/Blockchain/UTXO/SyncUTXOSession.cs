@@ -14,9 +14,9 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    partial class GatewayHeaderchain
+    partial class GatewayUTXO
     {
-      class NetworkSession
+      class SyncUTXOSession
       {
         public INetworkChannel Channel;
 
@@ -26,7 +26,7 @@ namespace BToken.Chaining
         const int TIMEOUT_GETHEADERS_MILLISECONDS = 10000;
         const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
-        GatewayHeaderchain Gateway;
+        GatewayUTXO Gateway;
         SHA256 SHA256;
 
         public SESSION_STATE State = SESSION_STATE.IDLE;
@@ -35,7 +35,7 @@ namespace BToken.Chaining
 
         Stopwatch StopwatchDownload = new Stopwatch();
         public int CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-        public DownloadBatch DownloadBatch;
+        public DataBatch UTXOBatch;
         public CancellationTokenSource CancellationSession;
 
         readonly object LOCK_BytesDownloaded = new object();
@@ -44,7 +44,7 @@ namespace BToken.Chaining
 
         public DateTimeOffset TimeStartChannelInterval;
 
-        public NetworkSession(GatewayHeaderchain gateway)
+        public SyncUTXOSession(GatewayUTXO gateway)
         {
           Gateway = gateway;
           SHA256 = SHA256.Create();
@@ -53,83 +53,56 @@ namespace BToken.Chaining
             Gateway.CancellationLoader.Token);
         }
         
-        public async Task StartAsync()
+
+        
+        public async Task Start()
         {
           while(true)
           {
-            Channel = await Gateway.Network.RequestChannelAsync();
-
-            try
+            lock (Gateway.LOCK_IsSyncing)
             {
-              //await SynchronizeChainAsync();
-
-              Console.WriteLine("session {0} ends chain syncing.", GetHashCode());
-            }
-            catch (Exception ex)
-            {
-              Console.WriteLine("Exception in chain syncing: '{0}' in session {1} with channel {2}", 
-                ex.Message,
-                GetHashCode(),
-                Channel == null ? "" : Channel.GetIdentification());
-                           
-              lock (Gateway.LOCK_IsSyncing)
+              if (Gateway.IsSyncingCompleted)
               {
-                if (IsSyncing)
-                {
-                  IsSyncing = false;
-                  Gateway.IsSyncing = false;
-                }
-
-                if (!Gateway.IsSyncingCompleted)
-                {
-                  continue;
-                }
+                return;
               }
             }
 
+            Console.WriteLine("sync UTXO session {0} requests channel.", GetHashCode());
+
+            Channel = await Gateway.Network.RequestChannelAsync();
+
+            Console.WriteLine("sync UTXO session {0} aquired channel {1}.",
+              GetHashCode(),
+              Channel.GetIdentification());
+
+
+            TimeStartChannelInterval = DateTimeOffset.UtcNow;
+            BytesDownloaded = 0;
+            CountBlocksDownloaded = 0;
+
             try
             {
-              await SynchronizeUTXOAsync();
-              //await RunListenerAsync();
+              while (Gateway.TryGetDownloadBatch(
+                out UTXOBatch,
+                CountBlocksDownloadBatch))
+              {
+                await StartBlockDownloadAsync();
+              }
+
+              return;
             }
             catch (Exception ex)
             {
-              Console.WriteLine("Exception in utxo syncing: '{0}' in session {1} with channel {2}",
-                ex.Message,
-                GetHashCode(),
-                Channel == null ? "" : Channel.GetIdentification());
+              Gateway.QueueBatchesCanceled.Enqueue(UTXOBatch);
+
+              CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+
+              throw ex;
             }
 
           }
         }
 
-
-        async Task SynchronizeUTXOAsync()
-        {
-          TimeStartChannelInterval = DateTimeOffset.UtcNow;
-          BytesDownloaded = 0;
-          CountBlocksDownloaded = 0;
-
-          try
-          {
-            while (Gateway.TryGetDownloadBatch(
-              out DownloadBatch,
-              CountBlocksDownloadBatch))
-            {
-              await StartBlockDownloadAsync();
-            }
-
-            return;
-          }
-          catch (Exception ex)
-          {
-            Gateway.QueueBatchesCanceled.Enqueue(DownloadBatch);
-
-            CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-
-            throw ex;
-          }
-        }
 
         async Task RunListenerAsync()
         {
@@ -150,29 +123,29 @@ namespace BToken.Chaining
             CancellationSession.Token);
 
           await Channel.RequestBlocksAsync(
-            DownloadBatch.Headers.Skip(DownloadBatch.Blocks.Count)
+            UTXOBatch.Headers.Skip(UTXOBatch.Blocks.Count)
             .Select(h => h.HeaderHash));
                     
-          while (DownloadBatch.Blocks.Count < DownloadBatch.Headers.Count)
+          while (UTXOBatch.Blocks.Count < UTXOBatch.Headers.Count)
           {
             byte[] blockBytes = await Channel
               .ReceiveBlockAsync(cancellationDownloadBlocks.Token)
               .ConfigureAwait(false);
 
-            Header header = DownloadBatch.Headers[DownloadBatch.Blocks.Count];
+            Header header = UTXOBatch.Headers[UTXOBatch.Blocks.Count];
 
-            //Block block = BlockParser.ParseBlockHeader(
-            //  blockBytes,
-            //  header,
-            //  header.HeaderHash,
-            //  SHA256);
+            Block block = BlockParser.ParseBlockHeader(
+              blockBytes,
+              header,
+              header.HeaderHash,
+              SHA256);
 
-            //DownloadBatch.Blocks.Add(block);
-            //CountBlocksDownloaded += 1;
-            //DownloadBatch.BytesDownloaded += blockBytes.Length;
+            UTXOBatch.Blocks.Add(block);
+            CountBlocksDownloaded += 1;
+            UTXOBatch.BytesDownloaded += blockBytes.Length;
           }
 
-          Gateway.BatcherBuffer.Post(DownloadBatch);
+          Gateway.BatcherBuffer.Post(UTXOBatch);
 
           StopwatchDownload.Stop();
 
@@ -180,7 +153,7 @@ namespace BToken.Chaining
 
           lock (LOCK_BytesDownloaded)
           {
-            BytesDownloaded += DownloadBatch.BytesDownloaded;
+            BytesDownloaded += UTXOBatch.BytesDownloaded;
           }
         }
 

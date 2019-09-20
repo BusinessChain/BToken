@@ -43,8 +43,14 @@ namespace BToken.Chaining
               }
             }
 
+            Console.WriteLine("sync headerchain session {0} requests channel.", GetHashCode());
+
             Channel = await Gateway.Network.RequestChannelAsync();
-            
+
+            Console.WriteLine("sync headerchain session {0} aquired channel {1}.", 
+              GetHashCode(), 
+              Channel.GetIdentification());
+
             try
             {
             StartRaceSyncHeaderSession:
@@ -72,7 +78,7 @@ namespace BToken.Chaining
 
                   if (!Gateway.IsSyncing)
                   {
-                    if(HeaderBatch.Index != Gateway.HeaderBatchIndex)
+                    if(HeaderBatch.Index != Gateway.IndexHeaderBatch)
                     {
                       goto StartRaceSyncHeaderSession;
                     }
@@ -139,7 +145,7 @@ namespace BToken.Chaining
 
                 lock (Gateway.LOCK_IsSyncing)
                 {
-                  Gateway.HeaderBatchIndex = HeaderBatch.Index;
+                  Gateway.IndexHeaderBatch = HeaderBatch.Index;
                   Gateway.LocatorHashes = ((HeaderBatchContainer)HeaderBatch.ItemBatchContainers.First())
                     .LocatorHashes;
 
@@ -163,8 +169,7 @@ namespace BToken.Chaining
               batch,
               new List<byte[]> {
                 ((HeaderBatchContainer)HeaderBatch.ItemBatchContainers[0])
-                .HeaderTip
-                .HeaderHash }));
+                .HeaderTip.HeaderHash }));
 
           return batch;
         }

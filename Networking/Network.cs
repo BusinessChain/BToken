@@ -59,6 +59,7 @@ namespace BToken.Networking
 
       while(!await peer.TryConnectAsync())
       {
+        Console.WriteLine("Failed to connect to peer {0}", peer.GetIdentification());
         await Task.Delay(3000);
         peer = new Peer(this);
       }

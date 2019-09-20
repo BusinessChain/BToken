@@ -111,7 +111,7 @@
     <Compile Include="Chaining\Blockchain\Headerchain\HeaderLocation.cs" />
     <Compile Include="Chaining\Blockchain\Headerchain\ChainProbe.cs" />
     <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
-    <Compile Include="Chaining\Blockchain\NetworkSession.cs" />
+    <Compile Include="Chaining\Blockchain\UTXO\SyncUTXOSession.cs" />
     <Compile Include="Chaining\Blockchain\ChainException.cs" />
     <Compile Include="Chaining\Blockchain\Headerchain\Chain.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />

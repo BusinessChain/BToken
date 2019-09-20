@@ -8,7 +8,7 @@ namespace BToken.Chaining
 {
   interface IGateway
   {
-    Task Synchronize();
+    Task Synchronize(ItemBatchContainer itemBatchContainerInsertedLast);
     void ReportInvalidBatch(DataBatch batch);
   }
 }

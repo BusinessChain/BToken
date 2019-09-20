@@ -20,7 +20,7 @@ namespace BToken.Chaining
 
 
 
-    const int COUNT_ARCHIVE_LOADER_PARALLEL = 4;
+    const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
     public int ArchiveIndexLoad;
     int BatchIndexOutputQueue;
@@ -28,7 +28,7 @@ namespace BToken.Chaining
 
     public async Task Start()
     {
-      ArchiveIndexLoad = Database.LoadImage();
+      Database.LoadImage(out ArchiveIndexLoad);
       BatchIndexOutputQueue = ArchiveIndexLoad;
 
       Parallel.For(
@@ -37,20 +37,17 @@ namespace BToken.Chaining
         i => ArchiveLoaderTasks[i] = StartArchiveLoaderAsync());
 
       await Task.WhenAll(ArchiveLoaderTasks);
-
-      OutputQueue.Clear();
-      InvalidBatchEncountered = false;
-            
+                  
       StartBatcherAsync();
 
-      await Gateway.Synchronize();
+      await Gateway.Synchronize(ItemBatchContainerInsertedLast);
     }
 
 
 
     const int SIZE_OUTPUT_BATCH = 50000;
-    public BufferBlock<DataBatch> InputBuffer =
-      new BufferBlock<DataBatch>(new DataflowBlockOptions { BoundedCapacity = 10 });
+    public BufferBlock<DataBatch> InputBuffer = new BufferBlock<DataBatch>(
+      new DataflowBlockOptions { BoundedCapacity = 10 });
     int InputBatchIndex;
     Dictionary<int, DataBatch> QueueDownloadBatch = new Dictionary<int, DataBatch>();
     Queue<ItemBatchContainer> FIFOItems = new Queue<ItemBatchContainer>();
@@ -206,7 +203,9 @@ namespace BToken.Chaining
 
 
 
-    Dictionary<int, ItemBatchContainer> OutputQueue = new Dictionary<int, ItemBatchContainer>();
+    Dictionary<int, ItemBatchContainer> OutputQueue = 
+      new Dictionary<int, ItemBatchContainer>();
+    ItemBatchContainer ItemBatchContainerInsertedLast;
 
     async Task<bool> SendToOutputQueue(ItemBatchContainer itemBatchContainer)
     {
@@ -243,6 +242,8 @@ namespace BToken.Chaining
           InvalidBatchEncountered = true;
           return false;
         }
+
+        ItemBatchContainerInsertedLast = itemBatchContainer;
 
         lock (LOCK_OutputQueue)
         {
