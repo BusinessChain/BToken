@@ -263,6 +263,8 @@ namespace BToken.Networking
           {
             continue;
           }
+
+          return networkMessage.Payload;
         }
       }
 

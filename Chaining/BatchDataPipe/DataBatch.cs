@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace BToken.Chaining
 {
@@ -13,7 +14,9 @@ namespace BToken.Chaining
     public List<ItemBatchContainer> ItemBatchContainers;
     public int CountItems;
     public bool IsFinalBatch;
+    
 
+    
     public DataBatch(int index)
     {
       Index = index;
@@ -22,7 +25,7 @@ namespace BToken.Chaining
 
     public void Parse()
     {
-      foreach(ItemBatchContainer container in ItemBatchContainers)
+      foreach (ItemBatchContainer container in ItemBatchContainers)
       {
         container.Parse();
         CountItems += container.CountItems;
@@ -37,6 +40,10 @@ namespace BToken.Chaining
     public DataBatch Batch;
     public int CountItems;
     public byte[] Buffer;
+
+    public Stopwatch StopwatchParse = new Stopwatch();
+
+
 
     protected ItemBatchContainer(
       DataBatch batch,

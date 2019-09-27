@@ -28,19 +28,13 @@ namespace BToken.Chaining
 
         GatewayUTXO Gateway;
         SHA256 SHA256;
-
-        public SESSION_STATE State = SESSION_STATE.IDLE;
-        readonly object LOCK_State = new object();
-        bool IsSyncing;
-
+        
         Stopwatch StopwatchDownload = new Stopwatch();
         public int CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-        public DataBatch UTXOBatch;
-        public CancellationTokenSource CancellationSession;
+        DataBatch UTXOBatch;
 
         readonly object LOCK_BytesDownloaded = new object();
         long BytesDownloaded;
-        int CountBlocksDownloaded;
 
         public DateTimeOffset TimeStartChannelInterval;
 
@@ -48,9 +42,6 @@ namespace BToken.Chaining
         {
           Gateway = gateway;
           SHA256 = SHA256.Create();
-
-          CancellationSession = CancellationTokenSource.CreateLinkedTokenSource(
-            Gateway.CancellationLoader.Token);
         }
         
 
@@ -67,18 +58,17 @@ namespace BToken.Chaining
               }
             }
 
-            Console.WriteLine("sync UTXO session {0} requests channel.", GetHashCode());
+            Console.WriteLine("sync UTXO session {0} requests channel.", 
+              GetHashCode());
 
             Channel = await Gateway.Network.RequestChannelAsync();
 
             Console.WriteLine("sync UTXO session {0} aquired channel {1}.",
               GetHashCode(),
               Channel.GetIdentification());
-
-
+            
             TimeStartChannelInterval = DateTimeOffset.UtcNow;
             BytesDownloaded = 0;
-            CountBlocksDownloaded = 0;
 
             try
             {
@@ -93,6 +83,11 @@ namespace BToken.Chaining
             }
             catch (Exception ex)
             {
+              Console.WriteLine("Exception in block download: \n{0}" +
+                "batch {1} queued",
+                ex.Message,
+                UTXOBatch.Index);
+
               Gateway.QueueBatchesCanceled.Enqueue(UTXOBatch);
 
               CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
@@ -116,45 +111,54 @@ namespace BToken.Chaining
         async Task StartBlockDownloadAsync()
         {
           StopwatchDownload.Restart();
+                           
+          List<byte[]> hashesRequested = new List<byte[]>();
 
-          var cancellationTimeout = new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-          var cancellationDownloadBlocks = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationTimeout.Token,
-            CancellationSession.Token);
-
-          await Channel.RequestBlocksAsync(
-            UTXOBatch.Headers.Skip(UTXOBatch.Blocks.Count)
-            .Select(h => h.HeaderHash));
-                    
-          while (UTXOBatch.Blocks.Count < UTXOBatch.Headers.Count)
+          foreach (UTXOTable.BlockBatchContainer blockBatchContainer in
+            UTXOBatch.ItemBatchContainers)
           {
-            byte[] blockBytes = await Channel
-              .ReceiveBlockAsync(cancellationDownloadBlocks.Token)
-              .ConfigureAwait(false);
-
-            Header header = UTXOBatch.Headers[UTXOBatch.Blocks.Count];
-
-            Block block = BlockParser.ParseBlockHeader(
-              blockBytes,
-              header,
-              header.HeaderHash,
-              SHA256);
-
-            UTXOBatch.Blocks.Add(block);
-            CountBlocksDownloaded += 1;
-            UTXOBatch.BytesDownloaded += blockBytes.Length;
+            if(blockBatchContainer.Buffer == null)
+            {
+              hashesRequested.Add(blockBatchContainer.HeaderRoot.HeaderHash);
+            }
           }
 
-          Gateway.BatcherBuffer.Post(UTXOBatch);
+          var cancellationDownloadBlocks =
+            new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+          
+          await Channel.RequestBlocksAsync(hashesRequested);
+
+          foreach (UTXOTable.BlockBatchContainer blockBatchContainer in
+            UTXOBatch.ItemBatchContainers)
+          {
+            if (blockBatchContainer.Buffer != null)
+            {
+              continue;
+            }
+
+            blockBatchContainer.Buffer = await Channel
+              .ReceiveBlockAsync(cancellationDownloadBlocks.Token)
+              .ConfigureAwait(false);
+            
+            blockBatchContainer.Parse();
+            UTXOBatch.CountItems += blockBatchContainer.CountItems;
+
+            lock (LOCK_BytesDownloaded)
+            {
+              BytesDownloaded += blockBatchContainer.Buffer.Length;
+            }
+          }
+
+          await Gateway.Blockchain.UTXODataPipe.InputBuffer.SendAsync(UTXOBatch);
+
+          Console.WriteLine("Downloaded batch {0} with {1} blocks and {2} txs", 
+            UTXOBatch.Index,
+            UTXOBatch.ItemBatchContainers.Count,
+            UTXOBatch.CountItems);
 
           StopwatchDownload.Stop();
 
           CalculateNewCountBlocks();
-
-          lock (LOCK_BytesDownloaded)
-          {
-            BytesDownloaded += UTXOBatch.BytesDownloaded;
-          }
         }
 
         void CalculateNewCountBlocks()
@@ -190,15 +194,13 @@ namespace BToken.Chaining
             (int)(DateTimeOffset.UtcNow - TimeStartChannelInterval).TotalMilliseconds;
 
           Console.WriteLine(
-            "{0}({1}),{2}({3})MB,{4}({5})kB/s,{6}({7})",
+            "{0}({1}),{2}({3})MB,{4}({5})kB/s",
             GetHashCode(),
             Channel == null ? "not connencted" : Channel.GetIdentification(),
             BytesDownloaded / 1000000,
             BytesDownloadedOld / 1000000,
             downloadRate,
-            DownloadRateOld,
-            CountBlocksDownloaded,
-            CountBlocksDownloadedOld);
+            DownloadRateOld);
         
           BytesDownloadedOld = BytesDownloaded;
           BytesDownloaded = 0;
@@ -206,8 +208,6 @@ namespace BToken.Chaining
           DownloadRateOld = downloadRate;
           TimeStartChannelInterval = DateTimeOffset.UtcNow;
 
-          CountBlocksDownloadedOld = CountBlocksDownloaded;
-          CountBlocksDownloaded = 0;
         }
       }
     }

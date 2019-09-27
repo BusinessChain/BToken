@@ -13,8 +13,6 @@ namespace BToken.Chaining
     {
       public class BlockBatchContainer : ItemBatchContainer
       {
-        public List<Block> Blocks = new List<Block>(50);
-
         const int AVERAGE_INPUTS_PER_TX = 5;
         public List<TXInput> Inputs = new List<TXInput>(COUNT_TXS_IN_BATCH_FILE * AVERAGE_INPUTS_PER_TX);
 
@@ -33,8 +31,6 @@ namespace BToken.Chaining
 
         BlockParser BlockParser;
 
-        public Stopwatch StopwatchParse = new Stopwatch();
-
 
         public BlockBatchContainer(
           BlockParser blockParser,
@@ -49,18 +45,23 @@ namespace BToken.Chaining
 
 
         public BlockBatchContainer(
-          DataBatch batch,
+          BlockParser blockParser,
           Header header)
-          : base(batch)
+          : base(null)
         {
-          Header = header;
+          BlockParser = blockParser;
+          HeaderRoot = header;
         }
 
 
 
         public override void Parse()
         {
+          StopwatchParse.Start();
+
           BlockParser.Parse(this);
+
+          StopwatchParse.Stop();
         }
 
 

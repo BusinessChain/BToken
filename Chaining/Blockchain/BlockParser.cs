@@ -76,6 +76,7 @@ namespace BToken.Chaining
 
           ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
           blockBatchContainer.BlockCount += 1;
+          blockBatchContainer.CountItems += TXCount;
 
           while (BufferIndex < Buffer.Length)
           {
@@ -98,6 +99,7 @@ namespace BToken.Chaining
 
             ParseBlock(merkleRootIndex);
             blockBatchContainer.BlockCount += 1;
+            blockBatchContainer.CountItems += TXCount;
           }
 
           blockBatchContainer.HeaderLast = Header;
@@ -116,72 +118,9 @@ namespace BToken.Chaining
               headerHashValidator.ToHexString()));
           }
         }
-
-        public static Block ParseBlockHeader(
-          byte[] buffer,
-          Header header,
-          byte[] headerHash,
-          SHA256 sHA256)
-        {
-          int bufferIndex = 0;
-
-          byte[] headerHashParsed =
-            sHA256.ComputeHash(
-              sHA256.ComputeHash(
-                buffer,
-                bufferIndex,
-                COUNT_HEADER_BYTES));
-
-          bufferIndex += COUNT_HEADER_BYTES;
-          int tXCount = VarInt.GetInt32(buffer, ref bufferIndex);
-
-          ValidateHeaderHash(
-            headerHashParsed,
-            headerHash);
-
-          return new Block(
-            buffer,
-            bufferIndex,
-            header,
-            headerHash,
-            tXCount);
-        }
-
-        //public void ParseBatch(UTXOTable.UTXOBatch batch)
-        //{
-        //  Batch = batch;
-
-        //  BatchIndex = Batch.BatchIndex;
-
-        //  batch.StopwatchParse.Start();
-        //  foreach (Block block in batch.Blocks)
-        //  {
-        //    LoadBlock(block);
-        //    ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
-        //    Batch.BlockCount += 1;
-        //  }
-
-        //  Batch.ConvertTablesToArrays();
-
-        //  batch.HeaderPrevious = batch.Blocks[0].Header.HeaderPrevious;
-        //  batch.HeaderLast = batch.Blocks.Last().Header;
-
-        //  batch.StopwatchParse.Stop();
-        //}
-
-        void LoadBlock(Block block)
-        {
-          Buffer = block.Buffer;
-          BufferIndex = block.BufferIndex;
-          MerkleIndex = block.BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
-          HeaderHash = block.HeaderHash;
-          TXCount = block.TXCount;
-        }
-
+        
         void ParseBlock(int merkleRootIndex)
         {
-          BlockBatchContainer.StopwatchParse.Start();
-
           if (TXCount == 1)
           {
             byte[] tXHash = ParseTX(true);
@@ -213,8 +152,6 @@ namespace BToken.Chaining
           {
             throw new ChainException("Payload merkle root corrupted.");
           }
-
-          BlockBatchContainer.StopwatchParse.Stop();
 
           return;
         }

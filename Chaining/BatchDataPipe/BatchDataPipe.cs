@@ -40,7 +40,7 @@ namespace BToken.Chaining
                   
       StartBatcherAsync();
 
-      await Gateway.Synchronize(ItemBatchContainerInsertedLast);
+      await Gateway.Synchronize(BatchInsertedLast);
     }
 
 
@@ -100,9 +100,7 @@ namespace BToken.Chaining
           {
             break;
           }
-
         } while (true);
-
       }
     }
 
@@ -115,7 +113,7 @@ namespace BToken.Chaining
           Gateway.ReportInvalidBatch(containerInvalid.Batch);
         }
 
-        Task archiveBatchTask = Database.ArchiveBatchAsync(OutputBatch);
+        Task archiveBatchTask = Database.ArchiveBatch(OutputBatch);
 
         OutputBatch = new DataBatch(OutputBatch.Index + 1);
       }
@@ -138,7 +136,7 @@ namespace BToken.Chaining
                 Gateway.ReportInvalidBatch(containerInvalid.Batch);
               }
 
-              Task archiveBatchTask = Database.ArchiveBatchAsync(OutputBatch);
+              Task archiveBatchTask = Database.ArchiveBatch(OutputBatch);
             }
 
             return;
@@ -151,7 +149,7 @@ namespace BToken.Chaining
               Gateway.ReportInvalidBatch(containerInvalid.Batch);
             }
 
-            Task archiveBatchTask = Database.ArchiveBatchAsync(OutputBatch);
+            Task archiveBatchTask = Database.ArchiveBatch(OutputBatch);
 
             OutputBatch = new DataBatch(OutputBatch.Index + 1);
             break;
@@ -168,7 +166,7 @@ namespace BToken.Chaining
 
     async Task StartArchiveLoaderAsync()
     {
-      ItemBatchContainer dataConstainer;
+      DataBatch batch;
       int archiveIndex;
 
       do
@@ -181,9 +179,9 @@ namespace BToken.Chaining
 
         try
         {
-          dataConstainer = Database.LoadDataArchive(archiveIndex);
-          dataConstainer.Parse();
-          dataConstainer.IsValid = true;
+          batch = Database.LoadDataArchive(archiveIndex);
+          batch.Parse();
+          batch.IsValid = true;
         }
         catch(IOException)
         {
@@ -198,16 +196,16 @@ namespace BToken.Chaining
           return;
         }
 
-      } while (await SendToOutputQueue(dataConstainer));
+      } while (await SendToOutputQueue(batch));
     }
 
 
 
-    Dictionary<int, ItemBatchContainer> OutputQueue = 
-      new Dictionary<int, ItemBatchContainer>();
-    ItemBatchContainer ItemBatchContainerInsertedLast;
+    Dictionary<int, DataBatch> OutputQueue = 
+      new Dictionary<int, DataBatch>();
+    DataBatch BatchInsertedLast;
 
-    async Task<bool> SendToOutputQueue(ItemBatchContainer itemBatchContainer)
+    async Task<bool> SendToOutputQueue(DataBatch batch)
     {
       while (true)
       {
@@ -218,14 +216,14 @@ namespace BToken.Chaining
             return false;
           }
 
-          if (itemBatchContainer.Index == BatchIndexOutputQueue)
+          if (batch.Index == BatchIndexOutputQueue)
           {
             break;
           }
 
           if (OutputQueue.Count < 10)
           {
-            OutputQueue.Add(itemBatchContainer.Index, itemBatchContainer);
+            OutputQueue.Add(batch.Index, batch);
             return true;
           }
         }
@@ -236,20 +234,20 @@ namespace BToken.Chaining
       while (true)
       {
         if(
-          !itemBatchContainer.IsValid ||
-          !Database.TryInsertDataContainer(itemBatchContainer))
+          !batch.IsValid ||
+          !Database.TryInsertBatch(batch, out ItemBatchContainer containerInvalid))
         {          
           InvalidBatchEncountered = true;
           return false;
         }
 
-        ItemBatchContainerInsertedLast = itemBatchContainer;
+        BatchInsertedLast = batch;
 
         lock (LOCK_OutputQueue)
         {
           BatchIndexOutputQueue += 1;
           
-          if (OutputQueue.TryGetValue(BatchIndexOutputQueue, out itemBatchContainer))
+          if (OutputQueue.TryGetValue(BatchIndexOutputQueue, out batch))
           {
             OutputQueue.Remove(BatchIndexOutputQueue);
           }

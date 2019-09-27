@@ -10,11 +10,9 @@ namespace BToken.Chaining
   {
     bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid);
 
-    bool TryInsertDataContainer(ItemBatchContainer dataContainer);
+    Task ArchiveBatch(DataBatch batch);
 
-    Task ArchiveBatchAsync(DataBatch batch);
-
-    ItemBatchContainer LoadDataArchive(int archiveIndex);
+    DataBatch LoadDataArchive(int archiveIndex);
 
     void LoadImage(out int archiveIndexNext);
   }

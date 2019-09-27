@@ -77,36 +77,6 @@ namespace BToken.Chaining
         return firstContainer.HeaderRoot.HeaderHash;
       }
 
-      public bool TryInsertDataContainer(ItemBatchContainer dataContainer)
-      {
-        Chain rivalChain;
-
-        try
-        {
-          rivalChain = Inserter.InsertChain(
-            ((HeaderBatchContainer)dataContainer).HeaderRoot);
-        }
-        catch (ChainException ex)
-        {
-          Console.WriteLine(
-            "Insertion of headerBatchContainer {0} raised ChainException:\n {1}.",
-            dataContainer.Index,
-            ex.Message);
-
-          return false;
-        }
-
-        if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
-        {
-          ReorganizeChain(rivalChain);
-        }
-
-        Console.WriteLine("Inserted headerBatchContainer {0} in headerchain", 
-          dataContainer.Index);
-
-        return true;
-      }
-
       public bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid)
       {
         Chain rivalChain;
@@ -193,14 +163,19 @@ namespace BToken.Chaining
         }
       }
 
-      public ItemBatchContainer LoadDataArchive(int archiveIndex)
+      public DataBatch LoadDataArchive(int archiveIndex)
       {
-        return new HeaderBatchContainer(
-          archiveIndex,
-          File.ReadAllBytes(FilePath + archiveIndex));
+        var batch = new DataBatch(archiveIndex);
+
+        batch.ItemBatchContainers.Add(
+          new HeaderBatchContainer(
+            archiveIndex,
+            File.ReadAllBytes(FilePath + archiveIndex)));
+
+        return batch;
       }
 
-      public async Task ArchiveBatchAsync(DataBatch batch)
+      public async Task ArchiveBatch(DataBatch batch)
       {
         using (FileStream fileStream = new FileStream(
           FilePath + batch.Index,

@@ -181,7 +181,8 @@ namespace BToken.Chaining
           
           CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
 
-          foreach(HeaderBatchContainer headerBatchContainer in HeaderBatch.ItemBatchContainers)
+          foreach(HeaderBatchContainer headerBatchContainer 
+            in HeaderBatch.ItemBatchContainers)
           {
             headerBatchContainer.Buffer = await Channel.GetHeadersAsync(
               headerBatchContainer.LocatorHashes,
