@@ -17,10 +17,6 @@ namespace BToken.Chaining
       Network Network;
       UTXOTable UTXOTable;
 
-      readonly object LOCK_IsSyncing = new object();
-      bool IsSyncingCompleted;
-
-
 
       public GatewayUTXO(
         Blockchain blockchain,
@@ -34,7 +30,7 @@ namespace BToken.Chaining
 
 
 
-      const int COUNT_UTXO_SESSIONS = 1;
+      const int COUNT_UTXO_SESSIONS = 4;
       readonly object LOCK_BatchLoadedLast = new object();
       DataBatch BatchLoadedLast;
 

@@ -58,7 +58,7 @@ namespace BToken.Chaining
       
 
 
-      const int COUNT_HEADER_SESSIONS = 1;
+      const int COUNT_HEADER_SESSIONS = 4;
 
       public async Task Synchronize(DataBatch batchInsertedLast)
       {

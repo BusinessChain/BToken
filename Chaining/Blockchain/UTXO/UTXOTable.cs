@@ -356,15 +356,39 @@ namespace BToken.Chaining
         containerInvalid = null;
         return true;
       }
-      public async Task ArchiveBatch(DataBatch batch)
+
+
+
+      string FilePath = "J:\\BlockArchivePartitioned";
+
+      public async Task ArchiveBatch(DataBatch uTXOBatch)
       {
-        Console.WriteLine("ArchiveBatchAsync not implemented yet");
+        Directory.CreateDirectory(FilePath);
+        string filePath = Path.Combine(FilePath, "p" + uTXOBatch.Index);
+
+        try
+        {
+          using (FileStream file = new FileStream(
+            filePath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 1048576,
+            useAsync: true))
+          {
+            foreach (BlockBatchContainer blockContainer in uTXOBatch.ItemBatchContainers)
+            {
+              await file.WriteAsync(blockContainer.Buffer, 0, blockContainer.Buffer.Length);
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine(ex.Message);
+        }
       }
 
-
-
-      string FilePath = "J:\\BlockArchivePartitioned\\p";
-
+                  
       public DataBatch LoadDataArchive(int archiveIndex)
       {
         var batch = new DataBatch(archiveIndex);
@@ -373,7 +397,8 @@ namespace BToken.Chaining
           new BlockBatchContainer(
             new BlockParser(Blockchain.Chain),
             archiveIndex,
-            File.ReadAllBytes(FilePath + archiveIndex)));
+            File.ReadAllBytes(
+              Path.Combine(FilePath, "p" + archiveIndex))));
 
         return batch;
       }

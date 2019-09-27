@@ -50,14 +50,6 @@ namespace BToken.Chaining
         {
           while(true)
           {
-            lock (Gateway.LOCK_IsSyncing)
-            {
-              if (Gateway.IsSyncingCompleted)
-              {
-                return;
-              }
-            }
-
             Console.WriteLine("sync UTXO session {0} requests channel.", 
               GetHashCode());
 
@@ -91,10 +83,7 @@ namespace BToken.Chaining
               Gateway.QueueBatchesCanceled.Enqueue(UTXOBatch);
 
               CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-
-              throw ex;
             }
-
           }
         }
 
@@ -182,32 +171,6 @@ namespace BToken.Chaining
           {
             CountBlocksDownloadBatch -= 1;
           }
-        }
-
-
-        long BytesDownloadedOld;
-        long DownloadRateOld;
-        long CountBlocksDownloadedOld;
-        public void PrintDownloadMetrics(int timeSpanIntervalMilliSeconds)
-        {
-          long downloadRate = BytesDownloaded / 
-            (int)(DateTimeOffset.UtcNow - TimeStartChannelInterval).TotalMilliseconds;
-
-          Console.WriteLine(
-            "{0}({1}),{2}({3})MB,{4}({5})kB/s",
-            GetHashCode(),
-            Channel == null ? "not connencted" : Channel.GetIdentification(),
-            BytesDownloaded / 1000000,
-            BytesDownloadedOld / 1000000,
-            downloadRate,
-            DownloadRateOld);
-        
-          BytesDownloadedOld = BytesDownloaded;
-          BytesDownloaded = 0;
-
-          DownloadRateOld = downloadRate;
-          TimeStartChannelInterval = DateTimeOffset.UtcNow;
-
         }
       }
     }
