@@ -29,23 +29,20 @@ namespace BToken.Chaining
         GatewayUTXO Gateway;
         SHA256 SHA256;
         
-        Stopwatch StopwatchDownload = new Stopwatch();
-        public int CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-        DataBatch UTXOBatch;
 
-        readonly object LOCK_BytesDownloaded = new object();
-        long BytesDownloaded;
-
-        public DateTimeOffset TimeStartChannelInterval;
-
+        
         public SyncUTXOSession(GatewayUTXO gateway)
         {
           Gateway = gateway;
           SHA256 = SHA256.Create();
         }
-        
 
-        
+
+
+        Stopwatch StopwatchDownload = new Stopwatch();
+        public int CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+        DataBatch UTXOBatch;
+
         public async Task Start()
         {
           while(true)
@@ -58,9 +55,6 @@ namespace BToken.Chaining
             Console.WriteLine("sync UTXO session {0} aquired channel {1}.",
               GetHashCode(),
               Channel.GetIdentification());
-            
-            TimeStartChannelInterval = DateTimeOffset.UtcNow;
-            BytesDownloaded = 0;
 
             try
             {
@@ -71,6 +65,7 @@ namespace BToken.Chaining
                 await StartBlockDownloadAsync();
               }
 
+              Console.WriteLine("Session {0} returns", GetHashCode());
               return;
             }
             catch (Exception ex)
@@ -99,6 +94,10 @@ namespace BToken.Chaining
 
         async Task StartBlockDownloadAsync()
         {
+          Console.WriteLine("session {0} starts download of batch {1}",
+            GetHashCode(),
+            UTXOBatch.Index);
+
           StopwatchDownload.Restart();
                            
           List<byte[]> hashesRequested = new List<byte[]>();
@@ -132,15 +131,12 @@ namespace BToken.Chaining
             blockBatchContainer.Parse();
             UTXOBatch.CountItems += blockBatchContainer.CountItems;
 
-            lock (LOCK_BytesDownloaded)
-            {
-              BytesDownloaded += blockBatchContainer.Buffer.Length;
-            }
           }
 
           await Gateway.Blockchain.UTXODataPipe.InputBuffer.SendAsync(UTXOBatch);
 
-          Console.WriteLine("Downloaded batch {0} with {1} blocks and {2} txs", 
+          Console.WriteLine("session {0} Downloaded batch {1} with {2} blocks and {3} txs",
+            GetHashCode(),
             UTXOBatch.Index,
             UTXOBatch.ItemBatchContainers.Count,
             UTXOBatch.CountItems);

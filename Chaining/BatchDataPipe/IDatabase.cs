@@ -12,7 +12,7 @@ namespace BToken.Chaining
 
     Task ArchiveBatch(DataBatch batch);
 
-    DataBatch LoadDataArchive(int archiveIndex);
+    DataBatch LoadDataBatch(int batchIndex);
 
     void LoadImage(out int archiveIndexNext);
   }

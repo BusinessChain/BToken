@@ -30,14 +30,11 @@ namespace BToken.Chaining
       UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
       UTXOIndexUInt32ArrayCompressed TableUInt32Array = new UTXOIndexUInt32ArrayCompressed();
 
-      const int UTXOSTATE_ARCHIVING_INTERVAL = 500;
+      const int UTXOSTATE_ARCHIVING_INTERVAL = 100;
       static string PathUTXOState = "UTXOArchive";
       static string PathUTXOStateOld = PathUTXOState + "_Old";
 
       public int BlockHeight;
-      public BufferBlock<UTXOBatch> InputBuffer = new BufferBlock<UTXOBatch>(
-        new DataflowBlockOptions { BoundedCapacity = 10 });
-
       int ArchiveIndexNext;
       Header HeaderMergedLast;
 
@@ -389,16 +386,16 @@ namespace BToken.Chaining
       }
 
                   
-      public DataBatch LoadDataArchive(int archiveIndex)
+      public DataBatch LoadDataBatch(int batchIndex)
       {
-        var batch = new DataBatch(archiveIndex);
+        var batch = new DataBatch(batchIndex);
 
         batch.ItemBatchContainers.Add(
           new BlockBatchContainer(
             new BlockParser(Blockchain.Chain),
-            archiveIndex,
+            batchIndex,
             File.ReadAllBytes(
-              Path.Combine(FilePath, "p" + archiveIndex))));
+              Path.Combine(FilePath, "p" + batchIndex))));
 
         return batch;
       }
@@ -412,34 +409,32 @@ namespace BToken.Chaining
         ref DataBatch uTXOBatch,
         int countHeaders)
       {
-        BlockBatchContainer blockContainerLoadedLast = 
-          (BlockBatchContainer)uTXOBatch.ItemBatchContainers.Last();
+        Header headerLoadedLast = 
+          ((BlockBatchContainer)uTXOBatch.ItemBatchContainers.Last())
+          .HeaderLast;
         
         lock (LOCK_HeaderLoad)
         {
-          if (blockContainerLoadedLast
-            .HeaderLast.HeadersNext == null)
+          if (headerLoadedLast.HeadersNext == null)
           {
             uTXOBatch = null;
             return false;
           }
 
           uTXOBatch = new DataBatch(IndexLoad++);
-
-          var header = blockContainerLoadedLast.HeaderLast;
-
+          
           for (int i = 0; i < countHeaders; i += 1)
           {
-            header = header.HeadersNext[0];
+            headerLoadedLast = headerLoadedLast.HeadersNext[0];
 
             BlockBatchContainer blockContainer =
               new BlockBatchContainer(
                 new BlockParser(Blockchain.Chain),
-                header);
+                headerLoadedLast);
 
             uTXOBatch.ItemBatchContainers.Add(blockContainer);
 
-            if (header.HeadersNext == null)
+            if (headerLoadedLast.HeadersNext == null)
             {
               uTXOBatch.IsFinalBatch = true;
               break;

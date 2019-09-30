@@ -31,7 +31,6 @@ namespace BToken.Chaining
 
 
       const int COUNT_UTXO_SESSIONS = 4;
-      readonly object LOCK_BatchLoadedLast = new object();
       DataBatch BatchLoadedLast;
 
       public async Task Synchronize(DataBatch batchInsertedLast)
@@ -55,6 +54,7 @@ namespace BToken.Chaining
 
 
 
+      readonly object LOCK_BatchLoadedLast = new object();
       ConcurrentQueue<DataBatch> QueueBatchesCanceled 
         = new ConcurrentQueue<DataBatch>();
 
@@ -69,7 +69,7 @@ namespace BToken.Chaining
 
         lock(LOCK_BatchLoadedLast)
         {
-          if(UTXOTable.TryLoadBatch(
+          if (UTXOTable.TryLoadBatch(
             ref BatchLoadedLast,
             countHeaders))
           {
@@ -77,6 +77,8 @@ namespace BToken.Chaining
             return true;
           }
         }
+
+        Console.WriteLine("session {0} failed to get download batch");
 
         uTXOBatch = null;
         return false;
@@ -86,6 +88,9 @@ namespace BToken.Chaining
 
       public void ReportInvalidBatch(DataBatch batch)
       {
+        Console.WriteLine("Invalid batch {0} reported",
+          batch.Index);
+
         throw new NotImplementedException();
       }
     }

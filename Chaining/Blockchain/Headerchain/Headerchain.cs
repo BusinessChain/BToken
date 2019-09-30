@@ -163,14 +163,14 @@ namespace BToken.Chaining
         }
       }
 
-      public DataBatch LoadDataArchive(int archiveIndex)
+      public DataBatch LoadDataBatch(int batchIndex)
       {
-        var batch = new DataBatch(archiveIndex);
+        var batch = new DataBatch(batchIndex);
 
         batch.ItemBatchContainers.Add(
           new HeaderBatchContainer(
-            archiveIndex,
-            File.ReadAllBytes(FilePath + archiveIndex)));
+            batchIndex,
+            File.ReadAllBytes(FilePath + batchIndex)));
 
         return batch;
       }

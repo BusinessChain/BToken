@@ -51,6 +51,7 @@ namespace BToken.Chaining
         {
           BlockParser = blockParser;
           HeaderRoot = header;
+          HeaderLast = header;
         }
 
 
