@@ -78,8 +78,6 @@ namespace BToken.Chaining
           }
         }
 
-        Console.WriteLine("session {0} failed to get download batch");
-
         uTXOBatch = null;
         return false;
       }

@@ -94,10 +94,6 @@ namespace BToken.Chaining
 
         async Task StartBlockDownloadAsync()
         {
-          Console.WriteLine("session {0} starts download of batch {1}",
-            GetHashCode(),
-            UTXOBatch.Index);
-
           StopwatchDownload.Restart();
                            
           List<byte[]> hashesRequested = new List<byte[]>();
@@ -107,7 +103,7 @@ namespace BToken.Chaining
           {
             if(blockBatchContainer.Buffer == null)
             {
-              hashesRequested.Add(blockBatchContainer.HeaderRoot.HeaderHash);
+              hashesRequested.Add(blockBatchContainer.Header.HeaderHash);
             }
           }
 
@@ -134,13 +130,7 @@ namespace BToken.Chaining
           }
 
           await Gateway.Blockchain.UTXODataPipe.InputBuffer.SendAsync(UTXOBatch);
-
-          Console.WriteLine("session {0} Downloaded batch {1} with {2} blocks and {3} txs",
-            GetHashCode(),
-            UTXOBatch.Index,
-            UTXOBatch.ItemBatchContainers.Count,
-            UTXOBatch.CountItems);
-
+          
           StopwatchDownload.Stop();
 
           CalculateNewCountBlocks();

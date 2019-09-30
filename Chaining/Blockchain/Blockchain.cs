@@ -51,6 +51,8 @@ namespace BToken.Chaining
     {      
       await HeaderchainDataPipe.Start();
       await UTXODataPipe.Start();
+
+      Console.WriteLine("Blockchain sync done");
     }
 
 

@@ -24,8 +24,7 @@ namespace BToken.Chaining
         public KeyValuePair<byte[], uint[]>[] UTXOsUInt32Array;
 
         public Header HeaderPrevious;
-        public Header HeaderRoot;
-        public Header HeaderLast;
+        public Header Header;
 
         public int BlockCount;
 
@@ -50,8 +49,7 @@ namespace BToken.Chaining
           : base(null)
         {
           BlockParser = blockParser;
-          HeaderRoot = header;
-          HeaderLast = header;
+          Header = header;
         }
 
 

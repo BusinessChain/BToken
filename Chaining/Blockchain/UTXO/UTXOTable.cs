@@ -335,7 +335,7 @@ namespace BToken.Chaining
           }
 
           BlockHeight += blockContainer.BlockCount;
-          HeaderMergedLast = blockContainer.HeaderLast;
+          HeaderMergedLast = blockContainer.Header;
         }
 
         StopwatchMerging.Stop();
@@ -409,15 +409,14 @@ namespace BToken.Chaining
         ref DataBatch uTXOBatch,
         int countHeaders)
       {
-        Header headerLoadedLast = 
+        Header headerLoadedLast =
           ((BlockBatchContainer)uTXOBatch.ItemBatchContainers.Last())
-          .HeaderLast;
-        
+          .Header;
+
         lock (LOCK_HeaderLoad)
         {
-          if (headerLoadedLast.HeadersNext == null)
+          if (headerLoadedLast.HeadersNext.Count == 0)
           {
-            uTXOBatch = null;
             return false;
           }
 
@@ -434,7 +433,7 @@ namespace BToken.Chaining
 
             uTXOBatch.ItemBatchContainers.Add(blockContainer);
 
-            if (headerLoadedLast.HeadersNext == null)
+            if (headerLoadedLast.HeadersNext.Count == 0)
             {
               uTXOBatch.IsFinalBatch = true;
               break;

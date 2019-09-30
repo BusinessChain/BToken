@@ -59,13 +59,13 @@ namespace BToken.Chaining
           BufferIndex += COUNT_HEADER_BYTES;
           TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
 
-          if(blockBatchContainer.HeaderRoot == null)
+          if(blockBatchContainer.Header == null)
           {
             Header = Chain.ReadHeader(HeaderHash, SHA256);
           }
           else
           {
-            Header = blockBatchContainer.HeaderRoot;
+            Header = blockBatchContainer.Header;
 
             ValidateHeaderHash(
               HeaderHash,
@@ -102,7 +102,7 @@ namespace BToken.Chaining
             blockBatchContainer.CountItems += TXCount;
           }
 
-          blockBatchContainer.HeaderLast = Header;
+          blockBatchContainer.Header = Header;
           blockBatchContainer.ConvertTablesToArrays();
         }
 
