@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+using System.Security.Cryptography;
 
 namespace BToken.Networking
 {
@@ -80,14 +81,13 @@ namespace BToken.Networking
       {
         try
         {
-
           IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
           IPEndPoint = new IPEndPoint(iPAddress, Port);
           
           await ConnectTCPAsync();
           await HandshakeAsync();
 
-          Task processNetworkMessagesTask = ProcessNetworkMessagesAsync();
+          ProcessNetworkMessagesAsync();
           
           return true;
         }
@@ -108,12 +108,13 @@ namespace BToken.Networking
       {
         while (true)
         {
-          NetworkMessage message = await NetworkMessageStreamer.ReadAsync(default(CancellationToken)).ConfigureAwait(false);
+          NetworkMessage message = await NetworkMessageStreamer
+            .ReadAsync(default).ConfigureAwait(false);
 
           switch (message.Command)
           {
             case "version":
-              await ProcessVersionMessageAsync(message, default(CancellationToken)).ConfigureAwait(false);
+              await ProcessVersionMessageAsync(message, default).ConfigureAwait(false);
               break;
             case "ping":
               Task processPingMessageTask = ProcessPingMessageAsync(message);
@@ -225,23 +226,48 @@ namespace BToken.Networking
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      public async Task<bool> TryExecuteSessionAsync(INetworkSession session)
+      public async Task<byte[]> GetHeadersAsync(
+        IEnumerable<byte[]> locatorHashes,
+        CancellationToken cancellationToken)
       {
-        try
+        await NetworkMessageStreamer.WriteAsync(
+          new GetHeadersMessage(
+            locatorHashes,
+            ProtocolVersion));
+
+        while (true)
         {
-          await session.RunAsync(this).ConfigureAwait(false);
-          return true;
-        }
-        catch
-        {
-          return false;
+          NetworkMessage networkMessage = await ReceiveSessionMessageAsync(cancellationToken);
+
+          if (networkMessage.Command == "headers")
+          {
+            return networkMessage.Payload;
+          }
         }
       }
-      
-      public uint GetProtocolVersion()
+
+      public async Task RequestBlocksAsync(IEnumerable<byte[]> headerHashes)
       {
-        return ProtocolVersion;
+        await SendMessageAsync(
+          new GetDataMessage(
+            headerHashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h))));
       }
+      public async Task<byte[]> ReceiveBlockAsync(CancellationToken cancellationToken)
+      {
+        while(true)
+        {
+          NetworkMessage networkMessage = await ReceiveSessionMessageAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+          if (networkMessage.Command != "block")
+          {
+            continue;
+          }
+
+          return networkMessage.Payload;
+        }
+      }
+
       public string GetIdentification()
       {
         return IPEndPoint.Address.ToString();
