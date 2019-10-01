@@ -10,10 +10,10 @@ namespace BToken.Chaining
     {
       class Chain
       {
+        public Header HeaderRoot;
         public Header HeaderTip;
         public int Height;
         public double AccumulatedDifficulty;
-        public Header HeaderRoot;
 
 
         public Chain(
@@ -21,9 +21,9 @@ namespace BToken.Chaining
           int height,
           double accumulatedDifficulty)
         {
+          HeaderRoot = headerRoot;
           HeaderTip = headerRoot;
           Height = height;
-          HeaderRoot = headerRoot;
           AccumulatedDifficulty = accumulatedDifficulty;
         }
 

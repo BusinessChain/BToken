@@ -15,6 +15,7 @@ namespace BToken.Chaining
     partial class GatewayHeaderchain : IGateway
     {
       Blockchain Blockchain;
+      Headerchain Headerchain;
       Network Network;
       
       readonly object LOCK_IsSyncing = new object();
@@ -29,6 +30,7 @@ namespace BToken.Chaining
         Headerchain headerchain)
       {
         Blockchain = blockchain;
+        Headerchain = headerchain;
         Network = network;
       }
       
@@ -99,6 +101,59 @@ namespace BToken.Chaining
           batch.Index);
 
         throw new NotImplementedException();
+      }
+
+
+      public async Task StartListener()
+      {
+        while (true)
+        {
+          INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync();
+          try
+          {
+            List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
+
+            foreach (NetworkMessage inboundMessage in inboundMessages)
+            {
+              switch (inboundMessage.Command)
+              {
+                case "getheaders":
+                  //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                  //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
+                  //await channel.SendMessageAsync(new HeadersMessage(headers));
+                  break;
+
+                case "headers":
+                  var headersMessage = new HeadersMessage(inboundMessage);
+                  
+                  var batch = new DataBatch(batchIndex);
+
+                  batch.ItemBatchContainers.Add(
+                    new HeaderBatchContainer(
+                      batchIndex,
+                      headersMessage.Payload));
+
+                  Headerchain.TryInsertBatch(
+                    batch, 
+                    out ItemBatchContainer containerInvalid);
+
+                  await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
+                  break;
+
+                default:
+                  break;
+              }
+            }
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
+              channel.GetIdentification(),
+              ex.Message);
+
+            //Network.RemoveChannel(channel);
+          }
+        }
       }
     }
   }

@@ -31,6 +31,8 @@ namespace BToken.Chaining
       StartBatcherAsync();
 
       await Gateway.Synchronize(BatchInsertedLast);
+
+      Gateway.StartListener();
     }
 
 

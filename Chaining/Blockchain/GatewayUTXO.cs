@@ -91,6 +91,12 @@ namespace BToken.Chaining
 
         throw new NotImplementedException();
       }
+
+
+      public async Task StartListener()
+      {
+
+      }
     }
   }
 }

@@ -169,7 +169,6 @@ namespace BToken.Chaining
 
         batch.ItemBatchContainers.Add(
           new HeaderBatchContainer(
-            batchIndex,
             File.ReadAllBytes(FilePath + batchIndex)));
 
         return batch;

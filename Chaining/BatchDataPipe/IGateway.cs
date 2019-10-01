@@ -10,5 +10,6 @@ namespace BToken.Chaining
   {
     Task Synchronize(DataBatch batchInsertedLast);
     void ReportInvalidBatch(DataBatch batch);
+    Task StartListener();
   }
 }

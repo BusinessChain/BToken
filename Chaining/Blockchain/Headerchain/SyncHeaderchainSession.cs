@@ -117,8 +117,7 @@ namespace BToken.Chaining
               {
                 HeaderBatchOld.IsFinalBatch = true;
 
-                await Gateway.Blockchain.HeaderchainDataPipe.InputBuffer
-                  .SendAsync(HeaderBatchOld);
+                await Gateway.Blockchain.HeaderchainDataPipe.InputBuffer.SendAsync(HeaderBatchOld);
               }
 
               lock (Gateway.LOCK_IsSyncing)

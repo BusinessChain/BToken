@@ -35,12 +35,13 @@ namespace BToken.Networking
       Payload = payload.ToArray();
     }
 
-    public HeadersMessage(NetworkMessage message, SHA256 sHA256) 
+    public HeadersMessage(NetworkMessage message) 
       : base("headers", message.Payload)
     {
       int startIndex = 0;
 
       int headersCount = VarInt.GetInt32(Payload, ref startIndex);
+      SHA256 sHA256 = SHA256.Create();
       for (int i = 0; i < headersCount; i += 1)
       {
         Headers.Add(Header.ParseHeader(Payload, ref startIndex, sHA256));
