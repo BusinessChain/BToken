@@ -31,11 +31,11 @@ namespace BToken.Chaining
 
 
       const int COUNT_UTXO_SESSIONS = 4;
-      DataBatch BatchLoadedLast;
+      ItemBatchContainer ContainerInsertedLast;
 
-      public async Task Synchronize(DataBatch batchInsertedLast)
+      public async Task Synchronize(ItemBatchContainer containerInsertedLast)
       {
-        BatchLoadedLast = batchInsertedLast;
+        ContainerInsertedLast = containerInsertedLast;
 
         Task[] syncUTXOTasks = new Task[COUNT_UTXO_SESSIONS];
 
@@ -70,15 +70,17 @@ namespace BToken.Chaining
         lock(LOCK_BatchLoadedLast)
         {
           if (UTXOTable.TryLoadBatch(
-            ref BatchLoadedLast,
+            ContainerInsertedLast,
+            out uTXOBatch,
             countHeaders))
           {
-            uTXOBatch = BatchLoadedLast;
+            ContainerInsertedLast 
+              = uTXOBatch.ItemBatchContainers.Last();
+
             return true;
           }
         }
 
-        uTXOBatch = null;
         return false;
       }
 

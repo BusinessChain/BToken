@@ -10,9 +10,6 @@ namespace BToken.Chaining
   {
     class ChainException : Exception
     {
-      public ChainCode ErrorCode { get; private set; }
-
-
       public ChainException()
       { }
 
@@ -24,15 +21,6 @@ namespace BToken.Chaining
           : base(message, inner)
       { }
 
-      public ChainException(ChainCode errorCode)
-      {
-        ErrorCode = errorCode;
-      }
-      public ChainException(string message, ChainCode errorCode) 
-        : base(message)
-      {
-        ErrorCode = errorCode;
-      }
     }
   }
 }

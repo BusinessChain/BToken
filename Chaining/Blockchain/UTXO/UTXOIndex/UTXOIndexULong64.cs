@@ -18,7 +18,7 @@ namespace BToken.Chaining
         ulong UTXOItem;
 
         ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
-        ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
+        public static ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
 
 
         public UTXOIndexULong64()

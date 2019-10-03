@@ -52,87 +52,178 @@ namespace BToken.Chaining
           TableUInt32Array };
       }
 
+
+
       void InsertUTXOsUInt32(KeyValuePair<byte[], uint>[] uTXOsUInt32)
       {
         int i = 0;
 
-      LoopUTXOItems:
         while (i < uTXOsUInt32.Length)
         {
-          int primaryKey = BitConverter.ToInt32(uTXOsUInt32[i].Key, 0);
-
-          for (int c = 0; c < Tables.Length; c += 1)
-          {
-            if (Tables[c].PrimaryTableContainsKey(primaryKey))
-            {
-              Tables[c].IncrementCollisionBits(primaryKey, 0);
-
-              TableUInt32.CollisionTables[uTXOsUInt32[i].Key[0]].Add(uTXOsUInt32[i].Key, uTXOsUInt32[i].Value);
-
-              i += 1;
-              goto LoopUTXOItems;
-            }
-          }
-
-          TableUInt32.PrimaryTables[(byte)primaryKey].Add(primaryKey, uTXOsUInt32[i].Value);
+          InsertUTXOUInt32(
+            uTXOsUInt32[i].Key, 
+            uTXOsUInt32[i].Value);
 
           i += 1;
         }
       }
+
+      void InsertUTXOsUInt32(
+        KeyValuePair<byte[], uint>[] uTXOsUInt32,
+        int archiveIndex)
+      {
+        int i = 0;
+
+        while (i < uTXOsUInt32.Length)
+        {
+          uint uTXO =
+            uTXOsUInt32[i].Value |
+            ((uint)archiveIndex & UTXOIndexUInt32.MaskBatchIndex);
+
+          InsertUTXOUInt32(
+            uTXOsUInt32[i].Key,
+            uTXO);
+
+          i += 1;
+        }
+      }
+
+      void InsertUTXOUInt32(byte[] uTXOKey, uint uTXO)
+      {
+        int primaryKey = BitConverter.ToInt32(uTXOKey, 0);
+
+        for (int c = 0; c < Tables.Length; c += 1)
+        {
+          if (Tables[c].PrimaryTableContainsKey(primaryKey))
+          {
+            Tables[c].IncrementCollisionBits(primaryKey, 0);
+
+            TableUInt32.CollisionTables[uTXOKey[0]]
+              .Add(
+                uTXOKey,
+                uTXO);
+
+            return;
+          }
+        }
+
+        TableUInt32.PrimaryTables[(byte)primaryKey]
+          .Add(
+            primaryKey,
+            uTXO);
+      }
+
+      
+
       void InsertUTXOsULong64(KeyValuePair<byte[], ulong>[] uTXOsULong64)
       {
         int i = 0;
 
-      LoopUTXOItems:
         while (i < uTXOsULong64.Length)
         {
-          int primaryKey = BitConverter.ToInt32(uTXOsULong64[i].Key, 0);
-
-          for (int c = 0; c < Tables.Length; c += 1)
-          {
-            if (Tables[c].PrimaryTableContainsKey(primaryKey))
-            {
-              Tables[c].IncrementCollisionBits(primaryKey, 1);
-
-              TableULong64.CollisionTable.Add(uTXOsULong64[i].Key, uTXOsULong64[i].Value);
-
-              i += 1;
-              goto LoopUTXOItems;
-            }
-          }
-
-          TableULong64.PrimaryTable.Add(primaryKey, uTXOsULong64[i].Value);
+          InsertUTXOULong64(
+            uTXOsULong64[i].Key,
+            uTXOsULong64[i].Value);
 
           i += 1;
         }
       }
+
+      void InsertUTXOULong64(byte[] uTXOKey, ulong uTXO)
+      {
+        int primaryKey = BitConverter.ToInt32(uTXOKey, 0);
+
+        for (int c = 0; c < Tables.Length; c += 1)
+        {
+          if (Tables[c].PrimaryTableContainsKey(primaryKey))
+          {
+            Tables[c].IncrementCollisionBits(primaryKey, 1);
+
+            TableULong64.CollisionTable.Add(uTXOKey, uTXO);
+
+            return;
+          }
+        }
+
+        TableULong64.PrimaryTable.Add(primaryKey, uTXO);
+      }
+
+      void InsertUTXOsULong64(
+        KeyValuePair<byte[], ulong>[] uTXOsULong64,
+        int archiveIndex)
+      {
+        int i = 0;
+
+        while (i < uTXOsULong64.Length)
+        {
+          ulong uTXO =
+            uTXOsULong64[i].Value |
+            ((ulong)archiveIndex & UTXOIndexULong64.MaskBatchIndex);
+
+          InsertUTXOULong64(
+            uTXOsULong64[i].Key,
+            uTXO);
+
+          i += 1;
+        }
+      }
+
+
+
       void InsertUTXOsUInt32Array(KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array)
       {
         int i = 0;
 
-      LoopUTXOItems:
         while (i < uTXOsUInt32Array.Length)
         {
-          int primaryKey = BitConverter.ToInt32(uTXOsUInt32Array[i].Key, 0);
-
-          for (int c = 0; c < Tables.Length; c += 1)
-          {
-            if (Tables[c].PrimaryTableContainsKey(primaryKey))
-            {
-              Tables[c].IncrementCollisionBits(primaryKey, 2);
-
-              TableUInt32Array.CollisionTable.Add(uTXOsUInt32Array[i].Key, uTXOsUInt32Array[i].Value);
-
-              i += 1;
-              goto LoopUTXOItems;
-            }
-          }
-
-          TableUInt32Array.PrimaryTable.Add(primaryKey, uTXOsUInt32Array[i].Value);
+          InsertUTXOUInt32Array(
+            uTXOsUInt32Array[i].Key,
+            uTXOsUInt32Array[i].Value);
 
           i += 1;
         }
       }
+
+      void InsertUTXOUInt32Array(byte[] uTXOKey, uint[] uTXO)
+      {
+        int primaryKey = BitConverter.ToInt32(uTXOKey, 0);
+
+        for (int c = 0; c < Tables.Length; c += 1)
+        {
+          if (Tables[c].PrimaryTableContainsKey(primaryKey))
+          {
+            Tables[c].IncrementCollisionBits(primaryKey, 2);
+
+            TableUInt32Array.CollisionTable.Add(uTXOKey, uTXO);
+
+            return;
+          }
+        }
+
+        TableUInt32Array.PrimaryTable.Add(primaryKey, uTXO);
+      }
+
+      void InsertUTXOsUInt32Array(
+        KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array,
+        int archiveIndex)
+      {
+        int i = 0;
+
+        while (i < uTXOsUInt32Array.Length)
+        {
+          uint[] uTXO = uTXOsUInt32Array[i].Value;
+          uTXO[0] |= (uint)archiveIndex & UTXOIndexUInt32Array.MaskBatchIndex;
+
+          InsertUTXOUInt32Array(
+            uTXOsUInt32Array[i].Key,
+            uTXO);
+
+          i += 1;
+        }
+      }
+
+
+
       void SpendUTXOs(List<TXInput> inputs)
       {
         int i = 0;
@@ -183,6 +274,8 @@ namespace BToken.Chaining
         }
       }
       
+
+
       void ArchiveState()
       {
         if (Directory.Exists(PathUTXOState))
@@ -215,6 +308,8 @@ namespace BToken.Chaining
           t.BackupToDisk(PathUTXOState);
         });
       }
+
+
 
       public void LoadImage(out int archiveIndexNext)
       {
@@ -297,6 +392,62 @@ namespace BToken.Chaining
         }
       }
 
+
+
+      public bool TryInsertContainer(ItemBatchContainer container)
+      {
+        BlockBatchContainer blockContainer = (BlockBatchContainer)container;
+
+        if (blockContainer.HeaderPrevious != HeaderMergedLast)
+        {
+          Console.WriteLine("HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}",
+            blockContainer.HeaderPrevious.HeaderHash.ToHexString(),
+            blockContainer.Index,
+            HeaderMergedLast.HeaderHash.ToHexString());
+          
+          return false;
+        }
+
+
+        StopwatchMerging.Restart();
+
+        try
+        {
+          InsertUTXOsUInt32(blockContainer.UTXOsUInt32);
+          InsertUTXOsULong64(blockContainer.UTXOsULong64);
+          InsertUTXOsUInt32Array(blockContainer.UTXOsUInt32Array);
+          SpendUTXOs(blockContainer.Inputs);
+        }
+        catch (ChainException ex)
+        {
+          Console.WriteLine(
+            "Insertion of blockBatchContainer {0} raised ChainException:\n {1}.",
+            blockContainer.Index,
+            ex.Message);
+          
+          return false;
+        }
+
+        StopwatchMerging.Stop();
+
+        BlockHeight += blockContainer.BlockCount;
+        HeaderMergedLast = blockContainer.Header;
+        
+        if (blockContainer.Index % UTXOSTATE_ARCHIVING_INTERVAL == 0
+          && blockContainer.Index > 0)
+        {
+          ArchiveIndexNext += UTXOSTATE_ARCHIVING_INTERVAL;
+          ArchiveState();
+        }
+
+        LogCSV(
+          new List<ItemBatchContainer>() { blockContainer }, 
+          blockContainer.Index);
+
+        return true;
+      }
+
+
       public bool TryInsertBatch(DataBatch uTXOBatch, out ItemBatchContainer containerInvalid)
       {
         BlockBatchContainer blockContainerFirst = (BlockBatchContainer)uTXOBatch.ItemBatchContainers[0];
@@ -318,9 +469,9 @@ namespace BToken.Chaining
         {
           try
           {
-            InsertUTXOsUInt32(blockContainer.UTXOsUInt32);
-            InsertUTXOsULong64(blockContainer.UTXOsULong64);
-            InsertUTXOsUInt32Array(blockContainer.UTXOsUInt32Array);
+            InsertUTXOsUInt32(blockContainer.UTXOsUInt32, uTXOBatch.Index);
+            InsertUTXOsULong64(blockContainer.UTXOsULong64, uTXOBatch.Index);
+            InsertUTXOsUInt32Array(blockContainer.UTXOsUInt32Array, uTXOBatch.Index);
             SpendUTXOs(blockContainer.Inputs);
           }
           catch (ChainException ex)
@@ -340,15 +491,16 @@ namespace BToken.Chaining
 
         StopwatchMerging.Stop();
         
-        ArchiveIndexNext += 1;
-
         if (uTXOBatch.Index % UTXOSTATE_ARCHIVING_INTERVAL == 0
           && uTXOBatch.Index > 0)
         {
+          ArchiveIndexNext += UTXOSTATE_ARCHIVING_INTERVAL;
           ArchiveState();
         }
 
-        LogCSV(uTXOBatch);
+        LogCSV(
+          uTXOBatch.ItemBatchContainers, 
+          uTXOBatch.Index);
 
         containerInvalid = null;
         return true;
@@ -386,18 +538,13 @@ namespace BToken.Chaining
       }
 
                   
-      public DataBatch LoadDataBatch(int batchIndex)
+      public ItemBatchContainer LoadDataContainer(int batchIndex)
       {
-        var batch = new DataBatch(batchIndex);
-
-        batch.ItemBatchContainers.Add(
-          new BlockBatchContainer(
-            new BlockParser(Blockchain.Chain),
-            batchIndex,
-            File.ReadAllBytes(
-              Path.Combine(FilePath, "p" + batchIndex))));
-
-        return batch;
+        return new BlockBatchContainer(
+          new BlockParser(Blockchain.Chain),
+          batchIndex,
+          File.ReadAllBytes(
+            Path.Combine(FilePath, "p" + batchIndex)));
       }
 
 
@@ -406,17 +553,19 @@ namespace BToken.Chaining
       int IndexLoad;
 
       public bool TryLoadBatch(
-        ref DataBatch uTXOBatch,
+        ItemBatchContainer containerInsertedLast,
+        out DataBatch uTXOBatch,
         int countHeaders)
       {
         Header headerLoadedLast =
-          ((BlockBatchContainer)uTXOBatch.ItemBatchContainers.Last())
+          ((BlockBatchContainer)containerInsertedLast)
           .Header;
 
         lock (LOCK_HeaderLoad)
         {
           if (headerLoadedLast.HeadersNext.Count == 0)
           {
+            uTXOBatch = null;
             return false;
           }
 
@@ -445,14 +594,14 @@ namespace BToken.Chaining
       }
 
 
-      void LogCSV(DataBatch uTXOBatch)
+      void LogCSV(List<ItemBatchContainer> batchContainers, int index)
       {
         if(UTCTimeStartMerger == 0)
         {
           UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         }
 
-        long elapsedTicksParsing = uTXOBatch.ItemBatchContainers
+        long elapsedTicksParsing = batchContainers
           .Sum(c => c.StopwatchParse.ElapsedTicks);
 
         int ratioMergeToParse =
@@ -461,7 +610,7 @@ namespace BToken.Chaining
 
         string logCSV = string.Format(
           "{0},{1},{2},{3},{4},{5},{6}",
-          uTXOBatch.Index,
+          index,
           BlockHeight,
           DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
           ratioMergeToParse,

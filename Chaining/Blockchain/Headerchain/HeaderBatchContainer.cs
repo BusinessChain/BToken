@@ -15,13 +15,12 @@ namespace BToken.Chaining
 
       public Header HeaderRoot;
       public Header HeaderTip;
-
-
+      
            
 
-      public HeaderBatchContainer(byte[] headerBytes)
+      public HeaderBatchContainer(int index, byte[] headerBytes)
         : base(
-            -1, 
+            index, 
             headerBytes)
       { }
 

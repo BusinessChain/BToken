@@ -15,7 +15,7 @@ namespace BToken.Chaining
 
         uint[] UTXOItem;
 
-        static readonly uint MaskBatchIndex = ~(uint.MaxValue << COUNT_BATCHINDEX_BITS);
+        public static readonly uint MaskBatchIndex = ~(uint.MaxValue << COUNT_BATCHINDEX_BITS);
         static readonly uint MaskAllOutputsBitsInFirstUInt32 = uint.MaxValue << CountNonOutputBits;
 
 

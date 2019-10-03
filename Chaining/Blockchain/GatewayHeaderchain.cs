@@ -37,11 +37,11 @@ namespace BToken.Chaining
 
 
       const int COUNT_HEADER_SESSIONS = 4;
-      DataBatch BatchLoadedLast;
+      ItemBatchContainer ContainerInsertedLast;
 
-      public async Task Synchronize(DataBatch batchInsertedLast)
+      public async Task Synchronize(ItemBatchContainer containerInsertedLast)
       {
-        BatchLoadedLast = batchInsertedLast;
+        ContainerInsertedLast = containerInsertedLast;
 
         Task[] syncHeaderchainTasks = new Task[COUNT_HEADER_SESSIONS];
 
@@ -106,54 +106,54 @@ namespace BToken.Chaining
 
       public async Task StartListener()
       {
-        while (true)
-        {
-          INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync();
-          try
-          {
-            List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
+        //  while (true)
+        //  {
+        //    INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync();
+        //    try
+        //    {
+        //      List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
 
-            foreach (NetworkMessage inboundMessage in inboundMessages)
-            {
-              switch (inboundMessage.Command)
-              {
-                case "getheaders":
-                  //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-                  //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
-                  //await channel.SendMessageAsync(new HeadersMessage(headers));
-                  break;
+        //      foreach (NetworkMessage inboundMessage in inboundMessages)
+        //      {
+        //        switch (inboundMessage.Command)
+        //        {
+        //          case "getheaders":
+        //            //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+        //            //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
+        //            //await channel.SendMessageAsync(new HeadersMessage(headers));
+        //            break;
 
-                case "headers":
-                  var headersMessage = new HeadersMessage(inboundMessage);
-                  
-                  var batch = new DataBatch(batchIndex);
+        //          case "headers":
+        //            var headersMessage = new HeadersMessage(inboundMessage);
 
-                  batch.ItemBatchContainers.Add(
-                    new HeaderBatchContainer(
-                      batchIndex,
-                      headersMessage.Payload));
+        //            var batch = new DataBatch(batchIndex);
 
-                  Headerchain.TryInsertBatch(
-                    batch, 
-                    out ItemBatchContainer containerInvalid);
+        //            batch.ItemBatchContainers.Add(
+        //              new HeaderBatchContainer(
+        //                batchIndex,
+        //                headersMessage.Payload));
 
-                  await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
-                  break;
+        //            Headerchain.TryInsertBatch(
+        //              batch, 
+        //              out ItemBatchContainer containerInvalid);
 
-                default:
-                  break;
-              }
-            }
-          }
-          catch (Exception ex)
-          {
-            Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
-              channel.GetIdentification(),
-              ex.Message);
+        //            await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
+        //            break;
 
-            //Network.RemoveChannel(channel);
-          }
-        }
+        //          default:
+        //            break;
+        //        }
+        //      }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //      Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
+        //        channel.GetIdentification(),
+        //        ex.Message);
+
+        //      //Network.RemoveChannel(channel);
+        //    }
+        //  }
       }
     }
   }

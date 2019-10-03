@@ -9,10 +9,11 @@ namespace BToken.Chaining
   interface IDatabase
   {
     bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid);
+    bool TryInsertContainer(ItemBatchContainer container);
 
     Task ArchiveBatch(DataBatch batch);
 
-    DataBatch LoadDataBatch(int batchIndex);
+    ItemBatchContainer LoadDataContainer(int containerIndex);
 
     void LoadImage(out int archiveIndexNext);
   }

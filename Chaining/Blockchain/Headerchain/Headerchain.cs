@@ -12,8 +12,6 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public enum ChainCode { ORPHAN, DUPLICATE, INVALID };
-    
     partial class Headerchain : IDatabase
     {
       Chain MainChain;
@@ -163,15 +161,40 @@ namespace BToken.Chaining
         }
       }
 
-      public DataBatch LoadDataBatch(int batchIndex)
+      public ItemBatchContainer LoadDataContainer(int batchIndex)
       {
-        var batch = new DataBatch(batchIndex);
+        return new HeaderBatchContainer(
+          batchIndex,
+          File.ReadAllBytes(FilePath + batchIndex));
+      }
+      
+      public bool TryInsertContainer(ItemBatchContainer container)
+      {
+        HeaderBatchContainer headerContainer = (HeaderBatchContainer)container;
+        Chain rivalChain;
 
-        batch.ItemBatchContainers.Add(
-          new HeaderBatchContainer(
-            File.ReadAllBytes(FilePath + batchIndex)));
+        try
+        {
+          rivalChain = Inserter.InsertChain(headerContainer.HeaderRoot);
+        }
+        catch (ChainException ex)
+        {
+          Console.WriteLine(
+            "Insertion of header container {0} raised ChainException:\n {1}.",
+            headerContainer.Index,
+            ex.Message);
 
-        return batch;
+          return false;
+        }
+
+        if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
+        {
+          ReorganizeChain(rivalChain);
+        }
+
+        Console.WriteLine("Inserted header container {0}", headerContainer.Index);
+        
+        return true;
       }
 
       public async Task ArchiveBatch(DataBatch batch)
