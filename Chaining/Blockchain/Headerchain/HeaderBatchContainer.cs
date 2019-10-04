@@ -71,7 +71,7 @@ namespace BToken.Chaining
           ParseHeaders(ref bufferIndex, headersCount);
         }
       }
-
+               
       void ParseHeaders(ref int startIndex, int headersCount)
       {
         while (headersCount > 0)
@@ -98,6 +98,9 @@ namespace BToken.Chaining
           HeaderTip = header;
         }
       }
+
+
+
       void ValidateHeader(Header header)
       {
         if (header.HeaderHash.IsGreaterThan(header.NBits))

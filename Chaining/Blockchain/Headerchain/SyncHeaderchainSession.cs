@@ -45,7 +45,7 @@ namespace BToken.Chaining
 
             Console.WriteLine("sync headerchain session {0} requests channel.", GetHashCode());
 
-            Channel = await Gateway.Network.RequestChannelAsync();
+            Channel = await Gateway.Network.RequestChannel();
 
             Console.WriteLine("sync headerchain session {0} aquired channel {1}.", 
               GetHashCode(), 
@@ -128,6 +128,8 @@ namespace BToken.Chaining
               Gateway.SignalStartHeaderSyncSession.SetResult(null);
 
               Console.WriteLine("session {0} completes chain syncing.", GetHashCode());
+              
+              Gateway.Network.ReturnChannel(Channel);
 
               return;
             }
@@ -135,13 +137,13 @@ namespace BToken.Chaining
             {
               Console.WriteLine("Exception in SyncHeaderchainSession {0} with channel {1}: '{2}'",
                 GetHashCode(),
-                Channel == null ? "" : Channel.GetIdentification(),
+                Channel == null ? "'null'" : Channel.GetIdentification(),
                 ex.Message);
-                 
-              if(IsSyncing)
-              {
-                IsSyncing = false;
 
+              Channel.Dispose();
+
+              if (IsSyncing)
+              {
                 lock (Gateway.LOCK_IsSyncing)
                 {
                   Gateway.IndexHeaderBatch = HeaderBatch.Index;
@@ -159,6 +161,8 @@ namespace BToken.Chaining
           }
         }
 
+
+
         DataBatch CreateNextHeaderBatch()
         {
           DataBatch batch = new DataBatch(HeaderBatch.Index + 1);
@@ -172,6 +176,7 @@ namespace BToken.Chaining
 
           return batch;
         }
+
 
 
         async Task DownloadHeaders()

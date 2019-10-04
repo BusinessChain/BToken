@@ -34,57 +34,7 @@ namespace BToken
 
       await Blockchain.Start();
 
-      //Task NetworkListenerTask = StartNetworkListenerAsync();
-
       //Wallet.GeneratePublicKey();
-    }
-
-    async Task StartNetworkListenerAsync()
-    {
-      while (true)
-      {
-        INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync();
-        try
-        {
-          List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
-
-          foreach (NetworkMessage inboundMessage in inboundMessages)
-          {
-            switch (inboundMessage.Command)
-            {
-              case "inv":
-                //await ProcessInventoryMessageAsync(invMessage);
-                break;
-
-              case "getheaders":
-                //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-                //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
-                //await channel.SendMessageAsync(new HeadersMessage(headers));
-                break;
-
-              case "headers":
-                //var headersMessage = new HeadersMessage(inboundMessage);
-                //List<byte[]> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
-                //await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
-                break;
-
-              case "block":
-                break;
-
-              default:
-                break;
-            }
-          }
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
-            channel.GetIdentification(),
-            ex.Message);
-
-          //Network.RemoveChannel(channel);
-        }
-      }
     }
   }
 }

@@ -106,54 +106,63 @@ namespace BToken.Chaining
 
       public async Task StartListener()
       {
-        //  while (true)
-        //  {
-        //    INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync();
-        //    try
-        //    {
-        //      List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
+        while (true)
+        {
+          INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync();
 
-        //      foreach (NetworkMessage inboundMessage in inboundMessages)
-        //      {
-        //        switch (inboundMessage.Command)
-        //        {
-        //          case "getheaders":
-        //            //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-        //            //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
-        //            //await channel.SendMessageAsync(new HeadersMessage(headers));
-        //            break;
+          try
+          {
+            List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
 
-        //          case "headers":
-        //            var headersMessage = new HeadersMessage(inboundMessage);
+            foreach (NetworkMessage inboundMessage in inboundMessages)
+            {
+              switch (inboundMessage.Command)
+              {
+                case "getheaders":
+                  //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                  //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
+                  //await channel.SendMessageAsync(new HeadersMessage(headers));
+                  break;
 
-        //            var batch = new DataBatch(batchIndex);
+                case "headers":
+                  var headersMessage = new HeadersMessage(inboundMessage);
 
-        //            batch.ItemBatchContainers.Add(
-        //              new HeaderBatchContainer(
-        //                batchIndex,
-        //                headersMessage.Payload));
+                  HeaderBatchContainer container = 
+                    new HeaderBatchContainer(
+                      -1,
+                      headersMessage.Payload);
 
-        //            Headerchain.TryInsertBatch(
-        //              batch, 
-        //              out ItemBatchContainer containerInvalid);
+                  container.Parse();
 
-        //            await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
-        //            break;
+                  if (Headerchain.TryInsertContainer(container))
+                  {
+                    Console.WriteLine("Inserted header {0}",
+                      container.HeaderRoot.HeaderHash.ToHexString());
+                  }
+                  else
+                  {
+                    Console.WriteLine("Failed to insert header {0}",
+                      container.HeaderRoot.HeaderHash.ToHexString());
+                  }
 
-        //          default:
-        //            break;
-        //        }
-        //      }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //      Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
-        //        channel.GetIdentification(),
-        //        ex.Message);
 
-        //      //Network.RemoveChannel(channel);
-        //    }
-        //  }
+                  //await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
+                  break;
+
+                default:
+                  break;
+              }
+            }
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
+              channel.GetIdentification(),
+              ex.Message);
+
+            //Network.RemoveChannel(channel);
+          }
+        }
       }
     }
   }

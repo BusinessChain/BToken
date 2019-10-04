@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  public interface INetworkChannel
+  public interface INetworkChannel : IDisposable
   {
     List<NetworkMessage> GetInboundRequestMessages();
 

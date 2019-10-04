@@ -54,11 +54,11 @@ namespace BToken.Networking
         IPEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
       }
 
-      public async Task StartAsync()
+      public async Task Start()
       {
         try
         {
-          await ConnectAsync();
+          await Connect();
 
           lock(IsDispatchedLOCK)
           {
@@ -77,15 +77,11 @@ namespace BToken.Networking
         }
       }
 
-      public async Task<bool> TryConnectAsync()
+      public async Task<bool> TryConnect()
       {
         try
         {
-          IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
-          IPEndPoint = new IPEndPoint(iPAddress, Port);
-          
-          await ConnectTCPAsync();
-          await HandshakeAsync();
+          await Connect();
 
           ProcessNetworkMessagesAsync();
           
@@ -96,7 +92,9 @@ namespace BToken.Networking
           return false;
         }
       }
-      public async Task ConnectAsync()
+
+
+      public async Task Connect()
       {
         IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
         IPEndPoint = new IPEndPoint(iPAddress, Port);
@@ -165,7 +163,15 @@ namespace BToken.Networking
       }
       public void Release()
       {
-        IsDispatched = false;
+        lock (IsDispatchedLOCK)
+        {
+          IsDispatched = false;
+        }
+      }
+
+      public void Dispose()
+      {
+        TcpClient.Dispose();
       }
 
       public List<NetworkMessage> GetInboundRequestMessages()
