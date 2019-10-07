@@ -35,16 +35,6 @@ namespace BToken.Chaining
         {
           while (true)
           {
-            lock (Gateway.LOCK_IsSyncing)
-            {
-              if (Gateway.IsSyncingCompleted)
-              {
-                return;
-              }
-            }
-
-            Console.WriteLine("sync headerchain session {0} requests channel.", GetHashCode());
-
             Channel = await Gateway.Network.RequestChannel();
 
             Console.WriteLine("sync headerchain session {0} aquired channel {1}.", 
@@ -59,6 +49,11 @@ namespace BToken.Chaining
               {
                 if (Gateway.IsSyncingCompleted)
                 {
+                  Console.WriteLine("chain session {0} returns {1}.",
+                    GetHashCode(),
+                    Channel.GetIdentification());
+
+                  Gateway.Network.ReturnChannel(Channel);
                   return;
                 }
               }
@@ -73,6 +68,12 @@ namespace BToken.Chaining
                 {
                   if (Gateway.IsSyncingCompleted)
                   {
+                    Console.WriteLine("chain session {0} returns {1}.",
+                      GetHashCode(),
+                      Channel.GetIdentification());
+
+                    Gateway.Network.ReturnChannel(Channel);
+
                     return;
                   }
 
@@ -127,7 +128,9 @@ namespace BToken.Chaining
 
               Gateway.SignalStartHeaderSyncSession.SetResult(null);
 
-              Console.WriteLine("session {0} completes chain syncing.", GetHashCode());
+              Console.WriteLine("chain session {0} returns {1}.", 
+                GetHashCode(),
+                Channel.GetIdentification());
               
               Gateway.Network.ReturnChannel(Channel);
 
@@ -140,7 +143,15 @@ namespace BToken.Chaining
                 Channel == null ? "'null'" : Channel.GetIdentification(),
                 ex.Message);
 
-              Channel.Dispose();
+              Gateway.Network.DisposeChannel(Channel);
+
+              lock (Gateway.LOCK_IsSyncing)
+              {
+                if (Gateway.IsSyncingCompleted)
+                {
+                  return;
+                }
+              }
 
               if (IsSyncing)
               {

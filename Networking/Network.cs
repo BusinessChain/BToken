@@ -28,7 +28,6 @@ namespace BToken.Networking
     List<Peer> PeersInbound = new List<Peer>();
     BufferBlock<Peer> PeersRequestInbound = new BufferBlock<Peer>();
 
-    public int COUNT_CHANNELS_OUTBOUND { get; private set; }
 
     public Network()
     {
@@ -50,7 +49,7 @@ namespace BToken.Networking
     public void Start()
     {
       Parallel.For(
-        0, COUNT_CHANNELS_OUTBOUND,
+        0, PEERS_COUNT_OUTBOUND,
         i => CreateOutboundPeer());
 
       //Task peerInboundListenerTask = StartPeerInboundListenerAsync();
@@ -59,7 +58,7 @@ namespace BToken.Networking
 
 
     readonly object LOCK_ChannelsOutbound = new object();
-    Queue<INetworkChannel> ChannelsOutbound = new Queue<INetworkChannel>();
+    List<INetworkChannel> ChannelsOutboundAvailable = new List<INetworkChannel>();
 
     async Task CreateOutboundPeer()
     {
@@ -67,17 +66,19 @@ namespace BToken.Networking
 
       while(!await peer.TryConnect())
       {
-        Console.WriteLine("Failed to connect to peer {0}", peer.GetIdentification());
         await Task.Delay(1000);
         peer = new Peer(this);
       }
 
       lock(LOCK_ChannelsOutbound)
       {
-        ChannelsOutbound.Enqueue(peer);
-      }
+        ChannelsOutboundAvailable.Add(peer);
 
-      Console.WriteLine("Created connection to peer {0}", peer.GetIdentification());
+        Console.WriteLine(
+          "Created connection to peer {0}, count channelsOutbound {1}",
+          peer.GetIdentification(),
+          ChannelsOutboundAvailable.Count);
+      }
     }
 
     public async Task<INetworkChannel> RequestChannel()
@@ -86,13 +87,17 @@ namespace BToken.Networking
       {
         lock (LOCK_ChannelsOutbound)
         {
-          if (ChannelsOutbound.Any())
+          if (ChannelsOutboundAvailable.Any())
           {
-            return ChannelsOutbound.Dequeue();
+            var channel = ChannelsOutboundAvailable.First();
+            ChannelsOutboundAvailable.RemoveAt(0);
+
+            return channel;
           }
         }
 
-        await CreateOutboundPeer();
+        await Task.Delay(1000);
+
       } while (true);
     }
 
@@ -100,19 +105,24 @@ namespace BToken.Networking
     {
       lock (LOCK_ChannelsOutbound)
       {
-        ChannelsOutbound.Enqueue(channel);
+        ChannelsOutboundAvailable.Add(channel);
+
+        Console.WriteLine(
+          "returned channel {0}, count channelsOutbound {1}",
+          channel.GetIdentification(),
+          ChannelsOutboundAvailable.Count);
       }
+    }
+
+    public void DisposeChannel(INetworkChannel channel)
+    {
+      channel.Dispose();
+      CreateOutboundPeer();
     }
 
     public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
-      Peer peer;
-      do
-      {
-        peer = await PeersRequestInbound.ReceiveAsync();
-      } while (!peer.TryDispatch());
-
-      return peer;
+      return await PeersRequestInbound.ReceiveAsync(); ;
     }
         
     public async Task StartPeerInboundListenerAsync()

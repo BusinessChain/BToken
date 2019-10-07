@@ -10,7 +10,7 @@ namespace BToken.Networking
 {
   public interface INetworkChannel : IDisposable
   {
-    List<NetworkMessage> GetInboundRequestMessages();
+    List<NetworkMessage> GetApplicationMessages();
 
     Task<byte[]> GetHeadersAsync(
       IEnumerable<byte[]> locatorHashes, 

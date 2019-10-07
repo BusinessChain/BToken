@@ -109,14 +109,30 @@ namespace BToken.Chaining
         while (true)
         {
           INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync();
+          
+          List<NetworkMessage> messages = channel.GetApplicationMessages();
+
+          lock(LOCK_IsSyncing)
+          {
+            if(!IsSyncingCompleted)
+            {
+              Console.WriteLine("Chain listener returns channel {0} as syncing not completed",
+                channel.GetIdentification());
+
+              Network.ReturnChannel(channel);
+
+              continue;
+            }
+          }
+
+          Console.WriteLine("Chain listener accepts channel {0}",
+            channel.GetIdentification());
 
           try
           {
-            List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
-
-            foreach (NetworkMessage inboundMessage in inboundMessages)
+            foreach (NetworkMessage message in messages)
             {
-              switch (inboundMessage.Command)
+              switch (message.Command)
               {
                 case "getheaders":
                   //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
@@ -124,10 +140,22 @@ namespace BToken.Chaining
                   //await channel.SendMessageAsync(new HeadersMessage(headers));
                   break;
 
-                case "headers":
-                  var headersMessage = new HeadersMessage(inboundMessage);
+                case "inv":
+                  Console.WriteLine("inv message");
+                  var invMessage = new InvMessage(message);
 
-                  HeaderBatchContainer container = 
+                  invMessage.Inventories.ForEach(i => 
+                  {
+                    Console.WriteLine("received inventory type {0}",
+                      i.Type.ToString());
+                  });
+
+                  break;
+
+                case "headers":
+                  var headersMessage = new HeadersMessage(message);
+
+                  HeaderBatchContainer container =
                     new HeaderBatchContainer(
                       -1,
                       headersMessage.Payload);
@@ -153,6 +181,11 @@ namespace BToken.Chaining
                   break;
               }
             }
+
+            Console.WriteLine("Chain listener returns channel {0}",
+              channel.GetIdentification());
+
+            Network.ReturnChannel(channel);
           }
           catch (Exception ex)
           {
@@ -160,7 +193,7 @@ namespace BToken.Chaining
               channel.GetIdentification(),
               ex.Message);
 
-            //Network.RemoveChannel(channel);
+            Network.DisposeChannel(channel);
           }
         }
       }

@@ -24,6 +24,8 @@ namespace BToken.Chaining
 
     public async Task Start()
     {
+      Gateway.StartListener();
+
       Database.LoadImage(out BatchIndexLoad);
 
       await SynchronizeWithArchive();
@@ -31,8 +33,6 @@ namespace BToken.Chaining
       StartBatcherAsync();
 
       await Gateway.Synchronize(ContainerInsertedLast);
-
-      Gateway.StartListener();
     }
 
 

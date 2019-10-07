@@ -24,9 +24,9 @@ namespace BToken.Networking
 
       readonly object IsDispatchedLOCK = new object();
       bool IsDispatched = true;
-      
-      BufferBlock<NetworkMessage> SessionMessages;
-      BufferBlock<NetworkMessage> InboundRequestMessages;
+
+      BufferBlock<NetworkMessage> ApplicationMessages = 
+        new BufferBlock<NetworkMessage>();
 
       ulong FeeFilterValue;
 
@@ -34,16 +34,6 @@ namespace BToken.Networking
       public Peer(Network network)
       {
         Network = network;
-
-        SessionMessages = new BufferBlock<NetworkMessage>(
-          new DataflowBlockOptions() {
-            BoundedCapacity = 2000 });
-
-        InboundRequestMessages = new BufferBlock<NetworkMessage>(
-          new DataflowBlockOptions()
-          {
-            BoundedCapacity = 10
-          });
       }
       public Peer(TcpClient tcpClient, Network network)
         : this(network)
@@ -60,7 +50,7 @@ namespace BToken.Networking
         {
           await Connect();
 
-          lock(IsDispatchedLOCK)
+          lock (IsDispatchedLOCK)
           {
             IsDispatched = false;
           }
@@ -84,7 +74,7 @@ namespace BToken.Networking
           await Connect();
 
           ProcessNetworkMessagesAsync();
-          
+
           return true;
         }
         catch
@@ -134,15 +124,13 @@ namespace BToken.Networking
       }
       void ProcessApplicationMessage(NetworkMessage message)
       {
-        lock (IsDispatchedLOCK)
+        ApplicationMessages.Post(message);
+
+        lock (Network.LOCK_ChannelsOutbound)
         {
-          if (IsDispatched)
+          if (Network.ChannelsOutboundAvailable.Contains(this))
           {
-            SessionMessages.Post(message);
-          }
-          else
-          {
-            InboundRequestMessages.Post(message);
+            Network.ChannelsOutboundAvailable.Remove(this);
             Network.PeersRequestInbound.Post(this);
           }
         }
@@ -174,9 +162,9 @@ namespace BToken.Networking
         TcpClient.Dispose();
       }
 
-      public List<NetworkMessage> GetInboundRequestMessages()
+      public List<NetworkMessage> GetApplicationMessages()
       {
-        if(InboundRequestMessages.TryReceiveAll(out IList<NetworkMessage> messages))
+        if(ApplicationMessages.TryReceiveAll(out IList<NetworkMessage> messages))
         {
           return (List<NetworkMessage>)messages;
         }
@@ -228,7 +216,7 @@ namespace BToken.Networking
       }
 
       public async Task<NetworkMessage> ReceiveSessionMessageAsync(CancellationToken cancellationToken) 
-        => await SessionMessages.ReceiveAsync(cancellationToken);
+        => await ApplicationMessages.ReceiveAsync(cancellationToken);
       
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 

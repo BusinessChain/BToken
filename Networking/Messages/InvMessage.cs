@@ -8,31 +8,34 @@ namespace BToken.Networking
 {
   class InvMessage : NetworkMessage
   {
-    List<Inventory> Inventories = new List<Inventory>();
+    public List<Inventory> Inventories = new List<Inventory>();
 
 
-    public InvMessage(NetworkMessage networkMessage) : base("inv", networkMessage.Payload)
-    {
-      DeserializePayload();
-    }
-    void DeserializePayload()
+    public InvMessage(NetworkMessage networkMessage) 
+      : base(
+          "inv", 
+          networkMessage.Payload)
     {
       int startIndex = 0;
       int inventoryCount = VarInt.GetInt32(Payload, ref startIndex);
 
-      deserializeInventories(Payload, ref startIndex, inventoryCount);
-    }
-    void deserializeInventories(byte[] buffer, ref int startIndex, int inventoryCount)
-    {
       for (int i = 0; i < inventoryCount; i++)
       {
-        Inventory inventory = deserializeInventory(buffer, ref startIndex);
-        Inventories.Add(inventory);
+        Inventories.Add(
+          DeserializeInventory(
+            Payload, 
+            ref startIndex));
       }
     }
-    Inventory deserializeInventory(byte[] buffer, ref int startIndex)
+
+    Inventory DeserializeInventory(
+      byte[] buffer, 
+      ref int startIndex)
     {
-      InventoryType type = (InventoryType)BitConverter.ToUInt32(buffer, startIndex);
+      InventoryType type = (InventoryType)BitConverter.ToUInt32(
+        buffer, 
+        startIndex);
+
       startIndex += 4;
 
       byte[] hashBytes = new byte[32];
@@ -42,13 +45,5 @@ namespace BToken.Networking
       return new Inventory(type, hashBytes);
     }
     
-    public List<Inventory> GetBlockInventories()
-    {
-      return Inventories.FindAll(i => i.Type == InventoryType.MSG_BLOCK);
-    }
-    public List<Inventory> GetTXInventories()
-    {
-      return Inventories.FindAll(i => i.Type == InventoryType.MSG_TX);
-    }
   }
 }

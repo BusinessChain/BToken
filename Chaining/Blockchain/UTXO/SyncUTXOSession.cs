@@ -47,9 +47,6 @@ namespace BToken.Chaining
         {
           while(true)
           {
-            Console.WriteLine("sync UTXO session {0} requests channel.", 
-              GetHashCode());
-
             Channel = await Gateway.Network.RequestChannel();
 
             Console.WriteLine("sync UTXO session {0} aquired channel {1}.",
@@ -65,7 +62,9 @@ namespace BToken.Chaining
                 await StartBlockDownloadAsync();
               }
 
-              Console.WriteLine("Session {0} returns", GetHashCode());
+              Console.WriteLine("utxo Session {0} returns {1}", 
+                GetHashCode(),
+                Channel.GetIdentification());
 
               Gateway.Network.ReturnChannel(Channel);
 
@@ -80,7 +79,7 @@ namespace BToken.Chaining
 
               Gateway.QueueBatchesCanceled.Enqueue(UTXOBatch);
 
-              Channel.Dispose();
+              Gateway.Network.DisposeChannel(Channel);
 
               CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
             }
