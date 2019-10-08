@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  partial class UTXOTable : IDatabase
   {
-    struct TXInput
+    public struct TXInput
     {
       public byte[] TXIDOutput;
       public int PrimaryKeyTXIDOutput;

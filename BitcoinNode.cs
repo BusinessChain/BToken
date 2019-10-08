@@ -9,8 +9,10 @@ namespace BToken
 {
   public partial class BitcoinNode
   {
-    public Network Network { get; private set; }
-    Blockchain Blockchain;
+    Network Network;
+    UTXOTable UTXO;
+    Headerchain Headerchain;
+
     Wallet Wallet;
 
     BitcoinGenesisBlock GenesisBlock = new BitcoinGenesisBlock();
@@ -24,17 +26,31 @@ namespace BToken
     public BitcoinNode()
     {
       Network = new Network();
-      Blockchain = new Blockchain(GenesisBlock, Checkpoints, Network);
-      Wallet = new Wallet(Blockchain);
+
+      Headerchain = new Headerchain(
+        GenesisBlock.Header,
+        Checkpoints,
+        Network);
+
+      UTXO = new UTXOTable(
+        GenesisBlock.BlockBytes,
+        Headerchain,
+        Network);
+
+      Wallet = new Wallet();
     }
 
     public async Task StartAsync()
     {
       Network.Start();
 
-      await Blockchain.Start();
+      await Headerchain.Start();
 
-      //Wallet.GeneratePublicKey();
+      await UTXO.Start();
+
+      Console.WriteLine("Blockchain sync done");
+
+      Wallet.GeneratePublicKey();
     }
   }
 }

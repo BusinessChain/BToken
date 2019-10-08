@@ -6,66 +6,63 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  partial class UTXOTable
   {
-    partial class UTXOTable
+    public class UTXOIndexULong64
     {
-      public class UTXOIndexULong64
+      public Dictionary<byte[], ulong> Table =
+        new Dictionary<byte[], ulong>(COUNT_TXS_IN_BATCH_FILE, new EqualityComparerByteArray());
+
+      ulong UTXOItem;
+
+      ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
+      public static ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
+
+
+      public UTXOIndexULong64()
+      { }
+
+
+      public void ParseUTXO(
+        int batchIndex,
+        int lengthUTXOBits,
+        byte[] tXHash)
       {
-        public Dictionary<byte[], ulong> Table =
-          new Dictionary<byte[], ulong>(COUNT_TXS_IN_BATCH_FILE, new EqualityComparerByteArray());
+        ulong uTXOIndex = (uint)batchIndex & MaskBatchIndex;
 
-        ulong UTXOItem;
-
-        ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
-        public static ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
-
-
-        public UTXOIndexULong64()
-        { }
-
-
-        public void ParseUTXO(
-          int batchIndex,
-          int lengthUTXOBits,
-          byte[] tXHash)
+        if (LENGTH_BITS_ULONG > lengthUTXOBits)
         {
-          ulong uTXOIndex = (uint)batchIndex & MaskBatchIndex;
-
-          if (LENGTH_BITS_ULONG > lengthUTXOBits)
-          {
-            uTXOIndex |= (ulong.MaxValue << lengthUTXOBits);
-          }
-
-          Table.Add(tXHash, uTXOIndex);
+          uTXOIndex |= (ulong.MaxValue << lengthUTXOBits);
         }
 
-        public bool TrySpend(in TXInput input)
-        {
-          if (Table.TryGetValue(input.TXIDOutput, out UTXOItem))
-          {
-            ulong mask = (ulong)1 << (CountNonOutputBits + input.OutputIndex);
-            if ((UTXOItem & mask) != 0x00)
-            {
-              throw new UTXOException(string.Format(
-                "Output index {0} already spent.", input.OutputIndex));
-            }
-            UTXOItem |= mask;
-
-            Table[input.TXIDOutput] = UTXOItem;
-
-            if ((UTXOItem & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent)
-            {
-              Table.Remove(input.TXIDOutput);
-            }
-
-            return true;
-          }
-
-          return false;
-        }
-
+        Table.Add(tXHash, uTXOIndex);
       }
+
+      public bool TrySpend(in TXInput input)
+      {
+        if (Table.TryGetValue(input.TXIDOutput, out UTXOItem))
+        {
+          ulong mask = (ulong)1 << (CountNonOutputBits + input.OutputIndex);
+          if ((UTXOItem & mask) != 0x00)
+          {
+            throw new UTXOException(string.Format(
+              "Output index {0} already spent.", input.OutputIndex));
+          }
+          UTXOItem |= mask;
+
+          Table[input.TXIDOutput] = UTXOItem;
+
+          if ((UTXOItem & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent)
+          {
+            Table.Remove(input.TXIDOutput);
+          }
+
+          return true;
+        }
+
+        return false;
+      }
+
     }
   }
 }

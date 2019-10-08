@@ -6,21 +6,18 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  class ChainException : Exception
   {
-    class ChainException : Exception
-    {
-      public ChainException()
-      { }
+    public ChainException()
+    { }
 
-      public ChainException(string message)
-          : base(message)
-      { }
+    public ChainException(string message)
+        : base(message)
+    { }
 
-      public ChainException(string message, Exception inner)
-          : base(message, inner)
-      { }
+    public ChainException(string message, Exception inner)
+        : base(message, inner)
+    { }
 
-    }
   }
 }

@@ -73,11 +73,6 @@ namespace BToken.Networking
       lock(LOCK_ChannelsOutbound)
       {
         ChannelsOutboundAvailable.Add(peer);
-
-        Console.WriteLine(
-          "Created connection to peer {0}, count channelsOutbound {1}",
-          peer.GetIdentification(),
-          ChannelsOutboundAvailable.Count);
       }
     }
 
@@ -106,11 +101,6 @@ namespace BToken.Networking
       lock (LOCK_ChannelsOutbound)
       {
         ChannelsOutboundAvailable.Add(channel);
-
-        Console.WriteLine(
-          "returned channel {0}, count channelsOutbound {1}",
-          channel.GetIdentification(),
-          ChannelsOutboundAvailable.Count);
       }
     }
 

@@ -9,96 +9,101 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  partial class GatewayUTXO : IGateway
   {
-    partial class GatewayUTXO : IGateway
+    Network Network;
+    UTXOTable UTXOTable;
+
+    BatchDataPipe DataPipe;
+
+
+    public GatewayUTXO(
+      Network network,
+      UTXOTable uTXOTable)
     {
-      Blockchain Blockchain;
-      Network Network;
-      UTXOTable UTXOTable;
+      Network = network;
+      UTXOTable = uTXOTable;
+
+      DataPipe = new BatchDataPipe(UTXOTable, this);
+    }
 
 
-      public GatewayUTXO(
-        Blockchain blockchain,
-        Network network,
-        UTXOTable uTXOTable)
+
+    public async Task Start()
+    {
+      await DataPipe.Start();
+    }
+
+
+
+    const int COUNT_UTXO_SESSIONS = 4;
+    ItemBatchContainer ContainerInsertedLast;
+
+    public async Task Synchronize(ItemBatchContainer containerInsertedLast)
+    {
+      ContainerInsertedLast = containerInsertedLast;
+
+      Task[] syncUTXOTasks = new Task[COUNT_UTXO_SESSIONS];
+
+      for (int i = 0; i < COUNT_UTXO_SESSIONS; i += 1)
       {
-        Blockchain = blockchain;
-        Network = network;
-        UTXOTable = uTXOTable;
+        syncUTXOTasks[i] = new SyncUTXOSession(this).Start();
       }
 
+      await Task.WhenAll(syncUTXOTasks);
+
+      await Task.Delay(3000);
+
+      Console.WriteLine("UTXO synced to hight {0}",
+        UTXOTable.BlockHeight);
+    }
 
 
-      const int COUNT_UTXO_SESSIONS = 4;
-      ItemBatchContainer ContainerInsertedLast;
 
-      public async Task Synchronize(ItemBatchContainer containerInsertedLast)
+    readonly object LOCK_BatchLoadedLast = new object();
+    ConcurrentQueue<DataBatch> QueueBatchesCanceled
+      = new ConcurrentQueue<DataBatch>();
+
+    bool TryGetDownloadBatch(
+      out DataBatch uTXOBatch,
+      int countHeaders)
+    {
+      if (QueueBatchesCanceled.TryDequeue(out uTXOBatch))
       {
-        ContainerInsertedLast = containerInsertedLast;
-
-        Task[] syncUTXOTasks = new Task[COUNT_UTXO_SESSIONS];
-
-        for (int i = 0; i < COUNT_UTXO_SESSIONS; i += 1)
-        {
-          syncUTXOTasks[i] = new SyncUTXOSession(this).Start();
-        }
-
-        await Task.WhenAll(syncUTXOTasks);
-
-        await Task.Delay(3000);
-
-        Console.WriteLine("UTXO synced to hight {0}",
-          Blockchain.UTXO.BlockHeight);
+        return true;
       }
 
-
-
-      readonly object LOCK_BatchLoadedLast = new object();
-      ConcurrentQueue<DataBatch> QueueBatchesCanceled 
-        = new ConcurrentQueue<DataBatch>();
-
-      bool TryGetDownloadBatch(
-        out DataBatch uTXOBatch, 
-        int countHeaders)
+      lock (LOCK_BatchLoadedLast)
       {
-        if (QueueBatchesCanceled.TryDequeue(out uTXOBatch))
+        if (UTXOTable.TryLoadBatch(
+          ContainerInsertedLast,
+          out uTXOBatch,
+          countHeaders))
         {
+          ContainerInsertedLast
+            = uTXOBatch.ItemBatchContainers.Last();
+
           return true;
         }
-
-        lock(LOCK_BatchLoadedLast)
-        {
-          if (UTXOTable.TryLoadBatch(
-            ContainerInsertedLast,
-            out uTXOBatch,
-            countHeaders))
-          {
-            ContainerInsertedLast 
-              = uTXOBatch.ItemBatchContainers.Last();
-
-            return true;
-          }
-        }
-
-        return false;
       }
 
+      return false;
+    }
 
 
-      public void ReportInvalidBatch(DataBatch batch)
-      {
-        Console.WriteLine("Invalid batch {0} reported",
-          batch.Index);
 
-        throw new NotImplementedException();
-      }
+    public void ReportInvalidBatch(DataBatch batch)
+    {
+      Console.WriteLine("Invalid batch {0} reported",
+        batch.Index);
+
+      throw new NotImplementedException();
+    }
 
 
-      public async Task StartListener()
-      {
+    public async Task StartListener()
+    {
 
-      }
     }
   }
 }

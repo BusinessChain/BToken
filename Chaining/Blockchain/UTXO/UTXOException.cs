@@ -6,25 +6,22 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  partial class UTXOTable
   {
-    partial class UTXOTable
+    class UTXOException : Exception
     {
-      class UTXOException : Exception
+      public UTXOException()
       {
-        public UTXOException()
-        {
-        }
+      }
 
-        public UTXOException(string message)
-            : base(message)
-        {
-        }
+      public UTXOException(string message)
+          : base(message)
+      {
+      }
 
-        public UTXOException(string message, Exception inner)
-            : base(message, inner)
-        {
-        }
+      public UTXOException(string message, Exception inner)
+          : base(message, inner)
+      {
       }
     }
   }

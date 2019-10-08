@@ -13,15 +13,12 @@ namespace BToken
 {
   class Wallet
   {
-    Blockchain Blockchain;
-
     byte[] PrivateKey = new byte[] { };
     byte[] PublicKey = new byte[] { };
 
 
-    public Wallet(Blockchain blockchain)
+    public Wallet()
     {
-      Blockchain = blockchain;
     }
 
     public static void GeneratePublicKey()
