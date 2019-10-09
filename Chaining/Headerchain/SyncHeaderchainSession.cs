@@ -185,7 +185,7 @@ namespace BToken.Chaining
         foreach (HeaderBatchContainer headerBatchContainer
           in HeaderBatch.ItemBatchContainers)
         {
-          headerBatchContainer.Buffer = await Channel.GetHeadersAsync(
+          headerBatchContainer.Buffer = await Channel.GetHeaders(
             headerBatchContainer.LocatorHashes,
             cancellation.Token);
 

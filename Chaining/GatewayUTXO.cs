@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
+
+
 namespace BToken.Chaining
 {
   partial class GatewayUTXO : IGateway
@@ -64,7 +66,7 @@ namespace BToken.Chaining
     ConcurrentQueue<DataBatch> QueueBatchesCanceled
       = new ConcurrentQueue<DataBatch>();
 
-    bool TryGetDownloadBatch(
+    bool TryGetBatch(
       out DataBatch uTXOBatch,
       int countHeaders)
     {
@@ -90,6 +92,23 @@ namespace BToken.Chaining
       return false;
     }
 
+
+    async Task<UTXOChannel> RequestChannel()
+    {
+      INetworkChannel channel = await Network.RequestChannel();
+      return new UTXOChannel(channel);
+    }
+
+    void ReturnChannel(UTXOChannel channel)
+    {
+      Network.ReturnChannel(
+        channel.NetworkChannel);
+    }
+
+    void DisposeChannel(UTXOChannel channel)
+    {
+      Network.DisposeChannel(channel.NetworkChannel);
+    }
 
 
     public void ReportInvalidBatch(DataBatch batch)

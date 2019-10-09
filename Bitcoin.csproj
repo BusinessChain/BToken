@@ -85,6 +85,7 @@
     <Compile Include="Chaining\GatewayUTXO.cs" />
     <Compile Include="Chaining\Headerchain\HeaderBatchContainer.cs" />
     <Compile Include="Chaining\Headerchain\SyncHeaderchainSession.cs" />
+    <Compile Include="Chaining\UTXO\UTXOChannel.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexULong64.cs" />

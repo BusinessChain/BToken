@@ -12,12 +12,14 @@ namespace BToken.Networking
   {
     List<NetworkMessage> GetApplicationMessages();
 
-    Task<byte[]> GetHeadersAsync(
+    Task<byte[]> GetHeaders(
       IEnumerable<byte[]> locatorHashes, 
       CancellationToken cancellationToken);
-    
-    Task RequestBlocksAsync(IEnumerable<byte[]> headerHashes);
-    Task<byte[]> ReceiveBlockAsync(CancellationToken cancellationToken);
+
+    Task SendMessage(NetworkMessage networkMessage);
+
+    Task<NetworkMessage> ReceiveApplicationMessage(
+        CancellationToken cancellationToken);
 
     string GetIdentification();
   }

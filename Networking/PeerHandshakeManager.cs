@@ -46,10 +46,10 @@ namespace BToken.Networking
           ValidateVersionRemoteAsync(versionMessageRemote, out string rejectionReason);
           if (rejectionReason != "")
           {
-            await Peer.SendMessageAsync(new RejectMessage("version", RejectMessage.RejectCode.OBSOLETE, rejectionReason)).ConfigureAwait(false);
+            await Peer.SendMessage(new RejectMessage("version", RejectMessage.RejectCode.OBSOLETE, rejectionReason)).ConfigureAwait(false);
             throw new NetworkException("Remote peer rejected: " + rejectionReason);
           }
-          await Peer.SendMessageAsync(new VerAckMessage());
+          await Peer.SendMessage(new VerAckMessage());
         }
         void ValidateVersionRemoteAsync(VersionMessage versionMessageRemote, out string rejectionReason)
         {

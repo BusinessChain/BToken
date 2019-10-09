@@ -16,8 +16,6 @@ namespace BToken.Chaining
   {
     class SyncUTXOSession
     {
-      public INetworkChannel Channel;
-
       const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
       const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
 
@@ -37,6 +35,7 @@ namespace BToken.Chaining
 
 
 
+      UTXOChannel Channel;
       Stopwatch StopwatchDownload = new Stopwatch();
       public int CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
       DataBatch UTXOBatch;
@@ -45,18 +44,18 @@ namespace BToken.Chaining
       {
         while (true)
         {
-          Channel = await Gateway.Network.RequestChannel();
+          Channel = await Gateway.RequestChannel();
 
           try
           {
-            while (Gateway.TryGetDownloadBatch(
+            while (Gateway.TryGetBatch(
               out UTXOBatch,
               CountBlocksDownloadBatch))
             {
               await StartBlockDownloadAsync();
             }
 
-            Gateway.Network.ReturnChannel(Channel);
+            Gateway.ReturnChannel(Channel);
 
             return;
           }
@@ -69,7 +68,7 @@ namespace BToken.Chaining
 
             Gateway.QueueBatchesCanceled.Enqueue(UTXOBatch);
 
-            Gateway.Network.DisposeChannel(Channel);
+            Gateway.DisposeChannel(Channel);
 
             CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
           }
@@ -104,7 +103,7 @@ namespace BToken.Chaining
         var cancellationDownloadBlocks =
           new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
 
-        await Channel.RequestBlocksAsync(hashesRequested);
+        await Channel.RequestBlocks(hashesRequested);
 
         foreach (UTXOTable.BlockBatchContainer blockBatchContainer in
           UTXOBatch.ItemBatchContainers)
@@ -115,7 +114,7 @@ namespace BToken.Chaining
           }
 
           blockBatchContainer.Buffer = await Channel
-            .ReceiveBlockAsync(cancellationDownloadBlocks.Token)
+            .ReceiveBlock(cancellationDownloadBlocks.Token)
             .ConfigureAwait(false);
 
           blockBatchContainer.Parse();

@@ -210,17 +210,20 @@ namespace BToken.Networking
       }
       async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage());
 
-      public async Task SendMessageAsync(NetworkMessage networkMessage)
+      public async Task SendMessage(NetworkMessage networkMessage)
       {
         await NetworkMessageStreamer.WriteAsync(networkMessage);
       }
 
-      public async Task<NetworkMessage> ReceiveSessionMessageAsync(CancellationToken cancellationToken) 
-        => await ApplicationMessages.ReceiveAsync(cancellationToken);
-      
+      public async Task<NetworkMessage> ReceiveApplicationMessage(
+        CancellationToken cancellationToken)
+      {
+        return await ApplicationMessages.ReceiveAsync(cancellationToken);
+      }
+
       public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
 
-      public async Task<byte[]> GetHeadersAsync(
+      public async Task<byte[]> GetHeaders(
         IEnumerable<byte[]> locatorHashes,
         CancellationToken cancellationToken)
       {
@@ -231,34 +234,12 @@ namespace BToken.Networking
 
         while (true)
         {
-          NetworkMessage networkMessage = await ReceiveSessionMessageAsync(cancellationToken);
+          NetworkMessage networkMessage = await ReceiveApplicationMessage(cancellationToken);
 
           if (networkMessage.Command == "headers")
           {
             return networkMessage.Payload;
           }
-        }
-      }
-
-      public async Task RequestBlocksAsync(IEnumerable<byte[]> headerHashes)
-      {
-        await SendMessageAsync(
-          new GetDataMessage(
-            headerHashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h))));
-      }
-      public async Task<byte[]> ReceiveBlockAsync(CancellationToken cancellationToken)
-      {
-        while(true)
-        {
-          NetworkMessage networkMessage = await ReceiveSessionMessageAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-          if (networkMessage.Command != "block")
-          {
-            continue;
-          }
-
-          return networkMessage.Payload;
         }
       }
 
