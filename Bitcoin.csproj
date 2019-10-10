@@ -145,7 +145,6 @@
     <Compile Include="Networking\Messages\VerAckMessage.cs" />
     <Compile Include="Networking\Messages\VersionMessage.cs" />
     <Compile Include="Networking\NetworkException.cs" />
-    <Compile Include="Networking\PeerHandshakeManager.cs" />
     <Compile Include="Networking\Peer.cs" />
     <Compile Include="Networking\ProtocolVersion.cs" />
     <Compile Include="BitcoinNode.cs" />

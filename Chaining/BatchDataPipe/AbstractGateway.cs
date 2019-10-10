@@ -38,8 +38,7 @@ namespace BToken.Chaining
 
     protected abstract void LoadImage(out int archiveIndexNext);
     protected abstract Task StartListener();
-
-
+    
 
 
     async Task Synchronize(ItemBatchContainer containerInsertedLast)

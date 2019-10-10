@@ -12,7 +12,7 @@ namespace BToken.Networking
   public partial class Network
   {
     const UInt16 Port = 8333;
-    const UInt32 ProtocolVersion = 70013;
+    const UInt32 ProtocolVersion = 70015;
     const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NETWORK;
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
@@ -20,7 +20,7 @@ namespace BToken.Networking
     const int PEERS_COUNT_INBOUND = 8;
     const int PEERS_COUNT_OUTBOUND = 8;
 
-    static UInt64 Nonce;
+    static UInt64 Nonce = CreateNonce();
 
     NetworkAddressPool AddressPool;
     TcpListener TcpListener;
@@ -31,11 +31,13 @@ namespace BToken.Networking
 
     public Network()
     {
-      Nonce = CreateNonce();
       AddressPool = new NetworkAddressPool();
       
       TcpListener = new TcpListener(IPAddress.Any, Port);
     }
+
+
+
     static ulong CreateNonce()
     {
       Random rnd = new Random();

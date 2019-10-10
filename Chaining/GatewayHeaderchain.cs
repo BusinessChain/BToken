@@ -156,14 +156,12 @@ namespace BToken.Chaining
                   break;
 
                 case "inv":
-                  Console.WriteLine("inv message");
                   var invMessage = new InvMessage(message);
 
-                  invMessage.Inventories.ForEach(i =>
-                  {
-                    Console.WriteLine("received inventory type {0}",
-                      i.Type.ToString());
-                  });
+                  Console.WriteLine("inv message with {0} {1} from channel {2}",
+                    invMessage.Inventories.Count,
+                    invMessage.Inventories.First().Type.ToString(),
+                    channel.GetIdentification());
 
                   break;
 
