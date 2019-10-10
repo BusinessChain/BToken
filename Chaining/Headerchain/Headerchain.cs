@@ -11,7 +11,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain : IDatabase
+  partial class Headerchain
   {
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
@@ -73,7 +73,7 @@ namespace BToken.Chaining
     }
 
 
-    public void LoadImage(out int batchIndexMergedLast)
+    void LoadImage(out int batchIndexMergedLast)
     {
       batchIndexMergedLast = 1;
       return;
@@ -89,7 +89,7 @@ namespace BToken.Chaining
       return firstContainer.HeaderRoot.HeaderHash;
     }
 
-    public bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid)
+    bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid)
     {
       Chain rivalChain;
 
@@ -182,20 +182,19 @@ namespace BToken.Chaining
         File.ReadAllBytes(FilePath + batchIndex));
     }
 
-    public bool TryInsertContainer(ItemBatchContainer container)
+    bool TryInsertContainer(HeaderBatchContainer container)
     {
-      HeaderBatchContainer headerContainer = (HeaderBatchContainer)container;
       Chain rivalChain;
 
       try
       {
-        rivalChain = Inserter.InsertChain(headerContainer.HeaderRoot);
+        rivalChain = Inserter.InsertChain(container.HeaderRoot);
       }
       catch (ChainException ex)
       {
         Console.WriteLine(
           "Insertion of header container {0} raised ChainException:\n {1}.",
-          headerContainer.Index,
+          container.Index,
           ex.Message);
 
         return false;
@@ -206,12 +205,12 @@ namespace BToken.Chaining
         ReorganizeChain(rivalChain);
       }
 
-      Console.WriteLine("Inserted header container {0}", headerContainer.Index);
+      Console.WriteLine("Inserted header container {0}", container.Index);
 
       return true;
     }
 
-    public async Task ArchiveBatch(DataBatch batch)
+    async Task ArchiveBatch(DataBatch batch)
     {
       using (FileStream fileStream = new FileStream(
         FilePath + batch.Index,

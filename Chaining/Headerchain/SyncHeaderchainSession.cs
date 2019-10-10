@@ -10,193 +10,196 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class GatewayHeaderchain
+  partial class Headerchain
   {
-    class SyncHeaderchainSession
+    partial class GatewayHeaderchain : AbstractGateway
     {
-      GatewayHeaderchain Gateway;
-
-      public SyncHeaderchainSession(GatewayHeaderchain gateway)
+      class SyncHeaderchainSession
       {
-        Gateway = gateway;
-      }
+        GatewayHeaderchain Gateway;
 
-
-
-      INetworkChannel Channel;
-      const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
-      DataBatch HeaderBatchOld;
-      DataBatch HeaderBatch;
-      bool IsSyncing;
-
-      public async Task Start()
-      {
-        while (true)
+        public SyncHeaderchainSession(GatewayHeaderchain gateway)
         {
-          Channel = await Gateway.Network.RequestChannel();
+          Gateway = gateway;
+        }
 
-          try
+
+
+        INetworkChannel Channel;
+        const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
+        DataBatch HeaderBatchOld;
+        DataBatch HeaderBatch;
+        bool IsSyncing;
+
+        public async Task Start()
+        {
+          while (true)
           {
-          StartRaceSyncHeaderSession:
+            Channel = await Gateway.Network.RequestChannel();
 
-            lock (Gateway.LOCK_IsSyncing)
+            try
             {
-              if (Gateway.IsSyncingCompleted)
-              {
-                Gateway.Network.ReturnChannel(Channel);
-                return;
-              }
-            }
+            StartRaceSyncHeaderSession:
 
-            HeaderBatch = Gateway.CreateHeaderBatch();
-
-            await DownloadHeaders();
-
-            while (true)
-            {
               lock (Gateway.LOCK_IsSyncing)
               {
                 if (Gateway.IsSyncingCompleted)
                 {
                   Gateway.Network.ReturnChannel(Channel);
-
                   return;
                 }
-
-                if (!Gateway.IsSyncing)
-                {
-                  if (HeaderBatch.Index != Gateway.IndexHeaderBatch)
-                  {
-                    goto StartRaceSyncHeaderSession;
-                  }
-                  else
-                  {
-                    IsSyncing = true;
-                    Gateway.IsSyncing = true;
-                    break;
-                  }
-                }
               }
 
-              await Gateway.SignalStartHeaderSyncSession.Task.ConfigureAwait(false);
-            }
-
-            Console.WriteLine("session {0} enters header syncing", GetHashCode());
-
-            Gateway.SignalStartHeaderSyncSession = new TaskCompletionSource<object>();
-            HeaderBatchOld = Gateway.HeaderBatchOld;
-
-            while (HeaderBatch.CountItems > 0)
-            {
-              if (HeaderBatchOld != null)
-              {
-                await Gateway.DataPipe.InputBuffer.SendAsync(HeaderBatchOld);
-              }
-
-              HeaderBatchOld = HeaderBatch;
-
-              HeaderBatch = CreateNextHeaderBatch();
+              HeaderBatch = Gateway.CreateHeaderBatch();
 
               await DownloadHeaders();
-            }
 
-            if (HeaderBatchOld != null)
-            {
-              HeaderBatchOld.IsFinalBatch = true;
-
-              await Gateway.DataPipe.InputBuffer.SendAsync(HeaderBatchOld);
-            }
-
-            lock (Gateway.LOCK_IsSyncing)
-            {
-              Gateway.IsSyncingCompleted = true;
-            }
-
-            Gateway.SignalStartHeaderSyncSession.SetResult(null);
-
-            Console.WriteLine("chain session {0} returns {1}.",
-              GetHashCode(),
-              Channel.GetIdentification());
-
-            Gateway.Network.ReturnChannel(Channel);
-
-            return;
-          }
-          catch (Exception ex)
-          {
-            Console.WriteLine("Exception in SyncHeaderchainSession {0} with channel {1}: '{2}'",
-              GetHashCode(),
-              Channel == null ? "'null'" : Channel.GetIdentification(),
-              ex.Message);
-
-            Gateway.Network.DisposeChannel(Channel);
-
-            lock (Gateway.LOCK_IsSyncing)
-            {
-              if (Gateway.IsSyncingCompleted)
+              while (true)
               {
-                return;
-              }
-            }
+                lock (Gateway.LOCK_IsSyncing)
+                {
+                  if (Gateway.IsSyncingCompleted)
+                  {
+                    Gateway.Network.ReturnChannel(Channel);
 
-            if (IsSyncing)
-            {
+                    return;
+                  }
+
+                  if (!Gateway.IsSyncing)
+                  {
+                    if (HeaderBatch.Index != Gateway.IndexHeaderBatch)
+                    {
+                      goto StartRaceSyncHeaderSession;
+                    }
+                    else
+                    {
+                      IsSyncing = true;
+                      Gateway.IsSyncing = true;
+                      break;
+                    }
+                  }
+                }
+
+                await Gateway.SignalStartHeaderSyncSession.Task.ConfigureAwait(false);
+              }
+
+              Console.WriteLine("session {0} enters header syncing", GetHashCode());
+
+              Gateway.SignalStartHeaderSyncSession = new TaskCompletionSource<object>();
+              HeaderBatchOld = Gateway.HeaderBatchOld;
+
+              while (HeaderBatch.CountItems > 0)
+              {
+                if (HeaderBatchOld != null)
+                {
+                  await Gateway.InputBuffer.SendAsync(HeaderBatchOld);
+                }
+
+                HeaderBatchOld = HeaderBatch;
+
+                HeaderBatch = CreateNextHeaderBatch();
+
+                await DownloadHeaders();
+              }
+
+              if (HeaderBatchOld != null)
+              {
+                HeaderBatchOld.IsFinalBatch = true;
+
+                await Gateway.InputBuffer.SendAsync(HeaderBatchOld);
+              }
+
               lock (Gateway.LOCK_IsSyncing)
               {
-                Gateway.IndexHeaderBatch = HeaderBatch.Index;
-                Gateway.LocatorHashes = ((HeaderBatchContainer)HeaderBatch.ItemBatchContainers.First())
-                  .LocatorHashes;
-
-                Gateway.HeaderBatchOld = HeaderBatchOld;
-
-                Gateway.IsSyncing = false;
+                Gateway.IsSyncingCompleted = true;
               }
 
               Gateway.SignalStartHeaderSyncSession.SetResult(null);
+
+              Console.WriteLine("chain session {0} returns {1}.",
+                GetHashCode(),
+                Channel.GetIdentification());
+
+              Gateway.Network.ReturnChannel(Channel);
+
+              return;
+            }
+            catch (Exception ex)
+            {
+              Console.WriteLine("Exception in SyncHeaderchainSession {0} with channel {1}: '{2}'",
+                GetHashCode(),
+                Channel == null ? "'null'" : Channel.GetIdentification(),
+                ex.Message);
+
+              Gateway.Network.DisposeChannel(Channel);
+
+              lock (Gateway.LOCK_IsSyncing)
+              {
+                if (Gateway.IsSyncingCompleted)
+                {
+                  return;
+                }
+              }
+
+              if (IsSyncing)
+              {
+                lock (Gateway.LOCK_IsSyncing)
+                {
+                  Gateway.IndexHeaderBatch = HeaderBatch.Index;
+                  Gateway.LocatorHashes = ((HeaderBatchContainer)HeaderBatch.ItemBatchContainers.First())
+                    .LocatorHashes;
+
+                  Gateway.HeaderBatchOld = HeaderBatchOld;
+
+                  Gateway.IsSyncing = false;
+                }
+
+                Gateway.SignalStartHeaderSyncSession.SetResult(null);
+              }
             }
           }
         }
-      }
 
 
 
-      DataBatch CreateNextHeaderBatch()
-      {
-        DataBatch batch = new DataBatch(HeaderBatch.Index + 1);
+        DataBatch CreateNextHeaderBatch()
+        {
+          DataBatch batch = new DataBatch(HeaderBatch.Index + 1);
 
-        batch.ItemBatchContainers.Add(
-          new HeaderBatchContainer(
-            batch,
-            new List<byte[]> {
+          batch.ItemBatchContainers.Add(
+            new HeaderBatchContainer(
+              batch,
+              new List<byte[]> {
                 ((HeaderBatchContainer)HeaderBatch.ItemBatchContainers[0])
                 .HeaderTip.HeaderHash }));
 
-        return batch;
-      }
-
-
-
-      async Task DownloadHeaders()
-      {
-        int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
-
-        CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
-
-        foreach (HeaderBatchContainer headerBatchContainer
-          in HeaderBatch.ItemBatchContainers)
-        {
-          headerBatchContainer.Buffer = await Channel.GetHeaders(
-            headerBatchContainer.LocatorHashes,
-            cancellation.Token);
-
-          headerBatchContainer.Parse();
-
-          HeaderBatch.CountItems += headerBatchContainer.CountItems;
+          return batch;
         }
 
-        HeaderBatch.IsValid = true;
 
-        return;
+
+        async Task DownloadHeaders()
+        {
+          int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
+
+          CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
+
+          foreach (HeaderBatchContainer headerBatchContainer
+            in HeaderBatch.ItemBatchContainers)
+          {
+            headerBatchContainer.Buffer = await Channel.GetHeaders(
+              headerBatchContainer.LocatorHashes,
+              cancellation.Token);
+
+            headerBatchContainer.Parse();
+
+            HeaderBatch.CountItems += headerBatchContainer.CountItems;
+          }
+
+          HeaderBatch.IsValid = true;
+
+          return;
+        }
       }
     }
   }

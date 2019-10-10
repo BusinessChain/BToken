@@ -5,9 +5,9 @@ using System.Diagnostics;
 
 namespace BToken.Chaining
 {
-  partial class UTXOTable : IDatabase
+  partial class UTXOTable
   {
-    public class BlockParser
+    class BlockParser
     {
       const int COUNT_HEADER_BYTES = 80;
 
@@ -263,7 +263,6 @@ namespace BToken.Chaining
             SHA256.ComputeHash(leafPair));
         }
       }
-
     }
   }
 }

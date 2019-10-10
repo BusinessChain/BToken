@@ -12,7 +12,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class UTXOTable : IDatabase
+  partial class UTXOTable
   {
     Headerchain Headerchain;
 
@@ -336,7 +336,7 @@ namespace BToken.Chaining
 
 
 
-    public void LoadImage(out int archiveIndexNext)
+    void LoadImage(out int archiveIndexNext)
     {
       if (TryLoadUTXOState())
       {
@@ -419,15 +419,13 @@ namespace BToken.Chaining
 
 
 
-    public bool TryInsertContainer(ItemBatchContainer container)
+    bool TryInsertContainer(BlockBatchContainer container)
     {
-      BlockBatchContainer blockContainer = (BlockBatchContainer)container;
-
-      if (blockContainer.HeaderPrevious != HeaderMergedLast)
+      if (container.HeaderPrevious != HeaderMergedLast)
       {
         Console.WriteLine("HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}",
-          blockContainer.HeaderPrevious.HeaderHash.ToHexString(),
-          blockContainer.Index,
+          container.HeaderPrevious.HeaderHash.ToHexString(),
+          container.Index,
           HeaderMergedLast.HeaderHash.ToHexString());
 
         return false;
@@ -438,16 +436,16 @@ namespace BToken.Chaining
 
       try
       {
-        InsertUTXOsUInt32(blockContainer.UTXOsUInt32);
-        InsertUTXOsULong64(blockContainer.UTXOsULong64);
-        InsertUTXOsUInt32Array(blockContainer.UTXOsUInt32Array);
-        SpendUTXOs(blockContainer.Inputs);
+        InsertUTXOsUInt32(container.UTXOsUInt32);
+        InsertUTXOsULong64(container.UTXOsULong64);
+        InsertUTXOsUInt32Array(container.UTXOsUInt32Array);
+        SpendUTXOs(container.Inputs);
       }
       catch (ChainException ex)
       {
         Console.WriteLine(
           "Insertion of blockBatchContainer {0} raised ChainException:\n {1}.",
-          blockContainer.Index,
+          container.Index,
           ex.Message);
 
         return false;
@@ -455,25 +453,27 @@ namespace BToken.Chaining
 
       StopwatchMerging.Stop();
 
-      BlockHeight += blockContainer.BlockCount;
-      HeaderMergedLast = blockContainer.Header;
+      BlockHeight += container.BlockCount;
+      HeaderMergedLast = container.Header;
 
-      if (blockContainer.Index % UTXOSTATE_ARCHIVING_INTERVAL == 0
-        && blockContainer.Index > 0)
+      if (container.Index % UTXOSTATE_ARCHIVING_INTERVAL == 0
+        && container.Index > 0)
       {
         ArchiveIndexNext += UTXOSTATE_ARCHIVING_INTERVAL;
         ArchiveState();
       }
 
       LogCSV(
-        new List<ItemBatchContainer>() { blockContainer },
-        blockContainer.Index);
+        new List<ItemBatchContainer>() { container },
+        container.Index);
 
       return true;
     }
 
 
-    public bool TryInsertBatch(DataBatch uTXOBatch, out ItemBatchContainer containerInvalid)
+    bool TryInsertBatch(
+      DataBatch uTXOBatch, 
+      out ItemBatchContainer containerInvalid)
     {
       BlockBatchContainer blockContainerFirst = (BlockBatchContainer)uTXOBatch.ItemBatchContainers[0];
 
@@ -552,7 +552,10 @@ namespace BToken.Chaining
         {
           foreach (BlockBatchContainer blockContainer in uTXOBatch.ItemBatchContainers)
           {
-            await file.WriteAsync(blockContainer.Buffer, 0, blockContainer.Buffer.Length);
+            await file.WriteAsync(
+              blockContainer.Buffer,
+              0, 
+              blockContainer.Buffer.Length);
           }
         }
       }
@@ -561,9 +564,9 @@ namespace BToken.Chaining
         Console.WriteLine(ex.Message);
       }
     }
+    
 
-
-    public ItemBatchContainer LoadDataContainer(int batchIndex)
+    BlockBatchContainer LoadDataContainer(int batchIndex)
     {
       return new BlockBatchContainer(
         new BlockParser(Headerchain),

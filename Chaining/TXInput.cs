@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  partial class UTXOTable : IDatabase
+  partial class UTXOTable
   {
     public struct TXInput
     {

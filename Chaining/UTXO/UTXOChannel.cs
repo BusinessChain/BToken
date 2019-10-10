@@ -11,7 +11,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class GatewayUTXO
+  partial class UTXOTable
   {
     class UTXOChannel
     {

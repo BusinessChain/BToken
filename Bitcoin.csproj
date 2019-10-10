@@ -77,9 +77,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Chaining\BatchDataPipe\BatchDataPipe.cs" />
+    <Compile Include="Chaining\BatchDataPipe\AbstractGateway.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
-    <Compile Include="Chaining\BatchDataPipe\IDatabase.cs" />
     <Compile Include="Chaining\BatchDataPipe\IGateway.cs" />
     <Compile Include="Chaining\BlockBatchContainer.cs" />
     <Compile Include="Chaining\GatewayUTXO.cs" />

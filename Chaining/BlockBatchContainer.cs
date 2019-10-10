@@ -7,9 +7,9 @@ using System.Security.Cryptography;
 
 namespace BToken.Chaining
 {
-  partial class UTXOTable : IDatabase
+  partial class UTXOTable
   {
-    public class BlockBatchContainer : ItemBatchContainer
+    class BlockBatchContainer : ItemBatchContainer
     {
       const int AVERAGE_INPUTS_PER_TX = 5;
       public List<TXInput> Inputs = new List<TXInput>(COUNT_TXS_IN_BATCH_FILE * AVERAGE_INPUTS_PER_TX);
