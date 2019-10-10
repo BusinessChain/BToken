@@ -167,6 +167,9 @@ namespace BToken.Chaining
 
                 case "headers":
                   var headersMessage = new HeadersMessage(message);
+                  
+                  Console.WriteLine("header message from channel {1}",
+                    channel.GetIdentification());
 
                   HeaderBatchContainer container =
                     new HeaderBatchContainer(
