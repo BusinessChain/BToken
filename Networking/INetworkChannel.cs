@@ -8,16 +8,18 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  public interface INetworkChannel
+  public interface INetworkChannel : IDisposable
   {
-    List<NetworkMessage> GetInboundRequestMessages();
+    List<NetworkMessage> GetApplicationMessages();
 
-    Task<byte[]> GetHeadersAsync(
+    Task<byte[]> GetHeaders(
       IEnumerable<byte[]> locatorHashes, 
       CancellationToken cancellationToken);
-    
-    Task RequestBlocksAsync(IEnumerable<byte[]> headerHashes);
-    Task<byte[]> ReceiveBlockAsync(CancellationToken cancellationToken);
+
+    Task SendMessage(NetworkMessage networkMessage);
+
+    Task<NetworkMessage> ReceiveApplicationMessage(
+        CancellationToken cancellationToken);
 
     string GetIdentification();
   }

@@ -91,7 +91,7 @@ namespace BToken.Networking
         PortLocal = Network.Port;
         Nonce = Network.Nonce;
         UserAgent = Network.UserAgent;
-        BlockchainHeight = 0; // We do not have that information at this point. I recommend this should be ignored.
+        BlockchainHeight = 0; // We do not have that information at this point. I think this can be ignored.
         RelayOption = Network.RelayOption;
         
         SerializePayload();

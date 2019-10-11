@@ -9,8 +9,10 @@ namespace BToken
 {
   public partial class BitcoinNode
   {
-    public Network Network { get; private set; }
-    Blockchain Blockchain;
+    Network Network;
+    UTXOTable UTXO;
+    Headerchain Headerchain;
+
     Wallet Wallet;
 
     BitcoinGenesisBlock GenesisBlock = new BitcoinGenesisBlock();
@@ -24,67 +26,31 @@ namespace BToken
     public BitcoinNode()
     {
       Network = new Network();
-      Blockchain = new Blockchain(GenesisBlock, Checkpoints, Network);
-      Wallet = new Wallet(Blockchain);
+
+      Headerchain = new Headerchain(
+        GenesisBlock.Header,
+        Checkpoints,
+        Network);
+
+      UTXO = new UTXOTable(
+        GenesisBlock.BlockBytes,
+        Headerchain,
+        Network);
+
+      Wallet = new Wallet();
     }
 
     public async Task StartAsync()
     {
       Network.Start();
 
-      await Blockchain.Start();
+      await Headerchain.Start();
 
-      //Task NetworkListenerTask = StartNetworkListenerAsync();
+      await UTXO.Start();
 
-      //Wallet.GeneratePublicKey();
-    }
+      Console.WriteLine("Blockchain sync done");
 
-    async Task StartNetworkListenerAsync()
-    {
-      while (true)
-      {
-        INetworkChannel channel = await Network.AcceptChannelInboundRequestAsync();
-        try
-        {
-          List<NetworkMessage> inboundMessages = channel.GetInboundRequestMessages();
-
-          foreach (NetworkMessage inboundMessage in inboundMessages)
-          {
-            switch (inboundMessage.Command)
-            {
-              case "inv":
-                //await ProcessInventoryMessageAsync(invMessage);
-                break;
-
-              case "getheaders":
-                //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-                //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
-                //await channel.SendMessageAsync(new HeadersMessage(headers));
-                break;
-
-              case "headers":
-                //var headersMessage = new HeadersMessage(inboundMessage);
-                //List<byte[]> headersInserted = await Headerchain.InsertHeadersAsync(headersMessage.Headers);
-                //await UTXO.NotifyBlockHeadersAsync(headersInserted, channel);
-                break;
-
-              case "block":
-                break;
-
-              default:
-                break;
-            }
-          }
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
-            channel.GetIdentification(),
-            ex.Message);
-
-          //Network.RemoveChannel(channel);
-        }
-      }
+      Wallet.GeneratePublicKey();
     }
   }
 }
