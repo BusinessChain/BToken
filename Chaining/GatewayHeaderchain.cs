@@ -158,17 +158,20 @@ namespace BToken.Chaining
                 case "inv":
                   var invMessage = new InvMessage(message);
 
-                  Console.WriteLine("inv message with {0} {1} from channel {2}",
-                    invMessage.Inventories.Count,
-                    invMessage.Inventories.First().Type.ToString(),
-                    channel.GetIdentification());
+                  if (invMessage.Inventories.First().Type.ToString() != "MSG_TX")
+                  {
+                    Console.WriteLine("inv message with {0} {1} from channel {2}",
+                      invMessage.Inventories.Count,
+                      invMessage.Inventories.First().Type.ToString(),
+                      channel.GetIdentification());
+                  }
 
                   break;
 
                 case "headers":
                   var headersMessage = new HeadersMessage(message);
-                  
-                  Console.WriteLine("header message from channel {1}",
+
+                  Console.WriteLine("header message from channel {0}",
                     channel.GetIdentification());
 
                   HeaderBatchContainer container =
