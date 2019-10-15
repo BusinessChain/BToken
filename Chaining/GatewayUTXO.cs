@@ -75,26 +75,15 @@ namespace BToken.Chaining
       {
         UTXOTable.LoadImage(out archiveIndexNext);
       }
-      protected override bool TryInsertContainer(ItemBatchContainer container)
+      protected override bool TryInsertBatch(DataBatch batch)
+      {
+        return UTXOTable.TryInsertBatch(batch);
+      }
+      protected override bool TryInsertContainer(
+        ItemBatchContainer container)
       {
         return UTXOTable.TryInsertContainer(
           (BlockBatchContainer)container);
-      }
-
-      protected override bool TryInsertBatch(
-        DataBatch uTXOBatch,
-        out ItemBatchContainer containerInvalid)
-      {
-        return UTXOTable.TryInsertBatch(
-          uTXOBatch,
-          out containerInvalid);
-      }
-
-
-      
-      protected override void ArchiveBatch(DataBatch batch)
-      {
-        UTXOTable.ArchiveBatch(batch);
       }
 
       protected override ItemBatchContainer LoadDataContainer(

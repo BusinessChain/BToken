@@ -22,15 +22,6 @@ namespace BToken.Chaining
       Index = index;
       ItemBatchContainers = new List<ItemBatchContainer>();
     }
-
-    public void Parse()
-    {
-      foreach (ItemBatchContainer container in ItemBatchContainers)
-      {
-        container.Parse();
-        CountItems += container.CountItems;
-      }
-    }
   }
 
   public abstract class ItemBatchContainer
@@ -44,15 +35,7 @@ namespace BToken.Chaining
     public Stopwatch StopwatchParse = new Stopwatch();
 
 
-
-    protected ItemBatchContainer(
-      DataBatch batch,
-      byte[] buffer)
-    {
-      Batch = batch;
-      Buffer = buffer;
-    }
-
+    
     protected ItemBatchContainer(int index, byte[] buffer)
     {
       Index = index;

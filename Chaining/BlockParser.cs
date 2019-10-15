@@ -212,7 +212,10 @@ namespace BToken.Chaining
              tXStartIndex,
              tXLength));
 
-          BlockBatchContainer.AddOutput(tXHash, BatchIndex, countTXOutputs);
+          BlockBatchContainer.AddOutput(
+            tXHash, 
+            BatchIndex, 
+            countTXOutputs);
 
           return tXHash;
         }

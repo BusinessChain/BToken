@@ -18,7 +18,9 @@ namespace BToken.Chaining
 
 
 
-      public HeaderBatchContainer(int index, byte[] headerBytes)
+      public HeaderBatchContainer(
+        int index, 
+        byte[] headerBytes)
         : base(
             index,
             headerBytes)

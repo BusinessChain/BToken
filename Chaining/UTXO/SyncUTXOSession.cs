@@ -91,12 +91,13 @@ namespace BToken.Chaining
 
           List<byte[]> hashesRequested = new List<byte[]>();
 
-          foreach (UTXOTable.BlockBatchContainer blockBatchContainer in
+          foreach (BlockBatchContainer blockBatchContainer in
             UTXOBatch.ItemBatchContainers)
           {
             if (blockBatchContainer.Buffer == null)
             {
-              hashesRequested.Add(blockBatchContainer.Header.HeaderHash);
+              hashesRequested.Add(
+                blockBatchContainer.Header.HeaderHash);
             }
           }
 
@@ -105,7 +106,7 @@ namespace BToken.Chaining
 
           await Channel.RequestBlocks(hashesRequested);
 
-          foreach (UTXOTable.BlockBatchContainer blockBatchContainer in
+          foreach (BlockBatchContainer blockBatchContainer in
             UTXOBatch.ItemBatchContainers)
           {
             if (blockBatchContainer.Buffer != null)
@@ -119,7 +120,6 @@ namespace BToken.Chaining
 
             blockBatchContainer.Parse();
             UTXOBatch.CountItems += blockBatchContainer.CountItems;
-
           }
 
           await Gateway.InputBuffer.SendAsync(UTXOBatch);

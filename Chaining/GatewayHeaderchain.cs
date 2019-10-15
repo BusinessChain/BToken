@@ -111,18 +111,9 @@ namespace BToken.Chaining
           (HeaderBatchContainer)container);
       }
 
-      protected override bool TryInsertBatch(
-        DataBatch uTXOBatch,
-        out ItemBatchContainer containerInvalid)
+      protected override bool TryInsertBatch(DataBatch batch)
       {
-        return Headerchain.TryInsertBatch(
-          uTXOBatch,
-          out containerInvalid);
-      }
-
-      protected override void ArchiveBatch(DataBatch batch)
-      {
-        Headerchain.ArchiveBatch(batch);
+        return Headerchain.TryInsertBatch(batch);
       }
 
       protected override async Task StartListener()

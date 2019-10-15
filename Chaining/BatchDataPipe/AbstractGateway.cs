@@ -18,18 +18,18 @@ namespace BToken.Chaining
 
 
 
-    int BatchIndexLoad;
+    int ArchiveIndex;
     protected ItemBatchContainer ContainerInsertedLast;
 
     public async Task Start()
     {
       StartListener();
 
-      LoadImage(out BatchIndexLoad);
+      LoadImage(out ArchiveIndex);
 
       await SynchronizeWithArchive();
       
-      StartBatcherAsync();
+      StartInputBatchBuffer();
 
       await Synchronize(ContainerInsertedLast);
     }
@@ -66,7 +66,7 @@ namespace BToken.Chaining
 
     async Task SynchronizeWithArchive()
     {
-      ContainerhIndexOutputQueue = BatchIndexLoad;
+      ContainerhIndexOutputQueue = ArchiveIndex;
 
       Parallel.For(
         0,
@@ -91,8 +91,8 @@ namespace BToken.Chaining
       {
         lock (LOCK_BatchIndexLoad)
         {
-          containerIndex = BatchIndexLoad;
-          BatchIndexLoad += 1;
+          containerIndex = ArchiveIndex;
+          ArchiveIndex += 1;
         }
 
         try
@@ -183,57 +183,40 @@ namespace BToken.Chaining
       ItemBatchContainer container);
 
 
-
     const int SIZE_OUTPUT_BATCH = 50000;
-    public BufferBlock<DataBatch> InputBuffer = new BufferBlock<DataBatch>(
-      new DataflowBlockOptions { BoundedCapacity = 10 });
-    int InputBatchIndex;
-    Dictionary<int, DataBatch> QueueDownloadBatch = new Dictionary<int, DataBatch>();
-    Queue<ItemBatchContainer> FIFOItems = new Queue<ItemBatchContainer>();
-    int ItemCountFIFO;
-    DataBatch InputBatch;
-    DataBatch OutputBatch;
 
-    async Task StartBatcherAsync()
+    public BufferBlock<DataBatch> InputBuffer = 
+      new BufferBlock<DataBatch>(
+        new DataflowBlockOptions { BoundedCapacity = 10 });
+    int BatchIndex;
+    DataBatch Batch;
+
+    Dictionary<int, DataBatch> QueueDownloadBatch = 
+      new Dictionary<int, DataBatch>();
+
+    async Task StartInputBatchBuffer()
     {
-      OutputBatch = new DataBatch(ContainerhIndexOutputQueue);
-
       while (true)
       {
-        InputBatch = await InputBuffer.ReceiveAsync().ConfigureAwait(false);
+        Batch = await InputBuffer.ReceiveAsync().ConfigureAwait(false);
 
-        if (InputBatch.Index != InputBatchIndex)
+        if (Batch.Index != BatchIndex)
         {
-          QueueDownloadBatch.Add(InputBatch.Index, InputBatch);
+          QueueDownloadBatch.Add(Batch.Index, Batch);
           continue;
         }
 
         do
         {
-          foreach (ItemBatchContainer batchItemContainer in InputBatch.ItemBatchContainers)
+          TryInsertBatch(Batch);
+
+          BatchIndex += 1;
+
+          if (QueueDownloadBatch.TryGetValue(
+            BatchIndex, 
+            out Batch))
           {
-            if (batchItemContainer.CountItems > SIZE_OUTPUT_BATCH)
-            {
-              throw new InvalidOperationException(
-                string.Format("Container {0} of InputBatch {1}, index {2} has more items {3} than SIZE_OUTPUT_BATCH = {4}",
-                InputBatch.ItemBatchContainers.FindIndex(b => b == batchItemContainer),
-                InputBatch.ToString().Split('.').Last(),
-                InputBatch.Index,
-                batchItemContainer.CountItems,
-                SIZE_OUTPUT_BATCH));
-            }
-
-            FIFOItems.Enqueue(batchItemContainer);
-            ItemCountFIFO += batchItemContainer.CountItems;
-          }
-
-          DequeueOutputBatches();
-
-          InputBatchIndex += 1;
-
-          if (QueueDownloadBatch.TryGetValue(InputBatchIndex, out InputBatch))
-          {
-            QueueDownloadBatch.Remove(InputBatchIndex);
+            QueueDownloadBatch.Remove(BatchIndex);
           }
           else
           {
@@ -243,65 +226,8 @@ namespace BToken.Chaining
       }
     }
 
-    void DequeueOutputBatches()
-    {
-      if (OutputBatch.CountItems + FIFOItems.Peek().CountItems > SIZE_OUTPUT_BATCH)
-      {
-        if (!TryInsertBatch(OutputBatch, out ItemBatchContainer containerInvalid))
-        {
-          ReportInvalidBatch(containerInvalid.Batch);
-        }
 
-        ArchiveBatch(OutputBatch);
-
-        OutputBatch = new DataBatch(OutputBatch.Index + 1);
-      }
-
-      while (true)
-      {
-        do
-        {
-          ItemBatchContainer itemContainer = FIFOItems.Dequeue();
-          OutputBatch.ItemBatchContainers.Add(itemContainer);
-          OutputBatch.CountItems += itemContainer.CountItems;
-          ItemCountFIFO -= itemContainer.CountItems;
-
-          if (FIFOItems.Count == 0)
-          {
-            if (InputBatch.IsFinalBatch)
-            {
-              if (!TryInsertBatch(OutputBatch, out ItemBatchContainer containerInvalid))
-              {
-                ReportInvalidBatch(containerInvalid.Batch);
-              }
-
-              ArchiveBatch(OutputBatch);
-            }
-
-            return;
-          }
-
-          if (OutputBatch.CountItems + FIFOItems.Peek().CountItems > SIZE_OUTPUT_BATCH)
-          {
-            if (!TryInsertBatch(OutputBatch, out ItemBatchContainer containerInvalid))
-            {
-              ReportInvalidBatch(containerInvalid.Batch);
-            }
-
-            ArchiveBatch(OutputBatch);
-
-            OutputBatch = new DataBatch(OutputBatch.Index + 1);
-            break;
-          }
-        } while (true);
-      }
-    }
-
-    protected abstract bool TryInsertBatch(
-      DataBatch uTXOBatch,
-      out ItemBatchContainer containerInvalid);
-
-    protected abstract void ArchiveBatch(DataBatch batch);
+    protected abstract bool TryInsertBatch(DataBatch batch);
 
 
     void ReportInvalidBatch(DataBatch batch)
