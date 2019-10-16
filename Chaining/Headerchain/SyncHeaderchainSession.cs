@@ -83,8 +83,6 @@ namespace BToken.Chaining
                 await Gateway.SignalStartHeaderSyncSession.Task.ConfigureAwait(false);
               }
 
-              Console.WriteLine("session {0} enters header syncing", GetHashCode());
-
               Gateway.SignalStartHeaderSyncSession = new TaskCompletionSource<object>();
               HeaderBatchOld = Gateway.HeaderBatchOld;
 
@@ -115,21 +113,17 @@ namespace BToken.Chaining
               }
 
               Gateway.SignalStartHeaderSyncSession.SetResult(null);
-
-              Console.WriteLine("chain session {0} returns {1}.",
-                GetHashCode(),
-                Channel.GetIdentification());
-
+              
               Gateway.Network.ReturnChannel(Channel);
 
               return;
             }
             catch (Exception ex)
             {
-              Console.WriteLine("Exception in SyncHeaderchainSession {0} with channel {1}: '{2}'",
-                GetHashCode(),
-                Channel == null ? "'null'" : Channel.GetIdentification(),
-                ex.Message);
+              //Console.WriteLine("Exception in SyncHeaderchainSession {0} with channel {1}: '{2}'",
+              //  GetHashCode(),
+              //  Channel == null ? "'null'" : Channel.GetIdentification(),
+              //  ex.Message);
 
               Gateway.Network.DisposeChannel(Channel);
 

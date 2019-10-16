@@ -14,7 +14,7 @@ namespace BToken.Chaining
         new Dictionary<byte[], ulong>(new EqualityComparerByteArray());
 
       ulong UTXOPrimary;
-      ulong UTXOSecondary;
+      ulong UTXOCollision;
 
       const int COUNT_LONG_BITS = 64;
 
@@ -82,7 +82,7 @@ namespace BToken.Chaining
       }
       public override bool TryGetValueInPrimaryTable(int primaryKey)
       {
-        PrimaryKey = primaryKey; // cache
+        PrimaryKey = primaryKey;
         return PrimaryTable.TryGetValue(primaryKey, out UTXOPrimary);
       }
       public override bool HasCollision(int cacheAddress)
@@ -109,7 +109,6 @@ namespace BToken.Chaining
         ulong uTXOPrimary = collisionItem.Value | tablePrimary.GetCollisionBits();
         PrimaryTable.Add(tablePrimary.PrimaryKey, uTXOPrimary);
       }
-
       public override uint GetCollisionBits()
       {
         return MaskCollisionBits & (uint)UTXOPrimary;
@@ -120,14 +119,24 @@ namespace BToken.Chaining
           == MasksCollisionBitsFull[Address];
       }
 
+      public ulong UTXO;
+      public override void AddUTXOAsCollision(byte[] uTXOKey)
+      {
+        CollisionTable.Add(uTXOKey, UTXO);
+      }
+      public override void AddUTXOAsPrimary(int primaryKey)
+      {
+        PrimaryTable.Add(primaryKey, UTXO);
+      }
+
       protected override void SpendCollisionUTXO(byte[] key, int outputIndex, out bool areAllOutputpsSpent)
       {
-        SpendUTXO(ref UTXOSecondary, outputIndex, out areAllOutputpsSpent);
-        CollisionTable[key] = UTXOSecondary;
+        SpendUTXO(ref UTXOCollision, outputIndex, out areAllOutputpsSpent);
+        CollisionTable[key] = UTXOCollision;
       }
       protected override bool TryGetValueInCollisionTable(byte[] key)
       {
-        return CollisionTable.TryGetValue(key, out UTXOSecondary);
+        return CollisionTable.TryGetValue(key, out UTXOCollision);
       }
       protected override void RemoveCollision(byte[] key)
       {

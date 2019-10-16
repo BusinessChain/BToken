@@ -18,20 +18,19 @@ namespace BToken.Chaining
 
 
 
-    int ArchiveIndex;
-    protected ItemBatchContainer ContainerInsertedLast;
+    int ArchiveLoadIndex;
 
     public async Task Start()
     {
       StartListener();
 
-      LoadImage(out ArchiveIndex);
+      LoadImage(out ArchiveLoadIndex);
 
       await SynchronizeWithArchive();
       
       StartInputBatchBuffer();
 
-      await Synchronize(ContainerInsertedLast);
+      await SynchronizeWithNetwork();
     }
 
 
@@ -41,10 +40,8 @@ namespace BToken.Chaining
     
 
 
-    async Task Synchronize(ItemBatchContainer containerInsertedLast)
+    async Task SynchronizeWithNetwork()
     {
-      ContainerInsertedLast = containerInsertedLast;
-
       Task[] syncTasks = new Task[CountSessions];
 
       for (int i = 0; i < CountSessions; i += 1)
@@ -59,14 +56,16 @@ namespace BToken.Chaining
 
 
 
-    int ContainerhIndexOutputQueue;
+    int ContainerIndexOutputQueue;
     bool InvalidContainerEncountered;
     const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
 
     async Task SynchronizeWithArchive()
     {
-      ContainerhIndexOutputQueue = ArchiveIndex;
+      Console.WriteLine("synchronize {0} with archive", GetType().Name);
+
+      ContainerIndexOutputQueue = ArchiveLoadIndex;
 
       Parallel.For(
         0,
@@ -84,15 +83,15 @@ namespace BToken.Chaining
 
     async Task StartArchiveLoaderAsync()
     {
-      ItemBatchContainer container;
+      DataBatchContainer container;
       int containerIndex;
 
       do
       {
         lock (LOCK_BatchIndexLoad)
         {
-          containerIndex = ArchiveIndex;
-          ArchiveIndex += 1;
+          containerIndex = ArchiveLoadIndex;
+          ArchiveLoadIndex += 1;
         }
 
         try
@@ -117,15 +116,16 @@ namespace BToken.Chaining
       } while (await SendToOutputQueue(container));
     }
 
-    protected abstract ItemBatchContainer LoadDataContainer(
+    protected abstract DataBatchContainer LoadDataContainer(
       int containerIndex);
 
 
 
-    Dictionary<int, ItemBatchContainer> OutputQueue = 
-      new Dictionary<int, ItemBatchContainer>();
+    Dictionary<int, DataBatchContainer> OutputQueue = 
+      new Dictionary<int, DataBatchContainer>();
 
-    async Task<bool> SendToOutputQueue(ItemBatchContainer container)
+    async Task<bool> SendToOutputQueue(
+      DataBatchContainer container)
     {
       while (true)
       {
@@ -136,7 +136,7 @@ namespace BToken.Chaining
             return false;
           }
 
-          if (container.Index == ContainerhIndexOutputQueue)
+          if (container.Index == ContainerIndexOutputQueue)
           {
             break;
           }
@@ -161,15 +161,13 @@ namespace BToken.Chaining
           return false;
         }
 
-        ContainerInsertedLast = container;
-
         lock (LOCK_OutputQueue)
         {
-          ContainerhIndexOutputQueue += 1;
+          ContainerIndexOutputQueue += 1;
           
-          if (OutputQueue.TryGetValue(ContainerhIndexOutputQueue, out container))
+          if (OutputQueue.TryGetValue(ContainerIndexOutputQueue, out container))
           {
-            OutputQueue.Remove(ContainerhIndexOutputQueue);
+            OutputQueue.Remove(ContainerIndexOutputQueue);
           }
           else
           {
@@ -180,7 +178,7 @@ namespace BToken.Chaining
     }
 
     protected abstract bool TryInsertContainer(
-      ItemBatchContainer container);
+      DataBatchContainer container);
 
 
     const int SIZE_OUTPUT_BATCH = 50000;

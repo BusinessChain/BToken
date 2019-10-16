@@ -98,17 +98,25 @@ namespace BToken.Chaining
         Headerchain.LoadImage(out archiveIndexNext);
       }
 
-      protected override ItemBatchContainer LoadDataContainer(
+      protected override DataBatchContainer LoadDataContainer(
         int containerIndex)
       {
         return Headerchain.LoadDataContainer(containerIndex);
       }
 
 
-      protected override bool TryInsertContainer(ItemBatchContainer container)
+      protected override bool TryInsertContainer(
+        DataBatchContainer container)
       {
-        return Headerchain.TryInsertContainer(
-          (HeaderBatchContainer)container);
+        if(Headerchain.TryInsertContainer(
+          (HeaderBatchContainer)container))
+        {
+          Headerchain.ArchiveIndex += 1;
+          return true;
+        }
+
+        return false;
+
       }
 
       protected override bool TryInsertBatch(DataBatch batch)

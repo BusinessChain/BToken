@@ -214,7 +214,6 @@ namespace BToken.Chaining
 
           BlockBatchContainer.AddOutput(
             tXHash, 
-            BatchIndex, 
             countTXOutputs);
 
           return tXHash;
