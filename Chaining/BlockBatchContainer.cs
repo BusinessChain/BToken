@@ -9,7 +9,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    class BlockBatchContainer : ItemBatchContainer
+    class BlockBatchContainer : DataBatchContainer
     {
       const int AVERAGE_INPUTS_PER_TX = 5;
       public List<TXInput> Inputs = new List<TXInput>(COUNT_TXS_IN_BATCH_FILE * AVERAGE_INPUTS_PER_TX);
@@ -86,7 +86,6 @@ namespace BToken.Chaining
 
       public void AddOutput(
         byte[] tXHash,
-        int batchIndex,
         int countTXOutputs)
       {
         int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
@@ -94,21 +93,18 @@ namespace BToken.Chaining
         if (LENGTH_BITS_UINT >= lengthUTXOBits)
         {
           TableUInt32.ParseUTXO(
-            batchIndex,
             lengthUTXOBits,
             tXHash);
         }
         else if (LENGTH_BITS_ULONG >= lengthUTXOBits)
         {
           TableULong64.ParseUTXO(
-            batchIndex,
             lengthUTXOBits,
             tXHash);
         }
         else
         {
           TableUInt32Array.ParseUTXO(
-            batchIndex,
             lengthUTXOBits,
             tXHash);
         }

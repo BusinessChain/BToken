@@ -44,6 +44,9 @@ namespace BToken.Chaining
       public abstract uint GetCollisionBits();
       public abstract bool AreCollisionBitsFull();
 
+      public abstract void AddUTXOAsCollision(byte[] uTXOKey);
+      public abstract void AddUTXOAsPrimary(int primaryKey);
+
       public bool TrySpendCollision(
         in TXInput input,
         UTXOIndexCompressed tablePrimary)

@@ -75,7 +75,7 @@ namespace BToken.Chaining
 
     void LoadImage(out int batchIndexMergedLast)
     {
-      batchIndexMergedLast = 1;
+      batchIndexMergedLast = 0;
       return;
     }
 
@@ -89,36 +89,46 @@ namespace BToken.Chaining
       return firstContainer.HeaderRoot.HeaderHash;
     }
 
-    bool TryInsertBatch(DataBatch batch, out ItemBatchContainer containerInvalid)
+
+
+    const int SIZE_OUTPUT_BATCH = 50000;
+    int CountItems;
+
+    List<DataBatchContainer> Containers = new List<DataBatchContainer>();
+
+    bool TryInsertBatch(DataBatch batch)
     {
-      Chain rivalChain;
-
-      foreach (HeaderBatchContainer headerContainer in batch.ItemBatchContainers)
+      foreach (HeaderBatchContainer container 
+        in batch.ItemBatchContainers)
       {
-        try
+        if(!TryInsertContainer(container))
         {
-          rivalChain = Inserter.InsertChain(headerContainer.HeaderRoot);
-        }
-        catch (ChainException ex)
-        {
-          Console.WriteLine(
-            "Insertion of batch {0} raised ChainException:\n {1}.",
-            batch.Index,
-            ex.Message);
-
-          containerInvalid = headerContainer;
           return false;
         }
 
-        if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
+        Containers.Add(container);
+        CountItems += container.CountItems;
+
+        bool isFinalContainer = batch.IsFinalBatch &&
+          (container == batch.ItemBatchContainers.Last());
+
+        if (CountItems > SIZE_OUTPUT_BATCH || isFinalContainer)
         {
-          ReorganizeChain(rivalChain);
+          ArchiveContainers(Containers);
+
+          Containers = new List<DataBatchContainer>();
+          CountItems = 0;
+
+          ArchiveIndex += 1;
         }
       }
 
-      Console.WriteLine("Inserted batch {0} in headerchain", batch.Index);
+      Console.WriteLine("Blockheight {0}," +
+        "Inserted batch {1} with {2} headers in headerchain", 
+        GetHeight(),
+        batch.Index,
+        batch.CountItems);
 
-      containerInvalid = null;
       return true;
     }
 
@@ -175,12 +185,13 @@ namespace BToken.Chaining
       }
     }
 
-    public ItemBatchContainer LoadDataContainer(int batchIndex)
+    public DataBatchContainer LoadDataContainer(int batchIndex)
     {
       return new HeaderBatchContainer(
         batchIndex,
         File.ReadAllBytes(FilePath + batchIndex));
     }
+
 
     bool TryInsertContainer(HeaderBatchContainer container)
     {
@@ -200,33 +211,45 @@ namespace BToken.Chaining
         return false;
       }
 
-      if (rivalChain != null && rivalChain.IsStrongerThan(MainChain))
+      if (rivalChain != null 
+        && rivalChain.IsStrongerThan(MainChain))
       {
         ReorganizeChain(rivalChain);
       }
-
-      Console.WriteLine("Inserted header container {0}", container.Index);
-
+      
       return true;
     }
 
-    async Task ArchiveBatch(DataBatch batch)
+    int ArchiveIndex;
+    string ArchivePath = RootDirectory.Name;
+
+    async Task ArchiveContainers(List<DataBatchContainer> containers)
     {
-      using (FileStream fileStream = new FileStream(
-        FilePath + batch.Index,
-        FileMode.Create,
-        FileAccess.Write,
-        FileShare.None,
-        bufferSize: 65536,
-        useAsync: true))
+      string filePath =
+        Path.Combine(ArchivePath, "h" + ArchiveIndex);
+
+      try
       {
-        foreach (HeaderBatchContainer batchContainer in batch.ItemBatchContainers)
+        using (FileStream fileStream = new FileStream(
+          filePath,
+          FileMode.Create,
+          FileAccess.Write,
+          FileShare.None,
+          bufferSize: 65536,
+          useAsync: true))
         {
-          await fileStream.WriteAsync(
-            batchContainer.Buffer,
-            0,
-            batchContainer.Buffer.Length);
+          foreach (HeaderBatchContainer container in containers)
+          {
+            await fileStream.WriteAsync(
+              container.Buffer,
+              0,
+              container.Buffer.Length);
+          }
         }
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine(ex.Message);
       }
     }
 

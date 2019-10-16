@@ -130,6 +130,16 @@ namespace BToken.Chaining
         PrimaryTables[indexTablePartition].Add(tablePrimary.PrimaryKey, uTXOPrimary);
       }
 
+      public uint UTXO;
+      public override void AddUTXOAsCollision(byte[] uTXOKey)
+      {
+        CollisionTables[uTXOKey[0]].Add(uTXOKey, UTXO);
+      }
+      public override void AddUTXOAsPrimary(int primaryKey)
+      {
+        PrimaryTables[(byte)primaryKey].Add(primaryKey, UTXO);
+      }
+
       protected override void SpendCollisionUTXO(
         byte[] key,
         int outputIndex,

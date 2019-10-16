@@ -79,6 +79,7 @@
   <ItemGroup>
     <Compile Include="Chaining\BatchDataPipe\AbstractGateway.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
+    <Compile Include="Chaining\BatchDataPipe\DataBatchContainer.cs" />
     <Compile Include="Chaining\BatchDataPipe\IGateway.cs" />
     <Compile Include="Chaining\BlockBatchContainer.cs" />
     <Compile Include="Chaining\GatewayUTXO.cs" />

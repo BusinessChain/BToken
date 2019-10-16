@@ -22,7 +22,6 @@ namespace BToken.Chaining
 
 
       public void ParseUTXO(
-        int batchIndex,
         int lengthUTXOBits,
         byte[] tXHash)
       {
@@ -33,9 +32,7 @@ namespace BToken.Chaining
         {
           uTXOIndex[uTXOIndex.Length - 1] |= (uint.MaxValue << countUTXORemainderBits);
         }
-
-        uTXOIndex[0] = (uint)batchIndex & MaskBatchIndex;
-
+       
         Table.Add(tXHash, uTXOIndex);
       }
 

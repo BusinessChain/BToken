@@ -40,7 +40,6 @@ namespace BToken.Chaining
 
 
 
-      readonly object LOCK_BatchLoadedLast = new object();
       ConcurrentQueue<DataBatch> QueueBatchesCanceled
         = new ConcurrentQueue<DataBatch>();
 
@@ -53,51 +52,64 @@ namespace BToken.Chaining
           return true;
         }
 
-        lock (LOCK_BatchLoadedLast)
-        {
-          if (UTXOTable.TryLoadBatch(
-            ContainerInsertedLast,
-            out uTXOBatch,
-            countHeaders))
-          {
-            ContainerInsertedLast
-              = uTXOBatch.ItemBatchContainers.Last();
+        return UTXOTable.TryLoadBatch(
+           out uTXOBatch,
+           countHeaders);
+      }
 
-            return true;
-          }
+
+      protected override void LoadImage(out int archiveIndex)
+      {
+        UTXOTable.LoadImage();
+        archiveIndex = UTXOTable.ArchiveIndex;
+      }
+      protected override bool TryInsertBatch(DataBatch batch)
+      {
+        return UTXOTable.TryInsertBatch(batch);
+      }
+      protected override bool TryInsertContainer(
+        DataBatchContainer container)
+      {
+        BlockBatchContainer blockContainer = 
+          (BlockBatchContainer)container;
+
+        if (blockContainer.HeaderPrevious != UTXOTable.Header)
+        {
+          Console.WriteLine("HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}",
+            blockContainer.HeaderPrevious.HeaderHash.ToHexString(),
+            blockContainer.Index,
+            UTXOTable.Header.HeaderHash.ToHexString());
+
+          return false;
         }
 
-        return false;
+        try
+        {
+          UTXOTable.InsertContainer(blockContainer);
+        }
+        catch (ChainException ex)
+        {
+          Console.WriteLine(
+            "Insertion of blockBatchContainer {0} raised ChainException:\n {1}.",
+            container.Index,
+            ex.Message);
+
+          return false;
+        }
+
+        UTXOTable.Header = blockContainer.Header;
+        UTXOTable.ArchiveIndex += 1;
+
+        UTXOTable.ArchiveState();
+
+        UTXOTable.LogInsertion(
+          blockContainer.StopwatchParse.ElapsedTicks,
+          container.Index);
+
+        return true;
       }
 
-
-      protected override void LoadImage(out int archiveIndexNext)
-      {
-        UTXOTable.LoadImage(out archiveIndexNext);
-      }
-      protected override bool TryInsertContainer(ItemBatchContainer container)
-      {
-        return UTXOTable.TryInsertContainer(
-          (BlockBatchContainer)container);
-      }
-
-      protected override bool TryInsertBatch(
-        DataBatch uTXOBatch,
-        out ItemBatchContainer containerInvalid)
-      {
-        return UTXOTable.TryInsertBatch(
-          uTXOBatch,
-          out containerInvalid);
-      }
-
-
-      
-      protected override void ArchiveBatch(DataBatch batch)
-      {
-        UTXOTable.ArchiveBatch(batch);
-      }
-
-      protected override ItemBatchContainer LoadDataContainer(
+      protected override DataBatchContainer LoadDataContainer(
         int containerIndex)
       {
         return UTXOTable.LoadDataContainer(containerIndex);

@@ -11,7 +11,7 @@ namespace BToken.Chaining
   {
     public bool IsValid;
     public int Index;
-    public List<ItemBatchContainer> ItemBatchContainers;
+    public List<DataBatchContainer> ItemBatchContainers;
     public int CountItems;
     public bool IsFinalBatch;
     
@@ -20,52 +20,7 @@ namespace BToken.Chaining
     public DataBatch(int index)
     {
       Index = index;
-      ItemBatchContainers = new List<ItemBatchContainer>();
+      ItemBatchContainers = new List<DataBatchContainer>();
     }
-
-    public void Parse()
-    {
-      foreach (ItemBatchContainer container in ItemBatchContainers)
-      {
-        container.Parse();
-        CountItems += container.CountItems;
-      }
-    }
-  }
-
-  public abstract class ItemBatchContainer
-  {
-    public bool IsValid;
-    public int Index;
-    public DataBatch Batch;
-    public int CountItems;
-    public byte[] Buffer;
-
-    public Stopwatch StopwatchParse = new Stopwatch();
-
-
-
-    protected ItemBatchContainer(
-      DataBatch batch,
-      byte[] buffer)
-    {
-      Batch = batch;
-      Buffer = buffer;
-    }
-
-    protected ItemBatchContainer(int index, byte[] buffer)
-    {
-      Index = index;
-      Buffer = buffer;
-    }
-
-    protected ItemBatchContainer(
-      DataBatch batch)
-    {
-      Batch = batch;
-    }
-
-
-    public abstract void Parse();
   }
 }

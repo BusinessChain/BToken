@@ -21,11 +21,10 @@ namespace BToken.Chaining
       { }
 
       public void ParseUTXO(
-        int batchIndex,
         int lengthUTXOBits,
         byte[] tXHash)
       {
-        uint uTXOIndex = (uint)batchIndex & MaskBatchIndex;
+        uint uTXOIndex = 0;
 
         if (LENGTH_BITS_UINT > lengthUTXOBits)
         {

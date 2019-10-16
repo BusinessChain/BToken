@@ -9,7 +9,7 @@ namespace BToken.Chaining
 {
   partial class Headerchain
   {
-    class HeaderBatchContainer : ItemBatchContainer
+    class HeaderBatchContainer : DataBatchContainer
     {
       public IEnumerable<byte[]> LocatorHashes;
 
@@ -18,7 +18,9 @@ namespace BToken.Chaining
 
 
 
-      public HeaderBatchContainer(int index, byte[] headerBytes)
+      public HeaderBatchContainer(
+        int index, 
+        byte[] headerBytes)
         : base(
             index,
             headerBytes)
