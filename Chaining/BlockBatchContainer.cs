@@ -28,6 +28,13 @@ namespace BToken.Chaining
 
       BlockParser BlockParser;
 
+      public BlockBatchContainer(
+        BlockParser blockParser,
+        int archiveIndex)
+        : base(archiveIndex)
+      {
+        BlockParser = blockParser;
+      }
 
       public BlockBatchContainer(
         BlockParser blockParser,
@@ -56,7 +63,20 @@ namespace BToken.Chaining
       {
         StopwatchParse.Start();
 
-        BlockParser.Parse(this);
+        try
+        {
+          BlockParser.Parse(this);
+        }
+        catch (Exception ex)
+        {
+          IsValid = false;
+
+          Console.WriteLine(
+            "Exception {0} loading archive {1}: {2}",
+            ex.GetType().Name,
+            Index,
+            ex.Message);
+        }
 
         StopwatchParse.Stop();
       }

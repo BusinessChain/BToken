@@ -76,9 +76,18 @@ namespace BToken.Chaining
 
     public DataBatchContainer LoadDataContainer(int batchIndex)
     {
-      return new HeaderBatchContainer(
-        batchIndex,
-        File.ReadAllBytes(FilePath + batchIndex));
+      var container = new HeaderBatchContainer(batchIndex);
+
+      try
+      {
+        container.Buffer = File.ReadAllBytes(FilePath + batchIndex);
+      }
+      catch (IOException)
+      {
+        container.IsValid = false;
+      }
+
+      return container;
     }
 
 
@@ -176,7 +185,7 @@ namespace BToken.Chaining
       catch (ChainException ex)
       {
         Console.WriteLine(
-          "Insertion of header container {0} raised ChainException:\n {1}.",
+          "Insertion of header container {0} raised ChainException:\n {1}",
           container.Index,
           ex.Message);
 

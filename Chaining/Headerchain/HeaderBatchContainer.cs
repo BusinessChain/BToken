@@ -19,6 +19,11 @@ namespace BToken.Chaining
 
 
       public HeaderBatchContainer(
+        int index)
+        : base(index)
+      { }
+
+      public HeaderBatchContainer(
         int index, 
         byte[] headerBytes)
         : base(
@@ -41,37 +46,51 @@ namespace BToken.Chaining
 
       public override void Parse()
       {
-        int bufferIndex = 0;
-
-        int headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
-
-        if (headersCount == 0)
+        try
         {
-          return;
-        }
+          int bufferIndex = 0;
 
-        CountItems += headersCount;
+          int headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
 
-        HeaderRoot = Header.ParseHeader(Buffer, ref bufferIndex, SHA256);
-        bufferIndex += 1; // skip txCount
-
-        ValidateHeader(HeaderRoot);
-
-        headersCount -= 1;
-
-        HeaderTip = HeaderRoot;
-
-        ParseHeaders(ref bufferIndex, headersCount);
-
-
-        while (bufferIndex < Buffer.Length)
-        {
-          headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
+          if (headersCount == 0)
+          {
+            return;
+          }
 
           CountItems += headersCount;
 
+          HeaderRoot = Header.ParseHeader(Buffer, ref bufferIndex, SHA256);
+          bufferIndex += 1; // skip txCount
+
+          ValidateHeader(HeaderRoot);
+
+          headersCount -= 1;
+
+          HeaderTip = HeaderRoot;
+
           ParseHeaders(ref bufferIndex, headersCount);
+
+
+          while (bufferIndex < Buffer.Length)
+          {
+            headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
+
+            CountItems += headersCount;
+
+            ParseHeaders(ref bufferIndex, headersCount);
+          }
         }
+        catch (Exception ex)
+        {
+          IsValid = false;
+
+          Console.WriteLine(
+            "Exception {0} loading archive {1}: {2}",
+            ex.GetType().Name,
+            Index,
+            ex.Message);
+        }
+        
       }
 
       void ParseHeaders(ref int startIndex, int headersCount)

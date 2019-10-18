@@ -439,11 +439,21 @@ namespace BToken.Chaining
 
     BlockBatchContainer LoadDataContainer(int containerIndex)
     {
-      return new BlockBatchContainer(
+      var container = new BlockBatchContainer(
         new BlockParser(Headerchain),
-        containerIndex,
-        File.ReadAllBytes(
-          Path.Combine(ArchivePath, "p" + containerIndex)));
+        containerIndex);
+
+      try
+      {
+        container.Buffer = File.ReadAllBytes(
+          Path.Combine(ArchivePath, "p" + containerIndex));
+      }
+      catch (IOException)
+      {
+        container.IsValid = false;
+      }
+
+      return container;
     }
 
 

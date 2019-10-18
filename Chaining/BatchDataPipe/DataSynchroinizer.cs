@@ -91,24 +91,11 @@ namespace BToken.Chaining
           ArchiveLoadIndex += 1;
         }
 
-        try
-        {
-          container = LoadDataContainer(containerIndex);
-          container.Parse();
-          container.IsValid = true;
-        }
-        catch(IOException)
-        {
-          return;
-        }
-        catch(Exception ex)
-        {
-          Console.WriteLine(
-            "Exception loading archive {0}: {1}",
-            containerIndex,
-            ex.Message);
+        container = LoadDataContainer(containerIndex);
 
-          return;
+        if(container.IsValid)
+        {
+          container.Parse();
         }
 
       } while (await SendToOutputQueue(container));
@@ -142,7 +129,7 @@ namespace BToken.Chaining
           if (OutputQueue.Count < 10)
           {
             OutputQueue.Add(container.Index, container);
-            return true;
+            return container.IsValid;
           }
         }
         

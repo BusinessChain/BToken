@@ -75,6 +75,10 @@ namespace BToken.Chaining
                     {
                       IsSyncing = true;
                       Gateway.IsSyncing = true;
+
+                      Gateway.SignalStartHeaderSyncSession 
+                        = new TaskCompletionSource<object>();
+
                       break;
                     }
                   }
@@ -83,7 +87,6 @@ namespace BToken.Chaining
                 await Gateway.SignalStartHeaderSyncSession.Task.ConfigureAwait(false);
               }
 
-              Gateway.SignalStartHeaderSyncSession = new TaskCompletionSource<object>();
               HeaderBatchOld = Gateway.HeaderBatchOld;
 
               while (HeaderBatch.CountItems > 0)
@@ -105,6 +108,11 @@ namespace BToken.Chaining
                 HeaderBatchOld.IsFinalBatch = true;
 
                 await Gateway.InputBuffer.SendAsync(HeaderBatchOld);
+              }
+
+              lock (Gateway.LOCK_IsSyncing)
+              {
+                Gateway.IsSyncingCompleted = true;
               }
 
               Gateway.SignalStartHeaderSyncSession.SetResult(null);

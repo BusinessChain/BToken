@@ -8,7 +8,7 @@ namespace BToken.Chaining
 {
   public abstract class DataBatchContainer
   {
-    public bool IsValid;
+    public bool IsValid = true;
     public int Index;
     public DataBatch Batch;
     public int CountItems;
@@ -17,6 +17,10 @@ namespace BToken.Chaining
     public Stopwatch StopwatchParse = new Stopwatch();
 
 
+    protected DataBatchContainer(int index)
+    {
+      Index = index;
+    }
 
     protected DataBatchContainer(int index, byte[] buffer)
     {
