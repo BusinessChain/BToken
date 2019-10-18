@@ -17,7 +17,10 @@ namespace BToken.Networking
           networkMessage.Payload)
     {
       int startIndex = 0;
-      int inventoryCount = VarInt.GetInt32(Payload, ref startIndex);
+
+      int inventoryCount = VarInt.GetInt32(
+        Payload, 
+        ref startIndex);
 
       for (int i = 0; i < inventoryCount; i++)
       {

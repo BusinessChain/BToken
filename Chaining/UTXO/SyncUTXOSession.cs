@@ -12,7 +12,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    partial class GatewayUTXO : AbstractGateway
+    partial class UTXOSynchronizer : DataSynchronizer
     {
       class SyncUTXOSession
       {
@@ -22,12 +22,12 @@ namespace BToken.Chaining
         const int TIMEOUT_GETHEADERS_MILLISECONDS = 10000;
         const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
-        GatewayUTXO Gateway;
+        UTXOSynchronizer Gateway;
         SHA256 SHA256;
 
 
 
-        public SyncUTXOSession(GatewayUTXO gateway)
+        public SyncUTXOSession(UTXOSynchronizer gateway)
         {
           Gateway = gateway;
           SHA256 = SHA256.Create();

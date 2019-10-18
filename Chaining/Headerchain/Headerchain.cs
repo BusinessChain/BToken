@@ -38,7 +38,7 @@ namespace BToken.Chaining
 
     public readonly object LOCK_Chain = new object();
 
-    GatewayHeaderchain Gateway;
+    HeaderchainSynchronizer Synchronizer;
 
 
     public Headerchain(
@@ -60,7 +60,7 @@ namespace BToken.Chaining
       Locator = new HeaderLocator(this);
       Inserter = new ChainInserter(this);
 
-      Gateway = new GatewayHeaderchain(
+      Synchronizer = new HeaderchainSynchronizer(
         network,
         this);
     }
@@ -69,33 +69,25 @@ namespace BToken.Chaining
 
     public async Task Start()
     {
-      await Gateway.Start();
-    }
-
-
-    void LoadImage(out int batchIndexMergedLast)
-    {
-      batchIndexMergedLast = 0;
-      return;
+      await Synchronizer.Start();
     }
 
 
 
-    byte[] GetHeaderHashPrevious(DataBatch dataBatch)
+    public DataBatchContainer LoadDataContainer(int batchIndex)
     {
-      HeaderBatchContainer firstContainer =
-        (HeaderBatchContainer)dataBatch.ItemBatchContainers.First();
-
-      return firstContainer.HeaderRoot.HeaderHash;
+      return new HeaderBatchContainer(
+        batchIndex,
+        File.ReadAllBytes(FilePath + batchIndex));
     }
 
 
 
     const int SIZE_OUTPUT_BATCH = 50000;
     int CountItems;
-
+    int ArchiveIndex;
     List<DataBatchContainer> Containers = new List<DataBatchContainer>();
-
+    
     bool TryInsertBatch(DataBatch batch)
     {
       foreach (HeaderBatchContainer container 
@@ -131,6 +123,118 @@ namespace BToken.Chaining
 
       return true;
     }
+        
+
+
+    public bool TryInsertBuffer(byte[] buffer)
+    {
+      HeaderBatchContainer container =
+        new HeaderBatchContainer(
+          ArchiveIndex,
+          buffer);
+
+      try
+      {
+        container.Parse();
+
+        if (!TryInsertContainer(container))
+        {
+          return false;
+        }
+      }
+      catch
+      {
+        return false;
+      }
+
+      Containers.Add(container);
+      CountItems += container.CountItems;
+
+      ArchiveContainers(Containers);
+
+      if (CountItems > SIZE_OUTPUT_BATCH)
+      {
+        Containers = new List<DataBatchContainer>();
+        CountItems = 0;
+
+        ArchiveIndex += 1;
+      }
+
+      return true;
+    }
+
+
+
+    bool TryInsertContainer(HeaderBatchContainer container)
+    {
+      Chain rivalChain;
+
+      try
+      {
+        rivalChain = Inserter.InsertChain(container.HeaderRoot);
+      }
+      catch (ChainException ex)
+      {
+        Console.WriteLine(
+          "Insertion of header container {0} raised ChainException:\n {1}.",
+          container.Index,
+          ex.Message);
+
+        return false;
+      }
+
+      if (rivalChain != null 
+        && rivalChain.IsStrongerThan(MainChain))
+      {
+        ReorganizeChain(rivalChain);
+      }
+      
+      return true;
+    }
+           
+
+
+    void LoadImage(out int batchIndexMergedLast)
+    {
+      batchIndexMergedLast = 0;
+      return;
+    }
+
+
+
+    string ArchivePath = RootDirectory.Name;
+
+    async Task ArchiveContainers(List<DataBatchContainer> containers)
+    {
+      string filePath =
+        Path.Combine(ArchivePath, "h" + ArchiveIndex);
+
+      try
+      {
+        using (FileStream fileStream = new FileStream(
+          filePath,
+          FileMode.Create,
+          FileAccess.Write,
+          FileShare.None,
+          bufferSize: 65536,
+          useAsync: true))
+        {
+          foreach (HeaderBatchContainer container in containers)
+          {
+            await fileStream.WriteAsync(
+              container.Buffer,
+              0,
+              container.Buffer.Length);
+          }
+        }
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine(ex.Message);
+      }
+    }
+
+
 
     void ReorganizeChain(Chain chain)
     {
@@ -141,12 +245,22 @@ namespace BToken.Chaining
       Locator.Reorganize();
     }
 
+
+
+    public int GetHeight()
+    {
+      return MainChain.Height;
+    }
+
+
+
     public Header ReadHeader(byte[] headerHash)
     {
       SHA256 sHA256 = SHA256.Create();
 
       return ReadHeader(headerHash, sHA256);
     }
+
     public Header ReadHeader(byte[] headerHash, SHA256 sHA256)
     {
       int key = BitConverter.ToInt32(headerHash, 0);
@@ -183,79 +297,6 @@ namespace BToken.Chaining
 
         headers.Add(header);
       }
-    }
-
-    public DataBatchContainer LoadDataContainer(int batchIndex)
-    {
-      return new HeaderBatchContainer(
-        batchIndex,
-        File.ReadAllBytes(FilePath + batchIndex));
-    }
-
-
-    bool TryInsertContainer(HeaderBatchContainer container)
-    {
-      Chain rivalChain;
-
-      try
-      {
-        rivalChain = Inserter.InsertChain(container.HeaderRoot);
-      }
-      catch (ChainException ex)
-      {
-        Console.WriteLine(
-          "Insertion of header container {0} raised ChainException:\n {1}.",
-          container.Index,
-          ex.Message);
-
-        return false;
-      }
-
-      if (rivalChain != null 
-        && rivalChain.IsStrongerThan(MainChain))
-      {
-        ReorganizeChain(rivalChain);
-      }
-      
-      return true;
-    }
-
-    int ArchiveIndex;
-    string ArchivePath = RootDirectory.Name;
-
-    async Task ArchiveContainers(List<DataBatchContainer> containers)
-    {
-      string filePath =
-        Path.Combine(ArchivePath, "h" + ArchiveIndex);
-
-      try
-      {
-        using (FileStream fileStream = new FileStream(
-          filePath,
-          FileMode.Create,
-          FileAccess.Write,
-          FileShare.None,
-          bufferSize: 65536,
-          useAsync: true))
-        {
-          foreach (HeaderBatchContainer container in containers)
-          {
-            await fileStream.WriteAsync(
-              container.Buffer,
-              0,
-              container.Buffer.Length);
-          }
-        }
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine(ex.Message);
-      }
-    }
-
-    public int GetHeight()
-    {
-      return MainChain.Height;
     }
   }
 }

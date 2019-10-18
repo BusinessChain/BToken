@@ -12,13 +12,13 @@ namespace BToken.Chaining
 {
   partial class Headerchain
   {
-    partial class GatewayHeaderchain : AbstractGateway
+    partial class HeaderchainSynchronizer : DataSynchronizer
     {
       class SyncHeaderchainSession
       {
-        GatewayHeaderchain Gateway;
+        HeaderchainSynchronizer Gateway;
 
-        public SyncHeaderchainSession(GatewayHeaderchain gateway)
+        public SyncHeaderchainSession(HeaderchainSynchronizer gateway)
         {
           Gateway = gateway;
         }
@@ -107,11 +107,6 @@ namespace BToken.Chaining
                 await Gateway.InputBuffer.SendAsync(HeaderBatchOld);
               }
 
-              lock (Gateway.LOCK_IsSyncing)
-              {
-                Gateway.IsSyncingCompleted = true;
-              }
-
               Gateway.SignalStartHeaderSyncSession.SetResult(null);
               
               Gateway.Network.ReturnChannel(Channel);
@@ -191,8 +186,6 @@ namespace BToken.Chaining
           }
 
           HeaderBatch.IsValid = true;
-
-          return;
         }
       }
     }

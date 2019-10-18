@@ -276,7 +276,8 @@ namespace BToken.Networking
       {
         AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
-      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage());
+      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) 
+        => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage());
 
       public async Task SendMessage(NetworkMessage networkMessage)
       {

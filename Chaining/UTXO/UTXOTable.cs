@@ -48,7 +48,7 @@ namespace BToken.Chaining
     long UTCTimeStartMerger;
     Stopwatch StopwatchMerging = new Stopwatch();
 
-    GatewayUTXO Gateway;
+    UTXOSynchronizer Synchronizer;
 
     string ArchivePath = "J:\\BlockArchivePartitioned";
 
@@ -67,7 +67,7 @@ namespace BToken.Chaining
 
       GenesisBlockBytes = genesisBlockBytes;
 
-      Gateway = new GatewayUTXO(
+      Synchronizer = new UTXOSynchronizer(
         network,
         this);
 
@@ -78,7 +78,7 @@ namespace BToken.Chaining
 
     public async Task Start()
     {
-      await Gateway.Start();
+      await Synchronizer.Start();
     }
 
 

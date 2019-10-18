@@ -13,7 +13,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    partial class GatewayUTXO : AbstractGateway
+    partial class UTXOSynchronizer : DataSynchronizer
     {
       Network Network;
       UTXOTable UTXOTable;
@@ -22,7 +22,7 @@ namespace BToken.Chaining
 
 
 
-      public GatewayUTXO(
+      public UTXOSynchronizer(
         Network network,
         UTXOTable uTXOTable)
         : base(COUNT_UTXO_SESSIONS)
@@ -130,12 +130,6 @@ namespace BToken.Chaining
       void DisposeChannel(UTXOChannel channel)
       {
         Network.DisposeChannel(channel.NetworkChannel);
-      }
-
-           
-      protected override async Task StartListener()
-      {
-
       }
     }
   }

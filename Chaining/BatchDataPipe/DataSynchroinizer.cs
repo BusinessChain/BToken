@@ -7,11 +7,11 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BToken.Chaining
 {
-  abstract class AbstractGateway
+  abstract class DataSynchronizer
   {
     int CountSessions;
 
-    public AbstractGateway(int countSessions)
+    public DataSynchronizer(int countSessions)
     {
       CountSessions = countSessions;
     }
@@ -22,8 +22,6 @@ namespace BToken.Chaining
 
     public async Task Start()
     {
-      StartListener();
-
       LoadImage(out ArchiveLoadIndex);
 
       await SynchronizeWithArchive();
@@ -36,7 +34,6 @@ namespace BToken.Chaining
 
 
     protected abstract void LoadImage(out int archiveIndexNext);
-    protected abstract Task StartListener();
     
 
 
@@ -106,7 +103,8 @@ namespace BToken.Chaining
         }
         catch(Exception ex)
         {
-          Console.WriteLine("Exception in archive load of batch {0}: {1}",
+          Console.WriteLine(
+            "Exception loading archive {0}: {1}",
             containerIndex,
             ex.Message);
 
