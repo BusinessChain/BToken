@@ -32,6 +32,18 @@ namespace BToken.Chaining
       }
 
 
+      
+      public void Run(UTXOChannel channel)
+      {
+        if (IsRunning)
+        {
+          return;
+        }
+
+        new SyncUTXOSession(this, channel)
+          .Start();
+      }
+
 
       protected override Task CreateSyncSessionTask()
       {
@@ -67,6 +79,7 @@ namespace BToken.Chaining
       {
         return UTXOTable.TryInsertBatch(batch);
       }
+
       protected override bool TryInsertContainer(
         DataBatchContainer container)
       {
@@ -98,9 +111,16 @@ namespace BToken.Chaining
         }
 
         UTXOTable.Header = blockContainer.Header;
-        UTXOTable.ArchiveIndex += 1;
 
-        UTXOTable.ArchiveState();
+        if (UTXOTable.CountItems >= SIZE_OUTPUT_BATCH)
+        {
+          UTXOTable.Containers = new List<DataBatchContainer>();
+          UTXOTable.CountItems = 0;
+
+          UTXOTable.ArchiveIndex += 1;
+
+          UTXOTable.ArchiveState();
+        }
 
         UTXOTable.LogInsertion(
           blockContainer.StopwatchParse.ElapsedTicks,

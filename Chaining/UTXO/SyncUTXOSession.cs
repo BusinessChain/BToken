@@ -22,20 +22,28 @@ namespace BToken.Chaining
         const int TIMEOUT_GETHEADERS_MILLISECONDS = 10000;
         const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
-        UTXOSynchronizer Gateway;
-        SHA256 SHA256;
+        UTXOSynchronizer Synchronizer;
+        UTXOChannel Channel;
+
+        SHA256 SHA256 = SHA256.Create();
 
 
 
-        public SyncUTXOSession(UTXOSynchronizer gateway)
+        public SyncUTXOSession(UTXOSynchronizer synchronizer)
         {
-          Gateway = gateway;
-          SHA256 = SHA256.Create();
+          Synchronizer = synchronizer;
+        }
+
+        public SyncUTXOSession(
+          UTXOSynchronizer synchronizer,
+          UTXOChannel channel)
+        {
+          Synchronizer = synchronizer;
+          Channel = channel;
         }
 
 
 
-        UTXOChannel Channel;
         Stopwatch StopwatchDownload = new Stopwatch();
         public int CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
         DataBatch UTXOBatch;
@@ -44,18 +52,21 @@ namespace BToken.Chaining
         {
           while (true)
           {
-            Channel = await Gateway.RequestChannel();
+            if(Channel == null)
+            {
+              Channel = await Synchronizer.RequestChannel();
+            }
 
             try
             {
-              while (Gateway.TryGetBatch(
+              while (Synchronizer.TryGetBatch(
                 out UTXOBatch,
                 CountBlocksDownloadBatch))
               {
                 await StartBlockDownloadAsync();
               }
 
-              Gateway.ReturnChannel(Channel);
+              Synchronizer.ReturnChannel(Channel);
 
               return;
             }
@@ -66,9 +77,9 @@ namespace BToken.Chaining
                 ex.Message,
                 UTXOBatch.Index);
 
-              Gateway.QueueBatchesCanceled.Enqueue(UTXOBatch);
+              Synchronizer.QueueBatchesCanceled.Enqueue(UTXOBatch);
 
-              Gateway.DisposeChannel(Channel);
+              Synchronizer.DisposeChannel(Channel);
 
               CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
             }
@@ -122,7 +133,7 @@ namespace BToken.Chaining
             UTXOBatch.CountItems += blockBatchContainer.CountItems;
           }
 
-          await Gateway.InputBuffer.SendAsync(UTXOBatch);
+          await Synchronizer.InputBuffer.SendAsync(UTXOBatch);
 
           StopwatchDownload.Stop();
 

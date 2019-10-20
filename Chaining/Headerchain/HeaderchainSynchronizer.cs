@@ -111,7 +111,14 @@ namespace BToken.Chaining
         if(Headerchain.TryInsertContainer(
           (HeaderBatchContainer)container))
         {
-          Headerchain.ArchiveIndex += 1;
+          if (Headerchain.CountItems >= SIZE_OUTPUT_BATCH)
+          {
+            Headerchain.Containers = new List<DataBatchContainer>();
+            Headerchain.CountItems = 0;
+
+            Headerchain.ArchiveIndex += 1;
+          }
+
           return true;
         }
 

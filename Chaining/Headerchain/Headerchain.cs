@@ -106,21 +106,21 @@ namespace BToken.Chaining
         {
           return false;
         }
-
-        Containers.Add(container);
-        CountItems += container.CountItems;
-
+        
         bool isFinalContainer = batch.IsFinalBatch &&
           (container == batch.ItemBatchContainers.Last());
 
-        if (CountItems > SIZE_OUTPUT_BATCH || isFinalContainer)
+        if (CountItems >= SIZE_OUTPUT_BATCH || isFinalContainer)
         {
           ArchiveContainers(Containers);
 
-          Containers = new List<DataBatchContainer>();
-          CountItems = 0;
+          if (CountItems >= SIZE_OUTPUT_BATCH)
+          {
+            Containers = new List<DataBatchContainer>();
+            CountItems = 0;
 
-          ArchiveIndex += 1;
+            ArchiveIndex += 1;
+          }
         }
       }
 
@@ -135,38 +135,42 @@ namespace BToken.Chaining
         
 
 
-    public bool TryInsertBuffer(byte[] buffer)
+    public bool TryInsertHeaderBytes(
+      byte[] buffer,
+      out List<Header> headers)
     {
+      headers = new List<Header>();
+
       HeaderBatchContainer container =
         new HeaderBatchContainer(
           ArchiveIndex,
           buffer);
 
-      try
-      {
-        container.Parse();
+      container.Parse();
 
-        if (!TryInsertContainer(container))
-        {
-          return false;
-        }
-      }
-      catch
+      if (
+        !container.IsValid || 
+        !TryInsertContainer(container))
       {
         return false;
       }
 
-      Containers.Add(container);
-      CountItems += container.CountItems;
-
       ArchiveContainers(Containers);
 
-      if (CountItems > SIZE_OUTPUT_BATCH)
+      if (CountItems >= SIZE_OUTPUT_BATCH)
       {
         Containers = new List<DataBatchContainer>();
         CountItems = 0;
 
         ArchiveIndex += 1;
+      }
+
+      Header header = container.HeaderRoot;
+      headers.Add(header);
+      while(header != container.HeaderTip)
+      {
+        header = header.HeadersNext[0];
+        headers.Add(header);
       }
 
       return true;
@@ -198,9 +202,23 @@ namespace BToken.Chaining
         ReorganizeChain(rivalChain);
       }
       
+      Containers.Add(container);
+      CountItems += container.CountItems;
+
       return true;
     }
-           
+
+
+
+    void ReorganizeChain(Chain chain)
+    {
+      SecondaryChains.Remove(chain);
+      SecondaryChains.Add(MainChain);
+      MainChain = chain;
+
+      Locator.Reorganize();
+    }
+
 
 
     void LoadImage(out int batchIndexMergedLast)
@@ -241,17 +259,6 @@ namespace BToken.Chaining
       {
         Console.WriteLine(ex.Message);
       }
-    }
-
-
-
-    void ReorganizeChain(Chain chain)
-    {
-      SecondaryChains.Remove(chain);
-      SecondaryChains.Add(MainChain);
-      MainChain = chain;
-
-      Locator.Reorganize();
     }
 
 

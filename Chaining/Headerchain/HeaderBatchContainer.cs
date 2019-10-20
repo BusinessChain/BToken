@@ -90,7 +90,6 @@ namespace BToken.Chaining
             Index,
             ex.Message);
         }
-        
       }
 
       void ParseHeaders(ref int startIndex, int headersCount)

@@ -8,7 +8,7 @@ using BToken.Networking;
 
 namespace BToken
 {
-  public partial class Node
+  partial class Node
   {
     Network Network;
     UTXOTable UTXO;
@@ -50,7 +50,7 @@ namespace BToken
       await Headerchain.Start();
 
       await UTXO.Start();
-      
+
       Wallet.GeneratePublicKey();
     }
 
@@ -97,9 +97,13 @@ namespace BToken
                 Console.WriteLine("header message from channel {0}",
                   channel.GetIdentification());
                 
-                if (Headerchain.TryInsertBuffer(headersMessage.Payload))
+                if (Headerchain.TryInsertHeaderBytes(
+                  headersMessage.Payload,
+                  out List<Header> headers))
                 {
-                  Console.WriteLine("Contact UTXO on received header");
+                  UTXO.SyncWithHeaderchain(
+                    channel, 
+                    headers);
                 }
                 else
                 {

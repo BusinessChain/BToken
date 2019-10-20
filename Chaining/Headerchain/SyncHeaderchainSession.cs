@@ -16,11 +16,11 @@ namespace BToken.Chaining
     {
       class SyncHeaderchainSession
       {
-        HeaderchainSynchronizer Gateway;
+        HeaderchainSynchronizer Synchronizer;
 
-        public SyncHeaderchainSession(HeaderchainSynchronizer gateway)
+        public SyncHeaderchainSession(HeaderchainSynchronizer synchronizer)
         {
-          Gateway = gateway;
+          Synchronizer = synchronizer;
         }
 
 
@@ -35,48 +35,48 @@ namespace BToken.Chaining
         {
           while (true)
           {
-            Channel = await Gateway.Network.RequestChannel();
+            Channel = await Synchronizer.Network.RequestChannel();
 
             try
             {
             StartRaceSyncHeaderSession:
 
-              lock (Gateway.LOCK_IsSyncing)
+              lock (Synchronizer.LOCK_IsSyncing)
               {
-                if (Gateway.IsSyncingCompleted)
+                if (Synchronizer.IsSyncingCompleted)
                 {
-                  Gateway.Network.ReturnChannel(Channel);
+                  Synchronizer.Network.ReturnChannel(Channel);
                   return;
                 }
               }
 
-              HeaderBatch = Gateway.CreateHeaderBatch();
+              HeaderBatch = Synchronizer.CreateHeaderBatch();
 
               await DownloadHeaders();
 
               while (true)
               {
-                lock (Gateway.LOCK_IsSyncing)
+                lock (Synchronizer.LOCK_IsSyncing)
                 {
-                  if (Gateway.IsSyncingCompleted)
+                  if (Synchronizer.IsSyncingCompleted)
                   {
-                    Gateway.Network.ReturnChannel(Channel);
+                    Synchronizer.Network.ReturnChannel(Channel);
 
                     return;
                   }
 
-                  if (!Gateway.IsSyncing)
+                  if (!Synchronizer.IsSyncing)
                   {
-                    if (HeaderBatch.Index != Gateway.IndexHeaderBatch)
+                    if (HeaderBatch.Index != Synchronizer.IndexHeaderBatch)
                     {
                       goto StartRaceSyncHeaderSession;
                     }
                     else
                     {
                       IsSyncing = true;
-                      Gateway.IsSyncing = true;
+                      Synchronizer.IsSyncing = true;
 
-                      Gateway.SignalStartHeaderSyncSession 
+                      Synchronizer.SignalStartHeaderSyncSession 
                         = new TaskCompletionSource<object>();
 
                       break;
@@ -84,16 +84,16 @@ namespace BToken.Chaining
                   }
                 }
 
-                await Gateway.SignalStartHeaderSyncSession.Task.ConfigureAwait(false);
+                await Synchronizer.SignalStartHeaderSyncSession.Task.ConfigureAwait(false);
               }
 
-              HeaderBatchOld = Gateway.HeaderBatchOld;
+              HeaderBatchOld = Synchronizer.HeaderBatchOld;
 
               while (HeaderBatch.CountItems > 0)
               {
                 if (HeaderBatchOld != null)
                 {
-                  await Gateway.InputBuffer.SendAsync(HeaderBatchOld);
+                  await Synchronizer.InputBuffer.SendAsync(HeaderBatchOld);
                 }
 
                 HeaderBatchOld = HeaderBatch;
@@ -107,17 +107,17 @@ namespace BToken.Chaining
               {
                 HeaderBatchOld.IsFinalBatch = true;
 
-                await Gateway.InputBuffer.SendAsync(HeaderBatchOld);
+                await Synchronizer.InputBuffer.SendAsync(HeaderBatchOld);
               }
 
-              lock (Gateway.LOCK_IsSyncing)
+              lock (Synchronizer.LOCK_IsSyncing)
               {
-                Gateway.IsSyncingCompleted = true;
+                Synchronizer.IsSyncingCompleted = true;
               }
 
-              Gateway.SignalStartHeaderSyncSession.SetResult(null);
+              Synchronizer.SignalStartHeaderSyncSession.SetResult(null);
               
-              Gateway.Network.ReturnChannel(Channel);
+              Synchronizer.Network.ReturnChannel(Channel);
 
               return;
             }
@@ -128,11 +128,11 @@ namespace BToken.Chaining
               //  Channel == null ? "'null'" : Channel.GetIdentification(),
               //  ex.Message);
 
-              Gateway.Network.DisposeChannel(Channel);
+              Synchronizer.Network.DisposeChannel(Channel);
 
-              lock (Gateway.LOCK_IsSyncing)
+              lock (Synchronizer.LOCK_IsSyncing)
               {
-                if (Gateway.IsSyncingCompleted)
+                if (Synchronizer.IsSyncingCompleted)
                 {
                   return;
                 }
@@ -140,18 +140,18 @@ namespace BToken.Chaining
 
               if (IsSyncing)
               {
-                lock (Gateway.LOCK_IsSyncing)
+                lock (Synchronizer.LOCK_IsSyncing)
                 {
-                  Gateway.IndexHeaderBatch = HeaderBatch.Index;
-                  Gateway.LocatorHashes = ((HeaderBatchContainer)HeaderBatch.ItemBatchContainers.First())
+                  Synchronizer.IndexHeaderBatch = HeaderBatch.Index;
+                  Synchronizer.LocatorHashes = ((HeaderBatchContainer)HeaderBatch.ItemBatchContainers.First())
                     .LocatorHashes;
 
-                  Gateway.HeaderBatchOld = HeaderBatchOld;
+                  Synchronizer.HeaderBatchOld = HeaderBatchOld;
 
-                  Gateway.IsSyncing = false;
+                  Synchronizer.IsSyncing = false;
                 }
 
-                Gateway.SignalStartHeaderSyncSession.SetResult(null);
+                Synchronizer.SignalStartHeaderSyncSession.SetResult(null);
               }
             }
           }

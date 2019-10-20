@@ -82,6 +82,7 @@ namespace BToken.Chaining
     }
 
 
+
     void InsertUTXO(
       byte[] uTXOKey,
       UTXOIndexCompressed table)
@@ -311,6 +312,9 @@ namespace BToken.Chaining
       StopwatchMerging.Stop();
 
       BlockHeight += container.BlockCount;
+
+      Containers.Add(container);
+      CountItems += container.CountItems;
     }
 
     
@@ -328,10 +332,7 @@ namespace BToken.Chaining
           in batch.ItemBatchContainers)
         {
           InsertContainer(container);
-
-          Containers.Add(container);
-          CountItems += container.CountItems;
-
+          
           bool isFinalContainer = batch.IsFinalBatch && 
             (container == batch.ItemBatchContainers.Last());
 
@@ -339,12 +340,15 @@ namespace BToken.Chaining
           {
             ArchiveContainers(Containers);
 
-            Containers = new List<DataBatchContainer>();
-            CountItems = 0;
+            if (CountItems >= SIZE_OUTPUT_BATCH)
+            {
+              Containers = new List<DataBatchContainer>();
+              CountItems = 0;
 
-            ArchiveIndex += 1;
+              ArchiveIndex += 1;
 
-            ArchiveState();
+              ArchiveState();
+            }
           }
         }
         
@@ -497,6 +501,12 @@ namespace BToken.Chaining
       }
     }
 
+
+    public void SyncWithHeaderchain(INetworkChannel channel)
+    {
+      UTXOChannel uTXOChannel = new UTXOChannel(channel);
+      Synchronizer.Run(uTXOChannel);
+    }
 
     void LogInsertion(long elapsedTicksParsing, int index)
     {
