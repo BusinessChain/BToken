@@ -15,39 +15,32 @@ namespace BToken.Chaining
   {
     partial class UTXOSynchronizer : DataSynchronizer
     {
-      Network Network;
       UTXOTable UTXOTable;
 
       const int COUNT_UTXO_SESSIONS = 4;
 
 
 
-      public UTXOSynchronizer(
-        Network network,
-        UTXOTable uTXOTable)
-        : base(COUNT_UTXO_SESSIONS)
+      public UTXOSynchronizer(UTXOTable uTXOTable)
       {
-        Network = network;
         UTXOTable = uTXOTable;
       }
 
-
       
-      public void Run(UTXOChannel channel)
+
+      protected override Task[] StartSyncSessionTasks()
       {
-        if (IsRunning)
+        UTXOTable.HeaderLoad = UTXOTable.Header;
+
+
+        Task[] syncTasks = new Task[COUNT_UTXO_SESSIONS];
+
+        for (int i = 0; i < COUNT_UTXO_SESSIONS; i += 1)
         {
-          return;
+          syncTasks[i] = new SyncUTXOSession(this).Start();
         }
 
-        new SyncUTXOSession(this, channel)
-          .Start();
-      }
-
-
-      protected override Task CreateSyncSessionTask()
-      {
-        return new SyncUTXOSession(this).Start();
+        return syncTasks;
       }
 
 
@@ -72,16 +65,18 @@ namespace BToken.Chaining
 
       protected override void LoadImage(out int archiveIndex)
       {
-        UTXOTable.LoadImage();
-        archiveIndex = UTXOTable.ArchiveIndex;
+        UTXOTable.LoadImage(out archiveIndex);
       }
+
+
       protected override bool TryInsertBatch(DataBatch batch)
       {
         return UTXOTable.TryInsertBatch(batch);
       }
 
+
       protected override bool TryInsertContainer(
-        DataBatchContainer container)
+        DataContainer container)
       {
         BlockBatchContainer blockContainer = 
           (BlockBatchContainer)container;
@@ -109,18 +104,8 @@ namespace BToken.Chaining
 
           return false;
         }
-
-        UTXOTable.Header = blockContainer.Header;
-
-        if (UTXOTable.CountItems >= SIZE_OUTPUT_BATCH)
-        {
-          UTXOTable.Containers = new List<DataBatchContainer>();
-          UTXOTable.CountItems = 0;
-
-          UTXOTable.ArchiveIndex += 1;
-
-          UTXOTable.ArchiveState();
-        }
+        
+        UTXOTable.ArchiveImage(container.Index);
 
         UTXOTable.LogInsertion(
           blockContainer.StopwatchParse.ElapsedTicks,
@@ -129,27 +114,68 @@ namespace BToken.Chaining
         return true;
       }
 
-      protected override DataBatchContainer LoadDataContainer(
-        int containerIndex)
+      protected override void ArchiveImage(int archiveIndex)
       {
-        return UTXOTable.LoadDataContainer(containerIndex);
+        if (archiveIndex % UTXOSTATE_ARCHIVING_INTERVAL != 0)
+        {
+          return;
+        }
+
+        if (Directory.Exists(PathUTXOState))
+        {
+          if (Directory.Exists(PathUTXOStateOld))
+          {
+            Directory.Delete(PathUTXOStateOld, true);
+          }
+          Directory.Move(PathUTXOState, PathUTXOStateOld);
+        }
+
+        Directory.CreateDirectory(PathUTXOState);
+
+        byte[] uTXOState = new byte[40];
+        BitConverter.GetBytes(archiveIndex).CopyTo(uTXOState, 0);
+        BitConverter.GetBytes(UTXOTable.BlockHeight).CopyTo(uTXOState, 4);
+        UTXOTable.Header.HeaderHash.CopyTo(uTXOState, 8);
+
+        using (FileStream stream = new FileStream(
+           Path.Combine(PathUTXOState, "UTXOState"),
+           FileMode.Create,
+           FileAccess.ReadWrite,
+           FileShare.Read))
+        {
+          stream.Write(uTXOState, 0, uTXOState.Length);
+        }
+
+        Parallel.ForEach(UTXOTable.Tables, t =>
+        {
+          t.BackupToDisk(PathUTXOState);
+        });
       }
+
 
       async Task<UTXOChannel> RequestChannel()
       {
-        INetworkChannel channel = await Network.RequestChannel();
-        return new UTXOChannel(channel);
+        return new UTXOChannel(
+          await UTXOTable.Network.RequestChannel());
+      }
+
+      protected override DataContainer CreateContainer(
+        int archiveLoadIndex)
+      {
+        return new BlockBatchContainer(
+          UTXOTable.Headerchain,
+          archiveLoadIndex);
       }
 
       void ReturnChannel(UTXOChannel channel)
       {
-        Network.ReturnChannel(
+        UTXOTable.Network.ReturnChannel(
           channel.NetworkChannel);
       }
 
       void DisposeChannel(UTXOChannel channel)
       {
-        Network.DisposeChannel(channel.NetworkChannel);
+        UTXOTable.Network.DisposeChannel(channel.NetworkChannel);
       }
     }
   }

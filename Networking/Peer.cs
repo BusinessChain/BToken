@@ -8,7 +8,8 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using System.Security.Cryptography;
+
+using BToken.Chaining;
 
 namespace BToken.Networking
 {
@@ -116,12 +117,61 @@ namespace BToken.Networking
             case "feefilter":
               ProcessFeeFilterMessage(message);
               break;
+            case "headers":
+              await ProcessHeadersMessage(
+                new HeadersMessage(message));
+              break;
             default:
               ProcessApplicationMessage(message);
               break;
           }
         }
       }
+      async Task ProcessHeadersMessage(HeadersMessage headersMessage)
+      {
+        Console.WriteLine("header message from channel {0}",
+          GetIdentification());
+
+        if (Network.Headerchain.TryInsertHeaderBytes(
+          headersMessage.Payload))
+        {
+          while (Network.UTXOTable.TryLoadBatch(
+            out DataBatch batch, 1))
+          {
+            try
+            {
+              await DownloadBlocks(batch);
+            }
+            catch
+            {
+              Console.WriteLine("could not download batch {0} from {1}",
+                batch.Index,
+                GetIdentification());
+
+              Network.UTXOTable.UnLoadBatch(batch);
+              break;
+            }
+
+
+            if (Network.UTXOTable.TryInsertBatch(batch))
+            {
+              Console.WriteLine("inserted batch {0} in UTXO table",
+                batch.Index);
+            }
+            else
+            {
+              Console.WriteLine("could not insert batch {0} in UTXO table",
+                batch.Index);
+            }
+          }          
+        }
+        else
+        {
+          Console.WriteLine("Failed to insert header message from channel {0}",
+            GetIdentification());
+        }
+      }
+
       void ProcessApplicationMessage(NetworkMessage message)
       {
         ApplicationMessages.Post(message);
@@ -290,7 +340,11 @@ namespace BToken.Networking
         return await ApplicationMessages.ReceiveAsync(cancellationToken);
       }
 
-      public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
+      public async Task PingAsync()
+      {
+        await NetworkMessageStreamer
+          .WriteAsync(new PingMessage(Nonce));
+      }
 
       public async Task<byte[]> GetHeaders(
         IEnumerable<byte[]> locatorHashes,
@@ -311,6 +365,44 @@ namespace BToken.Networking
           }
         }
       }
+
+
+
+      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
+
+      public async Task DownloadBlocks(DataBatch batch)
+      {
+        IEnumerable<Inventory> inventories = batch.ItemBatchContainers
+          .Where(b => b.Buffer == null)
+          .Select(b => new Inventory(
+            InventoryType.MSG_BLOCK,
+            ((UTXOTable.BlockBatchContainer)b).Header.HeaderHash));
+
+        await SendMessage(
+          new GetDataMessage(inventories));
+
+        var cancellationDownloadBlocks =
+          new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
+        foreach (DataContainer blockBatchContainer 
+          in batch.ItemBatchContainers)
+        {
+          while (blockBatchContainer.Buffer == null)
+          {
+            NetworkMessage message = await NetworkMessageStreamer
+              .ReadAsync(default).ConfigureAwait(false);
+                        
+            if (message.Command != "block")
+            {
+              continue;
+            }
+
+            blockBatchContainer.Buffer = message.Payload;
+            blockBatchContainer.TryParse();
+          }
+        }
+      }
+
 
       public string GetIdentification()
       {

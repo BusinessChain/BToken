@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace BToken.Chaining
 {
-  public partial class Headerchain
+  partial class Headerchain
   {
     class Chain
     {

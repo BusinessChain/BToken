@@ -1,40 +1,50 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  public abstract class DataBatchContainer
+  public abstract class DataContainer
   {
     public bool IsValid = true;
     public int Index;
     public DataBatch Batch;
     public int CountItems;
     public byte[] Buffer;
-
+    public bool IsFinalContainer;
+    
     public Stopwatch StopwatchParse = new Stopwatch();
 
 
-    protected DataBatchContainer(int index)
+
+    protected DataContainer()
+    { }
+
+    protected DataContainer(int index)
     {
       Index = index;
     }
 
-    protected DataBatchContainer(int index, byte[] buffer)
+    protected DataContainer(byte[] buffer)
+    {
+      Buffer = buffer;
+    }
+
+    protected DataContainer(int index, byte[] buffer)
     {
       Index = index;
       Buffer = buffer;
     }
 
-    protected DataBatchContainer(
-      DataBatch batch)
+    protected DataContainer(DataBatch batch)
     {
       Batch = batch;
     }
 
+    
 
-    public abstract void Parse();
+    public abstract void TryParse();
   }
 }

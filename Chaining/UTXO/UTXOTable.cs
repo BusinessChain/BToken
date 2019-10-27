@@ -12,10 +12,8 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class UTXOTable
+  public partial class UTXOTable
   {
-    Headerchain Headerchain;
-
     byte[] GenesisBlockBytes;
 
     const int COUNT_TXS_IN_BATCH_FILE = 50000;
@@ -32,6 +30,7 @@ namespace BToken.Chaining
       COUNT_BATCHINDEX_BITS +
       COUNT_COLLISION_BITS_PER_TABLE * 3;
 
+    Headerchain Headerchain;
     UTXOIndexCompressed[] Tables;
     UTXOIndexUInt32Compressed TableUInt32 = new UTXOIndexUInt32Compressed();
     UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
@@ -42,21 +41,21 @@ namespace BToken.Chaining
     static string PathUTXOStateOld = PathUTXOState + "_Old";
 
     public int BlockHeight;
-    int ArchiveIndex;
     Header Header;
 
     long UTCTimeStartMerger;
     Stopwatch StopwatchMerging = new Stopwatch();
 
     UTXOSynchronizer Synchronizer;
+    public Network Network;
 
     string ArchivePath = "J:\\BlockArchivePartitioned";
 
 
+
     public UTXOTable(
       byte[] genesisBlockBytes,
-      Headerchain headerchain,
-      Network network)
+      Headerchain headerchain)
     {
       Headerchain = headerchain;
 
@@ -67,9 +66,7 @@ namespace BToken.Chaining
 
       GenesisBlockBytes = genesisBlockBytes;
 
-      Synchronizer = new UTXOSynchronizer(
-        network,
-        this);
+      Synchronizer = new UTXOSynchronizer(this);
 
       Directory.CreateDirectory(ArchivePath);
     }
@@ -107,7 +104,8 @@ namespace BToken.Chaining
     }
 
     void InsertUTXOsUInt32(
-      KeyValuePair<byte[], uint>[] uTXOsUInt32)
+      KeyValuePair<byte[], uint>[] uTXOsUInt32,
+      int archiveIndex)
     {
       int i = 0;
 
@@ -115,7 +113,7 @@ namespace BToken.Chaining
       {
         TableUInt32.UTXO =
           uTXOsUInt32[i].Value |
-          ((uint)ArchiveIndex & UTXOIndexUInt32.MaskBatchIndex);
+          ((uint)archiveIndex & UTXOIndexUInt32.MaskBatchIndex);
 
         InsertUTXO(
           uTXOsUInt32[i].Key,
@@ -126,7 +124,8 @@ namespace BToken.Chaining
     }
     
     void InsertUTXOsULong64(
-      KeyValuePair<byte[], ulong>[] uTXOsULong64)
+      KeyValuePair<byte[], ulong>[] uTXOsULong64,
+      int archiveIndex)
     {
       int i = 0;
 
@@ -134,7 +133,7 @@ namespace BToken.Chaining
       {
         TableULong64.UTXO =
           uTXOsULong64[i].Value |
-          ((ulong)ArchiveIndex & UTXOIndexULong64.MaskBatchIndex);
+          ((ulong)archiveIndex & UTXOIndexULong64.MaskBatchIndex);
 
         InsertUTXO(
           uTXOsULong64[i].Key,
@@ -145,7 +144,8 @@ namespace BToken.Chaining
     }
     
     void InsertUTXOsUInt32Array(
-      KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array)
+      KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array,
+      int archiveIndex)
     {
       int i = 0;
 
@@ -153,7 +153,7 @@ namespace BToken.Chaining
       {
         TableUInt32Array.UTXO = uTXOsUInt32Array[i].Value;
         TableUInt32Array.UTXO[0] |= 
-          (uint)ArchiveIndex & UTXOIndexUInt32Array.MaskBatchIndex;
+          (uint)archiveIndex & UTXOIndexUInt32Array.MaskBatchIndex;
 
         InsertUTXO(
           uTXOsUInt32Array[i].Key,
@@ -215,13 +215,12 @@ namespace BToken.Chaining
 
 
        
-    void LoadImage()
+    void LoadImage(out int archiveIndex)
     {
-      if (TryLoadUTXOState())
+      if (TryLoadUTXOState(out archiveIndex))
       {
-        Console.WriteLine("Load UTXO Image from {0}, ArchiveIndex {1}", 
-          PathUTXOState,
-          ArchiveIndex);
+        Console.WriteLine("Load UTXO Image from {0}", 
+          PathUTXOState);
         return;
       }
 
@@ -234,11 +233,10 @@ namespace BToken.Chaining
       {
         Directory.Move(PathUTXOStateOld, PathUTXOState);
 
-        if (TryLoadUTXOState())
+        if (TryLoadUTXOState(out archiveIndex))
         {
-          Console.WriteLine("Load UTXO Image from {0}, ArchiveIndex {1}",
-            PathUTXOStateOld,
-            ArchiveIndex);
+          Console.WriteLine("Load UTXO Image from {0}",
+            PathUTXOStateOld);
           return;
         }
 
@@ -246,30 +244,29 @@ namespace BToken.Chaining
       }
 
       Console.WriteLine("Failed to load UTXO Image from either {0} or {1}" +
-        "\n build from genesis, ArchiveIndex {2}",
+        "\n build from genesis",
         PathUTXOState,
-        PathUTXOStateOld,
-        ArchiveIndex);
+        PathUTXOStateOld);
 
       BlockBatchContainer genesisBlockContainer = new BlockBatchContainer(
-        new BlockParser(Headerchain),
+        Headerchain,
         0,
         GenesisBlockBytes);
 
-      genesisBlockContainer.Parse();
+      genesisBlockContainer.TryParse();
       
       InsertContainer(genesisBlockContainer);
     }
 
 
 
-    bool TryLoadUTXOState()
+    bool TryLoadUTXOState(out int archiveIndex)
     {
       try
       {
         byte[] uTXOState = File.ReadAllBytes(Path.Combine(PathUTXOState, "UTXOState"));
 
-        ArchiveIndex = BitConverter.ToInt32(uTXOState, 0);
+        archiveIndex = BitConverter.ToInt32(uTXOState, 0);
         BlockHeight = BitConverter.ToInt32(uTXOState, 4);
 
         byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
@@ -285,7 +282,7 @@ namespace BToken.Chaining
       }
       catch
       {
-        ArchiveIndex = 0;
+        archiveIndex = 0;
         BlockHeight = -1;
         Header = null;
 
@@ -303,18 +300,24 @@ namespace BToken.Chaining
     {
       StopwatchMerging.Restart();
 
-      InsertUTXOsUInt32(container.UTXOsUInt32);
-      InsertUTXOsULong64(container.UTXOsULong64);
-      InsertUTXOsUInt32Array(container.UTXOsUInt32Array);
+      InsertUTXOsUInt32(
+        container.UTXOsUInt32,
+        container.Index);
+
+      InsertUTXOsULong64(
+        container.UTXOsULong64,
+        container.Index);
+
+      InsertUTXOsUInt32Array(
+        container.UTXOsUInt32Array,
+        container.Index);
 
       SpendUTXOs(container.Inputs);
 
       StopwatchMerging.Stop();
 
+      Header = container.Header;
       BlockHeight += container.BlockCount;
-
-      Containers.Add(container);
-      CountItems += container.CountItems;
     }
 
     
@@ -322,9 +325,9 @@ namespace BToken.Chaining
     const int SIZE_OUTPUT_BATCH = 50000;
     int CountItems;
 
-    List<DataBatchContainer> Containers = new List<DataBatchContainer>();
+    List<DataContainer> Containers = new List<DataContainer>();
 
-    bool TryInsertBatch(DataBatch batch)
+    public bool TryInsertBatch(DataBatch batch)
     {
       try
       {
@@ -332,31 +335,9 @@ namespace BToken.Chaining
           in batch.ItemBatchContainers)
         {
           InsertContainer(container);
-          
-          bool isFinalContainer = batch.IsFinalBatch && 
-            (container == batch.ItemBatchContainers.Last());
-
-          if (CountItems > SIZE_OUTPUT_BATCH || isFinalContainer)
-          {
-            ArchiveContainers(Containers);
-
-            if (CountItems >= SIZE_OUTPUT_BATCH)
-            {
-              Containers = new List<DataBatchContainer>();
-              CountItems = 0;
-
-              ArchiveIndex += 1;
-
-              ArchiveState();
-            }
-          }
+          ArchiveContainer(container);
         }
         
-        LogInsertion(
-          batch.ItemBatchContainers.Sum(
-            c => c.StopwatchParse.ElapsedTicks),
-          batch.Index);
-
         return true;
       }
       catch (ChainException ex)
@@ -371,9 +352,9 @@ namespace BToken.Chaining
     }
 
 
-    void ArchiveState()
+    void ArchiveImage(int archiveIndex)
     {
-      if (ArchiveIndex % UTXOSTATE_ARCHIVING_INTERVAL != 0)
+      if (archiveIndex % UTXOSTATE_ARCHIVING_INTERVAL != 0)
       {
         return;
       }
@@ -390,7 +371,7 @@ namespace BToken.Chaining
       Directory.CreateDirectory(PathUTXOState);
 
       byte[] uTXOState = new byte[40];
-      BitConverter.GetBytes(ArchiveIndex).CopyTo(uTXOState, 0);
+      BitConverter.GetBytes(archiveIndex).CopyTo(uTXOState, 0);
       BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
       Header.HeaderHash.CopyTo(uTXOState, 8);
 
@@ -409,61 +390,12 @@ namespace BToken.Chaining
       });
     }
 
-    async Task ArchiveContainers(List<DataBatchContainer> containers)
-    {
-      string filePath =
-        Path.Combine(ArchivePath, "p" + ArchiveIndex);
-
-      try
-      {
-        using (FileStream file = new FileStream(
-          filePath,
-          FileMode.Create,
-          FileAccess.Write,
-          FileShare.None,
-          bufferSize: 1048576,
-          useAsync: true))
-        {
-          foreach (BlockBatchContainer container in containers)
-          {
-            await file.WriteAsync(
-              container.Buffer,
-              0,
-              container.Buffer.Length).ConfigureAwait(false);
-          }
-        }
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine(ex.Message);
-      }
-    }
-
-
-
-    BlockBatchContainer LoadDataContainer(int containerIndex)
-    {
-      var container = new BlockBatchContainer(
-        new BlockParser(Headerchain),
-        containerIndex);
-
-      try
-      {
-        container.Buffer = File.ReadAllBytes(
-          Path.Combine(ArchivePath, "p" + containerIndex));
-      }
-      catch (IOException)
-      {
-        container.IsValid = false;
-      }
-
-      return container;
-    }
-
+    
 
 
     readonly object LOCK_HeaderLoad = new object();
     int IndexLoad;
+    Header HeaderLoad;
 
     public bool TryLoadBatch(
       out DataBatch uTXOBatch,
@@ -471,7 +403,7 @@ namespace BToken.Chaining
     {
       lock (LOCK_HeaderLoad)
       {
-        if (Header.HeadersNext.Count == 0)
+        if (HeaderLoad.HeadersNext.Count == 0)
         {
           uTXOBatch = null;
           return false;
@@ -481,18 +413,19 @@ namespace BToken.Chaining
 
         for (int i = 0; i < countHeaders; i += 1)
         {
-          Header = Header.HeadersNext[0];
+          HeaderLoad = HeaderLoad.HeadersNext[0];
 
           BlockBatchContainer blockContainer =
             new BlockBatchContainer(
-              new BlockParser(Headerchain),
-              Header);
+              Headerchain,
+              HeaderLoad);
 
           uTXOBatch.ItemBatchContainers.Add(blockContainer);
 
-          if (Header.HeadersNext.Count == 0)
+          if (HeaderLoad.HeadersNext.Count == 0)
           {
             uTXOBatch.IsFinalBatch = true;
+            blockContainer.IsFinalContainer = true;
             break;
           }
         }
@@ -501,12 +434,45 @@ namespace BToken.Chaining
       }
     }
 
-
-    public void SyncWithHeaderchain(INetworkChannel channel)
+    public void UnLoadBatch(DataBatch uTXOBatch)
     {
-      UTXOChannel uTXOChannel = new UTXOChannel(channel);
-      Synchronizer.Run(uTXOChannel);
+
     }
+
+
+    //public bool TryInsertHeaderBytes(
+    //  byte[] buffer,
+    //  out DataBatch batch)
+    //{
+    //  var headerContainer =
+    //    new Headerchain.HeaderBatchContainer(
+    //      ArchiveIndex,
+    //      buffer);
+
+    //  headerContainer.Parse();
+
+    //  if (
+    //    !headerContainer.IsValid ||
+    //    !Headerchain.TryInsertContainer(headerContainer))
+    //  {
+    //    countHeaders = 0;
+    //    return false;
+    //  }
+
+    //  ArchiveContainers(Containers);
+
+    //  if (CountItems >= SIZE_OUTPUT_BATCH)
+    //  {
+    //    Containers = new List<DataBatchContainer>();
+    //    CountItems = 0;
+
+    //    ArchiveIndex += 1;
+    //  }
+
+    //  countHeaders = headerContainer.CountItems;
+    //  return true;
+    //}
+
 
     void LogInsertion(long elapsedTicksParsing, int index)
     {

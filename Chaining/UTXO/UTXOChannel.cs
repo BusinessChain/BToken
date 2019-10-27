@@ -15,23 +15,27 @@ namespace BToken.Chaining
   {
     class UTXOChannel
     {
-      public INetworkChannel NetworkChannel;
+      public Network.INetworkChannel NetworkChannel;
       public DataBatch Batch;
 
 
 
-      public UTXOChannel(INetworkChannel networkChannel)
+      public UTXOChannel(Network.INetworkChannel networkChannel)
       {
         NetworkChannel = networkChannel;
       }
 
+      
 
 
       public async Task RequestBlocks(IEnumerable<byte[]> headerHashes)
       {
         await NetworkChannel.SendMessage(
           new GetDataMessage(
-            headerHashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h))));
+            headerHashes
+            .Select(h => new Inventory(
+              InventoryType.MSG_BLOCK, 
+              h))));
       }
 
 

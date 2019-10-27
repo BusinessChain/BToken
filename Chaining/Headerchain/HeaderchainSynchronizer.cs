@@ -2,11 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
+using System.IO;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-
-using BToken.Networking;
 
 namespace BToken.Chaining
 {
@@ -15,7 +13,6 @@ namespace BToken.Chaining
     partial class HeaderchainSynchronizer : DataSynchronizer
     {
       Headerchain Headerchain;
-      Network Network;
 
       readonly object LOCK_IsSyncing = new object();
       bool IsSyncing;
@@ -26,22 +23,29 @@ namespace BToken.Chaining
 
       const int COUNT_HEADER_SESSIONS = 4;
 
+      
 
-
-      public HeaderchainSynchronizer(
-        Network network,
-        Headerchain headerchain)
-        : base(COUNT_HEADER_SESSIONS)
+      public HeaderchainSynchronizer(Headerchain headerchain)
       {
-        Network = network;
+        ArchiveDirectory = Directory.CreateDirectory(
+          Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            "HeaderArchive"));
+
         Headerchain = headerchain;
       }
 
-      
 
-      protected override Task CreateSyncSessionTask()
+      protected override Task[] StartSyncSessionTasks()
       {
-        return new SyncHeaderchainSession(this).Start();
+        Task[] syncTasks = new Task[COUNT_HEADER_SESSIONS];
+
+        for (int i = 0; i < COUNT_HEADER_SESSIONS; i += 1)
+        {
+          syncTasks[i] = new SyncHeaderchainSession(this).Start();
+        }
+
+        return syncTasks;
       }
 
 
@@ -98,39 +102,34 @@ namespace BToken.Chaining
         Headerchain.LoadImage(out archiveIndexNext);
       }
 
-      protected override DataBatchContainer LoadDataContainer(
-        int containerIndex)
+      protected override DataContainer CreateContainer(int archiveLoadIndex)
       {
-        return Headerchain.LoadDataContainer(containerIndex);
+        return new HeaderBatchContainer(archiveLoadIndex);
+      }
+
+
+      protected override void InsertContainer(
+        DataContainer container)
+      {
+        Headerchain.InsertContainer(
+          (HeaderBatchContainer)container);
       }
 
 
       protected override bool TryInsertContainer(
-        DataBatchContainer container)
+        DataContainer container)
       {
-        if(Headerchain.TryInsertContainer(
-          (HeaderBatchContainer)container))
+        try
         {
-          if (Headerchain.CountItems >= SIZE_OUTPUT_BATCH)
-          {
-            Headerchain.Containers = new List<DataBatchContainer>();
-            Headerchain.CountItems = 0;
-
-            Headerchain.ArchiveIndex += 1;
-          }
+          InsertContainer(container);
 
           return true;
         }
-
-        return false;
-
+        catch(ChainException)
+        {
+          return false;
+        }
       }
-
-      protected override bool TryInsertBatch(DataBatch batch)
-      {
-        return Headerchain.TryInsertBatch(batch);
-      }
-
     }
   }
 }

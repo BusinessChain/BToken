@@ -79,7 +79,7 @@
   <ItemGroup>
     <Compile Include="Chaining\BatchDataPipe\DataSynchroinizer.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
-    <Compile Include="Chaining\BatchDataPipe\DataBatchContainer.cs" />
+    <Compile Include="Chaining\BatchDataPipe\DataContainer.cs" />
     <Compile Include="Chaining\BlockBatchContainer.cs" />
     <Compile Include="Chaining\UTXO\UTXOSynchronizer.cs" />
     <Compile Include="Chaining\Headerchain\HeaderBatchContainer.cs" />

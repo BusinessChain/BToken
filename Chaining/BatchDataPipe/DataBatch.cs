@@ -11,7 +11,7 @@ namespace BToken.Chaining
   {
     public bool IsValid;
     public int Index;
-    public List<DataBatchContainer> ItemBatchContainers;
+    public List<DataContainer> ItemBatchContainers;
     public int CountItems;
     public bool IsFinalBatch;
     
@@ -20,7 +20,7 @@ namespace BToken.Chaining
     public DataBatch(int index)
     {
       Index = index;
-      ItemBatchContainers = new List<DataBatchContainer>();
+      ItemBatchContainers = new List<DataContainer>();
     }
   }
 }

@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
@@ -9,7 +9,7 @@ namespace BToken.Chaining
 {
   partial class Headerchain
   {
-    class HeaderBatchContainer : DataBatchContainer
+    public class HeaderBatchContainer : DataContainer
     {
       public IEnumerable<byte[]> LocatorHashes;
 
@@ -18,17 +18,15 @@ namespace BToken.Chaining
 
 
 
-      public HeaderBatchContainer(
-        int index)
+      public HeaderBatchContainer()
+      { }
+
+      public HeaderBatchContainer(int index)
         : base(index)
       { }
 
-      public HeaderBatchContainer(
-        int index, 
-        byte[] headerBytes)
-        : base(
-            index,
-            headerBytes)
+      public HeaderBatchContainer(byte[] headerBytes)
+        : base(headerBytes)
       { }
 
 
@@ -44,7 +42,7 @@ namespace BToken.Chaining
 
       SHA256 SHA256 = SHA256.Create();
 
-      public override void Parse()
+      public override void TryParse()
       {
         try
         {

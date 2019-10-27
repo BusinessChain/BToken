@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -18,14 +17,15 @@ namespace BToken.Chaining
       {
         HeaderchainSynchronizer Synchronizer;
 
-        public SyncHeaderchainSession(HeaderchainSynchronizer synchronizer)
+        public SyncHeaderchainSession(
+          HeaderchainSynchronizer synchronizer)
         {
           Synchronizer = synchronizer;
         }
 
 
 
-        INetworkChannel Channel;
+        Network.INetworkChannel Channel;
         const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
         DataBatch HeaderBatchOld;
         DataBatch HeaderBatch;
@@ -35,7 +35,7 @@ namespace BToken.Chaining
         {
           while (true)
           {
-            Channel = await Synchronizer.Network.RequestChannel();
+            Channel = await Synchronizer.Headerchain.Network.RequestChannel();
 
             try
             {
@@ -45,7 +45,7 @@ namespace BToken.Chaining
               {
                 if (Synchronizer.IsSyncingCompleted)
                 {
-                  Synchronizer.Network.ReturnChannel(Channel);
+                  Synchronizer.Headerchain.Network.ReturnChannel(Channel);
                   return;
                 }
               }
@@ -60,7 +60,7 @@ namespace BToken.Chaining
                 {
                   if (Synchronizer.IsSyncingCompleted)
                   {
-                    Synchronizer.Network.ReturnChannel(Channel);
+                    Synchronizer.Headerchain.Network.ReturnChannel(Channel);
 
                     return;
                   }
@@ -117,7 +117,7 @@ namespace BToken.Chaining
 
               Synchronizer.SignalStartHeaderSyncSession.SetResult(null);
               
-              Synchronizer.Network.ReturnChannel(Channel);
+              Synchronizer.Headerchain.Network.ReturnChannel(Channel);
 
               return;
             }
@@ -128,7 +128,7 @@ namespace BToken.Chaining
               //  Channel == null ? "'null'" : Channel.GetIdentification(),
               //  ex.Message);
 
-              Synchronizer.Network.DisposeChannel(Channel);
+              Synchronizer.Headerchain.Network.DisposeChannel(Channel);
 
               lock (Synchronizer.LOCK_IsSyncing)
               {
@@ -188,7 +188,7 @@ namespace BToken.Chaining
               headerBatchContainer.LocatorHashes,
               cancellation.Token);
 
-            headerBatchContainer.Parse();
+            headerBatchContainer.TryParse();
 
             HeaderBatch.CountItems += headerBatchContainer.CountItems;
           }

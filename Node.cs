@@ -11,7 +11,7 @@ namespace BToken
   partial class Node
   {
     Network Network;
-    UTXOTable UTXO;
+    UTXOTable UTXOTable;
     Headerchain Headerchain;
 
     Wallet Wallet;
@@ -30,13 +30,18 @@ namespace BToken
 
       Headerchain = new Headerchain(
         GenesisBlock.Header,
-        Checkpoints,
-        Network);
+        Checkpoints);
 
-      UTXO = new UTXOTable(
+      UTXOTable = new UTXOTable(
         GenesisBlock.BlockBytes,
-        Headerchain,
-        Network);
+        Headerchain);
+
+      Network.Headerchain = Headerchain;
+      Headerchain.Network = Network;
+
+      Network.UTXOTable = UTXOTable;
+      UTXOTable.Network = Network;
+
 
       Wallet = new Wallet();
     }
@@ -49,7 +54,7 @@ namespace BToken
 
       await Headerchain.Start();
 
-      await UTXO.Start();
+      await UTXOTable.Start();
 
       Wallet.GeneratePublicKey();
     }
@@ -61,7 +66,7 @@ namespace BToken
     {
       while (true)
       {
-        INetworkChannel channel =
+        Network.INetworkChannel channel =
           await Network.AcceptChannelInboundRequestAsync();
 
         List<NetworkMessage> messages = channel.GetApplicationMessages();
@@ -92,24 +97,24 @@ namespace BToken
                 break;
 
               case "headers":
-                var headersMessage = new HeadersMessage(message);
+                //var headersMessage = new HeadersMessage(message);
 
-                Console.WriteLine("header message from channel {0}",
-                  channel.GetIdentification());
+                //Console.WriteLine("header message from channel {0}",
+                //  channel.GetIdentification());
                 
-                if (Headerchain.TryInsertHeaderBytes(
-                  headersMessage.Payload,
-                  out List<Header> headers))
-                {
-                  UTXO.SyncWithHeaderchain(
-                    channel, 
-                    headers);
-                }
-                else
-                {
-                  Console.WriteLine("Failed to insert header message from channel {0}",
-                    channel.GetIdentification());
-                }
+                //if (Headerchain.TryInsertHeaderBytes(
+                //  headersMessage.Payload,
+                //  out List<Header> headers))
+                //{
+                //  UTXOTable.SyncWithHeaderchain(
+                //    channel, 
+                //    headers);
+                //}
+                //else
+                //{
+                //  Console.WriteLine("Failed to insert header message from channel {0}",
+                //    channel.GetIdentification());
+                //}
 
                 break;
 

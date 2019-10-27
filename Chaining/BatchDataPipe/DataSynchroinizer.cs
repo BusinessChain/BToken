@@ -9,52 +9,32 @@ namespace BToken.Chaining
 {
   abstract class DataSynchronizer
   {
-    int CountSessions;
-
-    public DataSynchronizer(int countSessions)
-    {
-      CountSessions = countSessions;
-    }
+    int ArchiveIndexLoad;
+    protected DirectoryInfo ArchiveDirectory;
 
 
-
-    int ArchiveLoadIndex;
 
     public async Task Start()
     {
-      LoadImage(out ArchiveLoadIndex);
+      LoadImage(out int archiveIndex);
+
+      ArchiveIndexLoad = archiveIndex + 1;
 
       await SynchronizeWithArchive();
       
       StartInputBatchBuffer();
 
-      await SynchronizeWithNetwork();
+      await Task.WhenAll(
+        StartSyncSessionTasks());
     }
-
-
 
     protected abstract void LoadImage(out int archiveIndexNext);
-    
 
-
-    async Task SynchronizeWithNetwork()
-    {
-      Task[] syncTasks = new Task[CountSessions];
-
-      for (int i = 0; i < CountSessions; i += 1)
-      {
-        syncTasks[i] = CreateSyncSessionTask();
-      }
-
-      await Task.WhenAll(syncTasks);
-    }
-
-    protected abstract Task CreateSyncSessionTask();
+    protected abstract Task[] StartSyncSessionTasks();
 
 
 
-    int ContainerIndexOutputQueue;
-    bool InvalidContainerEncountered;
+    int ArchiveIndexStore;
     const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
 
@@ -62,7 +42,7 @@ namespace BToken.Chaining
     {
       Console.WriteLine("synchronize {0} with archive", GetType().Name);
 
-      ContainerIndexOutputQueue = ArchiveLoadIndex;
+      ArchiveIndexStore = ArchiveIndexLoad;
 
       Parallel.For(
         0,
@@ -74,54 +54,65 @@ namespace BToken.Chaining
 
       
 
-    readonly object LOCK_BatchIndexLoad = new object();
+    readonly object LOCK_ArchiveLoadIndex = new object();
     readonly object LOCK_OutputQueue = new object();
-    readonly object LOCK_OccurredExceptionInAnyLoader = new object();
-
+    
     async Task StartArchiveLoaderAsync()
     {
-      DataBatchContainer container;
-      int containerIndex;
+      DataContainer container;
+      int archiveLoadIndex;
 
       do
       {
-        lock (LOCK_BatchIndexLoad)
+        lock (LOCK_ArchiveLoadIndex)
         {
-          containerIndex = ArchiveLoadIndex;
-          ArchiveLoadIndex += 1;
+          archiveLoadIndex = ArchiveIndexLoad;
+          ArchiveIndexLoad += 1;
         }
 
-        container = LoadDataContainer(containerIndex);
+        container = CreateContainer(archiveLoadIndex);
 
-        if(container.IsValid)
+        try
         {
-          container.Parse();
+          container.Buffer = File.ReadAllBytes(
+            Path.Combine(
+              ArchiveDirectory.FullName,
+              container.Index.ToString()));
+
+          container.TryParse();
+        }
+        catch (IOException)
+        {
+          container.IsValid = false;
         }
 
-      } while (await SendToOutputQueue(container));
+      } while (await SendContainerToOutputQueueAndContinue(container));
     }
+    
+    protected abstract DataContainer CreateContainer(
+      int archiveLoadIndex);
 
-    protected abstract DataBatchContainer LoadDataContainer(
-      int containerIndex);
 
 
+    List<DataContainer> Containers = new List<DataContainer>();
+    int CountItems;
+    Dictionary<int, DataContainer> OutputQueue = 
+      new Dictionary<int, DataContainer>();
+    bool IsArchiveLoadCompleted;
 
-    Dictionary<int, DataBatchContainer> OutputQueue = 
-      new Dictionary<int, DataBatchContainer>();
-
-    async Task<bool> SendToOutputQueue(
-      DataBatchContainer container)
+    async Task<bool> SendContainerToOutputQueueAndContinue(
+      DataContainer container)
     {
       while (true)
       {
+        if (IsArchiveLoadCompleted)
+        {
+          return false;
+        }
+
         lock (LOCK_OutputQueue)
         {
-          if (InvalidContainerEncountered)
-          {
-            return false;
-          }
-
-          if (container.Index == ContainerIndexOutputQueue)
+          if (container.Index == ArchiveIndexStore)
           {
             break;
           }
@@ -136,23 +127,29 @@ namespace BToken.Chaining
         await Task.Delay(2000).ConfigureAwait(false);
       }
 
-      while (true)
+      while (
+        container.IsValid &&
+        TryInsertContainer(container))
       {
-        if (
-          !container.IsValid ||
-          !TryInsertContainer(container))
-        { 
-          InvalidContainerEncountered = true;
-          return false;
+        if (CountItems < SIZE_OUTPUT_BATCH)
+        {
+          Containers.Add(container);
+          CountItems = container.CountItems;
+
+          break;
         }
+
+        ArchiveImage(ArchiveIndexStore);
 
         lock (LOCK_OutputQueue)
         {
-          ContainerIndexOutputQueue += 1;
-          
-          if (OutputQueue.TryGetValue(ContainerIndexOutputQueue, out container))
+          ArchiveIndexStore += 1;
+
+          if (OutputQueue.TryGetValue(
+            ArchiveIndexStore, out container))
           {
-            OutputQueue.Remove(ContainerIndexOutputQueue);
+            OutputQueue.Remove(ArchiveIndexStore);
+            continue;
           }
           else
           {
@@ -160,10 +157,16 @@ namespace BToken.Chaining
           }
         }
       }
+
+      IsArchiveLoadCompleted = true;
+      return false;
     }
 
+
+
     protected abstract bool TryInsertContainer(
-      DataBatchContainer container);
+      DataContainer container);
+
 
 
     const int SIZE_OUTPUT_BATCH = 50000;
@@ -191,7 +194,14 @@ namespace BToken.Chaining
 
         do
         {
-          TryInsertBatch(Batch);
+          foreach (DataContainer container in 
+            Batch.ItemBatchContainers)
+          {
+            container.Index = ArchiveIndexStore;
+
+            TryInsertContainer(container);
+            ArchiveContainer(container);
+          }
 
           BatchIndex += 1;
 
@@ -209,8 +219,83 @@ namespace BToken.Chaining
       }
     }
 
+    protected abstract void InsertContainer(DataContainer container);
 
-    protected abstract bool TryInsertBatch(DataBatch batch);
+
+    void ArchiveContainer(DataContainer container)
+    {
+      Containers.Add(container);
+      CountItems += container.CountItems;
+      
+
+      if (
+        CountItems >= SIZE_OUTPUT_BATCH ||
+        container.IsFinalContainer)
+      {
+        ArchiveContainers(
+          ArchiveDirectory.FullName,
+          ArchiveIndexStore);
+
+        if (CountItems >= SIZE_OUTPUT_BATCH)
+        {
+          Containers = new List<DataContainer>();
+          CountItems = 0;
+
+          ArchiveImage(ArchiveIndexStore);
+
+          ArchiveIndexStore += 1;
+        }
+      }
+    }
+
+
+    protected abstract void ArchiveImage(int archiveIndexStore);
+
+
+    async Task ArchiveContainers(
+      string directoryPath,
+      int archiveIndex)
+    {
+      string filePath = Path.Combine(
+        directoryPath,
+        archiveIndex.ToString());
+
+      while(true)
+      {
+        try
+        {
+          using (FileStream file = new FileStream(
+            filePath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 65536,
+            useAsync: true))
+          {
+            foreach (DataContainer container in Containers)
+            {
+              await file.WriteAsync(
+                container.Buffer,
+                0,
+                container.Buffer.Length).ConfigureAwait(false);
+            }
+          }
+
+          return;
+        }
+        catch (IOException ex)
+        {
+          Console.WriteLine(ex.GetType().Name + ": " + ex.Message);
+          await Task.Delay(2000);
+          continue;
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine(ex.GetType().Name + ": " + ex.Message);
+          return;
+        }
+      }
+    }
 
 
     void ReportInvalidBatch(DataBatch batch)

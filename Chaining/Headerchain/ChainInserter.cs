@@ -80,7 +80,7 @@ namespace BToken.Chaining
         }
       }
 
-      public Chain InsertChain(Header headerRoot)
+      public Chain InsertHeaderRoot(Header headerRoot)
       {
         FindPreviousHeader(headerRoot);
 

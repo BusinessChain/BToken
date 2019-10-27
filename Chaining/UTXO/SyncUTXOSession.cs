@@ -112,11 +112,11 @@ namespace BToken.Chaining
             }
           }
 
-          var cancellationDownloadBlocks =
-            new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-
           await Channel.RequestBlocks(hashesRequested);
 
+          var cancellationDownloadBlocks =
+            new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+          
           foreach (BlockBatchContainer blockBatchContainer in
             UTXOBatch.ItemBatchContainers)
           {
@@ -129,7 +129,7 @@ namespace BToken.Chaining
               .ReceiveBlock(cancellationDownloadBlocks.Token)
               .ConfigureAwait(false);
 
-            blockBatchContainer.Parse();
+            blockBatchContainer.TryParse();
             UTXOBatch.CountItems += blockBatchContainer.CountItems;
           }
 
