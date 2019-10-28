@@ -49,8 +49,6 @@ namespace BToken.Chaining
     UTXOSynchronizer Synchronizer;
     public Network Network;
 
-    string ArchivePath = "J:\\BlockArchivePartitioned";
-
 
 
     public UTXOTable(
@@ -67,8 +65,6 @@ namespace BToken.Chaining
       GenesisBlockBytes = genesisBlockBytes;
 
       Synchronizer = new UTXOSynchronizer(this);
-
-      Directory.CreateDirectory(ArchivePath);
     }
 
 
@@ -350,47 +346,7 @@ namespace BToken.Chaining
         return false;
       }
     }
-
-
-    void ArchiveImage(int archiveIndex)
-    {
-      if (archiveIndex % UTXOSTATE_ARCHIVING_INTERVAL != 0)
-      {
-        return;
-      }
-
-      if (Directory.Exists(PathUTXOState))
-      {
-        if (Directory.Exists(PathUTXOStateOld))
-        {
-          Directory.Delete(PathUTXOStateOld, true);
-        }
-        Directory.Move(PathUTXOState, PathUTXOStateOld);
-      }
-
-      Directory.CreateDirectory(PathUTXOState);
-
-      byte[] uTXOState = new byte[40];
-      BitConverter.GetBytes(archiveIndex).CopyTo(uTXOState, 0);
-      BitConverter.GetBytes(BlockHeight).CopyTo(uTXOState, 4);
-      Header.HeaderHash.CopyTo(uTXOState, 8);
-
-      using (FileStream stream = new FileStream(
-         Path.Combine(PathUTXOState, "UTXOState"),
-         FileMode.Create,
-         FileAccess.ReadWrite,
-         FileShare.Read))
-      {
-        stream.Write(uTXOState, 0, uTXOState.Length);
-      }
-
-      Parallel.ForEach(Tables, t =>
-      {
-        t.BackupToDisk(PathUTXOState);
-      });
-    }
-
-    
+           
 
 
     readonly object LOCK_HeaderLoad = new object();

@@ -132,8 +132,12 @@ namespace BToken.Networking
         Console.WriteLine("header message from channel {0}",
           GetIdentification());
 
+        // Statt headerchain Blockchain. Dort wird falls die Headerchein noch 
+        // am syncen ist nicht gemachts, bzw. der Header eingefügt, dann falls
+        // der UTXO noch am syncen ist nichts gemacht, bzw. der Block angefragt.
         if (Network.Headerchain.TryInsertHeaderBytes(
-          headersMessage.Payload))
+          headersMessage.Payload,
+          this))
         {
           while (Network.UTXOTable.TryLoadBatch(
             out DataBatch batch, 1))

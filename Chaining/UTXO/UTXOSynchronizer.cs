@@ -16,6 +16,7 @@ namespace BToken.Chaining
     partial class UTXOSynchronizer : DataSynchronizer
     {
       UTXOTable UTXOTable;
+      string ArchivePath = "J:\\BlockArchivePartitioned";
 
       const int COUNT_UTXO_SESSIONS = 4;
 
@@ -24,6 +25,8 @@ namespace BToken.Chaining
       public UTXOSynchronizer(UTXOTable uTXOTable)
       {
         UTXOTable = uTXOTable;
+
+        ArchiveDirectory = Directory.CreateDirectory(ArchivePath);
       }
 
       
@@ -31,7 +34,6 @@ namespace BToken.Chaining
       protected override Task[] StartSyncSessionTasks()
       {
         UTXOTable.HeaderLoad = UTXOTable.Header;
-
 
         Task[] syncTasks = new Task[COUNT_UTXO_SESSIONS];
 
@@ -68,12 +70,7 @@ namespace BToken.Chaining
         UTXOTable.LoadImage(out archiveIndex);
       }
 
-
-      protected override bool TryInsertBatch(DataBatch batch)
-      {
-        return UTXOTable.TryInsertBatch(batch);
-      }
-
+      
 
       protected override bool TryInsertContainer(
         DataContainer container)
@@ -105,8 +102,6 @@ namespace BToken.Chaining
           return false;
         }
         
-        UTXOTable.ArchiveImage(container.Index);
-
         UTXOTable.LogInsertion(
           blockContainer.StopwatchParse.ElapsedTicks,
           container.Index);
@@ -160,11 +155,11 @@ namespace BToken.Chaining
       }
 
       protected override DataContainer CreateContainer(
-        int archiveLoadIndex)
+        int index)
       {
         return new BlockBatchContainer(
           UTXOTable.Headerchain,
-          archiveLoadIndex);
+          index);
       }
 
       void ReturnChannel(UTXOChannel channel)

@@ -104,15 +104,7 @@ namespace BToken.Chaining
     }
 
 
-
-    void LoadImage(out int batchIndexMergedLast)
-    {
-      batchIndexMergedLast = 0;
-      return;
-    }
-
-
-    
+             
     public int GetHeight()
     {
       return MainChain.Height;

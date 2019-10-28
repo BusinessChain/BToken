@@ -99,34 +99,37 @@ namespace BToken.Chaining
 
       protected override void LoadImage(out int archiveIndexNext)
       {
-        Headerchain.LoadImage(out archiveIndexNext);
+        archiveIndexNext = 0;
       }
 
-      protected override DataContainer CreateContainer(int archiveLoadIndex)
+      protected override void ArchiveImage(int archiveIndex)
+      { }
+
+      protected override DataContainer CreateContainer(
+        int index)
       {
-        return new HeaderBatchContainer(archiveLoadIndex);
+        return new HeaderBatchContainer(index);
       }
 
-
-      protected override void InsertContainer(
-        DataContainer container)
-      {
-        Headerchain.InsertContainer(
-          (HeaderBatchContainer)container);
-      }
-
+      
 
       protected override bool TryInsertContainer(
         DataContainer container)
       {
         try
         {
-          InsertContainer(container);
+          Headerchain.InsertContainer(
+            (HeaderBatchContainer)container);
 
           return true;
         }
-        catch(ChainException)
+        catch(ChainException ex)
         {
+          Console.WriteLine(
+            "Insertion of headerContainer {0} raised ChainException:\n {1}.",
+            container.Index,
+            ex.Message);
+
           return false;
         }
       }

@@ -24,11 +24,11 @@ namespace BToken.Chaining
       
       StartInputBatchBuffer();
 
-      await Task.WhenAll(
-        StartSyncSessionTasks());
+      await Task.WhenAll(StartSyncSessionTasks());
     }
 
-    protected abstract void LoadImage(out int archiveIndexNext);
+    protected abstract void LoadImage(
+      out int archiveIndexNext);
 
     protected abstract Task[] StartSyncSessionTasks();
 
@@ -40,7 +40,8 @@ namespace BToken.Chaining
 
     async Task SynchronizeWithArchive()
     {
-      Console.WriteLine("synchronize {0} with archive", GetType().Name);
+      Console.WriteLine("synchronize {0} with archive", 
+        GetType().Name);
 
       ArchiveIndexStore = ArchiveIndexLoad;
 
@@ -219,7 +220,6 @@ namespace BToken.Chaining
       }
     }
 
-    protected abstract void InsertContainer(DataContainer container);
 
 
     void ArchiveContainer(DataContainer container)
