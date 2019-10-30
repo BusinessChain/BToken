@@ -80,9 +80,9 @@
     <Compile Include="Chaining\BatchDataPipe\DataSynchroinizer.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataContainer.cs" />
-    <Compile Include="Chaining\BlockBatchContainer.cs" />
+    <Compile Include="Chaining\BlockContainer.cs" />
     <Compile Include="Chaining\UTXO\UTXOSynchronizer.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderBatchContainer.cs" />
+    <Compile Include="Chaining\Headerchain\HeaderContainer.cs" />
     <Compile Include="Chaining\Headerchain\SyncHeaderchainSession.cs" />
     <Compile Include="Chaining\UTXO\UTXOChannel.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />

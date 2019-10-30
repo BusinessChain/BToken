@@ -31,15 +31,11 @@ namespace BToken
       Headerchain = new Headerchain(
         GenesisBlock.Header,
         Checkpoints);
+      Headerchain.Network = Network;
 
       UTXOTable = new UTXOTable(
         GenesisBlock.BlockBytes,
         Headerchain);
-
-      Network.Headerchain = Headerchain;
-      Headerchain.Network = Network;
-
-      Network.UTXOTable = UTXOTable;
       UTXOTable.Network = Network;
 
 
@@ -54,13 +50,12 @@ namespace BToken
 
       await Headerchain.Start();
 
-      await UTXOTable.Start();
+      //await UTXOTable.Start();
 
       Wallet.GeneratePublicKey();
     }
 
-
-
+    
     
     async Task StartListener()
     {
@@ -70,7 +65,7 @@ namespace BToken
           await Network.AcceptChannelInboundRequestAsync();
 
         List<NetworkMessage> messages = channel.GetApplicationMessages();
-        
+
         try
         {
           foreach (NetworkMessage message in messages)
@@ -78,15 +73,17 @@ namespace BToken
             switch (message.Command)
             {
               case "getheaders":
-                //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-                //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
-                //await channel.SendMessageAsync(new HeadersMessage(headers));
+                Console.WriteLine("getHeaders message from {0}",
+                  channel.GetIdentification());
+                  //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                  //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
+                  //await channel.SendMessageAsync(new HeadersMessage(headers));
                 break;
 
               case "inv":
                 var invMessage = new InvMessage(message);
 
-                if (invMessage.Inventories.First().Type.ToString() != "MSG_TX")
+                if (invMessage.Inventories.First().Type.ToString() == "MSG_BLOCK")
                 {
                   Console.WriteLine("inv message with {0} {1} from channel {2}",
                     invMessage.Inventories.Count,
@@ -97,24 +94,37 @@ namespace BToken
                 break;
 
               case "headers":
-                //var headersMessage = new HeadersMessage(message);
+                var headersMessage = new HeadersMessage(message);
 
-                //Console.WriteLine("header message from channel {0}",
-                //  channel.GetIdentification());
-                
-                //if (Headerchain.TryInsertHeaderBytes(
-                //  headersMessage.Payload,
-                //  out List<Header> headers))
-                //{
-                //  UTXOTable.SyncWithHeaderchain(
-                //    channel, 
-                //    headers);
-                //}
-                //else
-                //{
-                //  Console.WriteLine("Failed to insert header message from channel {0}",
-                //    channel.GetIdentification());
-                //}
+                Console.WriteLine("header message from channel {0}",
+                  channel.GetIdentification());
+
+                if(!Headerchain.Synchronizer.GetIsSyncingCompleted())
+                {
+                  channel.Release();
+                  break;
+                }
+
+                if (Headerchain.Synchronizer.TryInsertHeaderBytes(
+                  headersMessage.Payload))
+                {
+                  if (!UTXOTable.Synchronizer.GetIsSyncingCompleted())
+                  {
+                    channel.Release();
+                    break;
+                  }
+
+                  if(!await UTXOTable.Synchronizer.TrySynchronize(channel))
+                  {
+                    Console.WriteLine("Could not synchronize UTXO, with channel {0}",
+                      channel.GetIdentification());
+                  }
+                }
+                else
+                {
+                  Console.WriteLine("Failed to insert header message from channel {0}",
+                    channel.GetIdentification());
+                }
 
                 break;
 
@@ -123,7 +133,7 @@ namespace BToken
             }
           }
 
-          Network.ReturnChannel(channel);
+          channel.Release();
         }
         catch (Exception ex)
         {
@@ -133,6 +143,7 @@ namespace BToken
 
           Network.DisposeChannel(channel);
         }
+
       }
     }
   }

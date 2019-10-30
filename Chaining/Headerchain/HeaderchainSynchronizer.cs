@@ -10,22 +10,22 @@ namespace BToken.Chaining
 {
   partial class Headerchain
   {
-    partial class HeaderchainSynchronizer : DataSynchronizer
+    public partial class HeaderchainSynchronizer : DataSynchronizer
     {
       Headerchain Headerchain;
 
-      readonly object LOCK_IsSyncing = new object();
       bool IsSyncing;
-      bool IsSyncingCompleted;
 
       BufferBlock<Header> HeadersListened =
         new BufferBlock<Header>();
 
       const int COUNT_HEADER_SESSIONS = 4;
+      const int SIZE_BATCH_ARCHIVE = 50000;
 
-      
+
 
       public HeaderchainSynchronizer(Headerchain headerchain)
+        : base(SIZE_BATCH_ARCHIVE)
       {
         ArchiveDirectory = Directory.CreateDirectory(
           Path.Combine(
@@ -76,14 +76,15 @@ namespace BToken.Chaining
           locatorHashes = LocatorHashes;
         }
 
-        var headerBatch = new DataBatch(batchIndex);
+        return new DataBatch()
+        {
+          Index = batchIndex,
 
-        headerBatch.ItemBatchContainers.Add(
-          new HeaderBatchContainer(
-            headerBatch,
-            locatorHashes));
-
-        return headerBatch;
+          DataContainers = new List<DataContainer>()
+          { 
+            new HeaderContainer(locatorHashes)
+          }
+        };
       }
 
 
@@ -108,10 +109,54 @@ namespace BToken.Chaining
       protected override DataContainer CreateContainer(
         int index)
       {
-        return new HeaderBatchContainer(index);
+        return new HeaderContainer(index);
       }
 
-      
+           
+
+      public bool TryInsertHeaderBytes(
+        byte[] buffer)
+      {
+        DataBatch batch = new DataBatch()
+        {
+          DataContainers = new List<DataContainer>()
+        {
+          new HeaderContainer(buffer)
+        },
+
+          IsFinalBatch = true
+        };
+
+        batch.TryParse();
+
+        if(TryInsertBatch(batch))
+        {
+          foreach(HeaderContainer headerContainer 
+            in batch.DataContainers)
+          {
+            Header header = headerContainer.HeaderRoot;
+            while (true)
+            {
+              Console.WriteLine("inserted header {0}, height {1}",
+                header.HeaderHash.ToHexString(),
+                Headerchain.GetHeight());
+
+              if (header == headerContainer.HeaderTip)
+              {
+                break;
+              }
+
+              header = header.HeadersNext.First();
+            }
+          }
+
+          return true;
+        }
+
+        return false;
+      }
+
+
 
       protected override bool TryInsertContainer(
         DataContainer container)
@@ -119,7 +164,7 @@ namespace BToken.Chaining
         try
         {
           Headerchain.InsertContainer(
-            (HeaderBatchContainer)container);
+            (HeaderContainer)container);
 
           return true;
         }
@@ -133,6 +178,9 @@ namespace BToken.Chaining
           return false;
         }
       }
+
+
+      
     }
   }
 }

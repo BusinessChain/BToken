@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-using BToken.Chaining;
 
 namespace BToken.Networking
 {
@@ -23,6 +22,8 @@ namespace BToken.Networking
 
       Task<NetworkMessage> ReceiveApplicationMessage(
           CancellationToken cancellationToken);
+
+      void Release();
 
       string GetIdentification();
     }

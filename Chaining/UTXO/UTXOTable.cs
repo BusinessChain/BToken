@@ -46,7 +46,7 @@ namespace BToken.Chaining
     long UTCTimeStartMerger;
     Stopwatch StopwatchMerging = new Stopwatch();
 
-    UTXOSynchronizer Synchronizer;
+    public UTXOSynchronizer Synchronizer;
     public Network Network;
 
 
@@ -244,7 +244,7 @@ namespace BToken.Chaining
         PathUTXOState,
         PathUTXOStateOld);
 
-      BlockBatchContainer genesisBlockContainer = new BlockBatchContainer(
+      BlockContainer genesisBlockContainer = new BlockContainer(
         Headerchain,
         0,
         GenesisBlockBytes);
@@ -292,7 +292,7 @@ namespace BToken.Chaining
     }
 
 
-    void InsertContainer(BlockBatchContainer container)
+    void InsertContainer(BlockContainer container)
     {
       StopwatchMerging.Restart();
 
@@ -317,38 +317,7 @@ namespace BToken.Chaining
     }
 
     
-
-    const int SIZE_OUTPUT_BATCH = 50000;
-    int CountItems;
-
-    List<DataContainer> Containers = new List<DataContainer>();
-
-    public bool TryInsertBatch(DataBatch batch)
-    {
-      try
-      {
-        foreach (BlockBatchContainer container
-          in batch.ItemBatchContainers)
-        {
-          InsertContainer(container);
-          ArchiveContainer(container);
-        }
-        
-        return true;
-      }
-      catch (ChainException ex)
-      {
-        Console.WriteLine(
-          "Insertion of data batch {0} raised ChainException:\n {1}.",
-          batch.Index,
-          ex.Message);
-
-        return false;
-      }
-    }
-           
-
-
+    
     readonly object LOCK_HeaderLoad = new object();
     int IndexLoad;
     Header HeaderLoad;
@@ -371,17 +340,16 @@ namespace BToken.Chaining
         {
           HeaderLoad = HeaderLoad.HeadersNext[0];
 
-          BlockBatchContainer blockContainer =
-            new BlockBatchContainer(
+          BlockContainer blockContainer =
+            new BlockContainer(
               Headerchain,
               HeaderLoad);
 
-          uTXOBatch.ItemBatchContainers.Add(blockContainer);
+          uTXOBatch.DataContainers.Add(blockContainer);
 
           if (HeaderLoad.HeadersNext.Count == 0)
           {
             uTXOBatch.IsFinalBatch = true;
-            blockContainer.IsFinalContainer = true;
             break;
           }
         }
@@ -392,7 +360,7 @@ namespace BToken.Chaining
 
     public void UnLoadBatch(DataBatch uTXOBatch)
     {
-
+      throw new NotImplementedException();
     }
 
 

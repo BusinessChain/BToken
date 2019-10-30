@@ -29,10 +29,7 @@ namespace BToken.Networking
     
     List<Peer> PeersInbound = new List<Peer>();
     BufferBlock<Peer> PeersRequestInbound = new BufferBlock<Peer>();
-
-    public Headerchain Headerchain;
-    public UTXOTable UTXOTable;
-
+    
 
     public Network()
     {
@@ -102,14 +99,6 @@ namespace BToken.Networking
         await Task.Delay(1000);
 
       } while (true);
-    }
-
-    public void ReturnChannel(INetworkChannel channel)
-    {
-      lock (LOCK_ChannelsOutbound)
-      {
-        ChannelsOutboundAvailable.Add(channel);
-      }
     }
 
     public void DisposeChannel(INetworkChannel channel)

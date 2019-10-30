@@ -28,7 +28,7 @@ namespace BToken.Chaining
       Headerchain Chain;
       public Header Header;
 
-      BlockBatchContainer BlockBatchContainer;
+      BlockContainer BlockBatchContainer;
 
 
       public BlockParser(Headerchain chain)
@@ -37,7 +37,7 @@ namespace BToken.Chaining
         SHA256 = SHA256.Create();
       }
 
-      public void Parse(BlockBatchContainer blockBatchContainer)
+      public void Parse(BlockContainer blockBatchContainer)
       {
         BlockBatchContainer = blockBatchContainer;
 

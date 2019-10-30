@@ -7,11 +7,21 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BToken.Chaining
 {
-  abstract class DataSynchronizer
+  public abstract class DataSynchronizer
   {
     int ArchiveIndexLoad;
     protected DirectoryInfo ArchiveDirectory;
 
+    int SizeBatchArchive;
+
+    protected readonly object LOCK_IsSyncing = new object();
+
+
+
+    public DataSynchronizer(int sizeBatchArchive)
+    {
+      SizeBatchArchive = sizeBatchArchive;
+    }
 
 
     public async Task Start()
@@ -40,9 +50,6 @@ namespace BToken.Chaining
 
     async Task SynchronizeWithArchive()
     {
-      Console.WriteLine("synchronize {0} with archive", 
-        GetType().Name);
-
       ArchiveIndexStore = ArchiveIndexLoad;
 
       Parallel.For(
@@ -132,7 +139,7 @@ namespace BToken.Chaining
         container.IsValid &&
         TryInsertContainer(container))
       {
-        if (CountItems < SIZE_OUTPUT_BATCH)
+        if (container.CountItems < SizeBatchArchive)
         {
           Containers.Add(container);
           CountItems = container.CountItems;
@@ -164,19 +171,11 @@ namespace BToken.Chaining
     }
 
 
-
-    protected abstract bool TryInsertContainer(
-      DataContainer container);
-
-
-
-    const int SIZE_OUTPUT_BATCH = 50000;
-
+    
     public BufferBlock<DataBatch> InputBuffer = 
       new BufferBlock<DataBatch>(
         new DataflowBlockOptions { BoundedCapacity = 10 });
     int BatchIndex;
-    DataBatch Batch;
 
     Dictionary<int, DataBatch> QueueDownloadBatch = 
       new Dictionary<int, DataBatch>();
@@ -185,30 +184,23 @@ namespace BToken.Chaining
     {
       while (true)
       {
-        Batch = await InputBuffer.ReceiveAsync().ConfigureAwait(false);
+        DataBatch batch = await InputBuffer.ReceiveAsync().ConfigureAwait(false);
 
-        if (Batch.Index != BatchIndex)
+        if (batch.Index != BatchIndex)
         {
-          QueueDownloadBatch.Add(Batch.Index, Batch);
+          QueueDownloadBatch.Add(batch.Index, batch);
           continue;
         }
 
         do
         {
-          foreach (DataContainer container in 
-            Batch.ItemBatchContainers)
-          {
-            container.Index = ArchiveIndexStore;
-
-            TryInsertContainer(container);
-            ArchiveContainer(container);
-          }
+          TryInsertBatch(batch);
 
           BatchIndex += 1;
 
           if (QueueDownloadBatch.TryGetValue(
             BatchIndex, 
-            out Batch))
+            out batch))
           {
             QueueDownloadBatch.Remove(BatchIndex);
           }
@@ -222,21 +214,54 @@ namespace BToken.Chaining
 
 
 
-    void ArchiveContainer(DataContainer container)
+    public bool TryInsertBatch(DataBatch batch)
+    {
+      foreach (DataContainer container in
+        batch.DataContainers)
+      {
+        container.Index = ArchiveIndexStore;
+
+        if(!TryInsertContainer(container))
+        {
+          return false;
+        }
+
+        bool archiveContainer = 
+          batch.IsFinalBatch && 
+          (container == batch.DataContainers.Last());
+
+        ArchiveContainer(
+          container,
+          archiveContainer);
+      }
+
+      return true;
+    }
+
+
+
+    protected abstract bool TryInsertContainer(
+      DataContainer container);
+
+
+
+    void ArchiveContainer(
+      DataContainer container,
+      bool isFinalContainer)
     {
       Containers.Add(container);
       CountItems += container.CountItems;
       
 
       if (
-        CountItems >= SIZE_OUTPUT_BATCH ||
-        container.IsFinalContainer)
+        CountItems >= SizeBatchArchive ||
+        isFinalContainer)
       {
         ArchiveContainers(
           ArchiveDirectory.FullName,
           ArchiveIndexStore);
 
-        if (CountItems >= SIZE_OUTPUT_BATCH)
+        if (CountItems >= SizeBatchArchive)
         {
           Containers = new List<DataContainer>();
           CountItems = 0;
@@ -296,6 +321,26 @@ namespace BToken.Chaining
         }
       }
     }
+
+
+    protected readonly object LOCK_IsSyncingCompleted = new object();
+    bool IsSyncingCompleted;
+
+    public bool GetIsSyncingCompleted()
+    {
+      lock (LOCK_IsSyncingCompleted)
+      {
+        return IsSyncingCompleted;
+      }
+    }
+    protected void SetIsSyncingCompleted()
+    {
+      lock (LOCK_IsSyncingCompleted)
+      {
+        IsSyncingCompleted = true;
+      }
+    }
+
 
 
     void ReportInvalidBatch(DataBatch batch)

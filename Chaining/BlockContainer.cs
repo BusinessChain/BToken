@@ -9,7 +9,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    public class BlockBatchContainer : DataContainer
+    public class BlockContainer : DataContainer
     {
       const int AVERAGE_INPUTS_PER_TX = 5;
       public List<TXInput> Inputs = new List<TXInput>(COUNT_TXS_IN_BATCH_FILE * AVERAGE_INPUTS_PER_TX);
@@ -28,7 +28,7 @@ namespace BToken.Chaining
 
       BlockParser BlockParser;
 
-      public BlockBatchContainer(
+      public BlockContainer(
         Headerchain headerchain,
         int archiveIndex)
         : base(archiveIndex)
@@ -36,7 +36,7 @@ namespace BToken.Chaining
         BlockParser = new BlockParser(headerchain);
       }
 
-      public BlockBatchContainer(
+      public BlockContainer(
         Headerchain headerchain,
         int archiveIndex,
         byte[] blockBytes)
@@ -48,7 +48,7 @@ namespace BToken.Chaining
       }
 
 
-      public BlockBatchContainer(
+      public BlockContainer(
         Headerchain headerchain,
         Header header)
       {

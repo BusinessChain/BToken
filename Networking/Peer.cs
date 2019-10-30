@@ -117,62 +117,10 @@ namespace BToken.Networking
             case "feefilter":
               ProcessFeeFilterMessage(message);
               break;
-            case "headers":
-              await ProcessHeadersMessage(
-                new HeadersMessage(message));
-              break;
             default:
               ProcessApplicationMessage(message);
               break;
           }
-        }
-      }
-      async Task ProcessHeadersMessage(HeadersMessage headersMessage)
-      {
-        Console.WriteLine("header message from channel {0}",
-          GetIdentification());
-
-        // Statt headerchain Blockchain. Dort wird falls die Headerchein noch 
-        // am syncen ist nicht gemachts, bzw. der Header eingefügt, dann falls
-        // der UTXO noch am syncen ist nichts gemacht, bzw. der Block angefragt.
-        if (Network.Headerchain.TryInsertHeaderBytes(
-          headersMessage.Payload,
-          this))
-        {
-          while (Network.UTXOTable.TryLoadBatch(
-            out DataBatch batch, 1))
-          {
-            try
-            {
-              await DownloadBlocks(batch);
-            }
-            catch
-            {
-              Console.WriteLine("could not download batch {0} from {1}",
-                batch.Index,
-                GetIdentification());
-
-              Network.UTXOTable.UnLoadBatch(batch);
-              break;
-            }
-
-
-            if (Network.UTXOTable.TryInsertBatch(batch))
-            {
-              Console.WriteLine("inserted batch {0} in UTXO table",
-                batch.Index);
-            }
-            else
-            {
-              Console.WriteLine("could not insert batch {0} in UTXO table",
-                batch.Index);
-            }
-          }          
-        }
-        else
-        {
-          Console.WriteLine("Failed to insert header message from channel {0}",
-            GetIdentification());
         }
       }
 
@@ -190,6 +138,19 @@ namespace BToken.Networking
         }
       }
 
+
+      public void Release()
+      {
+        lock (IsDispatchedLOCK)
+        {
+          IsDispatched = false;
+        }
+        lock (Network.LOCK_ChannelsOutbound)
+        {
+          Network.ChannelsOutboundAvailable.Add(this);
+        }
+      }
+
       public bool TryDispatch()
       {
         lock (IsDispatchedLOCK)
@@ -201,13 +162,6 @@ namespace BToken.Networking
 
           IsDispatched = true;
           return true;
-        }
-      }
-      public void Release()
-      {
-        lock (IsDispatchedLOCK)
-        {
-          IsDispatched = false;
         }
       }
 
@@ -376,11 +330,11 @@ namespace BToken.Networking
 
       public async Task DownloadBlocks(DataBatch batch)
       {
-        IEnumerable<Inventory> inventories = batch.ItemBatchContainers
+        IEnumerable<Inventory> inventories = batch.DataContainers
           .Where(b => b.Buffer == null)
           .Select(b => new Inventory(
             InventoryType.MSG_BLOCK,
-            ((UTXOTable.BlockBatchContainer)b).Header.HeaderHash));
+            ((UTXOTable.BlockContainer)b).Header.HeaderHash));
 
         await SendMessage(
           new GetDataMessage(inventories));
@@ -389,7 +343,7 @@ namespace BToken.Networking
           new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
 
         foreach (DataContainer blockBatchContainer 
-          in batch.ItemBatchContainers)
+          in batch.DataContainers)
         {
           while (blockBatchContainer.Buffer == null)
           {

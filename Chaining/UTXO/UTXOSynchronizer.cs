@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 using BToken.Networking;
@@ -16,17 +17,19 @@ namespace BToken.Chaining
     partial class UTXOSynchronizer : DataSynchronizer
     {
       UTXOTable UTXOTable;
-      string ArchivePath = "J:\\BlockArchivePartitioned";
 
       const int COUNT_UTXO_SESSIONS = 4;
+      const int SIZE_BATCH_ARCHIVE = 50000;
 
 
 
       public UTXOSynchronizer(UTXOTable uTXOTable)
+        : base(SIZE_BATCH_ARCHIVE)
       {
         UTXOTable = uTXOTable;
 
-        ArchiveDirectory = Directory.CreateDirectory(ArchivePath);
+        ArchiveDirectory = Directory.CreateDirectory(
+          "J:\\BlockArchivePartitioned");
       }
 
       
@@ -75,8 +78,8 @@ namespace BToken.Chaining
       protected override bool TryInsertContainer(
         DataContainer container)
       {
-        BlockBatchContainer blockContainer = 
-          (BlockBatchContainer)container;
+        BlockContainer blockContainer = 
+          (BlockContainer)container;
 
         if (blockContainer.HeaderPrevious != UTXOTable.Header)
         {
@@ -157,20 +160,118 @@ namespace BToken.Chaining
       protected override DataContainer CreateContainer(
         int index)
       {
-        return new BlockBatchContainer(
+        return new BlockContainer(
           UTXOTable.Headerchain,
           index);
       }
 
       void ReturnChannel(UTXOChannel channel)
       {
-        UTXOTable.Network.ReturnChannel(
-          channel.NetworkChannel);
+        channel.NetworkChannel.Release();
       }
 
       void DisposeChannel(UTXOChannel channel)
       {
         UTXOTable.Network.DisposeChannel(channel.NetworkChannel);
+      }
+
+
+
+      public async Task<bool> TrySynchronize(Network.INetworkChannel channel)
+      {
+        while (UTXOTable.TryLoadBatch(
+          out DataBatch batch, 1))
+        {
+          try
+          {
+            await StartBlockDownloadAsync(
+              batch,
+              channel);
+          }
+          catch
+          {
+            Console.WriteLine("could not download batch {0} from {1}",
+              batch.Index,
+              channel.GetIdentification());
+
+            UTXOTable.UnLoadBatch(batch);
+            return false;
+          }
+
+
+          if (TryInsertBatch(batch))
+          {
+            Console.WriteLine("inserted batch {0} in UTXO table",
+              batch.Index);
+          }
+          else
+          {
+            Console.WriteLine("could not insert batch {0} in UTXO table",
+              batch.Index);
+
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+
+
+      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
+
+      public async Task StartBlockDownloadAsync(
+        DataBatch batch,
+        Network.INetworkChannel channel)
+      {
+        List<byte[]> hashesRequested = new List<byte[]>();
+
+        foreach (BlockContainer blockBatchContainer in
+          batch.DataContainers)
+        {
+          if (blockBatchContainer.Buffer == null)
+          {
+            hashesRequested.Add(
+              blockBatchContainer.Header.HeaderHash);
+          }
+        }
+        
+        await channel.SendMessage(
+          new GetDataMessage(
+            hashesRequested
+            .Select(h => new Inventory(
+              InventoryType.MSG_BLOCK,
+              h))));
+
+        var cancellationDownloadBlocks =
+          new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
+        foreach (BlockContainer blockBatchContainer in
+          batch.DataContainers)
+        {
+          if (blockBatchContainer.Buffer != null)
+          {
+            continue;
+          }
+          
+          while (true)
+          {
+            NetworkMessage networkMessage =
+              await channel
+              .ReceiveApplicationMessage(cancellationDownloadBlocks.Token)
+              .ConfigureAwait(false);
+
+            if (networkMessage.Command != "block")
+            {
+              continue;
+            }
+
+            break;
+          }
+
+          blockBatchContainer.TryParse();
+          batch.CountItems += blockBatchContainer.CountItems;
+        }
       }
     }
   }

@@ -10,10 +10,8 @@ namespace BToken.Chaining
   {
     public bool IsValid = true;
     public int Index;
-    public DataBatch Batch;
     public int CountItems;
     public byte[] Buffer;
-    public bool IsFinalContainer;
     
     public Stopwatch StopwatchParse = new Stopwatch();
 
@@ -36,11 +34,6 @@ namespace BToken.Chaining
     {
       Index = index;
       Buffer = buffer;
-    }
-
-    protected DataContainer(DataBatch batch)
-    {
-      Batch = batch;
     }
 
     

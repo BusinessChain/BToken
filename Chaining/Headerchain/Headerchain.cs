@@ -29,7 +29,7 @@ namespace BToken.Chaining
     
     public readonly object LOCK_Chain = new object();
 
-    HeaderchainSynchronizer Synchronizer;
+    public HeaderchainSynchronizer Synchronizer;
     public Network Network;
 
 
@@ -59,35 +59,15 @@ namespace BToken.Chaining
     public async Task Start()
     {
       await Synchronizer.Start();
+
+      Console.WriteLine(
+        "Headerchain synchronization done, block height {0}",
+        GetHeight());
     }
+
     
 
-    public bool TryInsertHeaderBytes(
-      byte[] buffer)
-    {
-      HeaderBatchContainer container =
-        new HeaderBatchContainer(buffer);
-
-      container.TryParse();
-      container.IsFinalContainer = true;
-      
-      if (
-        container.IsValid &&
-        TryInsertHeaderRoot(container.HeaderRoot))
-      {
-        ArchiveContainer(container);
-        return true;
-      }
-      
-      return false;
-    }
-
-
-
-    const int SIZE_OUTPUT_BATCH = 50000;  
-
-
-    void InsertContainer(HeaderBatchContainer container)
+    void InsertContainer(HeaderContainer container)
     {
       Chain rivalChain = Inserter.InsertHeaderRoot(container.HeaderRoot);
       

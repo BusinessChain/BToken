@@ -12,7 +12,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    partial class UTXOSynchronizer : DataSynchronizer
+    public partial class UTXOSynchronizer : DataSynchronizer
     {
       class SyncUTXOSession
       {
@@ -102,8 +102,8 @@ namespace BToken.Chaining
 
           List<byte[]> hashesRequested = new List<byte[]>();
 
-          foreach (BlockBatchContainer blockBatchContainer in
-            UTXOBatch.ItemBatchContainers)
+          foreach (BlockContainer blockBatchContainer in
+            UTXOBatch.DataContainers)
           {
             if (blockBatchContainer.Buffer == null)
             {
@@ -117,8 +117,8 @@ namespace BToken.Chaining
           var cancellationDownloadBlocks =
             new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
           
-          foreach (BlockBatchContainer blockBatchContainer in
-            UTXOBatch.ItemBatchContainers)
+          foreach (BlockContainer blockBatchContainer in
+            UTXOBatch.DataContainers)
           {
             if (blockBatchContainer.Buffer != null)
             {

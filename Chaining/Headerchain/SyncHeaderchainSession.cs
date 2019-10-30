@@ -41,13 +41,10 @@ namespace BToken.Chaining
             {
             StartRaceSyncHeaderSession:
 
-              lock (Synchronizer.LOCK_IsSyncing)
+              if (Synchronizer.GetIsSyncingCompleted())
               {
-                if (Synchronizer.IsSyncingCompleted)
-                {
-                  Synchronizer.Headerchain.Network.ReturnChannel(Channel);
-                  return;
-                }
+                Channel.Release();
+                return;
               }
 
               HeaderBatch = Synchronizer.CreateHeaderBatch();
@@ -56,15 +53,14 @@ namespace BToken.Chaining
 
               while (true)
               {
+                if (Synchronizer.GetIsSyncingCompleted())
+                {
+                  Channel.Release();
+                  return;
+                }
+
                 lock (Synchronizer.LOCK_IsSyncing)
                 {
-                  if (Synchronizer.IsSyncingCompleted)
-                  {
-                    Synchronizer.Headerchain.Network.ReturnChannel(Channel);
-
-                    return;
-                  }
-
                   if (!Synchronizer.IsSyncing)
                   {
                     if (HeaderBatch.Index != Synchronizer.IndexHeaderBatch)
@@ -110,14 +106,11 @@ namespace BToken.Chaining
                 await Synchronizer.InputBuffer.SendAsync(HeaderBatchOld);
               }
 
-              lock (Synchronizer.LOCK_IsSyncing)
-              {
-                Synchronizer.IsSyncingCompleted = true;
-              }
+              Synchronizer.SetIsSyncingCompleted();
 
               Synchronizer.SignalStartHeaderSyncSession.SetResult(null);
-              
-              Synchronizer.Headerchain.Network.ReturnChannel(Channel);
+
+              Channel.Release();
 
               return;
             }
@@ -130,12 +123,9 @@ namespace BToken.Chaining
 
               Synchronizer.Headerchain.Network.DisposeChannel(Channel);
 
-              lock (Synchronizer.LOCK_IsSyncing)
+              if (Synchronizer.GetIsSyncingCompleted())
               {
-                if (Synchronizer.IsSyncingCompleted)
-                {
-                  return;
-                }
+                return;
               }
 
               if (IsSyncing)
@@ -143,7 +133,7 @@ namespace BToken.Chaining
                 lock (Synchronizer.LOCK_IsSyncing)
                 {
                   Synchronizer.IndexHeaderBatch = HeaderBatch.Index;
-                  Synchronizer.LocatorHashes = ((HeaderBatchContainer)HeaderBatch.ItemBatchContainers.First())
+                  Synchronizer.LocatorHashes = ((HeaderContainer)HeaderBatch.DataContainers.First())
                     .LocatorHashes;
 
                   Synchronizer.HeaderBatchOld = HeaderBatchOld;
@@ -163,11 +153,10 @@ namespace BToken.Chaining
         {
           DataBatch batch = new DataBatch(HeaderBatch.Index + 1);
 
-          batch.ItemBatchContainers.Add(
-            new HeaderBatchContainer(
-              batch,
+          batch.DataContainers.Add(
+            new HeaderContainer(
               new List<byte[]> {
-                ((HeaderBatchContainer)HeaderBatch.ItemBatchContainers[0])
+                ((HeaderContainer)HeaderBatch.DataContainers[0])
                 .HeaderTip.HeaderHash }));
 
           return batch;
@@ -181,8 +170,8 @@ namespace BToken.Chaining
 
           CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
 
-          foreach (HeaderBatchContainer headerBatchContainer
-            in HeaderBatch.ItemBatchContainers)
+          foreach (HeaderContainer headerBatchContainer
+            in HeaderBatch.DataContainers)
           {
             headerBatchContainer.Buffer = await Channel.GetHeaders(
               headerBatchContainer.LocatorHashes,
@@ -192,8 +181,6 @@ namespace BToken.Chaining
 
             HeaderBatch.CountItems += headerBatchContainer.CountItems;
           }
-
-          HeaderBatch.IsValid = true;
         }
       }
     }
