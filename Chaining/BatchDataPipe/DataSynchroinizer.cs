@@ -252,7 +252,6 @@ namespace BToken.Chaining
       Containers.Add(container);
       CountItems += container.CountItems;
       
-
       if (
         CountItems >= SizeBatchArchive ||
         isFinalContainer)

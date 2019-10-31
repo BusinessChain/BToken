@@ -24,12 +24,12 @@ namespace BToken.Chaining
 
         UTXOSynchronizer Synchronizer;
         UTXOChannel Channel;
-
-        SHA256 SHA256 = SHA256.Create();
-
+        
 
 
-        public SyncUTXOSession(UTXOSynchronizer synchronizer)
+
+        public SyncUTXOSession(
+          UTXOSynchronizer synchronizer)
         {
           Synchronizer = synchronizer;
         }
@@ -86,16 +86,7 @@ namespace BToken.Chaining
           }
         }
 
-
-        async Task RunListenerAsync()
-        {
-          while (true)
-          {
-            await Task.Delay(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS);
-            Console.WriteLine("session {0} listening.", GetHashCode());
-          }
-        }
-
+        
         async Task StartBlockDownloadAsync()
         {
           StopwatchDownload.Restart();
@@ -134,7 +125,7 @@ namespace BToken.Chaining
           }
 
           await Synchronizer.InputBuffer.SendAsync(UTXOBatch);
-
+          
           StopwatchDownload.Stop();
 
           CalculateNewCountBlocks();

@@ -50,7 +50,7 @@ namespace BToken
 
       await Headerchain.Start();
 
-      //await UTXOTable.Start();
+      await UTXOTable.Start();
 
       Wallet.GeneratePublicKey();
     }

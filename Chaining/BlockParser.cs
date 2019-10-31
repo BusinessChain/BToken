@@ -7,7 +7,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    class BlockParser
+    public class BlockParser
     {
       const int COUNT_HEADER_BYTES = 80;
 
@@ -26,7 +26,7 @@ namespace BToken.Chaining
       SHA256 SHA256;
 
       Headerchain Chain;
-      public Header Header;
+      Header Header;
 
       BlockContainer BlockBatchContainer;
 
@@ -42,7 +42,6 @@ namespace BToken.Chaining
         BlockBatchContainer = blockBatchContainer;
 
         BatchIndex = blockBatchContainer.Index;
-
         Buffer = blockBatchContainer.Buffer;
         BufferIndex = 0;
 

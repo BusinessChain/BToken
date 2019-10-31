@@ -18,7 +18,7 @@ namespace BToken.Chaining
     {
       UTXOTable UTXOTable;
 
-      const int COUNT_UTXO_SESSIONS = 4;
+      const int COUNT_UTXO_SESSIONS = 1;
       const int SIZE_BATCH_ARCHIVE = 50000;
 
 
@@ -81,10 +81,10 @@ namespace BToken.Chaining
         BlockContainer blockContainer = 
           (BlockContainer)container;
 
-        if (blockContainer.HeaderPrevious != UTXOTable.Header)
+        if (blockContainer.Header.HeaderPrevious != UTXOTable.Header)
         {
           Console.WriteLine("HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}",
-            blockContainer.HeaderPrevious.HeaderHash.ToHexString(),
+            blockContainer.Header.HeaderPrevious.HeaderHash.ToHexString(),
             blockContainer.Index,
             UTXOTable.Header.HeaderHash.ToHexString());
 
@@ -104,7 +104,7 @@ namespace BToken.Chaining
 
           return false;
         }
-        
+
         UTXOTable.LogInsertion(
           blockContainer.StopwatchParse.ElapsedTicks,
           container.Index);
