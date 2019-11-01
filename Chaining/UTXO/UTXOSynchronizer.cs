@@ -18,7 +18,7 @@ namespace BToken.Chaining
     {
       UTXOTable UTXOTable;
 
-      const int COUNT_UTXO_SESSIONS = 1;
+      const int COUNT_UTXO_SESSIONS = 4;
       const int SIZE_BATCH_ARCHIVE = 50000;
 
 
@@ -78,13 +78,12 @@ namespace BToken.Chaining
       protected override bool TryInsertContainer(
         DataContainer container)
       {
-        BlockContainer blockContainer = 
-          (BlockContainer)container;
+        BlockContainer blockContainer = (BlockContainer)container;
 
-        if (blockContainer.Header.HeaderPrevious != UTXOTable.Header)
+        if (blockContainer.HeaderPrevious != UTXOTable.Header)
         {
           Console.WriteLine("HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}",
-            blockContainer.Header.HeaderPrevious.HeaderHash.ToHexString(),
+            blockContainer.HeaderPrevious.HeaderHash.ToHexString(),
             blockContainer.Index,
             UTXOTable.Header.HeaderHash.ToHexString());
 
@@ -105,9 +104,7 @@ namespace BToken.Chaining
           return false;
         }
 
-        UTXOTable.LogInsertion(
-          blockContainer.StopwatchParse.ElapsedTicks,
-          container.Index);
+        UTXOTable.LogInsertion(blockContainer);
 
         return true;
       }
@@ -163,16 +160,6 @@ namespace BToken.Chaining
         return new BlockContainer(
           UTXOTable.Headerchain,
           index);
-      }
-
-      void ReturnChannel(UTXOChannel channel)
-      {
-        channel.NetworkChannel.Release();
-      }
-
-      void DisposeChannel(UTXOChannel channel)
-      {
-        UTXOTable.Network.DisposeChannel(channel.NetworkChannel);
       }
 
 

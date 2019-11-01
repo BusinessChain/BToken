@@ -11,8 +11,7 @@ namespace BToken.Chaining
   {
     public class BlockContainer : DataContainer
     {
-      const int AVERAGE_INPUTS_PER_TX = 5;
-      public List<TXInput> Inputs = new List<TXInput>(COUNT_TXS_IN_BATCH_FILE * AVERAGE_INPUTS_PER_TX);
+      public List<TXInput> Inputs = new List<TXInput>();
 
       UTXOIndexUInt32 TableUInt32 = new UTXOIndexUInt32();
       UTXOIndexULong64 TableULong64 = new UTXOIndexULong64();
@@ -27,6 +26,8 @@ namespace BToken.Chaining
       public int BlockCount;
       SHA256 SHA256 = SHA256.Create();
 
+      public Stopwatch StopwatchMerging = new Stopwatch();
+      public Stopwatch StopwatchParse = new Stopwatch();
 
 
 
@@ -102,6 +103,8 @@ namespace BToken.Chaining
               HeaderHash,
               Header.HeaderHash);
           }
+
+          HeaderPrevious = Header.HeaderPrevious;
           
           ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
           BlockCount += 1;

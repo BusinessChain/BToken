@@ -58,6 +58,17 @@ namespace BToken.Chaining
         }
       }
 
+
+
+      public void Dispose()
+      {
+        NetworkChannel.Dispose();
+      }
+
+      public void Release()
+      {
+        NetworkChannel.Release();
+      }
     }
   }
 }

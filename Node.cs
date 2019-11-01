@@ -73,8 +73,9 @@ namespace BToken
             switch (message.Command)
             {
               case "getheaders":
-                Console.WriteLine("getHeaders message from {0}",
-                  channel.GetIdentification());
+                //Console.WriteLine("getHeaders message from {0}",
+                //  channel.GetIdentification());
+
                   //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
                   //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
                   //await channel.SendMessageAsync(new HeadersMessage(headers));

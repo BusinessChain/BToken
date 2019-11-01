@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using System.Security.Cryptography;
 using System.Diagnostics;
 
 
@@ -66,20 +65,22 @@ namespace BToken.Chaining
                 await StartBlockDownloadAsync();
               }
 
-              Synchronizer.ReturnChannel(Channel);
+              Channel.Release();
 
               return;
             }
             catch (Exception ex)
             {
-              Console.WriteLine("Exception in block download: \n{0}" +
-                "batch {1} queued",
+              Console.WriteLine("Exception {0} in block download: \n{1}" +
+                "batch {2} queued",
+                ex.GetType().Name,
                 ex.Message,
                 UTXOBatch.Index);
 
               Synchronizer.QueueBatchesCanceled.Enqueue(UTXOBatch);
 
-              Synchronizer.DisposeChannel(Channel);
+              Channel.Dispose();
+              Channel = null;
 
               CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
             }

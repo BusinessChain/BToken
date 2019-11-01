@@ -12,8 +12,7 @@ namespace BToken.Chaining
     public int Index;
     public int CountItems;
     public byte[] Buffer;
-    
-    public Stopwatch StopwatchParse = new Stopwatch();
+
 
 
 

@@ -9,7 +9,7 @@ namespace BToken.Chaining
     public class UTXOIndexUInt32
     {
       public Dictionary<byte[], uint> Table =
-        new Dictionary<byte[], uint>(COUNT_TXS_IN_BATCH_FILE, new EqualityComparerByteArray());
+        new Dictionary<byte[], uint>(new EqualityComparerByteArray());
 
       uint UTXOItem;
 

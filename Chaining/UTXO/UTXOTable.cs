@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 using System.Linq;
 
 using BToken.Networking;
@@ -15,8 +14,7 @@ namespace BToken.Chaining
   public partial class UTXOTable
   {
     byte[] GenesisBlockBytes;
-
-    const int COUNT_TXS_IN_BATCH_FILE = 50000;
+    
     const int HASH_BYTE_SIZE = 32;
 
     const int COUNT_BATCHINDEX_BITS = 16;
@@ -44,7 +42,6 @@ namespace BToken.Chaining
     Header Header;
 
     long UTCTimeStartMerger;
-    Stopwatch StopwatchMerging = new Stopwatch();
 
     public UTXOSynchronizer Synchronizer;
     public Network Network;
@@ -294,7 +291,7 @@ namespace BToken.Chaining
 
     void InsertContainer(BlockContainer container)
     {
-      StopwatchMerging.Restart();
+      container.StopwatchMerging.Start();
 
       InsertUTXOsUInt32(
         container.UTXOsUInt32,
@@ -310,7 +307,7 @@ namespace BToken.Chaining
 
       SpendUTXOs(container.Inputs);
 
-      StopwatchMerging.Stop();
+      container.StopwatchMerging.Stop();
 
       Header = container.Header;
       BlockHeight += container.BlockCount;
@@ -398,7 +395,7 @@ namespace BToken.Chaining
     //}
 
 
-    void LogInsertion(long elapsedTicksParsing, int index)
+    void LogInsertion(BlockContainer container)
     {
       if (UTCTimeStartMerger == 0)
       {
@@ -406,15 +403,23 @@ namespace BToken.Chaining
       }
       
       int ratioMergeToParse =
-        (int)((float)StopwatchMerging.ElapsedTicks * 100
-        / elapsedTicksParsing);
+        (int)((float)container.StopwatchMerging.ElapsedTicks * 100
+        / container.StopwatchParse.ElapsedTicks);
+
+      int countOutputs = 
+        container.UTXOsUInt32.Length +
+        container.UTXOsULong64.Length +
+        container.UTXOsUInt32Array.Length;
 
       string logCSV = string.Format(
-        "{0},{1},{2},{3},{4},{5},{6}",
-        index,
+        "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
+        container.Index,
         BlockHeight,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
         ratioMergeToParse,
+        container.Buffer.Length,
+        container.Inputs.Count,
+        countOutputs,
         Tables[0].GetMetricsCSV(),
         Tables[1].GetMetricsCSV(),
         Tables[2].GetMetricsCSV());

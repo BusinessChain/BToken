@@ -45,7 +45,7 @@ namespace BToken.Chaining
 
 
     int ArchiveIndexStore;
-    const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
+    const int COUNT_ARCHIVE_LOADER_PARALLEL = 4;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
 
     async Task SynchronizeWithArchive()
@@ -221,18 +221,18 @@ namespace BToken.Chaining
       {
         container.Index = ArchiveIndexStore;
 
-        if(!TryInsertContainer(container))
+        if (!TryInsertContainer(container))
         {
           return false;
         }
 
-        bool archiveContainer = 
-          batch.IsFinalBatch && 
+        bool isFinalContainer =
+          batch.IsFinalBatch &&
           (container == batch.DataContainers.Last());
 
         ArchiveContainer(
           container,
-          archiveContainer);
+          isFinalContainer);
       }
 
       return true;
