@@ -15,8 +15,9 @@ namespace BToken.Chaining
   {
     class UTXOChannel
     {
+      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
+
       public Network.INetworkChannel NetworkChannel;
-      public DataBatch Batch;
 
 
 
@@ -24,8 +25,7 @@ namespace BToken.Chaining
       {
         NetworkChannel = networkChannel;
       }
-
-      
+            
 
 
       public async Task RequestBlocks(IEnumerable<byte[]> headerHashes)
@@ -55,6 +55,44 @@ namespace BToken.Chaining
           }
 
           return networkMessage.Payload;
+        }
+      }
+
+
+
+      public async Task StartBlockDownloadAsync(DataBatch uTXOBatch)
+      {
+        List<byte[]> hashesRequested = new List<byte[]>();
+
+        foreach (BlockContainer blockBatchContainer in
+          uTXOBatch.DataContainers)
+        {
+          if (blockBatchContainer.Buffer == null)
+          {
+            hashesRequested.Add(
+              blockBatchContainer.Header.HeaderHash);
+          }
+        }
+
+        await RequestBlocks(hashesRequested);
+
+        var cancellationDownloadBlocks =
+          new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
+        foreach (BlockContainer blockBatchContainer in
+          uTXOBatch.DataContainers)
+        {
+          if (blockBatchContainer.Buffer != null)
+          {
+            continue;
+          }
+
+          blockBatchContainer.Buffer = 
+            await ReceiveBlock(cancellationDownloadBlocks.Token)
+            .ConfigureAwait(false);
+
+          blockBatchContainer.TryParse();
+          uTXOBatch.CountItems += blockBatchContainer.CountItems;
         }
       }
 

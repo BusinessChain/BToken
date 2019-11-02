@@ -147,7 +147,6 @@ namespace BToken.Chaining
         });
       }
 
-
       async Task<UTXOChannel> RequestChannel()
       {
         return new UTXOChannel(
@@ -164,16 +163,18 @@ namespace BToken.Chaining
 
 
 
-      public async Task<bool> TrySynchronize(Network.INetworkChannel channel)
+      public async Task<bool> TrySynchronize(
+        Network.INetworkChannel channel)
       {
+        UTXOChannel uTXOChannel = new UTXOChannel(channel);
+
         while (UTXOTable.TryLoadBatch(
           out DataBatch batch, 1))
         {
           try
           {
-            await StartBlockDownloadAsync(
-              batch,
-              channel);
+            await uTXOChannel.StartBlockDownloadAsync(
+              batch);
           }
           catch
           {

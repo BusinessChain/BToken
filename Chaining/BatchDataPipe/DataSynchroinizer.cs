@@ -35,6 +35,8 @@ namespace BToken.Chaining
       StartInputBatchBuffer();
 
       await Task.WhenAll(StartSyncSessionTasks());
+
+      SetIsSyncingCompleted();
     }
 
     protected abstract void LoadImage(
@@ -45,7 +47,7 @@ namespace BToken.Chaining
 
 
     int ArchiveIndexStore;
-    const int COUNT_ARCHIVE_LOADER_PARALLEL = 4;
+    const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
 
     async Task SynchronizeWithArchive()
@@ -323,7 +325,7 @@ namespace BToken.Chaining
 
 
     protected readonly object LOCK_IsSyncingCompleted = new object();
-    bool IsSyncingCompleted;
+    protected bool IsSyncingCompleted;
 
     public bool GetIsSyncingCompleted()
     {
