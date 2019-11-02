@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using System.Security.Cryptography;
 using System.Diagnostics;
 
 
@@ -12,122 +11,85 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    partial class GatewayUTXO : AbstractGateway
+    public partial class UTXOSynchronizer : DataSynchronizer
     {
       class SyncUTXOSession
       {
         const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
-        const int INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS = 30000;
 
-        const int TIMEOUT_GETHEADERS_MILLISECONDS = 10000;
-        const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
+        UTXOSynchronizer Synchronizer;
+        UTXOChannel Channel;
+        
+        
 
-        GatewayUTXO Gateway;
-        SHA256 SHA256;
-
-
-
-        public SyncUTXOSession(GatewayUTXO gateway)
+        public SyncUTXOSession(
+          UTXOSynchronizer synchronizer)
         {
-          Gateway = gateway;
-          SHA256 = SHA256.Create();
+          Synchronizer = synchronizer;
+        }
+
+        public SyncUTXOSession(
+          UTXOSynchronizer synchronizer,
+          UTXOChannel channel)
+        {
+          Synchronizer = synchronizer;
+          Channel = channel;
         }
 
 
 
-        UTXOChannel Channel;
         Stopwatch StopwatchDownload = new Stopwatch();
-        public int CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+        public int CountBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
         DataBatch UTXOBatch;
 
         public async Task Start()
         {
           while (true)
           {
-            Channel = await Gateway.RequestChannel();
+            if(Channel == null)
+            {
+              Channel = await Synchronizer.RequestChannel();
+            }
 
             try
             {
-              while (Gateway.TryGetBatch(
+              while (Synchronizer.TryGetBatch(
                 out UTXOBatch,
-                CountBlocksDownloadBatch))
+                CountBlocks))
               {
-                await StartBlockDownloadAsync();
+                StopwatchDownload.Restart();
+
+                await Channel.StartBlockDownloadAsync(UTXOBatch);
+                
+                StopwatchDownload.Stop();
+
+                await Synchronizer.InputBuffer.SendAsync(UTXOBatch);
+
+                CalculateNewCountBlocks();
               }
 
-              Gateway.ReturnChannel(Channel);
+              Channel.Release();
 
               return;
             }
             catch (Exception ex)
             {
-              Console.WriteLine("Exception in block download: \n{0}" +
-                "batch {1} queued",
+              Console.WriteLine("Exception {0} in block download: \n{1}" +
+                "batch {2} queued",
+                ex.GetType().Name,
                 ex.Message,
                 UTXOBatch.Index);
 
-              Gateway.QueueBatchesCanceled.Enqueue(UTXOBatch);
+              Synchronizer.QueueBatchesCanceled.Enqueue(UTXOBatch);
 
-              Gateway.DisposeChannel(Channel);
+              Channel.Dispose();
+              Channel = null;
 
-              CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+              CountBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
             }
           }
         }
-
-
-        async Task RunListenerAsync()
-        {
-          while (true)
-          {
-            await Task.Delay(INTERVAL_DOWNLOAD_CONTROLLER_MILLISECONDS);
-            Console.WriteLine("session {0} listening.", GetHashCode());
-          }
-        }
-
-        async Task StartBlockDownloadAsync()
-        {
-          StopwatchDownload.Restart();
-
-          List<byte[]> hashesRequested = new List<byte[]>();
-
-          foreach (BlockBatchContainer blockBatchContainer in
-            UTXOBatch.ItemBatchContainers)
-          {
-            if (blockBatchContainer.Buffer == null)
-            {
-              hashesRequested.Add(
-                blockBatchContainer.Header.HeaderHash);
-            }
-          }
-
-          var cancellationDownloadBlocks =
-            new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-
-          await Channel.RequestBlocks(hashesRequested);
-
-          foreach (BlockBatchContainer blockBatchContainer in
-            UTXOBatch.ItemBatchContainers)
-          {
-            if (blockBatchContainer.Buffer != null)
-            {
-              continue;
-            }
-
-            blockBatchContainer.Buffer = await Channel
-              .ReceiveBlock(cancellationDownloadBlocks.Token)
-              .ConfigureAwait(false);
-
-            blockBatchContainer.Parse();
-            UTXOBatch.CountItems += blockBatchContainer.CountItems;
-          }
-
-          await Gateway.InputBuffer.SendAsync(UTXOBatch);
-
-          StopwatchDownload.Stop();
-
-          CalculateNewCountBlocks();
-        }
+                
 
         void CalculateNewCountBlocks()
         {
@@ -139,16 +101,16 @@ namespace BToken.Chaining
 
           if (ratioTimeoutToDownloadTime > safetyFactorTimeout)
           {
-            CountBlocksDownloadBatch += 1;
+            CountBlocks += 1;
           }
           else if (ratioTimeoutToDownloadTime < marginFactorResetCountBlocksDownload &&
-            CountBlocksDownloadBatch > COUNT_BLOCKS_DOWNLOADBATCH_INIT)
+            CountBlocks > COUNT_BLOCKS_DOWNLOADBATCH_INIT)
           {
-            CountBlocksDownloadBatch = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+            CountBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
           }
-          else if (CountBlocksDownloadBatch > 1)
+          else if (CountBlocks > 1)
           {
-            CountBlocksDownloadBatch -= 1;
+            CountBlocks -= 1;
           }
         }
       }

@@ -6,10 +6,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
+using BToken.Chaining;
+
 
 namespace BToken.Networking
 {
-  public partial class Network
+  partial class Network
   {
     const UInt16 Port = 8333;
     const UInt32 ProtocolVersion = 70015;
@@ -27,7 +29,7 @@ namespace BToken.Networking
     
     List<Peer> PeersInbound = new List<Peer>();
     BufferBlock<Peer> PeersRequestInbound = new BufferBlock<Peer>();
-
+    
 
     public Network()
     {
@@ -46,6 +48,7 @@ namespace BToken.Networking
       number = number << 32;
       return number |= (uint)rnd.Next();
     }
+
 
 
     public void Start()
@@ -98,14 +101,6 @@ namespace BToken.Networking
       } while (true);
     }
 
-    public void ReturnChannel(INetworkChannel channel)
-    {
-      lock (LOCK_ChannelsOutbound)
-      {
-        ChannelsOutboundAvailable.Add(channel);
-      }
-    }
-
     public void DisposeChannel(INetworkChannel channel)
     {
       channel.Dispose();
@@ -114,7 +109,7 @@ namespace BToken.Networking
 
     public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
     {
-      return await PeersRequestInbound.ReceiveAsync(); ;
+      return await PeersRequestInbound.ReceiveAsync();
     }
         
     public async Task StartPeerInboundListenerAsync()

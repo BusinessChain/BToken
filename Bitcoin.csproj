@@ -77,13 +77,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Chaining\BatchDataPipe\AbstractGateway.cs" />
+    <Compile Include="Chaining\BatchDataPipe\DataSynchroinizer.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
-    <Compile Include="Chaining\BatchDataPipe\DataBatchContainer.cs" />
-    <Compile Include="Chaining\BatchDataPipe\IGateway.cs" />
-    <Compile Include="Chaining\BlockBatchContainer.cs" />
-    <Compile Include="Chaining\GatewayUTXO.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderBatchContainer.cs" />
+    <Compile Include="Chaining\BatchDataPipe\DataContainer.cs" />
+    <Compile Include="Chaining\BlockContainer.cs" />
+    <Compile Include="Chaining\UTXO\UTXOSynchronizer.cs" />
+    <Compile Include="Chaining\Headerchain\HeaderContainer.cs" />
     <Compile Include="Chaining\Headerchain\SyncHeaderchainSession.cs" />
     <Compile Include="Chaining\UTXO\UTXOChannel.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
@@ -93,7 +92,7 @@
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexULong64Compressed.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexCompressed.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
-    <Compile Include="Chaining\GatewayHeaderchain.cs" />
+    <Compile Include="Chaining\Headerchain\HeaderchainSynchronizer.cs" />
     <Compile Include="Chaining\BlockParser.cs" />
     <Compile Include="Chaining\UTXO\UTXOTable.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
@@ -148,7 +147,7 @@
     <Compile Include="Networking\NetworkException.cs" />
     <Compile Include="Networking\Peer.cs" />
     <Compile Include="Networking\ProtocolVersion.cs" />
-    <Compile Include="BitcoinNode.cs" />
+    <Compile Include="Node.cs" />
     <Compile Include="Networking\ServiceFlags.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
@@ -9,7 +9,7 @@ namespace BToken.Chaining
 {
   partial class Headerchain
   {
-    class HeaderBatchContainer : DataBatchContainer
+    public class HeaderContainer : DataContainer
     {
       public IEnumerable<byte[]> LocatorHashes;
 
@@ -18,19 +18,24 @@ namespace BToken.Chaining
 
 
 
-      public HeaderBatchContainer(
-        int index, 
-        byte[] headerBytes)
-        : base(
-            index,
-            headerBytes)
+      public HeaderContainer()
+      { }
+
+      public HeaderContainer(int index)
+        : base(index)
+      { }
+
+      public HeaderContainer(int index, byte[] headerBytes)
+        : base(index, headerBytes)
+      { }
+
+      public HeaderContainer(byte[] headerBytes)
+        : base(headerBytes)
       { }
 
 
-      public HeaderBatchContainer(
-        DataBatch batch,
+      public HeaderContainer(
         IEnumerable<byte[]> locatorHashes)
-        : base(batch)
       {
         LocatorHashes = locatorHashes;
       }
@@ -39,38 +44,51 @@ namespace BToken.Chaining
 
       SHA256 SHA256 = SHA256.Create();
 
-      public override void Parse()
+      public override void TryParse()
       {
-        int bufferIndex = 0;
-
-        int headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
-
-        if (headersCount == 0)
+        try
         {
-          return;
-        }
+          int bufferIndex = 0;
 
-        CountItems += headersCount;
+          int headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
 
-        HeaderRoot = Header.ParseHeader(Buffer, ref bufferIndex, SHA256);
-        bufferIndex += 1; // skip txCount
-
-        ValidateHeader(HeaderRoot);
-
-        headersCount -= 1;
-
-        HeaderTip = HeaderRoot;
-
-        ParseHeaders(ref bufferIndex, headersCount);
-
-
-        while (bufferIndex < Buffer.Length)
-        {
-          headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
+          if (headersCount == 0)
+          {
+            return;
+          }
 
           CountItems += headersCount;
 
+          HeaderRoot = Header.ParseHeader(Buffer, ref bufferIndex, SHA256);
+          bufferIndex += 1; // skip txCount
+
+          ValidateHeader(HeaderRoot);
+
+          headersCount -= 1;
+
+          HeaderTip = HeaderRoot;
+
           ParseHeaders(ref bufferIndex, headersCount);
+
+
+          while (bufferIndex < Buffer.Length)
+          {
+            headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
+
+            CountItems += headersCount;
+
+            ParseHeaders(ref bufferIndex, headersCount);
+          }
+        }
+        catch (Exception ex)
+        {
+          IsValid = false;
+
+          Console.WriteLine(
+            "Exception {0} loading archive {1}: {2}",
+            ex.GetType().Name,
+            Index,
+            ex.Message);
         }
       }
 

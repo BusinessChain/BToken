@@ -8,7 +8,8 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using System.Security.Cryptography;
+
+using BToken.Chaining;
 
 namespace BToken.Networking
 {
@@ -122,6 +123,7 @@ namespace BToken.Networking
           }
         }
       }
+
       void ProcessApplicationMessage(NetworkMessage message)
       {
         ApplicationMessages.Post(message);
@@ -136,6 +138,19 @@ namespace BToken.Networking
         }
       }
 
+
+      public void Release()
+      {
+        lock (IsDispatchedLOCK)
+        {
+          IsDispatched = false;
+        }
+        lock (Network.LOCK_ChannelsOutbound)
+        {
+          Network.ChannelsOutboundAvailable.Add(this);
+        }
+      }
+
       public bool TryDispatch()
       {
         lock (IsDispatchedLOCK)
@@ -147,13 +162,6 @@ namespace BToken.Networking
 
           IsDispatched = true;
           return true;
-        }
-      }
-      public void Release()
-      {
-        lock (IsDispatchedLOCK)
-        {
-          IsDispatched = false;
         }
       }
 
@@ -276,7 +284,8 @@ namespace BToken.Networking
       {
         AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
-      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage());
+      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) 
+        => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage());
 
       public async Task SendMessage(NetworkMessage networkMessage)
       {
@@ -289,7 +298,11 @@ namespace BToken.Networking
         return await ApplicationMessages.ReceiveAsync(cancellationToken);
       }
 
-      public async Task PingAsync() => await NetworkMessageStreamer.WriteAsync(new PingMessage(Nonce));
+      public async Task PingAsync()
+      {
+        await NetworkMessageStreamer
+          .WriteAsync(new PingMessage(Nonce));
+      }
 
       public async Task<byte[]> GetHeaders(
         IEnumerable<byte[]> locatorHashes,
@@ -310,6 +323,44 @@ namespace BToken.Networking
           }
         }
       }
+
+
+
+      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
+
+      public async Task DownloadBlocks(DataBatch batch)
+      {
+        IEnumerable<Inventory> inventories = batch.DataContainers
+          .Where(b => b.Buffer == null)
+          .Select(b => new Inventory(
+            InventoryType.MSG_BLOCK,
+            ((UTXOTable.BlockContainer)b).Header.HeaderHash));
+
+        await SendMessage(
+          new GetDataMessage(inventories));
+
+        var cancellationDownloadBlocks =
+          new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
+        foreach (DataContainer blockBatchContainer 
+          in batch.DataContainers)
+        {
+          while (blockBatchContainer.Buffer == null)
+          {
+            NetworkMessage message = await NetworkMessageStreamer
+              .ReadAsync(default).ConfigureAwait(false);
+                        
+            if (message.Command != "block")
+            {
+              continue;
+            }
+
+            blockBatchContainer.Buffer = message.Payload;
+            blockBatchContainer.TryParse();
+          }
+        }
+      }
+
 
       public string GetIdentification()
       {

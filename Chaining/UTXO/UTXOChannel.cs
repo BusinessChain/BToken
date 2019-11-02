@@ -15,23 +15,27 @@ namespace BToken.Chaining
   {
     class UTXOChannel
     {
-      public INetworkChannel NetworkChannel;
-      public DataBatch Batch;
+      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
+
+      public Network.INetworkChannel NetworkChannel;
 
 
 
-      public UTXOChannel(INetworkChannel networkChannel)
+      public UTXOChannel(Network.INetworkChannel networkChannel)
       {
         NetworkChannel = networkChannel;
       }
-
+            
 
 
       public async Task RequestBlocks(IEnumerable<byte[]> headerHashes)
       {
         await NetworkChannel.SendMessage(
           new GetDataMessage(
-            headerHashes.Select(h => new Inventory(InventoryType.MSG_BLOCK, h))));
+            headerHashes
+            .Select(h => new Inventory(
+              InventoryType.MSG_BLOCK, 
+              h))));
       }
 
 
@@ -54,6 +58,55 @@ namespace BToken.Chaining
         }
       }
 
+
+
+      public async Task StartBlockDownloadAsync(DataBatch uTXOBatch)
+      {
+        List<byte[]> hashesRequested = new List<byte[]>();
+
+        foreach (BlockContainer blockBatchContainer in
+          uTXOBatch.DataContainers)
+        {
+          if (blockBatchContainer.Buffer == null)
+          {
+            hashesRequested.Add(
+              blockBatchContainer.Header.HeaderHash);
+          }
+        }
+
+        await RequestBlocks(hashesRequested);
+
+        var cancellationDownloadBlocks =
+          new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
+        foreach (BlockContainer blockBatchContainer in
+          uTXOBatch.DataContainers)
+        {
+          if (blockBatchContainer.Buffer != null)
+          {
+            continue;
+          }
+
+          blockBatchContainer.Buffer = 
+            await ReceiveBlock(cancellationDownloadBlocks.Token)
+            .ConfigureAwait(false);
+
+          blockBatchContainer.TryParse();
+          uTXOBatch.CountItems += blockBatchContainer.CountItems;
+        }
+      }
+
+
+
+      public void Dispose()
+      {
+        NetworkChannel.Dispose();
+      }
+
+      public void Release()
+      {
+        NetworkChannel.Release();
+      }
     }
   }
 }

@@ -11,7 +11,7 @@ namespace BToken.Chaining
     public class UTXOIndexULong64
     {
       public Dictionary<byte[], ulong> Table =
-        new Dictionary<byte[], ulong>(COUNT_TXS_IN_BATCH_FILE, new EqualityComparerByteArray());
+        new Dictionary<byte[], ulong>(new EqualityComparerByteArray());
 
       ulong UTXOItem;
 

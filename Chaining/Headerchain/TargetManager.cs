@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace BToken.Chaining
 {
-  public partial class Headerchain
+  partial class Headerchain
   {
     static class TargetManager
     {
