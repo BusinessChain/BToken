@@ -166,10 +166,6 @@ namespace BToken.Chaining
           Headerchain.InsertContainer(
             (HeaderContainer)container);
 
-          Console.WriteLine("Inserted {0} header, blockheight {1}",
-            container.CountItems,
-            Headerchain.GetHeight());
-
           return true;
         }
         catch(ChainException ex)

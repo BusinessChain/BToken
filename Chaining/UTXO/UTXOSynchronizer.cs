@@ -21,6 +21,8 @@ namespace BToken.Chaining
       const int COUNT_UTXO_SESSIONS = 4;
       const int SIZE_BATCH_ARCHIVE = 50000;
 
+      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
+
 
 
       public UTXOSynchronizer(UTXOTable uTXOTable)

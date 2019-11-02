@@ -13,99 +13,100 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    class UTXOChannel
+    partial class UTXOSynchronizer : DataSynchronizer
     {
-      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
-
-      public Network.INetworkChannel NetworkChannel;
-
-
-
-      public UTXOChannel(Network.INetworkChannel networkChannel)
+      class UTXOChannel
       {
-        NetworkChannel = networkChannel;
-      }
-            
-
-
-      public async Task RequestBlocks(IEnumerable<byte[]> headerHashes)
-      {
-        await NetworkChannel.SendMessage(
-          new GetDataMessage(
-            headerHashes
-            .Select(h => new Inventory(
-              InventoryType.MSG_BLOCK, 
-              h))));
-      }
+        public Network.INetworkChannel NetworkChannel;
 
 
 
-      public async Task<byte[]> ReceiveBlock(CancellationToken cancellationToken)
-      {
-        while (true)
+        public UTXOChannel(Network.INetworkChannel networkChannel)
         {
-          NetworkMessage networkMessage = 
-            await NetworkChannel
-            .ReceiveApplicationMessage(cancellationToken)
-            .ConfigureAwait(false);
-
-          if (networkMessage.Command != "block")
-          {
-            continue;
-          }
-
-          return networkMessage.Payload;
+          NetworkChannel = networkChannel;
         }
-      }
 
 
 
-      public async Task StartBlockDownloadAsync(DataBatch uTXOBatch)
-      {
-        List<byte[]> hashesRequested = new List<byte[]>();
-
-        foreach (BlockContainer blockBatchContainer in
-          uTXOBatch.DataContainers)
+        public async Task RequestBlocks(IEnumerable<byte[]> headerHashes)
         {
-          if (blockBatchContainer.Buffer == null)
+          await NetworkChannel.SendMessage(
+            new GetDataMessage(
+              headerHashes
+              .Select(h => new Inventory(
+                InventoryType.MSG_BLOCK,
+                h))));
+        }
+
+
+
+        public async Task<byte[]> ReceiveBlock(CancellationToken cancellationToken)
+        {
+          while (true)
           {
-            hashesRequested.Add(
-              blockBatchContainer.Header.HeaderHash);
+            NetworkMessage networkMessage =
+              await NetworkChannel
+              .ReceiveApplicationMessage(cancellationToken)
+              .ConfigureAwait(false);
+
+            if (networkMessage.Command != "block")
+            {
+              continue;
+            }
+
+            return networkMessage.Payload;
           }
         }
 
-        await RequestBlocks(hashesRequested);
 
-        var cancellationDownloadBlocks =
-          new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
 
-        foreach (BlockContainer blockBatchContainer in
-          uTXOBatch.DataContainers)
+        public async Task StartBlockDownloadAsync(DataBatch uTXOBatch)
         {
-          if (blockBatchContainer.Buffer != null)
+          List<byte[]> hashesRequested = new List<byte[]>();
+
+          foreach (BlockContainer blockBatchContainer in
+            uTXOBatch.DataContainers)
           {
-            continue;
+            if (blockBatchContainer.Buffer == null)
+            {
+              hashesRequested.Add(
+                blockBatchContainer.Header.HeaderHash);
+            }
           }
 
-          blockBatchContainer.Buffer = 
-            await ReceiveBlock(cancellationDownloadBlocks.Token)
-            .ConfigureAwait(false);
+          await RequestBlocks(hashesRequested);
 
-          blockBatchContainer.TryParse();
-          uTXOBatch.CountItems += blockBatchContainer.CountItems;
+          var cancellationDownloadBlocks =
+            new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
+          foreach (BlockContainer blockBatchContainer in
+            uTXOBatch.DataContainers)
+          {
+            if (blockBatchContainer.Buffer != null)
+            {
+              continue;
+            }
+
+            blockBatchContainer.Buffer =
+              await ReceiveBlock(cancellationDownloadBlocks.Token)
+              .ConfigureAwait(false);
+
+            blockBatchContainer.TryParse();
+            uTXOBatch.CountItems += blockBatchContainer.CountItems;
+          }
         }
-      }
 
 
 
-      public void Dispose()
-      {
-        NetworkChannel.Dispose();
-      }
+        public void Dispose()
+        {
+          NetworkChannel.Dispose();
+        }
 
-      public void Release()
-      {
-        NetworkChannel.Release();
+        public void Release()
+        {
+          NetworkChannel.Release();
+        }
       }
     }
   }
