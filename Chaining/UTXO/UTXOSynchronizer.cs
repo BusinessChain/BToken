@@ -203,64 +203,6 @@ namespace BToken.Chaining
 
         return true;
       }
-
-
-
-      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
-
-      public async Task StartBlockDownloadAsync(
-        DataBatch batch,
-        Network.INetworkChannel channel)
-      {
-        List<byte[]> hashesRequested = new List<byte[]>();
-
-        foreach (BlockContainer blockBatchContainer in
-          batch.DataContainers)
-        {
-          if (blockBatchContainer.Buffer == null)
-          {
-            hashesRequested.Add(
-              blockBatchContainer.Header.HeaderHash);
-          }
-        }
-        
-        await channel.SendMessage(
-          new GetDataMessage(
-            hashesRequested
-            .Select(h => new Inventory(
-              InventoryType.MSG_BLOCK,
-              h))));
-
-        var cancellationDownloadBlocks =
-          new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-
-        foreach (BlockContainer blockBatchContainer in
-          batch.DataContainers)
-        {
-          if (blockBatchContainer.Buffer != null)
-          {
-            continue;
-          }
-          
-          while (true)
-          {
-            NetworkMessage networkMessage =
-              await channel
-              .ReceiveApplicationMessage(cancellationDownloadBlocks.Token)
-              .ConfigureAwait(false);
-
-            if (networkMessage.Command != "block")
-            {
-              continue;
-            }
-
-            break;
-          }
-
-          blockBatchContainer.TryParse();
-          batch.CountItems += blockBatchContainer.CountItems;
-        }
-      }
     }
   }
 }
