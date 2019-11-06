@@ -28,39 +28,7 @@ namespace BToken.Chaining
 
 
 
-        public async Task RequestBlocks(IEnumerable<byte[]> headerHashes)
-        {
-          await NetworkChannel.SendMessage(
-            new GetDataMessage(
-              headerHashes
-              .Select(h => new Inventory(
-                InventoryType.MSG_BLOCK,
-                h))));
-        }
-
-
-
-        public async Task<byte[]> ReceiveBlock(CancellationToken cancellationToken)
-        {
-          while (true)
-          {
-            NetworkMessage networkMessage =
-              await NetworkChannel
-              .ReceiveApplicationMessage(cancellationToken)
-              .ConfigureAwait(false);
-
-            if (networkMessage.Command != "block")
-            {
-              continue;
-            }
-
-            return networkMessage.Payload;
-          }
-        }
-
-
-
-        public async Task StartBlockDownloadAsync(DataBatch uTXOBatch)
+        public async Task DownloadBlocks(DataBatch uTXOBatch)
         {
           List<byte[]> hashesRequested = new List<byte[]>();
 
@@ -73,8 +41,13 @@ namespace BToken.Chaining
                 blockBatchContainer.Header.HeaderHash);
             }
           }
-
-          await RequestBlocks(hashesRequested);
+          
+          await NetworkChannel.SendMessage(
+            new GetDataMessage(
+              hashesRequested
+              .Select(h => new Inventory(
+                InventoryType.MSG_BLOCK,
+                h))));
 
           var cancellationDownloadBlocks =
             new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
@@ -93,6 +66,26 @@ namespace BToken.Chaining
 
             blockBatchContainer.TryParse();
             uTXOBatch.CountItems += blockBatchContainer.CountItems;
+          }
+        }
+
+
+
+        async Task<byte[]> ReceiveBlock(CancellationToken cancellationToken)
+        {
+          while (true)
+          {
+            NetworkMessage networkMessage =
+              await NetworkChannel
+              .ReceiveApplicationMessage(cancellationToken)
+              .ConfigureAwait(false);
+
+            if (networkMessage.Command != "block")
+            {
+              continue;
+            }
+
+            return networkMessage.Payload;
           }
         }
 

@@ -65,7 +65,8 @@ namespace BToken.Chaining
 
     void InsertContainer(HeaderContainer container)
     {
-      Chain rivalChain = Inserter.InsertHeaderRoot(container.HeaderRoot);
+      Chain rivalChain = Inserter.InsertHeaderRoot(
+        container.HeaderRoot);
       
       if (
         rivalChain != null 

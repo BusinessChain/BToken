@@ -17,8 +17,6 @@ namespace BToken.Chaining
     public int CountItems;
     public bool IsFinalBatch;
 
-    Network.INetworkChannel Channel;
-
 
     public DataBatch()
     {

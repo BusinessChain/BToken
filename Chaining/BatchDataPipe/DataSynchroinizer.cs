@@ -13,14 +13,17 @@ namespace BToken.Chaining
     protected DirectoryInfo ArchiveDirectory;
 
     int SizeBatchArchive;
-
-    protected readonly object LOCK_IsSyncing = new object();
-
+    int CountSyncSessions;
 
 
-    public DataSynchronizer(int sizeBatchArchive)
+
+
+    public DataSynchronizer(
+      int sizeBatchArchive,
+      int countSyncSessions)
     {
       SizeBatchArchive = sizeBatchArchive;
+      CountSyncSessions = countSyncSessions;
     }
 
 
@@ -32,18 +35,27 @@ namespace BToken.Chaining
 
       await SynchronizeWithArchive();
       
-      StartInputBatchBuffer();
+      StartBatchSynchronizationBuffer();
 
       await Task.WhenAll(StartSyncSessionTasks());
-
-      SetIsSyncingCompleted();
     }
 
     protected abstract void LoadImage(
       out int archiveIndexNext);
 
-    protected abstract Task[] StartSyncSessionTasks();
+    protected Task[] StartSyncSessionTasks()
+    {
+      Task[] syncTasks = new Task[CountSyncSessions];
 
+      for (int i = 0; i < CountSyncSessions; i += 1)
+      {
+        syncTasks[i] = RunSyncSession();
+      }
+
+      return syncTasks;
+    }
+
+    protected abstract Task RunSyncSession();
 
 
     int ArchiveIndexStore;
@@ -174,7 +186,7 @@ namespace BToken.Chaining
 
 
     
-    public BufferBlock<DataBatch> InputBuffer = 
+    public BufferBlock<DataBatch> BatchSynchronizationBuffer = 
       new BufferBlock<DataBatch>(
         new DataflowBlockOptions { BoundedCapacity = 10 });
     int BatchIndex;
@@ -182,11 +194,13 @@ namespace BToken.Chaining
     Dictionary<int, DataBatch> QueueDownloadBatch = 
       new Dictionary<int, DataBatch>();
 
-    async Task StartInputBatchBuffer()
+    async Task StartBatchSynchronizationBuffer()
     {
       while (true)
       {
-        DataBatch batch = await InputBuffer.ReceiveAsync().ConfigureAwait(false);
+        DataBatch batch = await BatchSynchronizationBuffer
+          .ReceiveAsync()
+          .ConfigureAwait(false);
 
         if (batch.Index != BatchIndex)
         {
@@ -197,6 +211,18 @@ namespace BToken.Chaining
         do
         {
           TryInsertBatch(batch);
+
+          if(batch.IsFinalBatch)
+          {
+            SetIsSyncingCompleted();
+
+            Console.WriteLine(
+              "{0} received final batch {1} completed syncing",
+              GetType().Name,
+              batch.Index);
+
+            return;
+          }
 
           BatchIndex += 1;
 
@@ -275,9 +301,6 @@ namespace BToken.Chaining
     }
 
 
-    protected abstract void ArchiveImage(int archiveIndexStore);
-
-
     async Task ArchiveContainers(
       string directoryPath,
       int archiveIndex)
@@ -286,7 +309,7 @@ namespace BToken.Chaining
         directoryPath,
         archiveIndex.ToString());
 
-      while(true)
+      while (true)
       {
         try
         {
@@ -322,6 +345,9 @@ namespace BToken.Chaining
         }
       }
     }
+
+
+    protected abstract void ArchiveImage(int archiveIndexStore);
 
 
     protected readonly object LOCK_IsSyncingCompleted = new object();

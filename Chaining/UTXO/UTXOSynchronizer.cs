@@ -1,10 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 
 using BToken.Networking;
 
@@ -14,7 +14,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    partial class UTXOSynchronizer : DataSynchronizer
+    public partial class UTXOSynchronizer : DataSynchronizer
     {
       UTXOTable UTXOTable;
 
@@ -23,10 +23,14 @@ namespace BToken.Chaining
 
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
+      const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
+
 
 
       public UTXOSynchronizer(UTXOTable uTXOTable)
-        : base(SIZE_BATCH_ARCHIVE)
+        : base(
+            SIZE_BATCH_ARCHIVE,
+            COUNT_UTXO_SESSIONS)
       {
         UTXOTable = uTXOTable;
 
@@ -34,23 +38,78 @@ namespace BToken.Chaining
           "J:\\BlockArchivePartitioned");
       }
 
-      
 
-      protected override Task[] StartSyncSessionTasks()
+      protected override async Task RunSyncSession()
       {
-        UTXOTable.HeaderLoad = UTXOTable.Header;
+        Stopwatch stopwatchDownload = new Stopwatch();
+        int countBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+        DataBatch uTXOBatch = null;
 
-        Task[] syncTasks = new Task[COUNT_UTXO_SESSIONS];
 
-        for (int i = 0; i < COUNT_UTXO_SESSIONS; i += 1)
+        while(true)
         {
-          syncTasks[i] = new SyncUTXOSession(this).Start();
-        }
+          UTXOChannel channel = await RequestChannel();
 
-        return syncTasks;
+          try
+          {
+            while (TryGetBatch(out uTXOBatch, countBlocks))
+            {
+              stopwatchDownload.Restart();
+
+              await channel.DownloadBlocks(uTXOBatch);
+
+              stopwatchDownload.Stop();
+
+              await BatchSynchronizationBuffer.SendAsync(uTXOBatch);
+
+              CalculateNewCountBlocks(
+                ref countBlocks,
+                stopwatchDownload.ElapsedMilliseconds);
+            }
+
+            channel.Release();
+
+            return;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine("Exception {0} in block download: \n{1}" +
+              "batch {2} queued",
+              ex.GetType().Name,
+              ex.Message,
+              uTXOBatch.Index);
+
+            QueueBatchesCanceled.Enqueue(uTXOBatch);
+
+            channel.Dispose();
+
+            countBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+          }
+        }
       }
 
+      static void CalculateNewCountBlocks(ref int countBlocks, long timeDownloadMilliseconds)
+      {
+        const float safetyFactorTimeout = 10;
+        const float marginFactorResetCountBlocksDownload = 5;
 
+        float ratioTimeoutToDownloadTime = TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS
+          / (1 + timeDownloadMilliseconds);
+
+        if (ratioTimeoutToDownloadTime > safetyFactorTimeout)
+        {
+          countBlocks += 1;
+        }
+        else if (ratioTimeoutToDownloadTime < marginFactorResetCountBlocksDownload &&
+          countBlocks > COUNT_BLOCKS_DOWNLOADBATCH_INIT)
+        {
+          countBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+        }
+        else if (countBlocks > 1)
+        {
+          countBlocks -= 1;
+        }
+      }
 
       ConcurrentQueue<DataBatch> QueueBatchesCanceled
         = new ConcurrentQueue<DataBatch>();
@@ -175,12 +234,12 @@ namespace BToken.Chaining
         {
           try
           {
-            await uTXOChannel.StartBlockDownloadAsync(
-              batch);
+            await uTXOChannel.DownloadBlocks(batch);
           }
           catch
           {
-            Console.WriteLine("could not download batch {0} from {1}",
+            Console.WriteLine(
+              "could not download batch {0} from {1}",
               batch.Index,
               channel.GetIdentification());
 
@@ -191,12 +250,14 @@ namespace BToken.Chaining
 
           if (TryInsertBatch(batch))
           {
-            Console.WriteLine("inserted batch {0} in UTXO table",
+            Console.WriteLine(
+              "inserted batch {0} in UTXO table",
               batch.Index);
           }
           else
           {
-            Console.WriteLine("could not insert batch {0} in UTXO table",
+            Console.WriteLine(
+              "could not insert batch {0} in UTXO table",
               batch.Index);
 
             return false;

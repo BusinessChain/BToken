@@ -11,7 +11,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class UTXOTable
+  partial class UTXOTable
   {
     byte[] GenesisBlockBytes;
     
@@ -315,7 +315,6 @@ namespace BToken.Chaining
 
     
     
-    readonly object LOCK_HeaderLoad = new object();
     int IndexLoad;
     Header HeaderLoad;
 
@@ -323,36 +322,38 @@ namespace BToken.Chaining
       out DataBatch uTXOBatch,
       int countHeaders)
     {
-      lock (LOCK_HeaderLoad)
+      if (HeaderLoad == null)
       {
+        HeaderLoad = Header;
+      }
+
+      if (HeaderLoad.HeadersNext.Count == 0)
+      {
+        uTXOBatch = null;
+        return false;
+      }
+
+      uTXOBatch = new DataBatch(IndexLoad++);
+
+      for (int i = 0; i < countHeaders; i += 1)
+      {
+        HeaderLoad = HeaderLoad.HeadersNext[0];
+
+        BlockContainer blockContainer =
+          new BlockContainer(
+            Headerchain,
+            HeaderLoad);
+
+        uTXOBatch.DataContainers.Add(blockContainer);
+
         if (HeaderLoad.HeadersNext.Count == 0)
         {
-          uTXOBatch = null;
-          return false;
+          uTXOBatch.IsFinalBatch = true;
+          break;
         }
-
-        uTXOBatch = new DataBatch(IndexLoad++);
-
-        for (int i = 0; i < countHeaders; i += 1)
-        {
-          HeaderLoad = HeaderLoad.HeadersNext[0];
-
-          BlockContainer blockContainer =
-            new BlockContainer(
-              Headerchain,
-              HeaderLoad);
-
-          uTXOBatch.DataContainers.Add(blockContainer);
-
-          if (HeaderLoad.HeadersNext.Count == 0)
-          {
-            uTXOBatch.IsFinalBatch = true;
-            break;
-          }
-        }
-
-        return true;
       }
+
+      return true;
     }
 
     public void UnLoadBatch(DataBatch uTXOBatch)
@@ -360,41 +361,7 @@ namespace BToken.Chaining
       throw new NotImplementedException();
     }
 
-
-    //public bool TryInsertHeaderBytes(
-    //  byte[] buffer,
-    //  out DataBatch batch)
-    //{
-    //  var headerContainer =
-    //    new Headerchain.HeaderBatchContainer(
-    //      ArchiveIndex,
-    //      buffer);
-
-    //  headerContainer.Parse();
-
-    //  if (
-    //    !headerContainer.IsValid ||
-    //    !Headerchain.TryInsertContainer(headerContainer))
-    //  {
-    //    countHeaders = 0;
-    //    return false;
-    //  }
-
-    //  ArchiveContainers(Containers);
-
-    //  if (CountItems >= SIZE_OUTPUT_BATCH)
-    //  {
-    //    Containers = new List<DataBatchContainer>();
-    //    CountItems = 0;
-
-    //    ArchiveIndex += 1;
-    //  }
-
-    //  countHeaders = headerContainer.CountItems;
-    //  return true;
-    //}
-
-
+       
     void LogInsertion(BlockContainer container)
     {
       if (UTCTimeStartMerger == 0)
