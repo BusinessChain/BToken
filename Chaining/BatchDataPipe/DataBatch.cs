@@ -16,6 +16,7 @@ namespace BToken.Chaining
     public List<DataContainer> DataContainers;
     public int CountItems;
     public bool IsFinalBatch;
+    public bool IsCancellationBatch;
 
 
     public DataBatch()

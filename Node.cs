@@ -100,7 +100,7 @@ namespace BToken
                 Console.WriteLine("header message from channel {0}",
                   channel.GetIdentification());
 
-                if(!Headerchain.Synchronizer.GetIsSyncingCompleted())
+                if(!UTXOTable.Synchronizer.GetIsSyncingCompleted())
                 {
                   channel.Release();
                   break;
@@ -109,17 +109,11 @@ namespace BToken
                 if (Headerchain.Synchronizer.TryInsertHeaderBytes(
                   headersMessage.Payload))
                 {
-                  if (!UTXOTable.Synchronizer.GetIsSyncingCompleted())
-                  {
-                    channel.Release();
-                    break;
-                  }
-
-                  if(!await UTXOTable.Synchronizer.TrySynchronize(channel))
-                  {
-                    Console.WriteLine("Could not synchronize UTXO, with channel {0}",
-                      channel.GetIdentification());
-                  }
+                  //if(!await UTXOTable.Synchronizer.TrySynchronize(channel))
+                  //{
+                  //  Console.WriteLine("Could not synchronize UTXO, with channel {0}",
+                  //    channel.GetIdentification());
+                  //}
                 }
                 else
                 {

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,116 +50,109 @@ namespace BToken.Chaining
 
       protected override async Task RunSyncSession()
       {
-        Network.INetworkChannel channel = 
-          await Headerchain.Network.RequestChannel();
-
-        lock (LOCK_IsAnySessionSyncing)
+        while(true)
         {
-          if (IsAnySessionSyncing)
-          {
-            channel.Release();
-            return;
-          }
-
-          IsAnySessionSyncing = true;
-        }
-
-        try
-        {
-          if (HeaderBatch == null)
-          {
-            HeaderBatch = CreateHeaderBatch();
-          }
-
-          await DownloadHeaders(channel);
-
-          while (HeaderBatch.CountItems > 0)
-          {
-            if (HeaderBatchOld != null)
-            {
-              await BatchSynchronizationBuffer
-                .SendAsync(HeaderBatchOld);
-            }
-
-            HeaderBatchOld = HeaderBatch;
-
-            HeaderBatch = CreateNextHeaderBatch();
-            await DownloadHeaders(channel);
-          }
-
-          if (HeaderBatchOld != null)
-          {
-            HeaderBatchOld.IsFinalBatch = true;
-
-            await BatchSynchronizationBuffer
-              .SendAsync(HeaderBatchOld);
-          }
-
-          channel.Release();
-
-          return;
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine(
-            "{0} in SyncHeaderchainSession {1} with channel {2}: '{3}'",
-            ex.GetType().Name,
-            GetHashCode(),
-            channel == null ? "'null'" : channel.GetIdentification(),
-            ex.Message);
-
-          channel.Dispose();
+          Network.INetworkChannel channel =
+            await Headerchain.Network.RequestChannel();
 
           lock (LOCK_IsAnySessionSyncing)
           {
-            IsAnySessionSyncing = false;
+            if (IsAnySessionSyncing)
+            {
+              channel.Release();
+              return;
+            }
+
+            IsAnySessionSyncing = true;
+          }
+
+          try
+          {
+            do
+            {
+              HeaderBatch = LoadBatch();
+
+              await DownloadHeaders(channel);
+
+              if(HeaderBatch.CountItems == 0)
+              {
+                HeaderBatch.IsCancellationBatch = true;
+              }
+
+              await BatchSynchronizationBuffer
+                .SendAsync(HeaderBatch);
+
+            } while (!HeaderBatch.IsCancellationBatch);
+            
+            channel.Release();
+
+            return;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "{0} in SyncHeaderchainSession {1} with channel {2}: '{3}'",
+              ex.GetType().Name,
+              GetHashCode(),
+              channel == null ? "'null'" : channel.GetIdentification(),
+              ex.Message);
+
+            QueueBatchesCanceled.Enqueue(HeaderBatch);
+
+            channel.Dispose();
+
+            lock (LOCK_IsAnySessionSyncing)
+            {
+              IsAnySessionSyncing = false;
+            }
           }
         }
-
-        await Task.WhenAll(StartSyncSessionTasks());
       }
 
 
 
-      DataBatch CreateHeaderBatch()
-      {
-        IEnumerable<byte[]> locatorHashes;
+      ConcurrentQueue<DataBatch> QueueBatchesCanceled
+        = new ConcurrentQueue<DataBatch>();
 
-        lock (Headerchain.LOCK_Chain)
+      DataBatch LoadBatch()
+      {
+        if (QueueBatchesCanceled.TryDequeue(out DataBatch headerBatch))
         {
-          locatorHashes = Headerchain.Locator.GetHeaderHashes();
+          return headerBatch;
         }
 
-        return new DataBatch()
+        if (HeaderBatch == null)
         {
-          Index = 0,
-
-          DataContainers = new List<DataContainer>()
+          lock (Headerchain.LOCK_Chain)
+          {
+            return new DataBatch()
             {
-              new HeaderContainer(locatorHashes)
-            }
-        };
-      }
+              Index = 0,
 
-      DataBatch CreateNextHeaderBatch()
-      {
-        byte[] nextLocatorHash =
-          ((HeaderContainer)HeaderBatch.DataContainers[0])
-          .HeaderTip.HeaderHash;
-
+              DataContainers = new List<DataContainer>()
+              {
+                new HeaderContainer(
+                  Headerchain.
+                  Locator.
+                  GetHeaderHashes())
+              }
+            };
+          }
+        }
+        
         return new DataBatch()
         {
           Index = HeaderBatch.Index + 1,
 
           DataContainers = new List<DataContainer>()
-            {
-              new HeaderContainer(
-                new List<byte[]> { nextLocatorHash })
-            }
+          {
+            new HeaderContainer(
+              HeaderBatch.DataContainers
+              .Select(d => ((HeaderContainer)d).HeaderTip.HeaderHash))
+          }
         };
       }
-
-
+      
 
 
       async Task DownloadHeaders(Network.INetworkChannel channel)

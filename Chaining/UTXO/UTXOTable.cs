@@ -315,47 +315,6 @@ namespace BToken.Chaining
 
     
     
-    int IndexLoad;
-    Header HeaderLoad;
-
-    public bool TryLoadBatch(
-      out DataBatch uTXOBatch,
-      int countHeaders)
-    {
-      if (HeaderLoad == null)
-      {
-        HeaderLoad = Header;
-      }
-
-      if (HeaderLoad.HeadersNext.Count == 0)
-      {
-        uTXOBatch = null;
-        return false;
-      }
-
-      uTXOBatch = new DataBatch(IndexLoad++);
-
-      for (int i = 0; i < countHeaders; i += 1)
-      {
-        HeaderLoad = HeaderLoad.HeadersNext[0];
-
-        BlockContainer blockContainer =
-          new BlockContainer(
-            Headerchain,
-            HeaderLoad);
-
-        uTXOBatch.DataContainers.Add(blockContainer);
-
-        if (HeaderLoad.HeadersNext.Count == 0)
-        {
-          uTXOBatch.IsFinalBatch = true;
-          break;
-        }
-      }
-
-      return true;
-    }
-
     public void UnLoadBatch(DataBatch uTXOBatch)
     {
       throw new NotImplementedException();

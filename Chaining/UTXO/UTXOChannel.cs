@@ -30,6 +30,11 @@ namespace BToken.Chaining
 
         public async Task DownloadBlocks(DataBatch uTXOBatch)
         {
+          if(uTXOBatch.DataContainers.Count == 0)
+          {
+            return;
+          }
+
           List<byte[]> hashesRequested = new List<byte[]>();
 
           foreach (BlockContainer blockBatchContainer in
