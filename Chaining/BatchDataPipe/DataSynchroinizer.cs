@@ -44,6 +44,7 @@ namespace BToken.Chaining
       }
 
       await SignalSynchronizationCompleted.Task;
+      SetIsSyncingCompleted();
 
       Console.WriteLine("{0} synchronization completed",
         GetType().Name);
@@ -55,7 +56,7 @@ namespace BToken.Chaining
     protected abstract Task RunSyncSession();
 
 
-    int ArchiveIndexStore;
+    protected int ArchiveIndexStore;
     const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
 
@@ -210,9 +211,7 @@ namespace BToken.Chaining
         {
           if (batch.IsCancellationBatch)
           {
-            ArchiveContainers(
-              ArchiveDirectory.FullName,
-              ArchiveIndexStore);
+            ArchiveContainers();
 
             SignalSynchronizationCompleted.SetResult(null);
             return;
@@ -271,9 +270,7 @@ namespace BToken.Chaining
       
       if (CountItems >= SizeBatchArchive)
       {
-        ArchiveContainers(
-          ArchiveDirectory.FullName,
-          ArchiveIndexStore);
+        ArchiveContainers();
 
         Containers = new List<DataContainer>();
         CountItems = 0;
@@ -285,13 +282,11 @@ namespace BToken.Chaining
     }
 
 
-    async Task ArchiveContainers(
-      string directoryPath,
-      int archiveIndex)
+    protected async Task ArchiveContainers()
     {
       string filePath = Path.Combine(
-        directoryPath,
-        archiveIndex.ToString());
+        ArchiveDirectory.FullName,
+        ArchiveIndexStore.ToString());
 
       while (true)
       {

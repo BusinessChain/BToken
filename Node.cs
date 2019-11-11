@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 
@@ -55,8 +56,27 @@ namespace BToken
       Wallet.GeneratePublicKey();
     }
 
-    
-    
+
+
+    async Task<byte[]> ReceiveBlock(
+      Network.INetworkChannel channel,
+      CancellationToken cancellationToken)
+    {
+      while (true)
+      {
+        NetworkMessage networkMessage = await channel
+          .ReceiveApplicationMessage(cancellationToken)
+          .ConfigureAwait(false);
+
+        if (networkMessage.Command != "block")
+        {
+          continue;
+        }
+
+        return networkMessage.Payload;
+      }
+    }
+
     async Task StartListener()
     {
       while (true)
@@ -82,14 +102,38 @@ namespace BToken
                 break;
 
               case "inv":
+
+                if (!UTXOTable.Synchronizer.GetIsSyncingCompleted())
+                {
+                  channel.Release();
+                  break;
+                }
+
                 var invMessage = new InvMessage(message);
 
-                if (invMessage.Inventories.First().Type.ToString() == "MSG_BLOCK")
+                if(invMessage.Inventories.Any(
+                  inv => inv.Type.ToString() == "MSG_BLOCK"))
                 {
-                  Console.WriteLine("inv message with {0} {1} from channel {2}",
-                    invMessage.Inventories.Count,
-                    invMessage.Inventories.First().Type.ToString(),
+                  Console.WriteLine("block inventory message from channel {0}",
                     channel.GetIdentification());
+
+                  Headerchain.Synchronizer.LoadBatch();
+                  Headerchain.Synchronizer.DownloadHeaders(channel);
+
+                  if(Headerchain.Synchronizer.TryInsertBatch())
+                  {
+                    if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
+                    {
+                      Console.WriteLine("Could not synchronize UTXO, with channel {0}",
+                        channel.GetIdentification());
+                    }
+                  }
+                  else
+                  {
+                    Console.WriteLine(
+                      "Failed to insert header message from channel {0}",
+                      channel.GetIdentification());
+                  }
                 }
 
                 break;
@@ -97,23 +141,23 @@ namespace BToken
               case "headers":
                 var headersMessage = new HeadersMessage(message);
 
-                Console.WriteLine("header message from channel {0}",
-                  channel.GetIdentification());
-
                 if(!UTXOTable.Synchronizer.GetIsSyncingCompleted())
                 {
                   channel.Release();
                   break;
                 }
 
+                Console.WriteLine("header message from channel {0}",
+                  channel.GetIdentification());
+
                 if (Headerchain.Synchronizer.TryInsertHeaderBytes(
                   headersMessage.Payload))
                 {
-                  //if(!await UTXOTable.Synchronizer.TrySynchronize(channel))
-                  //{
-                  //  Console.WriteLine("Could not synchronize UTXO, with channel {0}",
-                  //    channel.GetIdentification());
-                  //}
+                  if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
+                  {
+                    Console.WriteLine("Could not synchronize UTXO, with channel {0}",
+                      channel.GetIdentification());
+                  }
                 }
                 else
                 {

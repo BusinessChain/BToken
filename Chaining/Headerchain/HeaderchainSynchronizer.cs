@@ -27,6 +27,11 @@ namespace BToken.Chaining
       const int COUNT_HEADER_SESSIONS = 4;
       const int SIZE_BATCH_ARCHIVE = 50000;
 
+      const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
+      DataBatch HeaderBatch;
+      
+      ConcurrentQueue<DataBatch> QueueBatchesCanceled
+        = new ConcurrentQueue<DataBatch>();
 
 
       public HeaderchainSynchronizer(Headerchain headerchain)
@@ -43,10 +48,6 @@ namespace BToken.Chaining
       }
 
 
-
-      const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
-      DataBatch HeaderBatch;
-      DataBatch HeaderBatchOld;
 
       protected override async Task RunSyncSession()
       {
@@ -70,7 +71,7 @@ namespace BToken.Chaining
           {
             do
             {
-              HeaderBatch = LoadBatch();
+              LoadBatch();
 
               await DownloadHeaders(channel);
 
@@ -111,36 +112,37 @@ namespace BToken.Chaining
 
 
 
-      ConcurrentQueue<DataBatch> QueueBatchesCanceled
-        = new ConcurrentQueue<DataBatch>();
-
-      DataBatch LoadBatch()
+      public void LoadBatch()
       {
         if (QueueBatchesCanceled.TryDequeue(out DataBatch headerBatch))
         {
-          return headerBatch;
+          HeaderBatch = headerBatch;
+          return;
         }
 
-        if (HeaderBatch == null)
+        if (HeaderBatch == null || HeaderBatch.IsCancellationBatch)
         {
+          IEnumerable<byte[]> headerLocator;
+
           lock (Headerchain.LOCK_Chain)
           {
-            return new DataBatch()
-            {
-              Index = 0,
-
-              DataContainers = new List<DataContainer>()
-              {
-                new HeaderContainer(
-                  Headerchain.
-                  Locator.
-                  GetHeaderHashes())
-              }
-            };
+            headerLocator = Headerchain.Locator.GetHeaderHashes();
           }
+          
+          HeaderBatch = new DataBatch()
+          {
+            Index = 0,
+
+            DataContainers = new List<DataContainer>()
+            {
+              new HeaderContainer(headerLocator)
+            }
+          };
+
+          return;
         }
-        
-        return new DataBatch()
+
+        HeaderBatch = new DataBatch()
         {
           Index = HeaderBatch.Index + 1,
 
@@ -155,7 +157,7 @@ namespace BToken.Chaining
       
 
 
-      async Task DownloadHeaders(Network.INetworkChannel channel)
+      public async Task DownloadHeaders(Network.INetworkChannel channel)
       {
         int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
 
@@ -200,50 +202,33 @@ namespace BToken.Chaining
         return new HeaderContainer(index);
       }
 
-           
 
-      public bool TryInsertHeaderBytes(
-        byte[] buffer)
+      public bool TryInsertHeaderBytes(byte[] buffer)
       {
-        DataBatch batch = new DataBatch()
+        HeaderBatch = new DataBatch()
         {
           DataContainers = new List<DataContainer>()
-        {
-          new HeaderContainer(buffer)
-        },
-
-          IsFinalBatch = true
+          {
+            new HeaderContainer(buffer)
+          }
         };
 
-        batch.TryParse();
+        HeaderBatch.TryParse();
 
-        if(TryInsertBatch(batch))
+        return TryInsertBatch();
+      }
+
+      public bool TryInsertBatch()
+      {
+        if (TryInsertBatch(HeaderBatch))
         {
-          foreach(HeaderContainer headerContainer 
-            in batch.DataContainers)
-          {
-            Header header = headerContainer.HeaderRoot;
-            while (true)
-            {
-              Console.WriteLine("inserted header {0}, height {1}",
-                header.HeaderHash.ToHexString(),
-                Headerchain.GetHeight());
-
-              if (header == headerContainer.HeaderTip)
-              {
-                break;
-              }
-
-              header = header.HeadersNext.First();
-            }
-          }
-
+          ArchiveContainers();
           return true;
         }
 
         return false;
       }
-
+      
 
 
       protected override bool TryInsertContainer(
@@ -253,10 +238,6 @@ namespace BToken.Chaining
         {
           Headerchain.InsertContainer(
             (HeaderContainer)container);
-
-          Console.WriteLine("Inserted {0} header, blockheight {1}",
-            container.CountItems,
-            Headerchain.GetHeight());
 
           return true;
         }

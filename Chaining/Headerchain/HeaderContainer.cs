@@ -59,7 +59,11 @@ namespace BToken.Chaining
 
           CountItems += headersCount;
 
-          HeaderRoot = Header.ParseHeader(Buffer, ref bufferIndex, SHA256);
+          HeaderRoot = Header.ParseHeader(
+            Buffer, 
+            ref bufferIndex, 
+            SHA256);
+
           bufferIndex += 1; // skip txCount
 
           ValidateHeader(HeaderRoot);

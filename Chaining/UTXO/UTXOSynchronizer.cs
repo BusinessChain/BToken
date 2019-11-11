@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.IO;
@@ -24,6 +25,7 @@ namespace BToken.Chaining
 
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
+      const int UTXOSTATE_ARCHIVING_INTERVAL = 50;
       const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
 
 
@@ -59,12 +61,7 @@ namespace BToken.Chaining
               stopwatchDownload.Restart();
 
               await channel.DownloadBlocks(uTXOBatch);
-
-              if (uTXOBatch.CountItems == 0)
-              {
-                uTXOBatch.IsCancellationBatch = true;
-              }
-
+              
               stopwatchDownload.Stop();
 
               await BatchSynchronizationBuffer.SendAsync(uTXOBatch);
@@ -147,7 +144,7 @@ namespace BToken.Chaining
             if (HeaderLoad.HeadersNext.Count == 0)
             {
               uTXOBatch.IsCancellationBatch = (i == 0);
-              break;
+              return uTXOBatch; ;
             }
 
             HeaderLoad = HeaderLoad.HeadersNext[0];
@@ -260,48 +257,78 @@ namespace BToken.Chaining
 
 
 
-      //public async Task<bool> TrySynchronize(
-      //  Network.INetworkChannel channel)
-      //{
-      //  UTXOChannel uTXOChannel = new UTXOChannel(channel);
+      public async Task<bool> TrySynchronize(
+        Network.INetworkChannel channel)
+      {
+        UTXOChannel uTXOChannel = new UTXOChannel(channel);
 
-      //  while (UTXOTable.TryLoadBatch(
-      //    out DataBatch batch, 1))
-      //  {
-      //    try
-      //    {
-      //      await uTXOChannel.DownloadBlocks(batch);
-      //    }
-      //    catch
-      //    {
-      //      Console.WriteLine(
-      //        "could not download batch {0} from {1}",
-      //        batch.Index,
-      //        channel.GetIdentification());
+        while (true)
+        {
+          DataBatch batch = LoadBatch(1);
 
-      //      UTXOTable.UnLoadBatch(batch);
-      //      return false;
-      //    }
+          try
+          {
+            await uTXOChannel.DownloadBlocks(batch);
+          }
+          catch
+          {
+            Console.WriteLine(
+              "could not download batch {0} from {1}",
+              batch.Index,
+              channel.GetIdentification());
+
+            UTXOTable.UnLoadBatch(batch);
+            return false;
+          }
+
+          if (batch.CountItems == 0)
+          {
+            ArchiveContainers();
+            return true;
+          }
+
+          if (TryInsertBatch(batch))
+          {
+            Console.WriteLine(
+              "inserted batch {0} in UTXO table",
+              batch.Index);
+          }
+          else
+          {
+            Console.WriteLine(
+              "could not insert batch {0} in UTXO table",
+              batch.Index);
+
+            return false;
+          }
+        }
+
+      }
 
 
-      //    if (TryInsertBatch(batch))
-      //    {
-      //      Console.WriteLine(
-      //        "inserted batch {0} in UTXO table",
-      //        batch.Index);
-      //    }
-      //    else
-      //    {
-      //      Console.WriteLine(
-      //        "could not insert batch {0} in UTXO table",
-      //        batch.Index);
+      public bool TryInsertBlockBytes(byte[] buffer)
+      {
+        DataBatch batch = new DataBatch()
+        {
+          DataContainers = new List<DataContainer>()
+          {
+            new BlockContainer(
+              UTXOTable.Headerchain,
+              -1,
+              buffer)
+          }
+        };
 
-      //      return false;
-      //    }
-      //  }
+        batch.TryParse();
 
-      //  return true;
-      //}
+        if (TryInsertBatch(batch))
+        {
+          ArchiveContainers();
+          return true;
+        }
+
+        return false;
+      }
     }
   }
 }

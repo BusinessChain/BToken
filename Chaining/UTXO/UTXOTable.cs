@@ -34,7 +34,6 @@ namespace BToken.Chaining
     UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
     UTXOIndexUInt32ArrayCompressed TableUInt32Array = new UTXOIndexUInt32ArrayCompressed();
 
-    const int UTXOSTATE_ARCHIVING_INTERVAL = 100;
     static string PathUTXOState = "UTXOArchive";
     static string PathUTXOStateOld = PathUTXOState + "_Old";
 
@@ -257,7 +256,8 @@ namespace BToken.Chaining
     {
       try
       {
-        byte[] uTXOState = File.ReadAllBytes(Path.Combine(PathUTXOState, "UTXOState"));
+        byte[] uTXOState = File.ReadAllBytes(
+          Path.Combine(PathUTXOState, "UTXOState"));
 
         archiveIndex = BitConverter.ToInt32(uTXOState, 0);
         BlockHeight = BitConverter.ToInt32(uTXOState, 4);
