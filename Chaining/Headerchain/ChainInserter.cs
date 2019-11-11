@@ -167,13 +167,19 @@ namespace BToken.Chaining
       void FindPreviousHeader(Header header)
       {
         Probe.Chain = Headerchain.MainChain;
-        if (Probe.GoTo(header.HashPrevious, Headerchain.MainChain.HeaderRoot))
+
+        if (Probe.GoTo(
+          header.HashPrevious, 
+          Headerchain.MainChain.HeaderRoot))
         { return; }
 
         foreach (Chain chain in Headerchain.SecondaryChains)
         {
           Probe.Chain = chain;
-          if (Probe.GoTo(header.HashPrevious, chain.HeaderRoot)) { return; }
+          if (Probe.GoTo(
+            header.HashPrevious, 
+            chain.HeaderRoot))
+          { return; }
         }
 
         throw new ChainException(

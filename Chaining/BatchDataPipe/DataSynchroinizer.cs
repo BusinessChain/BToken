@@ -12,46 +12,57 @@ namespace BToken.Chaining
     int ArchiveIndexLoad;
     protected DirectoryInfo ArchiveDirectory;
 
+    protected TaskCompletionSource<object> SignalSynchronizationCompleted =
+      new TaskCompletionSource<object>();
+
     int SizeBatchArchive;
-
-    protected readonly object LOCK_IsSyncing = new object();
-
+    int CountSyncSessions;
 
 
-    public DataSynchronizer(int sizeBatchArchive)
+
+
+    public DataSynchronizer(
+      int sizeBatchArchive,
+      int countSyncSessions)
     {
       SizeBatchArchive = sizeBatchArchive;
+      CountSyncSessions = countSyncSessions;
     }
 
 
     public async Task Start()
     {
       LoadImage(out int archiveIndex);
-
-      ArchiveIndexLoad = archiveIndex + 1;
-
-      await SynchronizeWithArchive();
       
-      StartInputBatchBuffer();
+      await SynchronizeWithArchive(archiveIndex);
+      
+      StartBatchSynchronizationBuffer();
 
-      await Task.WhenAll(StartSyncSessionTasks());
+      for (int i = 0; i < CountSyncSessions; i += 1)
+      {
+        RunSyncSession();
+      }
 
+      await SignalSynchronizationCompleted.Task;
       SetIsSyncingCompleted();
+
+      Console.WriteLine("{0} synchronization completed",
+        GetType().Name);
     }
 
     protected abstract void LoadImage(
       out int archiveIndexNext);
 
-    protected abstract Task[] StartSyncSessionTasks();
+    protected abstract Task RunSyncSession();
 
 
-
-    int ArchiveIndexStore;
+    protected int ArchiveIndexStore;
     const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
 
-    async Task SynchronizeWithArchive()
+    async Task SynchronizeWithArchive(int archiveIndex)
     {
+      ArchiveIndexLoad = archiveIndex + 1;
       ArchiveIndexStore = ArchiveIndexLoad;
 
       Parallel.For(
@@ -174,7 +185,7 @@ namespace BToken.Chaining
 
 
     
-    public BufferBlock<DataBatch> InputBuffer = 
+    public BufferBlock<DataBatch> BatchSynchronizationBuffer = 
       new BufferBlock<DataBatch>(
         new DataflowBlockOptions { BoundedCapacity = 10 });
     int BatchIndex;
@@ -182,11 +193,13 @@ namespace BToken.Chaining
     Dictionary<int, DataBatch> QueueDownloadBatch = 
       new Dictionary<int, DataBatch>();
 
-    async Task StartInputBatchBuffer()
+    async Task StartBatchSynchronizationBuffer()
     {
       while (true)
       {
-        DataBatch batch = await InputBuffer.ReceiveAsync().ConfigureAwait(false);
+        DataBatch batch = await BatchSynchronizationBuffer
+          .ReceiveAsync()
+          .ConfigureAwait(false);
 
         if (batch.Index != BatchIndex)
         {
@@ -196,8 +209,16 @@ namespace BToken.Chaining
 
         do
         {
-          TryInsertBatch(batch);
+          if (batch.IsCancellationBatch)
+          {
+            ArchiveContainers();
 
+            SignalSynchronizationCompleted.SetResult(null);
+            return;
+          }
+
+          TryInsertBatch(batch);
+          
           BatchIndex += 1;
 
           if (QueueDownloadBatch.TryGetValue(
@@ -222,19 +243,13 @@ namespace BToken.Chaining
         batch.DataContainers)
       {
         container.Index = ArchiveIndexStore;
-
+        
         if (!TryInsertContainer(container))
         {
           return false;
         }
 
-        bool isFinalContainer =
-          batch.IsFinalBatch &&
-          (container == batch.DataContainers.Last());
-
-        ArchiveContainer(
-          container,
-          isFinalContainer);
+        ArchiveContainer(container);
       }
 
       return true;
@@ -248,45 +263,32 @@ namespace BToken.Chaining
 
 
     void ArchiveContainer(
-      DataContainer container,
-      bool isFinalContainer)
+      DataContainer container)
     {
       Containers.Add(container);
       CountItems += container.CountItems;
       
-      if (
-        CountItems >= SizeBatchArchive ||
-        isFinalContainer)
+      if (CountItems >= SizeBatchArchive)
       {
-        ArchiveContainers(
-          ArchiveDirectory.FullName,
-          ArchiveIndexStore);
+        ArchiveContainers();
 
-        if (CountItems >= SizeBatchArchive)
-        {
-          Containers = new List<DataContainer>();
-          CountItems = 0;
+        Containers = new List<DataContainer>();
+        CountItems = 0;
 
-          ArchiveImage(ArchiveIndexStore);
+        ArchiveImage(ArchiveIndexStore);
 
-          ArchiveIndexStore += 1;
-        }
+        ArchiveIndexStore += 1;
       }
     }
 
 
-    protected abstract void ArchiveImage(int archiveIndexStore);
-
-
-    async Task ArchiveContainers(
-      string directoryPath,
-      int archiveIndex)
+    protected async Task ArchiveContainers()
     {
       string filePath = Path.Combine(
-        directoryPath,
-        archiveIndex.ToString());
+        ArchiveDirectory.FullName,
+        ArchiveIndexStore.ToString());
 
-      while(true)
+      while (true)
       {
         try
         {
@@ -322,6 +324,9 @@ namespace BToken.Chaining
         }
       }
     }
+
+
+    protected abstract void ArchiveImage(int archiveIndexStore);
 
 
     protected readonly object LOCK_IsSyncingCompleted = new object();

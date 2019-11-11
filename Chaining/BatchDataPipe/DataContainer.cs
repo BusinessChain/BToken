@@ -14,8 +14,7 @@ namespace BToken.Chaining
     public byte[] Buffer;
 
 
-
-
+    
     protected DataContainer()
     { }
 

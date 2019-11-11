@@ -13,22 +13,18 @@ namespace BToken.Chaining
   public class DataBatch
   {
     public int Index;
-    public List<DataContainer> DataContainers;
+    public List<DataContainer> DataContainers =
+      new List<DataContainer>();
     public int CountItems;
-    public bool IsFinalBatch;
-
-    Network.INetworkChannel Channel;
+    public bool IsCancellationBatch;
 
 
     public DataBatch()
-    {
-      DataContainers = new List<DataContainer>();
-    }
+    { }
 
     public DataBatch(int index)
     {
       Index = index;
-      DataContainers = new List<DataContainer>();
     }
 
 

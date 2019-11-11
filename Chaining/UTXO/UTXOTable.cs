@@ -11,7 +11,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class UTXOTable
+  partial class UTXOTable
   {
     byte[] GenesisBlockBytes;
     
@@ -34,7 +34,6 @@ namespace BToken.Chaining
     UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
     UTXOIndexUInt32ArrayCompressed TableUInt32Array = new UTXOIndexUInt32ArrayCompressed();
 
-    const int UTXOSTATE_ARCHIVING_INTERVAL = 100;
     static string PathUTXOState = "UTXOArchive";
     static string PathUTXOStateOld = PathUTXOState + "_Old";
 
@@ -257,7 +256,8 @@ namespace BToken.Chaining
     {
       try
       {
-        byte[] uTXOState = File.ReadAllBytes(Path.Combine(PathUTXOState, "UTXOState"));
+        byte[] uTXOState = File.ReadAllBytes(
+          Path.Combine(PathUTXOState, "UTXOState"));
 
         archiveIndex = BitConverter.ToInt32(uTXOState, 0);
         BlockHeight = BitConverter.ToInt32(uTXOState, 4);
@@ -315,86 +315,12 @@ namespace BToken.Chaining
 
     
     
-    readonly object LOCK_HeaderLoad = new object();
-    int IndexLoad;
-    Header HeaderLoad;
-
-    public bool TryLoadBatch(
-      out DataBatch uTXOBatch,
-      int countHeaders)
-    {
-      lock (LOCK_HeaderLoad)
-      {
-        if (HeaderLoad.HeadersNext.Count == 0)
-        {
-          uTXOBatch = null;
-          return false;
-        }
-
-        uTXOBatch = new DataBatch(IndexLoad++);
-
-        for (int i = 0; i < countHeaders; i += 1)
-        {
-          HeaderLoad = HeaderLoad.HeadersNext[0];
-
-          BlockContainer blockContainer =
-            new BlockContainer(
-              Headerchain,
-              HeaderLoad);
-
-          uTXOBatch.DataContainers.Add(blockContainer);
-
-          if (HeaderLoad.HeadersNext.Count == 0)
-          {
-            uTXOBatch.IsFinalBatch = true;
-            break;
-          }
-        }
-
-        return true;
-      }
-    }
-
     public void UnLoadBatch(DataBatch uTXOBatch)
     {
       throw new NotImplementedException();
     }
 
-
-    //public bool TryInsertHeaderBytes(
-    //  byte[] buffer,
-    //  out DataBatch batch)
-    //{
-    //  var headerContainer =
-    //    new Headerchain.HeaderBatchContainer(
-    //      ArchiveIndex,
-    //      buffer);
-
-    //  headerContainer.Parse();
-
-    //  if (
-    //    !headerContainer.IsValid ||
-    //    !Headerchain.TryInsertContainer(headerContainer))
-    //  {
-    //    countHeaders = 0;
-    //    return false;
-    //  }
-
-    //  ArchiveContainers(Containers);
-
-    //  if (CountItems >= SIZE_OUTPUT_BATCH)
-    //  {
-    //    Containers = new List<DataBatchContainer>();
-    //    CountItems = 0;
-
-    //    ArchiveIndex += 1;
-    //  }
-
-    //  countHeaders = headerContainer.CountItems;
-    //  return true;
-    //}
-
-
+       
     void LogInsertion(BlockContainer container)
     {
       if (UTCTimeStartMerger == 0)

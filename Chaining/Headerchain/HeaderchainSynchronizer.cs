@@ -1,10 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Collections.Concurrent;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+
+using BToken.Networking;
+
 
 namespace BToken.Chaining
 {
@@ -14,7 +18,8 @@ namespace BToken.Chaining
     {
       Headerchain Headerchain;
 
-      bool IsSyncing;
+      readonly object LOCK_IsAnySessionSyncing = new object();
+      bool IsAnySessionSyncing;
 
       BufferBlock<Header> HeadersListened =
         new BufferBlock<Header>();
@@ -22,10 +27,17 @@ namespace BToken.Chaining
       const int COUNT_HEADER_SESSIONS = 4;
       const int SIZE_BATCH_ARCHIVE = 50000;
 
+      const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
+      DataBatch HeaderBatch;
+      
+      ConcurrentQueue<DataBatch> QueueBatchesCanceled
+        = new ConcurrentQueue<DataBatch>();
 
 
       public HeaderchainSynchronizer(Headerchain headerchain)
-        : base(SIZE_BATCH_ARCHIVE)
+        : base(
+            SIZE_BATCH_ARCHIVE,
+            COUNT_HEADER_SESSIONS)
       {
         ArchiveDirectory = Directory.CreateDirectory(
           Path.Combine(
@@ -36,57 +48,135 @@ namespace BToken.Chaining
       }
 
 
-      protected override Task[] StartSyncSessionTasks()
+
+      protected override async Task RunSyncSession()
       {
-        Task[] syncTasks = new Task[COUNT_HEADER_SESSIONS];
-
-        for (int i = 0; i < COUNT_HEADER_SESSIONS; i += 1)
+        while(true)
         {
-          syncTasks[i] = new SyncHeaderchainSession(this).Start();
-        }
+          Network.INetworkChannel channel =
+            await Headerchain.Network.RequestChannel();
 
-        return syncTasks;
+          lock (LOCK_IsAnySessionSyncing)
+          {
+            if (IsAnySessionSyncing)
+            {
+              channel.Release();
+              return;
+            }
+
+            IsAnySessionSyncing = true;
+          }
+
+          try
+          {
+            do
+            {
+              LoadBatch();
+
+              await DownloadHeaders(channel);
+
+              if(HeaderBatch.CountItems == 0)
+              {
+                HeaderBatch.IsCancellationBatch = true;
+              }
+
+              await BatchSynchronizationBuffer
+                .SendAsync(HeaderBatch);
+
+            } while (!HeaderBatch.IsCancellationBatch);
+            
+            channel.Release();
+
+            return;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "{0} in SyncHeaderchainSession {1} with channel {2}: '{3}'",
+              ex.GetType().Name,
+              GetHashCode(),
+              channel == null ? "'null'" : channel.GetIdentification(),
+              ex.Message);
+
+            QueueBatchesCanceled.Enqueue(HeaderBatch);
+
+            channel.Dispose();
+
+            lock (LOCK_IsAnySessionSyncing)
+            {
+              IsAnySessionSyncing = false;
+            }
+          }
+        }
       }
 
 
 
-      IEnumerable<byte[]> LocatorHashes;
-      int IndexHeaderBatch;
-      DataBatch HeaderBatchOld;
-      TaskCompletionSource<object> SignalStartHeaderSyncSession =
-        new TaskCompletionSource<object>();
-
-      DataBatch CreateHeaderBatch()
+      public void LoadBatch()
       {
-        int batchIndex;
-        IEnumerable<byte[]> locatorHashes;
-
-        lock (LOCK_IsSyncing)
+        if (QueueBatchesCanceled.TryDequeue(out DataBatch headerBatch))
         {
-          batchIndex = IndexHeaderBatch;
-
-          if (LocatorHashes == null)
-          {
-            lock (Headerchain.LOCK_Chain)
-            {
-              LocatorHashes = Headerchain.Locator.GetHeaderHashes();
-            }
-          }
-
-          locatorHashes = LocatorHashes;
+          HeaderBatch = headerBatch;
+          return;
         }
 
-        return new DataBatch()
+        if (HeaderBatch == null || HeaderBatch.IsCancellationBatch)
         {
-          Index = batchIndex,
+          IEnumerable<byte[]> headerLocator;
+
+          lock (Headerchain.LOCK_Chain)
+          {
+            headerLocator = Headerchain.Locator.GetHeaderHashes();
+          }
+          
+          HeaderBatch = new DataBatch()
+          {
+            Index = 0,
+
+            DataContainers = new List<DataContainer>()
+            {
+              new HeaderContainer(headerLocator)
+            }
+          };
+
+          return;
+        }
+
+        HeaderBatch = new DataBatch()
+        {
+          Index = HeaderBatch.Index + 1,
 
           DataContainers = new List<DataContainer>()
-          { 
-            new HeaderContainer(locatorHashes)
+          {
+            new HeaderContainer(
+              HeaderBatch.DataContainers
+              .Select(d => ((HeaderContainer)d).HeaderTip.HeaderHash))
           }
         };
       }
+      
 
+
+      public async Task DownloadHeaders(Network.INetworkChannel channel)
+      {
+        int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
+
+        CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
+
+        HeaderBatch.CountItems = 0;
+
+        foreach (HeaderContainer headerBatchContainer
+          in HeaderBatch.DataContainers)
+        {
+          headerBatchContainer.Buffer = await channel.GetHeaders(
+            headerBatchContainer.LocatorHashes,
+            cancellation.Token);
+
+          headerBatchContainer.TryParse();
+
+          HeaderBatch.CountItems += headerBatchContainer.CountItems;
+        }
+      }
 
 
       public void ReportInvalidBatch(DataBatch batch)
@@ -112,50 +202,33 @@ namespace BToken.Chaining
         return new HeaderContainer(index);
       }
 
-           
 
-      public bool TryInsertHeaderBytes(
-        byte[] buffer)
+      public bool TryInsertHeaderBytes(byte[] buffer)
       {
-        DataBatch batch = new DataBatch()
+        HeaderBatch = new DataBatch()
         {
           DataContainers = new List<DataContainer>()
-        {
-          new HeaderContainer(buffer)
-        },
-
-          IsFinalBatch = true
+          {
+            new HeaderContainer(buffer)
+          }
         };
 
-        batch.TryParse();
+        HeaderBatch.TryParse();
 
-        if(TryInsertBatch(batch))
+        return TryInsertBatch();
+      }
+
+      public bool TryInsertBatch()
+      {
+        if (TryInsertBatch(HeaderBatch))
         {
-          foreach(HeaderContainer headerContainer 
-            in batch.DataContainers)
-          {
-            Header header = headerContainer.HeaderRoot;
-            while (true)
-            {
-              Console.WriteLine("inserted header {0}, height {1}",
-                header.HeaderHash.ToHexString(),
-                Headerchain.GetHeight());
-
-              if (header == headerContainer.HeaderTip)
-              {
-                break;
-              }
-
-              header = header.HeadersNext.First();
-            }
-          }
-
+          ArchiveContainers();
           return true;
         }
 
         return false;
       }
-
+      
 
 
       protected override bool TryInsertContainer(
@@ -178,9 +251,6 @@ namespace BToken.Chaining
           return false;
         }
       }
-
-
-      
     }
   }
 }

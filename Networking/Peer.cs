@@ -145,6 +145,7 @@ namespace BToken.Networking
         {
           IsDispatched = false;
         }
+
         lock (Network.LOCK_ChannelsOutbound)
         {
           Network.ChannelsOutboundAvailable.Add(this);
@@ -324,44 +325,7 @@ namespace BToken.Networking
         }
       }
 
-
-
-      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
-
-      public async Task DownloadBlocks(DataBatch batch)
-      {
-        IEnumerable<Inventory> inventories = batch.DataContainers
-          .Where(b => b.Buffer == null)
-          .Select(b => new Inventory(
-            InventoryType.MSG_BLOCK,
-            ((UTXOTable.BlockContainer)b).Header.HeaderHash));
-
-        await SendMessage(
-          new GetDataMessage(inventories));
-
-        var cancellationDownloadBlocks =
-          new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-
-        foreach (DataContainer blockBatchContainer 
-          in batch.DataContainers)
-        {
-          while (blockBatchContainer.Buffer == null)
-          {
-            NetworkMessage message = await NetworkMessageStreamer
-              .ReadAsync(default).ConfigureAwait(false);
-                        
-            if (message.Command != "block")
-            {
-              continue;
-            }
-
-            blockBatchContainer.Buffer = message.Payload;
-            blockBatchContainer.TryParse();
-          }
-        }
-      }
-
-
+      
       public string GetIdentification()
       {
         return IPEndPoint.Address.ToString();

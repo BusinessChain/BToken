@@ -28,40 +28,13 @@ namespace BToken.Chaining
 
 
 
-        public async Task RequestBlocks(IEnumerable<byte[]> headerHashes)
+        public async Task DownloadBlocks(DataBatch uTXOBatch)
         {
-          await NetworkChannel.SendMessage(
-            new GetDataMessage(
-              headerHashes
-              .Select(h => new Inventory(
-                InventoryType.MSG_BLOCK,
-                h))));
-        }
-
-
-
-        public async Task<byte[]> ReceiveBlock(CancellationToken cancellationToken)
-        {
-          while (true)
+          if(uTXOBatch.DataContainers.Count == 0)
           {
-            NetworkMessage networkMessage =
-              await NetworkChannel
-              .ReceiveApplicationMessage(cancellationToken)
-              .ConfigureAwait(false);
-
-            if (networkMessage.Command != "block")
-            {
-              continue;
-            }
-
-            return networkMessage.Payload;
+            return;
           }
-        }
 
-
-
-        public async Task StartBlockDownloadAsync(DataBatch uTXOBatch)
-        {
           List<byte[]> hashesRequested = new List<byte[]>();
 
           foreach (BlockContainer blockBatchContainer in
@@ -73,8 +46,13 @@ namespace BToken.Chaining
                 blockBatchContainer.Header.HeaderHash);
             }
           }
-
-          await RequestBlocks(hashesRequested);
+          
+          await NetworkChannel.SendMessage(
+            new GetDataMessage(
+              hashesRequested
+              .Select(h => new Inventory(
+                InventoryType.MSG_BLOCK,
+                h))));
 
           var cancellationDownloadBlocks =
             new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
@@ -93,6 +71,26 @@ namespace BToken.Chaining
 
             blockBatchContainer.TryParse();
             uTXOBatch.CountItems += blockBatchContainer.CountItems;
+          }
+        }
+
+
+
+        async Task<byte[]> ReceiveBlock(CancellationToken cancellationToken)
+        {
+          while (true)
+          {
+            NetworkMessage networkMessage =
+              await NetworkChannel
+              .ReceiveApplicationMessage(cancellationToken)
+              .ConfigureAwait(false);
+
+            if (networkMessage.Command != "block")
+            {
+              continue;
+            }
+
+            return networkMessage.Payload;
           }
         }
 
