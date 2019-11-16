@@ -13,6 +13,7 @@ using BToken.Networking;
 
 namespace BToken
 {
+  // This comment should go into testbench
   partial class Node
   {
     Network Network;
