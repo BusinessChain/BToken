@@ -8,7 +8,6 @@ using BToken.Chaining;
 using BToken.Networking;
 
 
-
 namespace BToken
 {
   partial class Node
