@@ -7,7 +7,7 @@ using System.Linq;
 using BToken.Chaining;
 using BToken.Networking;
 
-// Reorg branch
+// Testbench branch
 
 namespace BToken
 {
