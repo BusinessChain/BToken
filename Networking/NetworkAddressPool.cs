@@ -37,7 +37,7 @@ namespace BToken.Networking
 
       void DownloadIPAddressesFromSeeds()
       {
-        string[] dnsSeeds = File.ReadAllLines("DNSSeeds");
+        string[] dnsSeeds = File.ReadAllLines(@"..\..\DNSSeeds");
 
         foreach (string dnsSeed in dnsSeeds)
         {
