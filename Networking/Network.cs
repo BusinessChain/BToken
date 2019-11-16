@@ -20,7 +20,7 @@ namespace BToken.Networking
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
     const int PEERS_COUNT_INBOUND = 8;
-    const int PEERS_COUNT_OUTBOUND = 8;
+    const int PEERS_COUNT_OUTBOUND = 4;
 
     static UInt64 Nonce = CreateNonce();
 
@@ -57,7 +57,7 @@ namespace BToken.Networking
         0, PEERS_COUNT_OUTBOUND,
         i => CreateOutboundPeer());
 
-      //Task peerInboundListenerTask = StartPeerInboundListenerAsync();
+      Task peerInboundListenerTask = StartPeerInboundListenerAsync();
     }
 
 
@@ -79,6 +79,34 @@ namespace BToken.Networking
       {
         ChannelsOutboundAvailable.Add(peer);
       }
+    }
+
+    readonly object LOCK_IsAddressPoolLocked = new object();
+    bool IsAddressPoolLocked;
+    async Task<IPAddress> GetNodeAddress()
+    {
+      while (true)
+      {
+        lock (LOCK_IsAddressPoolLocked)
+        {
+          if (!IsAddressPoolLocked)
+          {
+            IsAddressPoolLocked = true;
+            break;
+          }
+        }
+
+        await Task.Delay(100);
+      } 
+
+      IPAddress iPAddress = AddressPool.GetNodeAddress();
+
+      lock (LOCK_IsAddressPoolLocked)
+      {
+        IsAddressPoolLocked = false;
+      }
+
+      return iPAddress;
     }
 
     public async Task<INetworkChannel> RequestChannel()
@@ -119,7 +147,10 @@ namespace BToken.Networking
       while (true)
       {
         TcpClient client = await TcpListener.AcceptTcpClientAsync();
-        Console.WriteLine("Received inbound request from " + client.Client.RemoteEndPoint.ToString());
+
+        Console.WriteLine("Received inbound request from {0}",
+          client.Client.RemoteEndPoint.ToString());
+
         Peer peer = new Peer(client, this);
         PeersInbound.Add(peer);
 

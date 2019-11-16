@@ -82,11 +82,27 @@ namespace BToken.Networking
         await SyncStreamToMagicAsync(cancellationToken).ConfigureAwait(false);
 
         await ReadBytesAsync(Header, cancellationToken).ConfigureAwait(false);
-        GetCommand();
-        GetPayloadLength();
 
-        await ParseMessagePayload(cancellationToken).ConfigureAwait(false);
-        VerifyChecksum();
+        byte[] commandBytes = Header.Take(CommandSize).ToArray();
+        Command = Encoding.ASCII.GetString(commandBytes).TrimEnd('\0');
+
+        PayloadLength = BitConverter.ToUInt32(Header, CommandSize);
+
+        if (PayloadLength > 0x02000000)
+        {
+          throw new NetworkException("Message payload too big (over 32MB)");
+        }
+
+        Payload = new byte[(int)PayloadLength];
+        await ReadBytesAsync(Payload, cancellationToken).ConfigureAwait(false);
+
+        uint checksumMessage = BitConverter.ToUInt32(Header, CommandSize + LengthSize);
+        uint checksumCalculated = BitConverter.ToUInt32(CreateChecksum(Payload), 0);
+
+        if (checksumMessage != checksumCalculated)
+        {
+          throw new NetworkException("Invalid Message checksum.");
+        }
 
         return new NetworkMessage(Command, Payload);
       }
@@ -103,35 +119,6 @@ namespace BToken.Networking
           {
             i = receivedByte == MagicBytes[0] ? 0 : -1;
           }
-        }
-      }
-      void GetCommand()
-      {
-        byte[] commandBytes = Header.Take(CommandSize).ToArray();
-        Command = Encoding.ASCII.GetString(commandBytes).TrimEnd('\0');
-      }
-      void GetPayloadLength()
-      {
-        PayloadLength = BitConverter.ToUInt32(Header, CommandSize);
-
-        if (PayloadLength > 0x02000000)
-        {
-          throw new NetworkException("Message payload too big (over 32MB)");
-        }
-      }
-      async Task ParseMessagePayload(CancellationToken cancellationToken)
-      {
-        Payload = new byte[(int)PayloadLength];
-        await ReadBytesAsync(Payload, cancellationToken).ConfigureAwait(false);
-      }
-      void VerifyChecksum()
-      {
-        uint checksumMessage = BitConverter.ToUInt32(Header, CommandSize + LengthSize);
-        uint checksumCalculated = BitConverter.ToUInt32(CreateChecksum(Payload), 0);
-
-        if (checksumMessage != checksumCalculated)
-        {
-          throw new NetworkException("Invalid Message checksum.");
         }
       }
       async Task ReadBytesAsync(byte[] buffer, CancellationToken cancellationToken)
