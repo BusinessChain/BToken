@@ -11,7 +11,7 @@ using BToken.Networking;
 
 namespace BToken
 {
-  partial class Node_Testbench
+  partial class Node
   {
     Network Network;
     UTXOTable UTXOTable;
@@ -27,7 +27,7 @@ namespace BToken
         new HeaderLocation(height : 535419, hash : "000000000000000000209ecbacceb3e7b8ec520ed7f1cfafbe149dd2b9007d39")
       };
 
-    public Node_Testbench()
+    public Node()
     {
       Network = new Network();
 

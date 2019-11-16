@@ -144,7 +144,7 @@
     <Compile Include="Networking\NetworkException.cs" />
     <Compile Include="Networking\Peer.cs" />
     <Compile Include="Networking\ProtocolVersion.cs" />
-    <Compile Include="Node_Testbench.cs" />
+    <Compile Include="Node.cs" />
     <Compile Include="Networking\ServiceFlags.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
