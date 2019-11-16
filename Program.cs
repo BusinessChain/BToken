@@ -8,7 +8,7 @@ namespace BToken
 {
   static class Program
   {
-    public static Node Node;
+    public static Node_Testbench Node;
 
     /// <summary>
     /// The main entry point for the application.
@@ -18,7 +18,7 @@ namespace BToken
     {
       try
       {
-        Node = new Node();
+        Node = new Node_Testbench();
         Task startNodeTask = Node.StartAsync();
       }
       catch (Exception ex)
