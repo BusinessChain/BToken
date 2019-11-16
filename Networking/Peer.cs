@@ -86,13 +86,12 @@ namespace BToken.Networking
           return false;
         }
       }
-
-
+      
       async Task Connect()
       {
-        IPAddress iPAddress = Network.AddressPool.GetRandomNodeAddress();
+        IPAddress iPAddress = await Network.GetNodeAddress();
         IPEndPoint = new IPEndPoint(iPAddress, Port);
-        await ConnectTCPAsync();
+        await ConnectTCPAsync();     
         await HandshakeAsync();
       }
 
@@ -189,14 +188,18 @@ namespace BToken.Networking
           IPEndPoint.Address, 
           IPEndPoint.Port);
 
-        NetworkMessageStreamer = new MessageStreamer(TcpClient.GetStream());
+        Console.WriteLine("connected with {0}",
+          IPEndPoint.ToString());
+
+        NetworkMessageStreamer = new MessageStreamer(
+          TcpClient.GetStream());
       }
       async Task HandshakeAsync()
       {
         await NetworkMessageStreamer.WriteAsync(new VersionMessage());
         
-        CancellationToken cancellationToken = new CancellationTokenSource(
-          TimeSpan.FromSeconds(3)).Token;
+        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(3))
+          .Token;
         
         bool VerAckReceived = false;
         bool VersionReceived = false;
