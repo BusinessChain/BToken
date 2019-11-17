@@ -25,7 +25,7 @@ namespace BToken.Chaining
 
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
 
-      const int UTXOSTATE_ARCHIVING_INTERVAL = 50;
+      const int UTXOSTATE_ARCHIVING_INTERVAL = 10;
       const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
 
 

@@ -56,18 +56,22 @@ namespace BToken.Networking
       {
         Stream.Write(MagicBytes, 0, MagicBytes.Length);
 
-        byte[] command = Encoding.ASCII.GetBytes(networkMessage.Command.PadRight(CommandSize, '\0'));
-        Stream.Write(command, 0, CommandSize);
+        byte[] command = Encoding.ASCII.GetBytes(
+          networkMessage.Command.PadRight(CommandSize, '\0'));
+
+        Stream.Write(command, 0, command.Length);
+        Stream.Flush();
+        Console.WriteLine("sent command {0}", networkMessage.Command);
 
         byte[] payloadLength = BitConverter.GetBytes(networkMessage.Payload.Length);
-        Stream.Write(payloadLength, 0, LengthSize);
+        Stream.Write(payloadLength, 0, payloadLength.Length);
         
         byte[] checksum = CreateChecksum(networkMessage.Payload);
-        Stream.Write(checksum, 0, ChecksumSize);
+        Stream.Write(checksum, 0, checksum.Length);
 
         await Stream.WriteAsync(
-          networkMessage.Payload, 
-          0, 
+          networkMessage.Payload,
+          0,
           networkMessage.Payload.Length)
           .ConfigureAwait(false);
       }

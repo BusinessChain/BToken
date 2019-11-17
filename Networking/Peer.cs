@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Chaining;
 
 namespace BToken.Networking
 {
@@ -42,7 +41,8 @@ namespace BToken.Networking
         : this(network)
       {
         TcpClient = tcpClient;
-        NetworkMessageStreamer = new MessageStreamer(tcpClient.GetStream());
+        NetworkMessageStreamer = new MessageStreamer(
+          tcpClient.GetStream());
 
         IPEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
       }
@@ -51,14 +51,14 @@ namespace BToken.Networking
       {
         try
         {
-          await Connect();
+          await HandshakeAsync();
 
           lock (IsDispatchedLOCK)
           {
             IsDispatched = false;
           }
 
-          await ProcessNetworkMessagesAsync();
+          ProcessNetworkMessagesAsync();
         }
         catch (Exception ex)
         {
@@ -101,6 +101,10 @@ namespace BToken.Networking
         {
           NetworkMessage message = await NetworkMessageStreamer
             .ReadAsync(default).ConfigureAwait(false);
+
+          Console.WriteLine("received {0} message from {1}",
+            message.Command,
+            GetIdentification());
 
           switch (message.Command)
           {
@@ -317,6 +321,9 @@ namespace BToken.Networking
             locatorHashes,
             ProtocolVersion));
 
+        Console.WriteLine("sent getheaders to channel {0}",
+          GetIdentification());
+
         while (true)
         {
           NetworkMessage networkMessage = await ReceiveApplicationMessage(cancellationToken);
@@ -331,7 +338,7 @@ namespace BToken.Networking
       
       public string GetIdentification()
       {
-        return IPEndPoint.Address.ToString();
+        return IPEndPoint.ToString();
       }
     }
   }
