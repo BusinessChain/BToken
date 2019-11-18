@@ -6,8 +6,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Chaining;
-
 
 namespace BToken.Networking
 {
@@ -26,8 +24,10 @@ namespace BToken.Networking
 
     NetworkAddressPool AddressPool;
     TcpListener TcpListener;
-    
-    List<Peer> PeersInbound = new List<Peer>();
+
+    readonly object LOCK_ChannelsInbound = new object();
+    List<INetworkChannel> ChannelsInbound = new List<INetworkChannel>();
+
     BufferBlock<Peer> PeersRequestInbound = new BufferBlock<Peer>();
     
 
@@ -63,7 +63,7 @@ namespace BToken.Networking
 
 
     readonly object LOCK_ChannelsOutbound = new object();
-    List<INetworkChannel> ChannelsOutboundAvailable = new List<INetworkChannel>();
+    List<INetworkChannel> ChannelsOutbound = new List<INetworkChannel>();
 
     async Task CreateOutboundPeer()
     {
@@ -77,7 +77,7 @@ namespace BToken.Networking
 
       lock(LOCK_ChannelsOutbound)
       {
-        ChannelsOutboundAvailable.Add(peer);
+        ChannelsOutbound.Add(peer);
       }
 
       Console.WriteLine("created outbound peer {0}",
@@ -118,10 +118,10 @@ namespace BToken.Networking
       {
         lock (LOCK_ChannelsOutbound)
         {
-          if (ChannelsOutboundAvailable.Any())
+          if (ChannelsOutbound.Any())
           {
-            var channel = ChannelsOutboundAvailable.First();
-            ChannelsOutboundAvailable.RemoveAt(0);
+            var channel = ChannelsOutbound.First();
+            ChannelsOutbound.RemoveAt(0);
 
             return channel;
           }
@@ -156,9 +156,12 @@ namespace BToken.Networking
           client.Client.RemoteEndPoint.ToString());
 
         Peer peer = new Peer(client, this);
-        PeersInbound.Add(peer);
-
         peer.Start();
+
+        lock (LOCK_ChannelsInbound)
+        {
+          ChannelsInbound.Add(peer);
+        }
       }
     }
     

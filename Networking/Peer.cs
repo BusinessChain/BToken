@@ -118,21 +118,29 @@ namespace BToken.Networking
               ProcessFeeFilterMessage(message);
               break;
             default:
-              ProcessApplicationMessage(message);
+              ApplicationMessages.Post(message);
+              SendPeerToInboundRequestBuffer();
               break;
           }
         }
       }
 
-      void ProcessApplicationMessage(NetworkMessage message)
+      void SendPeerToInboundRequestBuffer()
       {
-        ApplicationMessages.Post(message);
+        lock (Network.LOCK_ChannelsInbound)
+        {
+          if (Network.ChannelsInbound.Contains(this))
+          {
+            Network.PeersRequestInbound.Post(this);
+            return;
+          }
+        }
 
         lock (Network.LOCK_ChannelsOutbound)
         {
-          if (Network.ChannelsOutboundAvailable.Contains(this))
+          if (Network.ChannelsOutbound.Contains(this))
           {
-            Network.ChannelsOutboundAvailable.Remove(this);
+            Network.ChannelsOutbound.Remove(this);
             Network.PeersRequestInbound.Post(this);
           }
         }
@@ -148,7 +156,7 @@ namespace BToken.Networking
 
         lock (Network.LOCK_ChannelsOutbound)
         {
-          Network.ChannelsOutboundAvailable.Add(this);
+          Network.ChannelsOutbound.Add(this);
         }
       }
 
