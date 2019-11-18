@@ -62,11 +62,8 @@ namespace BToken.Networking
         }
         catch (Exception ex)
         {
+          Dispose();
           throw ex;
-        }
-        finally
-        {
-          TcpClient.Close();
         }
       }
 

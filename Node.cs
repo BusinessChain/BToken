@@ -56,27 +56,6 @@ namespace BToken
       Wallet.GeneratePublicKey();
     }
 
-
-
-    async Task<byte[]> ReceiveBlock(
-      Network.INetworkChannel channel,
-      CancellationToken cancellationToken)
-    {
-      while (true)
-      {
-        NetworkMessage networkMessage = await channel
-          .ReceiveApplicationMessage(cancellationToken)
-          .ConfigureAwait(false);
-
-        if (networkMessage.Command != "block")
-        {
-          continue;
-        }
-
-        return networkMessage.Payload;
-      }
-    }
-
     async Task StartListener()
     {
       while (true)
@@ -93,12 +72,12 @@ namespace BToken
             switch (message.Command)
             {
               case "getheaders":
-                //Console.WriteLine("getHeaders message from {0}",
-                //  channel.GetIdentification());
+                Console.WriteLine("getHeaders message from {0}",
+                  channel.GetIdentification());
 
-                  //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-                  //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
-                  //await channel.SendMessageAsync(new HeadersMessage(headers));
+                //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
+                //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
+                //await channel.SendMessageAsync(new HeadersMessage(headers));
                 break;
 
               case "inv":

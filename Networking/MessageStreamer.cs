@@ -60,9 +60,7 @@ namespace BToken.Networking
           networkMessage.Command.PadRight(CommandSize, '\0'));
 
         Stream.Write(command, 0, command.Length);
-        Stream.Flush();
-        Console.WriteLine("sent command {0}", networkMessage.Command);
-
+       
         byte[] payloadLength = BitConverter.GetBytes(networkMessage.Payload.Length);
         Stream.Write(payloadLength, 0, payloadLength.Length);
         
