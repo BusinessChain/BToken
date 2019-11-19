@@ -77,12 +77,13 @@ namespace BToken
         {
           foreach (NetworkMessage message in messages)
           {
+            Console.WriteLine("{0} message from {1}",
+              message.Command,
+              channel.GetIdentification());
+
             switch (message.Command)
             {
               case "getheaders":
-                Console.WriteLine("getHeaders message from {0}",
-                  channel.GetIdentification());
-
                 var getHeadersMessage = new GetHeadersMessage(message);
 
                 var headers = Headerchain.GetHeaders(
@@ -126,9 +127,6 @@ namespace BToken
 
               case "headers":
                 var headersMessage = new HeadersMessage(message);
-
-                Console.WriteLine("header message from channel {0}",
-                  channel.GetIdentification());
 
                 if (Headerchain.Synchronizer.TryInsertHeaderBytes(
                   headersMessage.Payload))

@@ -161,7 +161,7 @@ namespace BToken.Chaining
           "Locator does not root in headerchain."));
       }
 
-      List<Header> headers = new List<Header>() { header };
+      List<Header> headers = new List<Header>();
 
       while (
         header.HeadersNext.Count > 0 &&
