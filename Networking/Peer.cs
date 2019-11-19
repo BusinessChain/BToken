@@ -27,7 +27,7 @@ namespace BToken.Networking
       readonly object IsDispatchedLOCK = new object();
       bool IsDispatched = true;
 
-      BufferBlock<NetworkMessage> ApplicationMessages = 
+      BufferBlock<NetworkMessage> ApplicationMessages =
         new BufferBlock<NetworkMessage>();
 
       ulong FeeFilterValue;
@@ -83,12 +83,12 @@ namespace BToken.Networking
           return false;
         }
       }
-      
+
       async Task Connect()
       {
         IPAddress iPAddress = await Network.GetNodeAddress();
         IPEndPoint = new IPEndPoint(iPAddress, Port);
-        await ConnectTCPAsync();     
+        await ConnectTCPAsync();
         await HandshakeAsync();
       }
 
@@ -98,10 +98,6 @@ namespace BToken.Networking
         {
           NetworkMessage message = await NetworkMessageStreamer
             .ReadAsync(default).ConfigureAwait(false);
-
-          Console.WriteLine("received {0} message from {1}",
-            message.Command,
-            GetIdentification());
 
           switch (message.Command)
           {
@@ -181,7 +177,7 @@ namespace BToken.Networking
 
       public List<NetworkMessage> GetApplicationMessages()
       {
-        if(ApplicationMessages.TryReceiveAll(out IList<NetworkMessage> messages))
+        if (ApplicationMessages.TryReceiveAll(out IList<NetworkMessage> messages))
         {
           return (List<NetworkMessage>)messages;
         }
@@ -194,7 +190,7 @@ namespace BToken.Networking
         TcpClient = new TcpClient();
 
         await TcpClient.ConnectAsync(
-          IPEndPoint.Address, 
+          IPEndPoint.Address,
           IPEndPoint.Port);
 
         Console.WriteLine("connected with {0}",
@@ -206,16 +202,16 @@ namespace BToken.Networking
       async Task HandshakeAsync()
       {
         await NetworkMessageStreamer.WriteAsync(new VersionMessage());
-        
+
         CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(3))
           .Token;
-        
+
         bool VerAckReceived = false;
         bool VersionReceived = false;
 
         while (!VerAckReceived || !VersionReceived)
         {
-          NetworkMessage messageRemote = 
+          NetworkMessage messageRemote =
             await NetworkMessageStreamer.ReadAsync(cancellationToken);
 
           switch (messageRemote.Command)
@@ -257,7 +253,7 @@ namespace BToken.Networking
 
         if (VersionMessageRemote.UnixTimeSeconds - GetUnixTimeSeconds() > 2 * 60 * 60)
         {
-          rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.", 
+          rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.",
             VersionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
         }
 
@@ -270,8 +266,8 @@ namespace BToken.Networking
         {
           await SendMessage(
             new RejectMessage(
-              "version", 
-              RejectMessage.RejectCode.OBSOLETE, 
+              "version",
+              RejectMessage.RejectCode.OBSOLETE,
               rejectionReason)).ConfigureAwait(false);
 
           throw new NetworkException("Remote peer rejected: " + rejectionReason);
@@ -297,7 +293,7 @@ namespace BToken.Networking
       {
         AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
-      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage) 
+      async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage)
         => await NetworkMessageStreamer.WriteAsync(new SendHeadersMessage());
 
       public async Task SendMessage(NetworkMessage networkMessage)
@@ -326,9 +322,6 @@ namespace BToken.Networking
             locatorHashes,
             ProtocolVersion));
 
-        Console.WriteLine("sent getheaders to channel {0}",
-          GetIdentification());
-
         while (true)
         {
           NetworkMessage networkMessage = await ReceiveApplicationMessage(cancellationToken);
@@ -340,7 +333,7 @@ namespace BToken.Networking
         }
       }
 
-      
+
       public string GetIdentification()
       {
         return IPEndPoint.ToString();

@@ -7,6 +7,8 @@ using System.Linq;
 using BToken.Chaining;
 using BToken.Networking;
 
+// Test
+
 namespace BToken
 {
   partial class Node
@@ -65,6 +67,12 @@ namespace BToken
 
         List<NetworkMessage> messages = channel.GetApplicationMessages();
 
+        if (!UTXOTable.Synchronizer.GetIsSyncingCompleted())
+        {
+          channel.Release();
+          continue;
+        }
+
         try
         {
           foreach (NetworkMessage message in messages)
@@ -75,22 +83,21 @@ namespace BToken
                 Console.WriteLine("getHeaders message from {0}",
                   channel.GetIdentification());
 
-                //var getHeadersMessage = new GetHeadersMessage(inboundMessage);
-                //var headers = Headerchain.GetHeaders(getHeadersMessage.HeaderLocator, getHeadersMessage.StopHash);
-                //await channel.SendMessageAsync(new HeadersMessage(headers));
+                var getHeadersMessage = new GetHeadersMessage(message);
+
+                var headers = Headerchain.GetHeaders(
+                  getHeadersMessage.HeaderLocator,
+                  2000);
+
+                await channel.SendMessage(
+                  new HeadersMessage(headers));
+
                 break;
 
               case "inv":
-
-                if (!UTXOTable.Synchronizer.GetIsSyncingCompleted())
-                {
-                  channel.Release();
-                  break;
-                }
-
                 var invMessage = new InvMessage(message);
 
-                if(invMessage.Inventories.Any(
+                if (invMessage.Inventories.Any(
                   inv => inv.Type.ToString() == "MSG_BLOCK"))
                 {
                   Console.WriteLine("block inventory message from channel {0}",
@@ -99,7 +106,7 @@ namespace BToken
                   Headerchain.Synchronizer.LoadBatch();
                   Headerchain.Synchronizer.DownloadHeaders(channel);
 
-                  if(Headerchain.Synchronizer.TryInsertBatch())
+                  if (Headerchain.Synchronizer.TryInsertBatch())
                   {
                     if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
                     {
@@ -119,12 +126,6 @@ namespace BToken
 
               case "headers":
                 var headersMessage = new HeadersMessage(message);
-
-                if(!UTXOTable.Synchronizer.GetIsSyncingCompleted())
-                {
-                  channel.Release();
-                  break;
-                }
 
                 Console.WriteLine("header message from channel {0}",
                   channel.GetIdentification());

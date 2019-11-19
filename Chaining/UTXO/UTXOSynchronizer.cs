@@ -144,7 +144,7 @@ namespace BToken.Chaining
             if (HeaderLoad.HeadersNext.Count == 0)
             {
               uTXOBatch.IsCancellationBatch = (i == 0);
-              return uTXOBatch; ;
+              return uTXOBatch;
             }
 
             HeaderLoad = HeaderLoad.HeadersNext[0];

@@ -58,23 +58,7 @@ namespace BToken.Chaining
 
         Depth++;
       }
-
-      public byte[] GetHeaderHash(Header header)
-      {
-        if (header.HeadersNext != null)
-        {
-          return header.HeadersNext[0].HashPrevious;
-        }
-        else if (header == Chain.HeaderTip)
-        {
-          return Chain.HeaderTip.HeaderHash;
-        }
-        else
-        {
-          return header.HeaderHash;
-        }
-      }
-
+      
       public bool IsTip() => Header == Chain.HeaderTip;
       public int GetHeight() => Chain.Height - Depth;
     }
