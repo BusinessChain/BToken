@@ -9,7 +9,7 @@ namespace BToken.Networking
 {
   class HeadersMessage : NetworkMessage
   {
-    public List<Header> Headers { get; private set; } = new List<Header>();
+    public List<Header> Headers = new List<Header>();
 
 
     public HeadersMessage(
@@ -39,7 +39,10 @@ namespace BToken.Networking
     {
       int startIndex = 0;
 
-      int headersCount = VarInt.GetInt32(Payload, ref startIndex);
+      int headersCount = VarInt.GetInt32(
+        Payload, 
+        ref startIndex);
+
       SHA256 sHA256 = SHA256.Create();
 
       for (int i = 0; i < headersCount; i += 1)

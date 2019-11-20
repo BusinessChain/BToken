@@ -83,6 +83,11 @@ namespace BToken
 
             switch (message.Command)
             {
+              case "getdata":
+                var getDataMessage = new GetDataMessage(message);
+                
+                break;
+
               case "getheaders":
                 var getHeadersMessage = new GetHeadersMessage(message);
 

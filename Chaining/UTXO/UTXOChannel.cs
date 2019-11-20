@@ -51,8 +51,8 @@ namespace BToken.Chaining
             new GetDataMessage(
               hashesRequested
               .Select(h => new Inventory(
-                InventoryType.MSG_BLOCK,
-                h))));
+                InventoryType.MSG_BLOCK, h))
+                .ToList()));
 
           var cancellationDownloadBlocks =
             new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
