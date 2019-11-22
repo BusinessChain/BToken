@@ -23,6 +23,8 @@ namespace BToken.Chaining
       public Header HeaderPrevious;
       public Header Header;
 
+      public List<Header> Headers = new List<Header>();
+
       public int BlockCount;
       SHA256 SHA256 = SHA256.Create();
 
@@ -104,6 +106,8 @@ namespace BToken.Chaining
               Header.HeaderHash);
           }
 
+          Headers.Add(Header);
+
           HeaderPrevious = Header.HeaderPrevious;
           
           ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
@@ -128,6 +132,8 @@ namespace BToken.Chaining
             ValidateHeaderHash(
               HeaderHash,
               Header.HeaderHash);
+
+            Headers.Add(Header);
 
             ParseBlock(merkleRootIndex);
             BlockCount += 1;
@@ -342,7 +348,7 @@ namespace BToken.Chaining
         byte[] tXHash,
         int countTXOutputs)
       {
-        int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
+        int lengthUTXOBits = COUNT_NON_OUTPUT_BITS + countTXOutputs;
 
         if (LENGTH_BITS_UINT >= lengthUTXOBits)
         {

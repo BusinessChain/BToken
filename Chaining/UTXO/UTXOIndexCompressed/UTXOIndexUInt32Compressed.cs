@@ -19,7 +19,7 @@ namespace BToken.Chaining
 
       const int COUNT_INTEGER_BITS = 32;
 
-      static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << CountNonOutputBits;
+      static readonly uint MaskAllOutputBitsSpent = uint.MaxValue << COUNT_NON_OUTPUT_BITS;
 
       uint[] MasksCollisionBitsClear = {
         ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0),
@@ -199,7 +199,7 @@ namespace BToken.Chaining
 
       static void SpendUTXO(ref uint uTXO, int outputIndex, out bool areAllOutputpsSpent)
       {
-        uint mask = (uint)1 << (CountNonOutputBits + outputIndex);
+        uint mask = (uint)1 << (COUNT_NON_OUTPUT_BITS + outputIndex);
         if ((uTXO & mask) != 0x00)
         {
           throw new UTXOException(string.Format(

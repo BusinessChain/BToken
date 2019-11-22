@@ -41,6 +41,11 @@ namespace BToken.Networking
 
         foreach (string dnsSeed in dnsSeeds)
         {
+          if(dnsSeed.Substring(0,2) == "//")
+          {
+            continue;
+          }
+
           try
           {
             IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);

@@ -24,7 +24,7 @@ namespace BToken.Chaining
     const int LENGTH_BITS_UINT = 32;
     const int LENGTH_BITS_ULONG = 64;
 
-    public static readonly int CountNonOutputBits =
+    const int COUNT_NON_OUTPUT_BITS =
       COUNT_BATCHINDEX_BITS +
       COUNT_COLLISION_BITS_PER_TABLE * 3;
 
@@ -235,8 +235,7 @@ namespace BToken.Chaining
         Directory.Delete(PathUTXOState, true);
       }
 
-      Console.WriteLine("Failed to load UTXO Image from either {0} or {1}" +
-        "\n build from genesis",
+      Console.WriteLine("no image loaded, build from genesis",
         PathUTXOState,
         PathUTXOStateOld);
 
@@ -266,6 +265,9 @@ namespace BToken.Chaining
         Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
         Header = Headerchain.ReadHeader(headerHashMergedLast);
 
+        LoadMapBlockToArchiveData(File.ReadAllBytes(
+          Path.Combine(PathUTXOState, "MapBlockHeader")));
+
         for (int c = 0; c < Tables.Length; c += 1)
         {
           Tables[c].Load();
@@ -287,6 +289,25 @@ namespace BToken.Chaining
         return false;
       }
     }
+
+    // Similar function as LoadCollisionData in UTXOIndexUInt32Compressed
+    void LoadMapBlockToArchiveData(byte[] buffer)
+    {
+      int index = 0;
+
+      while (index < buffer.Length)
+      {
+        byte[] key = new byte[HASH_BYTE_SIZE];
+        Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
+        index += HASH_BYTE_SIZE;
+
+        int value = BitConverter.ToInt32(buffer, index);
+        index += 4;
+
+        Synchronizer.MapBlockToArchiveIndex.Add(key, value);
+      }
+    }
+
 
 
     void InsertContainer(BlockContainer container)
@@ -318,6 +339,14 @@ namespace BToken.Chaining
     public void UnLoadBatch(DataBatch uTXOBatch)
     {
       throw new NotImplementedException();
+    }
+
+    public void BackupToDisk()
+    {
+      Parallel.ForEach(Tables, t =>
+      {
+        t.BackupToDisk(PathUTXOState);
+      });
     }
 
        
