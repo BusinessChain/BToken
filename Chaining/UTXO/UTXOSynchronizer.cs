@@ -324,6 +324,69 @@ namespace BToken.Chaining
 
       }
 
+
+      public bool TryGetBlockFromArchive(
+        byte[] hash,
+        out byte[] blockBytes)
+      {
+        blockBytes = null;
+
+        if (!MapBlockToArchiveIndex.TryGetValue(
+          hash,
+          out int archiveIndex))
+        {
+          return false;
+        }
+        
+        var container = new BlockContainer(
+          UTXOTable.Headerchain,
+          archiveIndex);
+
+        try
+        {
+          container.Buffer = File.ReadAllBytes(
+            Path.Combine(
+              ArchiveDirectory.FullName,
+              container.Index.ToString()));
+        }
+        catch (IOException)
+        {
+          return false;
+        }
+
+        if(!container.TryParse())
+        {
+          return false;
+        }
+
+        int indexHeader = container.Headers.FindIndex(
+          h => h.HeaderHash.IsEqual(hash));
+
+        int bufferStartIndexBlock = 
+          container.BufferStartIndexesBlocks[indexHeader];
+
+        int blockBytesLength;
+        if(indexHeader == container.Headers.Count - 1)
+        {
+          blockBytesLength = container.Buffer.Length - bufferStartIndexBlock;
+        }
+        else
+        {
+          blockBytesLength = 
+            container.BufferStartIndexesBlocks[indexHeader + 1] - bufferStartIndexBlock;
+        }
+
+        blockBytes = new byte[blockBytesLength];
+
+        Array.Copy(
+          container.Buffer, 
+          bufferStartIndexBlock, 
+          blockBytes, 
+          0, 
+          blockBytesLength);
+
+        return true;
+      }
     }
   }
 }

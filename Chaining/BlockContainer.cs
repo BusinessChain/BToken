@@ -24,6 +24,7 @@ namespace BToken.Chaining
       public Header Header;
 
       public List<Header> Headers = new List<Header>();
+      public List<int> BufferStartIndexesBlocks = new List<int>();
 
       public int BlockCount;
       SHA256 SHA256 = SHA256.Create();
@@ -77,13 +78,15 @@ namespace BToken.Chaining
       
       Headerchain Headerchain;
 
-      public override void TryParse()
+      public override bool TryParse()
       {
         StopwatchParse.Start();
 
         try
         {
           BufferIndex = 0;
+
+          BufferStartIndexesBlocks.Add(BufferIndex);
 
           HeaderHash =
             SHA256.ComputeHash(
@@ -116,6 +119,8 @@ namespace BToken.Chaining
 
           while (BufferIndex < Buffer.Length)
           {
+            BufferStartIndexesBlocks.Add(BufferIndex);
+
             HeaderHash =
               SHA256.ComputeHash(
                 SHA256.ComputeHash(
@@ -151,9 +156,13 @@ namespace BToken.Chaining
             ex.GetType().Name,
             Index,
             ex.Message);
+
+          return false;
         }
 
         StopwatchParse.Stop();
+
+        return true;
       }
 
       static void ValidateHeaderHash(

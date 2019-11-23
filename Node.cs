@@ -90,7 +90,7 @@ namespace BToken
                 {
                   if(inventory.Type == InventoryType.MSG_BLOCK)
                   {
-                    if(UTXOTable.TryGetBlock(
+                    if(UTXOTable.Synchronizer.TryGetBlockFromArchive(
                       inventory.Hash, 
                       out byte[] blockBytes))
                     {

@@ -36,6 +36,6 @@ namespace BToken.Chaining
 
     
 
-    public abstract void TryParse();
+    public abstract bool TryParse();
   }
 }

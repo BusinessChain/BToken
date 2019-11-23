@@ -44,7 +44,7 @@ namespace BToken.Chaining
 
       SHA256 SHA256 = SHA256.Create();
 
-      public override void TryParse()
+      public override bool TryParse()
       {
         try
         {
@@ -54,7 +54,7 @@ namespace BToken.Chaining
 
           if (headersCount == 0)
           {
-            return;
+            return true;
           }
 
           CountItems += headersCount;
@@ -93,7 +93,11 @@ namespace BToken.Chaining
             ex.GetType().Name,
             Index,
             ex.Message);
+
+          return false;
         }
+
+        return true;
       }
 
       void ParseHeaders(ref int startIndex, int headersCount)
