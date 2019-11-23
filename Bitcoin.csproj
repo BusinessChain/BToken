@@ -134,7 +134,6 @@
     <Compile Include="Networking\Messages\PongMessage.cs" />
     <Compile Include="Networking\Messages\SendHeadersMessage.cs" />
     <Compile Include="Networking\Network.cs" />
-    <Compile Include="Networking\Messages\GetBlocksMessage.cs" />
     <Compile Include="Networking\Messages\GetDataMessage.cs" />
     <Compile Include="Networking\Messages\InvMessage.cs" />
     <Compile Include="Networking\Messages\RejectMessage.cs" />

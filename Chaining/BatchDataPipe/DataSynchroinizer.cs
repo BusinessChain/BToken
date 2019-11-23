@@ -7,7 +7,7 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BToken.Chaining
 {
-  public abstract class DataSynchronizer
+  abstract class DataSynchronizer
   {
     int ArchiveIndexLoad;
     protected DirectoryInfo ArchiveDirectory;
@@ -235,7 +235,7 @@ namespace BToken.Chaining
 
 
 
-    public bool TryInsertBatch(DataBatch batch)
+    protected bool TryInsertBatch(DataBatch batch)
     {
       if (batch.IsCancellationBatch)
       {

@@ -14,6 +14,8 @@ namespace BToken.Networking
 {
   partial class Network
   {
+    enum ConnectionType { OUTBOUND, INBOUND };
+
     partial class Peer : INetworkChannel
     {
       Network Network;
@@ -32,15 +34,29 @@ namespace BToken.Networking
 
       ulong FeeFilterValue;
 
+      ConnectionType ConnectionType;
 
-      public Peer(Network network)
+
+
+
+      public Peer(
+        ConnectionType connectionType,
+        Network network)
       {
+        ConnectionType = connectionType;
         Network = network;
       }
-      public Peer(TcpClient tcpClient, Network network)
-        : this(network)
+
+      public Peer(
+        TcpClient tcpClient, 
+        ConnectionType connectionType,
+        Network network)
+        : this(
+            connectionType,
+            network)
       {
         TcpClient = tcpClient;
+
         NetworkMessageStreamer = new MessageStreamer(
           tcpClient.GetStream());
 
@@ -173,6 +189,11 @@ namespace BToken.Networking
       public void Dispose()
       {
         TcpClient.Dispose();
+
+        if(ConnectionType == ConnectionType.OUTBOUND)
+        {
+          Network.CreateOutboundPeer();
+        }
       }
 
       public List<NetworkMessage> GetApplicationMessages()
@@ -192,9 +213,6 @@ namespace BToken.Networking
         await TcpClient.ConnectAsync(
           IPEndPoint.Address,
           IPEndPoint.Port);
-
-        Console.WriteLine("connected with {0}",
-          IPEndPoint.ToString());
 
         NetworkMessageStreamer = new MessageStreamer(
           TcpClient.GetStream());

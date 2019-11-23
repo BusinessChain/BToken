@@ -85,6 +85,27 @@ namespace BToken
             {
               case "getdata":
                 var getDataMessage = new GetDataMessage(message);
+
+                foreach(Inventory inventory in getDataMessage.Inventories)
+                {
+                  if(inventory.Type == InventoryType.MSG_BLOCK)
+                  {
+                    if(UTXOTable.TryGetBlock(
+                      inventory.Hash, 
+                      out byte[] blockBytes))
+                    {
+                      NetworkMessage blockMessage = new NetworkMessage(
+                        "block",
+                        blockBytes);
+
+                      await channel.SendMessage(blockMessage);
+                    }
+                    else
+                    {
+                      // Send reject message;
+                    }
+                  }
+                }
                 
                 break;
 
@@ -104,7 +125,7 @@ namespace BToken
                 var invMessage = new InvMessage(message);
 
                 if (invMessage.Inventories.Any(
-                  inv => inv.Type.ToString() == "MSG_BLOCK"))
+                  inv => inv.Type == InventoryType.MSG_BLOCK))
                 {
                   Console.WriteLine("block inventory message from channel {0}",
                     channel.GetIdentification());

@@ -9,8 +9,9 @@ namespace BToken.Networking
 {
   class GetDataMessage : NetworkMessage
   {
-    List<Inventory> Inventories = new List<Inventory>();
-
+    public List<Inventory> Inventories = 
+      new List<Inventory>();
+       
 
 
     public GetDataMessage(NetworkMessage message)
