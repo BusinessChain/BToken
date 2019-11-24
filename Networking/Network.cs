@@ -129,7 +129,6 @@ namespace BToken.Networking
           }
         }
 
-        Console.WriteLine("No channel available");
         await Task.Delay(1000);
 
       } while (true);

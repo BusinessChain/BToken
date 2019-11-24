@@ -77,9 +77,12 @@ namespace BToken
         {
           foreach (NetworkMessage message in messages)
           {
-            Console.WriteLine("{0} message from {1}",
-              message.Command,
-              channel.GetIdentification());
+            if(channel.IsConnectionTypeInbound())
+            {
+              Console.WriteLine("{0} message from {1}",
+                message.Command,
+                channel.GetIdentification());
+            }
 
             switch (message.Command)
             {

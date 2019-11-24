@@ -356,6 +356,11 @@ namespace BToken.Networking
       {
         return IPEndPoint.ToString();
       }
+
+      public bool IsConnectionTypeInbound()
+      {
+        return ConnectionType == ConnectionType.INBOUND;
+      }
     }
   }
 }

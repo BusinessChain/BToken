@@ -26,6 +26,8 @@ namespace BToken.Networking
       void Release();
 
       string GetIdentification();
+
+      bool IsConnectionTypeInbound();
     }
   }
 }
