@@ -6,8 +6,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Chaining;
-
 
 namespace BToken.Networking
 {
@@ -20,14 +18,16 @@ namespace BToken.Networking
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
     const int PEERS_COUNT_INBOUND = 8;
-    const int PEERS_COUNT_OUTBOUND = 1;
+    const int PEERS_COUNT_OUTBOUND = 4;
 
     static UInt64 Nonce = CreateNonce();
 
     NetworkAddressPool AddressPool;
     TcpListener TcpListener;
-    
-    List<Peer> PeersInbound = new List<Peer>();
+
+    readonly object LOCK_ChannelsInbound = new object();
+    List<INetworkChannel> ChannelsInbound = new List<INetworkChannel>();
+
     BufferBlock<Peer> PeersRequestInbound = new BufferBlock<Peer>();
     
 
@@ -63,25 +63,27 @@ namespace BToken.Networking
 
 
     readonly object LOCK_ChannelsOutbound = new object();
-    List<INetworkChannel> ChannelsOutboundAvailable = new List<INetworkChannel>();
+    List<INetworkChannel> ChannelsOutbound = new List<INetworkChannel>();
 
     async Task CreateOutboundPeer()
     {
-      var peer = new Peer(this);
+      var peer = new Peer(
+        ConnectionType.OUTBOUND,
+        this);
 
       while(!await peer.TryConnect())
       {
         await Task.Delay(1000);
-        peer = new Peer(this);
+
+        peer = new Peer(
+          ConnectionType.OUTBOUND, 
+          this);
       }
 
       lock(LOCK_ChannelsOutbound)
       {
-        ChannelsOutboundAvailable.Add(peer);
+        ChannelsOutbound.Add(peer);
       }
-
-      Console.WriteLine("created outbound peer {0}",
-        peer.GetIdentification());
     }
 
     readonly object LOCK_IsAddressPoolLocked = new object();
@@ -118,10 +120,10 @@ namespace BToken.Networking
       {
         lock (LOCK_ChannelsOutbound)
         {
-          if (ChannelsOutboundAvailable.Any())
+          if (ChannelsOutbound.Any())
           {
-            var channel = ChannelsOutboundAvailable.First();
-            ChannelsOutboundAvailable.RemoveAt(0);
+            var channel = ChannelsOutbound.First();
+            ChannelsOutbound.RemoveAt(0);
 
             return channel;
           }
@@ -155,10 +157,17 @@ namespace BToken.Networking
         Console.WriteLine("Received inbound request from {0}",
           client.Client.RemoteEndPoint.ToString());
 
-        Peer peer = new Peer(client, this);
-        PeersInbound.Add(peer);
+        Peer peer = new Peer(
+          client, 
+          ConnectionType.INBOUND,
+          this);
 
         peer.Start();
+
+        lock (LOCK_ChannelsInbound)
+        {
+          ChannelsInbound.Add(peer);
+        }
       }
     }
     

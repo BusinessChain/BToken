@@ -14,7 +14,7 @@ namespace BToken.Chaining
       uint[] UTXOItem;
 
       public static readonly uint MaskBatchIndex = ~(uint.MaxValue << COUNT_BATCHINDEX_BITS);
-      static readonly uint MaskAllOutputsBitsInFirstUInt32 = uint.MaxValue << CountNonOutputBits;
+      static readonly uint MaskAllOutputsBitsInFirstUInt32 = uint.MaxValue << COUNT_NON_OUTPUT_BITS;
 
 
       public UTXOIndexUInt32Array()
@@ -40,7 +40,7 @@ namespace BToken.Chaining
       {
         if (Table.TryGetValue(input.TXIDOutput, out UTXOItem))
         {
-          int bitOffset = CountNonOutputBits + input.OutputIndex;
+          int bitOffset = COUNT_NON_OUTPUT_BITS + input.OutputIndex;
           int uintIndex = bitOffset / 32;
           int bitIndex = bitOffset % 32;
 

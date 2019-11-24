@@ -15,7 +15,7 @@ namespace BToken.Chaining
 
       ulong UTXOItem;
 
-      ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
+      ulong MaskAllOutputBitsSpent = ulong.MaxValue << COUNT_NON_OUTPUT_BITS;
       public static ulong MaskBatchIndex = ~(ulong.MaxValue << COUNT_BATCHINDEX_BITS);
 
 
@@ -41,7 +41,7 @@ namespace BToken.Chaining
       {
         if (Table.TryGetValue(input.TXIDOutput, out UTXOItem))
         {
-          ulong mask = (ulong)1 << (CountNonOutputBits + input.OutputIndex);
+          ulong mask = (ulong)1 << (COUNT_NON_OUTPUT_BITS + input.OutputIndex);
           if ((UTXOItem & mask) != 0x00)
           {
             throw new UTXOException(string.Format(

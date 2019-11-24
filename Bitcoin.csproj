@@ -91,7 +91,6 @@
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexCompressed.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
     <Compile Include="Chaining\Headerchain\HeaderchainSynchronizer.cs" />
-    <Compile Include="Chaining\BlockParser.cs" />
     <Compile Include="Chaining\UTXO\UTXOTable.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Chaining\TXInput.cs" />
@@ -135,7 +134,6 @@
     <Compile Include="Networking\Messages\PongMessage.cs" />
     <Compile Include="Networking\Messages\SendHeadersMessage.cs" />
     <Compile Include="Networking\Network.cs" />
-    <Compile Include="Networking\Messages\GetBlocksMessage.cs" />
     <Compile Include="Networking\Messages\GetDataMessage.cs" />
     <Compile Include="Networking\Messages\InvMessage.cs" />
     <Compile Include="Networking\Messages\RejectMessage.cs" />

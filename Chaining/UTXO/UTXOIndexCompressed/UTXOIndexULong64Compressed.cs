@@ -18,7 +18,7 @@ namespace BToken.Chaining
 
       const int COUNT_LONG_BITS = 64;
 
-      static readonly ulong MaskAllOutputBitsSpent = ulong.MaxValue << CountNonOutputBits;
+      static readonly ulong MaskAllOutputBitsSpent = ulong.MaxValue << COUNT_NON_OUTPUT_BITS;
 
       ulong[] MasksCollisionBitsClear = {
         ~(ulong)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0),
@@ -184,7 +184,7 @@ namespace BToken.Chaining
 
       static void SpendUTXO(ref ulong uTXO, int outputIndex, out bool areAllOutputpsSpent)
       {
-        ulong mask = (ulong)1 << (CountNonOutputBits + outputIndex);
+        ulong mask = (ulong)1 << (COUNT_NON_OUTPUT_BITS + outputIndex);
         if ((uTXO & mask) != 0x00)
         {
           throw new UTXOException(string.Format(

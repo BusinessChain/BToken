@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  enum InventoryType : UInt32
+  enum InventoryType
   {
     UNDEFINED = 0,
     MSG_TX = 1,
@@ -17,8 +17,8 @@ namespace BToken.Networking
 
   class Inventory
   {
-    public InventoryType Type { get; private set; }
-    public byte[] Hash { get; private set; }
+    public InventoryType Type;
+    public byte[] Hash;
 
     public Inventory(InventoryType type, byte[] hash)
     {
@@ -34,8 +34,22 @@ namespace BToken.Networking
       bytes.AddRange(Hash);
 
       return bytes;
-
     }
 
+    public static Inventory Parse(
+      byte[] buffer, 
+      ref int startIndex)
+    {
+      uint type = BitConverter.ToUInt32(buffer, startIndex);
+      startIndex += 4;
+
+      byte[] hash = new byte[32];
+      Array.Copy(buffer, startIndex, hash, 0, 32);
+      startIndex += 32;
+
+      return new Inventory(
+        (InventoryType)type, 
+        hash);
+    }
   }
 }

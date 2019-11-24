@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.IO;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
 
@@ -11,7 +10,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  public partial class Headerchain
+  partial class Headerchain
   {
     Chain MainChain;
     List<Chain> SecondaryChains = new List<Chain>();
@@ -25,8 +24,6 @@ namespace BToken.Chaining
 
     ChainInserter Inserter;
 
-    const int HEADERS_COUNT_MAX = 2000;
-    
     public readonly object LOCK_Chain = new object();
 
     public HeaderchainSynchronizer Synchronizer;
@@ -61,20 +58,20 @@ namespace BToken.Chaining
       await Synchronizer.Start();
     }
 
-    
+
 
     void InsertContainer(HeaderContainer container)
     {
       Chain rivalChain = Inserter.InsertHeaderRoot(
         container.HeaderRoot);
-      
+
       Console.WriteLine("Inserted {0} header, blockheight {1}, tip {2}",
         container.CountItems,
         GetHeight(),
         container.HeaderTip.HeaderHash.ToHexString());
 
       if (
-        rivalChain != null 
+        rivalChain != null
         && rivalChain.IsStrongerThan(MainChain))
       {
         SecondaryChains.Remove(rivalChain);
@@ -86,7 +83,7 @@ namespace BToken.Chaining
     }
 
 
-             
+
     public int GetHeight()
     {
       return MainChain.Height;
@@ -137,6 +134,44 @@ namespace BToken.Chaining
 
         headers.Add(header);
       }
+    }
+
+    public List<Header> GetHeaders(
+      IEnumerable<byte[]> locatorHashes,
+      int count)
+    {
+      Header header = null;
+
+      foreach (byte[] hash in locatorHashes)
+      {
+        try
+        {
+          header = ReadHeader(hash);
+          break;
+        }
+        catch (ChainException)
+        {
+          continue;
+        }
+      }
+
+      if (header == null)
+      {
+        throw new ChainException(string.Format(
+          "Locator does not root in headerchain."));
+      }
+
+      List<Header> headers = new List<Header>();
+
+      while (
+        header.HeadersNext.Count > 0 &&
+        headers.Count < count)
+      {
+        headers.Add(header.HeadersNext.First());
+        header = header.HeadersNext.First();
+      }
+
+      return headers;
     }
   }
 }

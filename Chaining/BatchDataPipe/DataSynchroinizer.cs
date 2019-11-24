@@ -7,7 +7,7 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BToken.Chaining
 {
-  public abstract class DataSynchronizer
+  abstract class DataSynchronizer
   {
     int ArchiveIndexLoad;
     protected DirectoryInfo ArchiveDirectory;
@@ -107,7 +107,7 @@ namespace BToken.Chaining
           container.IsValid = false;
         }
 
-      } while (await SendContainerToOutputQueueAndContinue(container));
+      } while (await SendToQueueAndContinue(container));
     }
     
     protected abstract DataContainer CreateContainer(
@@ -121,7 +121,7 @@ namespace BToken.Chaining
       new Dictionary<int, DataContainer>();
     bool IsArchiveLoadCompleted;
 
-    async Task<bool> SendContainerToOutputQueueAndContinue(
+    async Task<bool> SendToQueueAndContinue(
       DataContainer container)
     {
       while (true)
@@ -209,16 +209,14 @@ namespace BToken.Chaining
 
         do
         {
+          TryInsertBatch(batch);
+
           if (batch.IsCancellationBatch)
           {
-            ArchiveContainers();
-
             SignalSynchronizationCompleted.SetResult(null);
             return;
           }
 
-          TryInsertBatch(batch);
-          
           BatchIndex += 1;
 
           if (QueueDownloadBatch.TryGetValue(
@@ -237,8 +235,14 @@ namespace BToken.Chaining
 
 
 
-    public bool TryInsertBatch(DataBatch batch)
+    protected bool TryInsertBatch(DataBatch batch)
     {
+      if (batch.IsCancellationBatch)
+      {
+        ArchiveContainers();
+        return true;
+      }
+
       foreach (DataContainer container in
         batch.DataContainers)
       {
@@ -249,7 +253,20 @@ namespace BToken.Chaining
           return false;
         }
 
-        ArchiveContainer(container);
+        Containers.Add(container);
+        CountItems += container.CountItems;
+
+        if (CountItems >= SizeBatchArchive)
+        {
+          ArchiveContainers();
+
+          Containers = new List<DataContainer>();
+          CountItems = 0;
+
+          ArchiveImage(ArchiveIndexStore);
+
+          ArchiveIndexStore += 1;
+        }
       }
 
       return true;
@@ -260,26 +277,6 @@ namespace BToken.Chaining
     protected abstract bool TryInsertContainer(
       DataContainer container);
 
-
-
-    void ArchiveContainer(
-      DataContainer container)
-    {
-      Containers.Add(container);
-      CountItems += container.CountItems;
-      
-      if (CountItems >= SizeBatchArchive)
-      {
-        ArchiveContainers();
-
-        Containers = new List<DataContainer>();
-        CountItems = 0;
-
-        ArchiveImage(ArchiveIndexStore);
-
-        ArchiveIndexStore += 1;
-      }
-    }
 
 
     protected async Task ArchiveContainers()

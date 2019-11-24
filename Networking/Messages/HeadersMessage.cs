@@ -9,12 +9,11 @@ namespace BToken.Networking
 {
   class HeadersMessage : NetworkMessage
   {
-    public List<Header> Headers { get; private set; } = new List<Header>();
+    public List<Header> Headers = new List<Header>();
 
 
     public HeadersMessage(
-      List<Header> headers, 
-      SHA256 sHA256) 
+      List<Header> headers)
       : base("headers")
     {
       Headers = headers;
@@ -26,7 +25,7 @@ namespace BToken.Networking
 
       payload.AddRange(VarInt.GetBytes(Headers.Count));
 
-      foreach(Header header in Headers)
+      foreach (Header header in Headers)
       {
         payload.AddRange(header.GetBytes());
         payload.Add(0);
@@ -35,18 +34,26 @@ namespace BToken.Networking
       Payload = payload.ToArray();
     }
 
-    public HeadersMessage(NetworkMessage message) 
+    public HeadersMessage(NetworkMessage message)
       : base("headers", message.Payload)
     {
       int startIndex = 0;
 
-      int headersCount = VarInt.GetInt32(Payload, ref startIndex);
+      int headersCount = VarInt.GetInt32(
+        Payload, 
+        ref startIndex);
+
       SHA256 sHA256 = SHA256.Create();
+
       for (int i = 0; i < headersCount; i += 1)
       {
-        Headers.Add(Header.ParseHeader(Payload, ref startIndex, sHA256));
+        Headers.Add(
+          Header.ParseHeader(
+            Payload,
+            ref startIndex,
+            sHA256));
 
-        startIndex += 1; // skip txCount (always a zero-byte)
+        startIndex += 1; // skip txCount (always zero)
       }
     }
   }

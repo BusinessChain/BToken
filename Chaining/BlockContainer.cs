@@ -23,6 +23,9 @@ namespace BToken.Chaining
       public Header HeaderPrevious;
       public Header Header;
 
+      public List<Header> Headers = new List<Header>();
+      public List<int> BufferStartIndexesBlocks = new List<int>();
+
       public int BlockCount;
       SHA256 SHA256 = SHA256.Create();
 
@@ -75,13 +78,15 @@ namespace BToken.Chaining
       
       Headerchain Headerchain;
 
-      public override void TryParse()
+      public override bool TryParse()
       {
         StopwatchParse.Start();
 
         try
         {
           BufferIndex = 0;
+
+          BufferStartIndexesBlocks.Add(BufferIndex);
 
           HeaderHash =
             SHA256.ComputeHash(
@@ -104,6 +109,8 @@ namespace BToken.Chaining
               Header.HeaderHash);
           }
 
+          Headers.Add(Header);
+
           HeaderPrevious = Header.HeaderPrevious;
           
           ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
@@ -112,6 +119,8 @@ namespace BToken.Chaining
 
           while (BufferIndex < Buffer.Length)
           {
+            BufferStartIndexesBlocks.Add(BufferIndex);
+
             HeaderHash =
               SHA256.ComputeHash(
                 SHA256.ComputeHash(
@@ -129,6 +138,8 @@ namespace BToken.Chaining
               HeaderHash,
               Header.HeaderHash);
 
+            Headers.Add(Header);
+
             ParseBlock(merkleRootIndex);
             BlockCount += 1;
             CountItems += TXCount;
@@ -145,9 +156,13 @@ namespace BToken.Chaining
             ex.GetType().Name,
             Index,
             ex.Message);
+
+          return false;
         }
 
         StopwatchParse.Stop();
+
+        return true;
       }
 
       static void ValidateHeaderHash(
@@ -342,7 +357,7 @@ namespace BToken.Chaining
         byte[] tXHash,
         int countTXOutputs)
       {
-        int lengthUTXOBits = CountNonOutputBits + countTXOutputs;
+        int lengthUTXOBits = COUNT_NON_OUTPUT_BITS + countTXOutputs;
 
         if (LENGTH_BITS_UINT >= lengthUTXOBits)
         {

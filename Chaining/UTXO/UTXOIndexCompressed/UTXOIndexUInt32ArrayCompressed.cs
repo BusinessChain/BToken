@@ -33,7 +33,7 @@ namespace BToken.Chaining
         3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1,
         3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2};
 
-      static readonly uint MaskAllOutputsBitsInFirstUInt32 = uint.MaxValue << CountNonOutputBits;
+      static readonly uint MaskAllOutputsBitsInFirstUInt32 = uint.MaxValue << COUNT_NON_OUTPUT_BITS;
 
 
       public UTXOIndexUInt32ArrayCompressed()
@@ -185,7 +185,7 @@ namespace BToken.Chaining
         int outputIndex,
         out bool areAllOutputpsSpent)
       {
-        int bitOffset = CountNonOutputBits + outputIndex;
+        int bitOffset = COUNT_NON_OUTPUT_BITS + outputIndex;
         int uintIndex = bitOffset / 32;
         int bitIndex = bitOffset % 32;
 

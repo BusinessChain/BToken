@@ -9,11 +9,15 @@ namespace BToken.Networking
 {
   class GetHeadersMessage : NetworkMessage
   {
-    public uint ProtocolVersion { get; private set; }
-    public IEnumerable<byte[]> HeaderLocator { get; private set; } = new List<byte[]>();
-    public UInt256 StopHash { get; private set; }
+    public uint ProtocolVersion;
+    public IEnumerable<byte[]> HeaderLocator = new List<byte[]>();
+    public UInt256 StopHash;
 
-    public GetHeadersMessage(IEnumerable<byte[]> headerLocator, uint protocolVersion)
+
+
+    public GetHeadersMessage(
+      IEnumerable<byte[]> headerLocator,
+      uint protocolVersion)
       : base("getheaders")
     {
       ProtocolVersion = protocolVersion;
@@ -53,6 +57,9 @@ namespace BToken.Networking
       {
         byte[] hash = new byte[32];
         Array.Copy(Payload, startIndex, hash, 0, 32);
+
+        ((List<byte[]>)HeaderLocator).Add(hash);
+
         startIndex += 32;
       }
 
