@@ -11,7 +11,7 @@ namespace BToken.Networking
   {
     public uint ProtocolVersion;
     public IEnumerable<byte[]> HeaderLocator = new List<byte[]>();
-    public byte[] StopHash;
+    public byte[] StopHash = new byte[32];
 
 
 
