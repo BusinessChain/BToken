@@ -138,7 +138,8 @@ namespace BToken.Chaining
 
     public List<Header> GetHeaders(
       IEnumerable<byte[]> locatorHashes,
-      int count)
+      int count,
+      byte[] stopHash)
     {
       Header header = null;
 
@@ -165,10 +166,13 @@ namespace BToken.Chaining
 
       while (
         header.HeadersNext.Count > 0 &&
-        headers.Count < count)
+        headers.Count < count &&
+        !header.HeaderHash.IsEqual(stopHash))
       {
-        headers.Add(header.HeadersNext.First());
-        header = header.HeadersNext.First();
+        Header nextHeader = header.HeadersNext.First();
+
+        headers.Add(nextHeader);
+        header = nextHeader;
       }
 
       return headers;

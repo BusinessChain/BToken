@@ -117,7 +117,8 @@ namespace BToken
 
                 var headers = Headerchain.GetHeaders(
                   getHeadersMessage.HeaderLocator,
-                  2000);
+                  2000,
+                  getHeadersMessage.StopHash);
 
                 await channel.SendMessage(
                   new HeadersMessage(headers));

@@ -11,7 +11,7 @@ namespace BToken.Networking
   {
     public uint ProtocolVersion;
     public IEnumerable<byte[]> HeaderLocator = new List<byte[]>();
-    public UInt256 StopHash;
+    public byte[] StopHash;
 
 
 
@@ -22,7 +22,7 @@ namespace BToken.Networking
     {
       ProtocolVersion = protocolVersion;
       HeaderLocator = headerLocator;
-      StopHash = new UInt256("0000000000000000000000000000000000000000000000000000000000000000");
+      StopHash = "0000000000000000000000000000000000000000000000000000000000000000".ToBinary();
 
       SerializePayload();
     }
@@ -38,7 +38,7 @@ namespace BToken.Networking
         payload.AddRange(HeaderLocator.ElementAt(i));
       }
 
-      payload.AddRange(StopHash.GetBytes());
+      payload.AddRange(StopHash);
 
       Payload = payload.ToArray();
     }
@@ -63,7 +63,8 @@ namespace BToken.Networking
         startIndex += 32;
       }
 
-      StopHash = new UInt256(Payload, ref startIndex);
+      Array.Copy(Payload, startIndex, StopHash, 0, 32);
+      startIndex += 32;
     }
 
   }
