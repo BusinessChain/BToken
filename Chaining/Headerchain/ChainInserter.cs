@@ -84,7 +84,8 @@ namespace BToken.Chaining
       {
         FindPreviousHeader(headerRoot);
 
-        if (Probe.Header.HeadersNext.Any(h => h.HeaderHash.IsEqual(headerRoot.HeaderHash)))
+        if (Probe.Header.HeadersNext
+          .Any(h => h.HeaderHash.IsEqual(headerRoot.HeaderHash)))
         {
           throw new ChainException(
             string.Format("duplicate header {0} \n attempting to connect to header {1}",

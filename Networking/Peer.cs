@@ -192,6 +192,12 @@ namespace BToken.Networking
 
         if(ConnectionType == ConnectionType.OUTBOUND)
         {
+
+          lock (Network.LOCK_ChannelsOutbound)
+          {
+            Network.ChannelsOutbound.Remove(this);
+          }
+
           Network.CreateOutboundPeer();
         }
       }
@@ -354,7 +360,12 @@ namespace BToken.Networking
 
       public string GetIdentification()
       {
-        return IPEndPoint.ToString();
+        if(ConnectionType == ConnectionType.INBOUND)
+        {
+          return TcpClient.Client.RemoteEndPoint.ToString();
+        }
+
+        return TcpClient.Client.LocalEndPoint.ToString();
       }
 
       public bool IsConnectionTypeInbound()

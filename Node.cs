@@ -161,6 +161,12 @@ namespace BToken
                 if (Headerchain.Synchronizer.TryInsertHeaderBytes(
                   headersMessage.Payload))
                 {
+                  headersMessage.Headers.ForEach(
+                    h => Console.WriteLine("inserted header {0}", 
+                    h.HeaderHash.ToHexString()));
+                  
+                  Console.WriteLine("blockheight {0}", Headerchain.GetHeight());
+
                   if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
                   {
                     Console.WriteLine("Could not synchronize UTXO, with channel {0}",

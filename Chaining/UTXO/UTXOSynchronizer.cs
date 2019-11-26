@@ -55,11 +55,6 @@ namespace BToken.Chaining
           UTXOChannel channel = new UTXOChannel(
             await UTXOTable.Network.RequestChannel());
 
-          Console.WriteLine(
-            "{0} requested channel {1}",
-            GetType().Name,
-            channel.NetworkChannel.GetIdentification());
-
           try
           {
             do
@@ -123,8 +118,7 @@ namespace BToken.Chaining
         }
       }
 
-
-
+      
       ConcurrentQueue<DataBatch> QueueBatchesCanceled
         = new ConcurrentQueue<DataBatch>();
       static readonly object LOCK_LoadBatch = new object();
@@ -197,10 +191,14 @@ namespace BToken.Chaining
         {
           UTXOTable.InsertContainer(blockContainer);
         }
-        catch (ChainException ex)
+        catch (ChainException)
+        {
+          return false;
+        }
+        catch(Exception ex)
         {
           Console.WriteLine(
-            "Insertion of blockBatchContainer {0} raised ChainException:\n {1}.",
+            "Insertion of blockBatchContainer {0} raised unexpected Exception:\n {1}.",
             container.Index,
             ex.Message);
 
@@ -308,9 +306,8 @@ namespace BToken.Chaining
               return true;
             }
 
-            Console.WriteLine(
-              "inserted batch {0} in UTXO table",
-              batch.Index);
+            batch.DataContainers.ForEach(d => ((BlockContainer)d).Headers.ForEach(h => 
+            Console.WriteLine("Inserted block {0} in UTXO", h.HeaderHash.ToHexString())));
           }
           else
           {

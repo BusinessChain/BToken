@@ -57,7 +57,7 @@ namespace BToken.Networking
         0, PEERS_COUNT_OUTBOUND,
         i => CreateOutboundPeer());
 
-      Task peerInboundListenerTask = StartPeerInboundListenerAsync();
+      StartPeerInboundListener();
     }
 
 
@@ -73,6 +73,8 @@ namespace BToken.Networking
 
       while(!await peer.TryConnect())
       {
+        Console.WriteLine("failed to created peer {0}", peer.GetIdentification());
+
         await Task.Delay(1000);
 
         peer = new Peer(
@@ -84,6 +86,8 @@ namespace BToken.Networking
       {
         ChannelsOutbound.Add(peer);
       }
+
+      Console.WriteLine("created peer {0}", peer.GetIdentification());
     }
 
     readonly object LOCK_IsAddressPoolLocked = new object();
@@ -101,7 +105,7 @@ namespace BToken.Networking
           }
         }
 
-        await Task.Delay(100);
+        await Task.Delay(1000);
       } 
 
       IPAddress iPAddress = AddressPool.GetNodeAddress();
@@ -145,7 +149,7 @@ namespace BToken.Networking
       return await PeersRequestInbound.ReceiveAsync();
     }
         
-    public async Task StartPeerInboundListenerAsync()
+    public async Task StartPeerInboundListener()
     {
       TcpListener.Start(PEERS_COUNT_INBOUND);
 
@@ -176,6 +180,11 @@ namespace BToken.Networking
     public uint GetProtocolVersion()
     {
       return ProtocolVersion;
+    }
+
+    public void SendToInbound(NetworkMessage message)
+    {
+      ChannelsInbound.ForEach(c => c.SendMessage(message));
     }
   }
 }
