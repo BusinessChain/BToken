@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
 
 namespace BToken.Networking
 {
@@ -49,7 +50,9 @@ namespace BToken.Networking
           try
           {
             IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
-            SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList);
+
+            SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList
+              .Where(a => a.AddressFamily == AddressFamily.InterNetwork));
           }
           catch(Exception ex)
           {

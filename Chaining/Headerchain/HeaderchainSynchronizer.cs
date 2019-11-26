@@ -241,7 +241,11 @@ namespace BToken.Chaining
 
           return true;
         }
-        catch(ChainException ex)
+        catch(ChainException)
+        {
+          return false;
+        }
+        catch(Exception ex)
         {
           Console.WriteLine(
             "Insertion of headerContainer {0} raised ChainException:\n {1}.",
