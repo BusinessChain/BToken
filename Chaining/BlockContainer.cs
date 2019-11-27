@@ -100,7 +100,15 @@ namespace BToken.Chaining
 
           if (Header == null)
           {
-            Header = Headerchain.ReadHeader(HeaderHash, SHA256);
+            if(!Headerchain.TryReadHeader(
+              HeaderHash, 
+              SHA256,
+              out Header))
+            {
+              throw new ChainException(string.Format(
+                "Header hash {0} not in chain.",
+                HeaderHash.ToHexString()));
+            }
           }
           else
           {

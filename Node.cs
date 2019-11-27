@@ -76,13 +76,6 @@ namespace BToken
         {
           try
           {
-            if (channel.IsConnectionTypeInbound())
-            {
-              Console.WriteLine("{0} message from {1}",
-                message.Command,
-                channel.GetIdentification());
-            }
-
             switch (message.Command)
             {
               case "getdata":
@@ -127,11 +120,23 @@ namespace BToken
               case "inv":
                 var invMessage = new InvMessage(message);
 
-                if (invMessage.Inventories.Any(
-                  inv => inv.Type == InventoryType.MSG_BLOCK))
+                foreach(Inventory inv in invMessage.Inventories
+                  .Where(inv => inv.Type == InventoryType.MSG_BLOCK).ToList())
                 {
-                  Console.WriteLine("block inventory message from channel {0}",
-                    channel.GetIdentification());
+                  Console.WriteLine("inv message {0} from {1}",
+                       inv.Hash.ToHexString(),
+                       channel.GetIdentification());
+
+                  if (Headerchain.TryReadHeader(
+                    inv.Hash, 
+                    out Header headerAdvertized))
+                  {
+                    Console.WriteLine(
+                      "Advertized block {0} already in chain",
+                      inv.Hash.ToHexString());
+
+                    break;
+                  }
 
                   Headerchain.Synchronizer.LoadBatch();
                   await Headerchain.Synchronizer.DownloadHeaders(channel);
@@ -140,7 +145,8 @@ namespace BToken
                   {
                     if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
                     {
-                      Console.WriteLine("Could not synchronize UTXO, with channel {0}",
+                      Console.WriteLine(
+                        "Could not synchronize UTXO, with channel {0}",
                         channel.GetIdentification());
                     }
                   }
@@ -151,11 +157,24 @@ namespace BToken
                       channel.GetIdentification());
                   }
                 }
-
+                
                 break;
 
               case "headers":
                 var headersMessage = new HeadersMessage(message);
+
+                Console.WriteLine("headers message {0} from {1}",
+                  headersMessage.Headers.First().HeaderHash.ToHexString(),
+                  channel.GetIdentification());
+
+                if (Headerchain.TryReadHeader(headersMessage.Headers.First().HeaderHash, out Header header))
+                {
+                  Console.WriteLine(
+                    "Advertized block {0} already in chain",
+                    headersMessage.Headers.First().HeaderHash.ToHexString());
+
+                  break;
+                }
 
                 if (Headerchain.Synchronizer.TryInsertHeaderBytes(
                   headersMessage.Payload))

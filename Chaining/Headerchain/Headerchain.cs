@@ -86,14 +86,22 @@ namespace BToken.Chaining
 
 
 
-    public Header ReadHeader(byte[] headerHash)
+    public bool TryReadHeader(
+      byte[] headerHash,
+      out Header header)
     {
       SHA256 sHA256 = SHA256.Create();
 
-      return ReadHeader(headerHash, sHA256);
+      return TryReadHeader(
+        headerHash, 
+        sHA256, 
+        out header);
     }
 
-    public Header ReadHeader(byte[] headerHash, SHA256 sHA256)
+    public bool TryReadHeader(
+      byte[] headerHash, 
+      SHA256 sHA256, 
+      out Header header)
     {
       int key = BitConverter.ToInt32(headerHash, 0);
 
@@ -101,18 +109,19 @@ namespace BToken.Chaining
       {
         if (HeaderIndex.TryGetValue(key, out List<Header> headers))
         {
-          foreach (Header header in headers)
+          foreach (Header h in headers)
           {
-            if (headerHash.IsEqual(header.HeaderHash))
+            if (headerHash.IsEqual(h.HeaderHash))
             {
-              return header;
+              header = h;
+              return true;
             }
           }
         }
       }
 
-      throw new ChainException(string.Format("Header hash {0} not in chain.",
-        headerHash.ToHexString()));
+      header = null;
+      return false;
     }
 
     void UpdateHeaderIndex(Header header)
@@ -140,12 +149,7 @@ namespace BToken.Chaining
 
       foreach (byte[] hash in locatorHashes)
       {
-        try
-        {
-          header = ReadHeader(hash);
-          break;
-        }
-        catch (ChainException)
+        if(!TryReadHeader(hash, out header))
         {
           continue;
         }

@@ -263,7 +263,13 @@ namespace BToken.Chaining
 
         byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
         Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
-        Header = Headerchain.ReadHeader(headerHashMergedLast);
+
+        if(!Headerchain.TryReadHeader(headerHashMergedLast, out Header))
+        {
+          throw new ChainException(string.Format(
+            "Header hash {0} merged last not in chain.",
+            headerHashMergedLast.ToHexString()));
+        }
 
         LoadMapBlockToArchiveData(File.ReadAllBytes(
           Path.Combine(PathUTXOState, "MapBlockHeader")));
