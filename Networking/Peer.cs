@@ -360,12 +360,13 @@ namespace BToken.Networking
 
       public string GetIdentification()
       {
-        if(ConnectionType == ConnectionType.INBOUND)
-        {
-          return TcpClient.Client.RemoteEndPoint.ToString();
-        }
+        string signConnectionType =
+          ConnectionType == ConnectionType.INBOUND ? " <- " : " -> ";
 
-        return TcpClient.Client.LocalEndPoint.ToString();
+        return 
+          TcpClient.Client.LocalEndPoint.ToString() + 
+          signConnectionType + 
+          TcpClient.Client.RemoteEndPoint.ToString();
       }
 
       public bool IsConnectionTypeInbound()

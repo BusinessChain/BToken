@@ -72,12 +72,11 @@ namespace BToken
           channel.Release();
           continue;
         }
-
-        try
+        foreach (NetworkMessage message in messages)
         {
-          foreach (NetworkMessage message in messages)
+          try
           {
-            if(channel.IsConnectionTypeInbound())
+            if (channel.IsConnectionTypeInbound())
             {
               Console.WriteLine("{0} message from {1}",
                 message.Command,
@@ -89,12 +88,12 @@ namespace BToken
               case "getdata":
                 var getDataMessage = new GetDataMessage(message);
 
-                foreach(Inventory inventory in getDataMessage.Inventories)
+                foreach (Inventory inventory in getDataMessage.Inventories)
                 {
-                  if(inventory.Type == InventoryType.MSG_BLOCK)
+                  if (inventory.Type == InventoryType.MSG_BLOCK)
                   {
-                    if(UTXOTable.Synchronizer.TryGetBlockFromArchive(
-                      inventory.Hash, 
+                    if (UTXOTable.Synchronizer.TryGetBlockFromArchive(
+                      inventory.Hash,
                       out byte[] blockBytes))
                     {
                       NetworkMessage blockMessage = new NetworkMessage(
@@ -109,7 +108,7 @@ namespace BToken
                     }
                   }
                 }
-                
+
                 break;
 
               case "getheaders":
@@ -135,7 +134,7 @@ namespace BToken
                     channel.GetIdentification());
 
                   Headerchain.Synchronizer.LoadBatch();
-                  Headerchain.Synchronizer.DownloadHeaders(channel);
+                  await Headerchain.Synchronizer.DownloadHeaders(channel);
 
                   if (Headerchain.Synchronizer.TryInsertBatch())
                   {
@@ -162,9 +161,9 @@ namespace BToken
                   headersMessage.Payload))
                 {
                   headersMessage.Headers.ForEach(
-                    h => Console.WriteLine("inserted header {0}", 
+                    h => Console.WriteLine("inserted header {0}",
                     h.HeaderHash.ToHexString()));
-                  
+
                   Console.WriteLine("blockheight {0}", Headerchain.GetHeight());
 
                   if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
@@ -185,17 +184,19 @@ namespace BToken
                 break;
             }
           }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "Serving inbound request {0} of channel {1} ended in exception {2}",
+              message.Command,
+              channel.GetIdentification(),
+              ex.Message);
 
-          channel.Release();
+            Network.DisposeChannel(channel);
+          }
         }
-        catch (Exception ex)
-        {
-          Console.WriteLine("Serving inbound request of channel '{0}' ended in exception '{1}'",
-            channel.GetIdentification(),
-            ex.Message);
 
-          Network.DisposeChannel(channel);
-        }
+        channel.Release();
 
       }
     }

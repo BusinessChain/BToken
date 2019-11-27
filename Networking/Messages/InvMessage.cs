@@ -11,6 +11,21 @@ namespace BToken.Networking
     public List<Inventory> Inventories = new List<Inventory>();
 
 
+    public InvMessage(List<Inventory> inventories)
+      : base("inv")
+    {
+      Inventories = inventories;
+
+      List<byte> payload = new List<byte>();
+
+      payload.AddRange(VarInt.GetBytes(inventories.Count));
+
+      Inventories.ForEach(
+        i => payload.AddRange(i.GetBytes()));
+
+      Payload = payload.ToArray();
+    }
+
     public InvMessage(NetworkMessage networkMessage) 
       : base(
           "inv", 
@@ -25,28 +40,10 @@ namespace BToken.Networking
       for (int i = 0; i < inventoryCount; i++)
       {
         Inventories.Add(
-          DeserializeInventory(
+          Inventory.Parse(
             Payload, 
             ref startIndex));
       }
-    }
-
-    Inventory DeserializeInventory(
-      byte[] buffer, 
-      ref int startIndex)
-    {
-      InventoryType type = (InventoryType)BitConverter.ToUInt32(
-        buffer, 
-        startIndex);
-
-      startIndex += 4;
-
-      byte[] hashBytes = new byte[32];
-      Array.Copy(buffer, startIndex, hashBytes, 0, 32);
-      startIndex += 32;
-
-      return new Inventory(type, hashBytes);
-    }
-    
+    }    
   }
 }

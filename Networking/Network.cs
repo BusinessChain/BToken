@@ -176,12 +176,7 @@ namespace BToken.Networking
     }
     
     static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        
-    public uint GetProtocolVersion()
-    {
-      return ProtocolVersion;
-    }
-
+       
     public void SendToInbound(NetworkMessage message)
     {
       ChannelsInbound.ForEach(c => c.SendMessage(message));
