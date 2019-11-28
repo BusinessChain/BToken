@@ -71,23 +71,18 @@ namespace BToken.Networking
         ConnectionType.OUTBOUND,
         this);
 
-      while(!await peer.TryConnect())
+      if(await peer.TryConnect())
       {
-        Console.WriteLine("failed to created peer {0}", peer.GetIdentification());
+        lock (LOCK_ChannelsOutbound)
+        {
+          ChannelsOutbound.Add(peer);
 
-        await Task.Delay(1000);
-
-        peer = new Peer(
-          ConnectionType.OUTBOUND, 
-          this);
+          Console.WriteLine(
+            "created peer {0}, total {1} peers", 
+            peer.GetIdentification(),
+            ChannelsOutbound.Count);
+        }
       }
-
-      lock(LOCK_ChannelsOutbound)
-      {
-        ChannelsOutbound.Add(peer);
-      }
-
-      Console.WriteLine("created peer {0}", peer.GetIdentification());
     }
 
     readonly object LOCK_IsAddressPoolLocked = new object();

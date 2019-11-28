@@ -20,7 +20,7 @@ namespace BToken.Networking
     {
       Network Network;
 
-      IPEndPoint IPEndPoint;
+      public IPEndPoint IPEndPoint;
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
 
@@ -87,10 +87,12 @@ namespace BToken.Networking
       {
         try
         {
-          await Connect();
+          IPAddress iPAddress = await Network.GetNodeAddress();
+          IPEndPoint = new IPEndPoint(iPAddress, Port);
+          await ConnectTCPAsync();
+          await HandshakeAsync();
 
           ProcessNetworkMessagesAsync();
-
           return true;
         }
         catch
@@ -100,12 +102,25 @@ namespace BToken.Networking
         }
       }
 
-      async Task Connect()
+
+      public void Dispose()
       {
-        IPAddress iPAddress = await Network.GetNodeAddress();
-        IPEndPoint = new IPEndPoint(iPAddress, Port);
-        await ConnectTCPAsync();
-        await HandshakeAsync();
+        TcpClient.Dispose();
+
+        if (ConnectionType == ConnectionType.OUTBOUND)
+        {
+          lock (Network.LOCK_ChannelsOutbound)
+          {
+            Network.ChannelsOutbound.Remove(this);
+
+            Console.WriteLine(
+              "disposed peer {0}, total peers {1}",
+              IPEndPoint,
+              Network.ChannelsOutbound.Count);
+          }
+
+          Network.CreateOutboundPeer();
+        }
       }
 
       async Task ProcessNetworkMessagesAsync()
@@ -161,44 +176,9 @@ namespace BToken.Networking
 
       public void Release()
       {
-        lock (IsDispatchedLOCK)
-        {
-          IsDispatched = false;
-        }
-
         lock (Network.LOCK_ChannelsOutbound)
         {
           Network.ChannelsOutbound.Add(this);
-        }
-      }
-
-      public bool TryDispatch()
-      {
-        lock (IsDispatchedLOCK)
-        {
-          if (IsDispatched)
-          {
-            return false;
-          }
-
-          IsDispatched = true;
-          return true;
-        }
-      }
-
-      public void Dispose()
-      {
-        TcpClient.Dispose();
-
-        if(ConnectionType == ConnectionType.OUTBOUND)
-        {
-
-          lock (Network.LOCK_ChannelsOutbound)
-          {
-            Network.ChannelsOutbound.Remove(this);
-          }
-
-          Network.CreateOutboundPeer();
         }
       }
 
