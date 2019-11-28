@@ -53,7 +53,7 @@ namespace BToken.Chaining
         while(true)
         {
           UTXOChannel channel = new UTXOChannel(
-            await UTXOTable.Network.RequestChannel());
+            await UTXOTable.Network.DispatchChannelOutbound());
 
           try
           {
