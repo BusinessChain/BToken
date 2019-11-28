@@ -81,6 +81,13 @@ namespace BToken
               case "getdata":
                 var getDataMessage = new GetDataMessage(message);
 
+                getDataMessage.Inventories.ForEach(inv =>
+                {
+                  Console.WriteLine("getdata {0} from {1}",
+                    inv.Hash.ToHexString(),
+                    channel.GetIdentification());
+                });
+                
                 foreach (Inventory inventory in getDataMessage.Inventories)
                 {
                   if (inventory.Type == InventoryType.MSG_BLOCK)
@@ -107,6 +114,9 @@ namespace BToken
               case "getheaders":
                 var getHeadersMessage = new GetHeadersMessage(message);
 
+                Console.WriteLine("getheaders from {0}",
+                     channel.GetIdentification());
+
                 var headers = Headerchain.GetHeaders(
                   getHeadersMessage.HeaderLocator,
                   2000,
@@ -131,9 +141,9 @@ namespace BToken
                     inv.Hash, 
                     out Header headerAdvertized))
                   {
-                    Console.WriteLine(
-                      "Advertized block {0} already in chain",
-                      inv.Hash.ToHexString());
+                    //Console.WriteLine(
+                    //  "Advertized block {0} already in chain",
+                    //  inv.Hash.ToHexString());
 
                     break;
                   }
@@ -167,11 +177,13 @@ namespace BToken
                   headersMessage.Headers.First().HeaderHash.ToHexString(),
                   channel.GetIdentification());
 
-                if (Headerchain.TryReadHeader(headersMessage.Headers.First().HeaderHash, out Header header))
+                if (Headerchain.TryReadHeader(
+                  headersMessage.Headers.First().HeaderHash, 
+                  out Header header))
                 {
-                  Console.WriteLine(
-                    "Advertized block {0} already in chain",
-                    headersMessage.Headers.First().HeaderHash.ToHexString());
+                  //Console.WriteLine(
+                  //  "Advertized block {0} already in chain",
+                  //  headersMessage.Headers.First().HeaderHash.ToHexString());
 
                   break;
                 }

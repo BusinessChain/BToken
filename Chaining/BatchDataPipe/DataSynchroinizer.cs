@@ -32,6 +32,8 @@ namespace BToken.Chaining
 
     public async Task Start()
     {
+      Console.WriteLine("Start {0}", GetType().Name);
+
       LoadImage(out int archiveIndex);
       
       await SynchronizeWithArchive(archiveIndex);
@@ -46,8 +48,7 @@ namespace BToken.Chaining
       await SignalSynchronizationCompleted.Task;
       SetIsSyncingCompleted();
 
-      Console.WriteLine("{0} synchronization completed",
-        GetType().Name);
+      Console.WriteLine("{0} completed", GetType().Name);
     }
 
     protected abstract void LoadImage(

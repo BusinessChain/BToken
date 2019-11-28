@@ -56,6 +56,8 @@ namespace BToken.Chaining
     public async Task Start()
     {
       await Synchronizer.Start();
+
+      Console.WriteLine("Headerchain height {0}", GetHeight());
     }
 
 
