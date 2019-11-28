@@ -114,8 +114,9 @@ namespace BToken
               case "getheaders":
                 var getHeadersMessage = new GetHeadersMessage(message);
 
-                Console.WriteLine("getheaders from {0}",
-                     channel.GetIdentification());
+                Console.WriteLine("received getheaders tip {0} from {1}",
+                  getHeadersMessage.HeaderLocator.First().ToHexString(),
+                  channel.GetIdentification());
 
                 var headers = Headerchain.GetHeaders(
                   getHeadersMessage.HeaderLocator,
@@ -124,6 +125,11 @@ namespace BToken
 
                 await channel.SendMessage(
                   new HeadersMessage(headers));
+
+                Console.WriteLine("sent {0} headers tip {1} to {2}",
+                  headers.Count,
+                  headers.First().HeaderHash.ToHexString(),
+                  channel.GetIdentification());
 
                 break;
 

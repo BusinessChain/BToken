@@ -147,36 +147,29 @@ namespace BToken.Chaining
       int count,
       byte[] stopHash)
     {
-      Header header = null;
-
       foreach (byte[] hash in locatorHashes)
       {
-        if(!TryReadHeader(hash, out header))
+        if(TryReadHeader(hash, out Header header))
         {
-          continue;
+          List<Header> headers = new List<Header>();
+
+          while (
+            header.HeadersNext.Count > 0 &&
+            headers.Count < count &&
+            !header.HeaderHash.IsEqual(stopHash))
+          {
+            Header nextHeader = header.HeadersNext.First();
+
+            headers.Add(nextHeader);
+            header = nextHeader;
+          }
+
+          return headers;
         }
       }
 
-      if (header == null)
-      {
-        throw new ChainException(string.Format(
-          "Locator does not root in headerchain."));
-      }
-
-      List<Header> headers = new List<Header>();
-
-      while (
-        header.HeadersNext.Count > 0 &&
-        headers.Count < count &&
-        !header.HeaderHash.IsEqual(stopHash))
-      {
-        Header nextHeader = header.HeadersNext.First();
-
-        headers.Add(nextHeader);
-        header = nextHeader;
-      }
-
-      return headers;
+      throw new ChainException(string.Format(
+        "Locator does not root in headerchain."));
     }
   }
 }
