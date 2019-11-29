@@ -64,22 +64,25 @@ namespace BToken.Networking
 
     async Task CreateOutboundPeer()
     {
+      IPAddress iPAddress = await GetNodeAddress();
+      var iPEndPoint = new IPEndPoint(iPAddress, Port);
+
       var peer = new Peer(
+        iPEndPoint,
         ConnectionType.OUTBOUND,
         this);
 
-      if(await peer.TryConnect())
+      lock (LOCK_Peers)
       {
-        lock (LOCK_Peers)
-        {
-          Peers.Add(peer);
+        Peers.Add(peer);
 
-          Console.WriteLine(
-            "created peer {0}, total {1} peers", 
-            peer.GetIdentification(),
-            Peers.Count);
-        }
+        Console.WriteLine(
+          "created peer {0}, total {1} peers",
+          peer.IPEndPoint,
+          Peers.Count);
       }
+
+      peer.Connect();
     }
 
     readonly object LOCK_IsAddressPoolLocked = new object();
@@ -118,11 +121,10 @@ namespace BToken.Networking
         {
           Peer peer = Peers.Find(p =>
             p.ConnectionType == ConnectionType.OUTBOUND &&
-            !p.IsDispatched);
+            p.TryDispatch());
 
           if(peer != null)
           {
-            peer.IsDispatched = true;
             return peer;
           }
         }
@@ -155,12 +157,12 @@ namespace BToken.Networking
           ConnectionType.INBOUND,
           this);
 
-        peer.Start();
-
         lock (LOCK_Peers)
         {
           Peers.Add(peer);
         }
+
+        peer.Start();
       }
     }
     

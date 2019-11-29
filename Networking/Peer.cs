@@ -27,7 +27,7 @@ namespace BToken.Networking
       VersionMessage VersionMessageRemote;
 
       readonly object LOCK_IsDispatched = new object();
-      public bool IsDispatched = true;
+      bool IsDispatched = true;
 
       BufferBlock<NetworkMessage> ApplicationMessages =
         new BufferBlock<NetworkMessage>();
@@ -40,9 +40,11 @@ namespace BToken.Networking
 
 
       public Peer(
+        IPEndPoint iPEndPoint,
         ConnectionType connectionType,
         Network network)
       {
+        IPEndPoint = iPEndPoint;
         ConnectionType = connectionType;
         Network = network;
       }
@@ -52,6 +54,7 @@ namespace BToken.Networking
         ConnectionType connectionType,
         Network network)
         : this(
+            (IPEndPoint)tcpClient.Client.RemoteEndPoint,
             connectionType,
             network)
       {
@@ -76,35 +79,24 @@ namespace BToken.Networking
 
           ProcessNetworkMessagesAsync();
         }
-        catch (Exception ex)
+        catch
         {
           Dispose();
-          throw ex;
         }
       }
 
-      public async Task<bool> TryConnect()
+      public async Task Connect()
       {
         try
         {
-          IPAddress iPAddress = await Network.GetNodeAddress();
-          IPEndPoint = new IPEndPoint(iPAddress, Port);
           await ConnectTCPAsync();
-          await HandshakeAsync();
-
-          lock (LOCK_IsDispatched)
-          {
-            IsDispatched = false;
-          }
-
-          ProcessNetworkMessagesAsync();
-          return true;
         }
         catch
         {
           Dispose();
-          return false;
         }
+
+        Start();
       }
 
 
@@ -141,16 +133,30 @@ namespace BToken.Networking
             case "ping":
               Task processPingMessageTask = ProcessPingMessageAsync(message);
               break;
+
             case "addr":
               ProcessAddressMessage(message);
               break;
+
             case "sendheaders":
               Task processSendHeadersMessageTask = ProcessSendHeadersMessageAsync(message);
               break;
+
             case "feefilter":
               ProcessFeeFilterMessage(message);
               break;
+
             default:
+              //lock (LOCK_IsDispatched)
+              //{
+              //  if (IsDispatched)
+              //  {
+              //    ApplicationMessages.Post(message);
+              //  }
+              //}
+
+              //ProcessRequest(message);
+
               ApplicationMessages.Post(message);
 
               lock (LOCK_IsDispatched)
@@ -167,6 +173,24 @@ namespace BToken.Networking
           }
         }
       }
+
+
+
+      public bool TryDispatch()
+      {
+        lock (LOCK_IsDispatched)
+        {
+          if(IsDispatched)
+          {
+            return false;
+          }
+
+          IsDispatched = true;
+          return true;
+        }
+      }
+
+
 
       public void Release()
       {
