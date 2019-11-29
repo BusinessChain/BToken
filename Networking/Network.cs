@@ -25,10 +25,10 @@ namespace BToken.Networking
     NetworkAddressPool AddressPool;
     TcpListener TcpListener;
 
-    readonly object LOCK_ChannelsInbound = new object();
-    List<INetworkChannel> ChannelsInbound = new List<INetworkChannel>();
+    readonly object LOCK_Peers = new object();
+    List<Peer> Peers = new List<Peer>();
 
-    BufferBlock<Peer> PeersRequestInbound = new BufferBlock<Peer>();
+    BufferBlock<Peer> PeersRequest = new BufferBlock<Peer>();
     
 
     public Network()
@@ -62,9 +62,6 @@ namespace BToken.Networking
 
 
 
-    readonly object LOCK_ChannelsOutbound = new object();
-    List<INetworkChannel> ChannelsOutbound = new List<INetworkChannel>();
-
     async Task CreateOutboundPeer()
     {
       var peer = new Peer(
@@ -73,14 +70,14 @@ namespace BToken.Networking
 
       if(await peer.TryConnect())
       {
-        lock (LOCK_ChannelsOutbound)
+        lock (LOCK_Peers)
         {
-          ChannelsOutbound.Add(peer);
+          Peers.Add(peer);
 
           Console.WriteLine(
             "created peer {0}, total {1} peers", 
             peer.GetIdentification(),
-            ChannelsOutbound.Count);
+            Peers.Count);
         }
       }
     }
@@ -113,35 +110,32 @@ namespace BToken.Networking
       return iPAddress;
     }
 
-    public async Task<INetworkChannel> RequestChannel()
+    public async Task<INetworkChannel> DispatchChannelOutbound()
     {
       do
       {
-        lock (LOCK_ChannelsOutbound)
+        lock (LOCK_Peers)
         {
-          if (ChannelsOutbound.Any())
-          {
-            var channel = ChannelsOutbound.First();
-            ChannelsOutbound.RemoveAt(0);
+          Peer peer = Peers.Find(p =>
+            p.ConnectionType == ConnectionType.OUTBOUND &&
+            !p.IsDispatched);
 
-            return channel;
+          if(peer != null)
+          {
+            peer.IsDispatched = true;
+            return peer;
           }
         }
 
+        Console.WriteLine("waiting for channel to dispatch");
         await Task.Delay(1000);
 
       } while (true);
     }
 
-    public void DisposeChannel(INetworkChannel channel)
+    public async Task<INetworkChannel> AcceptChannelRequest()
     {
-      channel.Dispose();
-      CreateOutboundPeer();
-    }
-
-    public async Task<INetworkChannel> AcceptChannelInboundRequestAsync()
-    {
-      return await PeersRequestInbound.ReceiveAsync();
+      return await PeersRequest.ReceiveAsync();
     }
         
     public async Task StartPeerInboundListener()
@@ -163,18 +157,14 @@ namespace BToken.Networking
 
         peer.Start();
 
-        lock (LOCK_ChannelsInbound)
+        lock (LOCK_Peers)
         {
-          ChannelsInbound.Add(peer);
+          Peers.Add(peer);
         }
       }
     }
     
     static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-       
-    public void SendToInbound(NetworkMessage message)
-    {
-      ChannelsInbound.ForEach(c => c.SendMessage(message));
-    }
+      
   }
 }

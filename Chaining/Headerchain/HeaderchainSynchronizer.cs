@@ -54,7 +54,7 @@ namespace BToken.Chaining
         while(true)
         {
           Network.INetworkChannel channel =
-            await Headerchain.Network.RequestChannel();
+            await Headerchain.Network.DispatchChannelOutbound();
 
           lock (LOCK_IsAnySessionSyncing)
           {

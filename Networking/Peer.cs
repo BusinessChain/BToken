@@ -26,15 +26,15 @@ namespace BToken.Networking
 
       VersionMessage VersionMessageRemote;
 
-      readonly object IsDispatchedLOCK = new object();
-      bool IsDispatched = true;
+      readonly object LOCK_IsDispatched = new object();
+      public bool IsDispatched = true;
 
       BufferBlock<NetworkMessage> ApplicationMessages =
         new BufferBlock<NetworkMessage>();
 
       ulong FeeFilterValue;
 
-      ConnectionType ConnectionType;
+      public ConnectionType ConnectionType;
 
 
 
@@ -69,7 +69,7 @@ namespace BToken.Networking
         {
           await HandshakeAsync();
 
-          lock (IsDispatchedLOCK)
+          lock (LOCK_IsDispatched)
           {
             IsDispatched = false;
           }
@@ -92,6 +92,11 @@ namespace BToken.Networking
           await ConnectTCPAsync();
           await HandshakeAsync();
 
+          lock (LOCK_IsDispatched)
+          {
+            IsDispatched = false;
+          }
+
           ProcessNetworkMessagesAsync();
           return true;
         }
@@ -107,18 +112,19 @@ namespace BToken.Networking
       {
         TcpClient.Dispose();
 
+        lock (Network.LOCK_Peers)
+        {
+          Network.Peers.Remove(this);
+
+          Console.WriteLine(
+            "disposed {0} peer {1}, total peers {2}",
+            ConnectionType.ToString(),
+            IPEndPoint,
+            Network.Peers.Count);
+        }
+
         if (ConnectionType == ConnectionType.OUTBOUND)
         {
-          lock (Network.LOCK_ChannelsOutbound)
-          {
-            Network.ChannelsOutbound.Remove(this);
-
-            Console.WriteLine(
-              "disposed peer {0}, total peers {1}",
-              IPEndPoint,
-              Network.ChannelsOutbound.Count);
-          }
-
           Network.CreateOutboundPeer();
         }
       }
@@ -146,39 +152,27 @@ namespace BToken.Networking
               break;
             default:
               ApplicationMessages.Post(message);
-              SendPeerToInboundRequestBuffer();
+
+              lock (LOCK_IsDispatched)
+              {
+                if (!IsDispatched)
+                {
+                  IsDispatched = true;
+
+                  Network.PeersRequest.Post(this);
+                }
+              }
+
               break;
           }
         }
       }
 
-      void SendPeerToInboundRequestBuffer()
-      {
-        lock (Network.LOCK_ChannelsInbound)
-        {
-          if (Network.ChannelsInbound.Contains(this))
-          {
-            Network.PeersRequestInbound.Post(this);
-            return;
-          }
-        }
-
-        lock (Network.LOCK_ChannelsOutbound)
-        {
-          if (Network.ChannelsOutbound.Contains(this))
-          {
-            Network.ChannelsOutbound.Remove(this);
-            Network.PeersRequestInbound.Post(this);
-          }
-        }
-      }
-
-
       public void Release()
       {
-        lock (Network.LOCK_ChannelsOutbound)
+        lock (LOCK_IsDispatched)
         {
-          Network.ChannelsOutbound.Add(this);
+          IsDispatched = false;
         }
       }
 
@@ -282,7 +276,6 @@ namespace BToken.Networking
 
 
 
-
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
       {
         PingMessage pingMessage = new PingMessage(networkMessage);
@@ -349,10 +342,6 @@ namespace BToken.Networking
           TcpClient.Client.RemoteEndPoint.ToString();
       }
 
-      public bool IsConnectionTypeInbound()
-      {
-        return ConnectionType == ConnectionType.INBOUND;
-      }
     }
   }
 }

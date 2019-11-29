@@ -63,7 +63,7 @@ namespace BToken
       while (true)
       {
         Network.INetworkChannel channel =
-          await Network.AcceptChannelInboundRequestAsync();
+          await Network.AcceptChannelRequest();
 
         List<NetworkMessage> messages = channel.GetApplicationMessages();
 
@@ -72,6 +72,7 @@ namespace BToken
           channel.Release();
           continue;
         }
+
         foreach (NetworkMessage message in messages)
         {
           try
@@ -229,12 +230,11 @@ namespace BToken
               channel.GetIdentification(),
               ex.Message);
 
-            Network.DisposeChannel(channel);
+            channel.Dispose();
           }
         }
 
         channel.Release();
-
       }
     }
   }
