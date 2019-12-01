@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
+using BToken.Chaining;
 
 namespace BToken.Networking
 {
@@ -20,7 +21,7 @@ namespace BToken.Networking
     const int PEERS_COUNT_INBOUND = 8;
     const int PEERS_COUNT_OUTBOUND = 4;
 
-    static UInt64 Nonce = CreateNonce();
+    static ulong Nonce = CreateNonce();
 
     NetworkAddressPool AddressPool;
     TcpListener TcpListener;
@@ -29,12 +30,14 @@ namespace BToken.Networking
     List<Peer> Peers = new List<Peer>();
 
     BufferBlock<Peer> PeersRequest = new BufferBlock<Peer>();
-    
+
+
+    public UTXOTable UTXOTable;
+
 
     public Network()
     {
       AddressPool = new NetworkAddressPool();
-      
       TcpListener = new TcpListener(IPAddress.Any, Port);
     }
 
@@ -83,6 +86,7 @@ namespace BToken.Networking
       }
 
       peer.Connect();
+      peer.Start();
     }
 
     readonly object LOCK_IsAddressPoolLocked = new object();
@@ -165,8 +169,11 @@ namespace BToken.Networking
         peer.Start();
       }
     }
-    
-    static long GetUnixTimeSeconds() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-      
+
+
+    List<byte[]> GetBlocks(IEnumerable<byte[]> hashes)
+    {
+      return UTXOTable.Synchronizer.GetBlocks(hashes);
+    }
   }
 }

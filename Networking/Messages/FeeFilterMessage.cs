@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BToken.Networking
 {
-  public partial class Network
+  partial class Network
   {
     class FeeFilterMessage : NetworkMessage
     {

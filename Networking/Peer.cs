@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -8,6 +6,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+
 
 
 namespace BToken.Networking
@@ -72,12 +71,9 @@ namespace BToken.Networking
         {
           await HandshakeAsync();
 
-          lock (LOCK_IsDispatched)
-          {
-            IsDispatched = false;
-          }
+          Release();
 
-          ProcessNetworkMessagesAsync();
+          await ProcessNetworkMessages();
         }
         catch
         {
@@ -94,9 +90,8 @@ namespace BToken.Networking
         catch
         {
           Dispose();
+          return;
         }
-
-        Start();
       }
 
 
@@ -121,7 +116,7 @@ namespace BToken.Networking
         }
       }
 
-      async Task ProcessNetworkMessagesAsync()
+      async Task ProcessNetworkMessages()
       {
         while (true)
         {
@@ -147,30 +142,161 @@ namespace BToken.Networking
               break;
 
             default:
-              //lock (LOCK_IsDispatched)
-              //{
-              //  if (IsDispatched)
-              //  {
-              //    ApplicationMessages.Post(message);
-              //  }
-              //}
-
-              //ProcessRequest(message);
-
-              ApplicationMessages.Post(message);
-
               lock (LOCK_IsDispatched)
               {
-                if (!IsDispatched)
+                if (IsDispatched)
+                {
+                  ApplicationMessages.Post(message);
+                  break;
+                }
+                else
                 {
                   IsDispatched = true;
-
-                  Network.PeersRequest.Post(this);
                 }
               }
 
+              await ProcessRequest(message);
+
+              Release();
+
               break;
           }
+        }
+      }
+
+
+      async Task ProcessRequest(NetworkMessage message)
+      {
+        switch (message.Command)
+        {
+          case "getdata":
+            var getDataMessage = new GetDataMessage(message);
+
+            getDataMessage.Inventories.ForEach(inv =>
+            {
+              Console.WriteLine("getdata {0}: {1} from {2}",
+                inv.Type,
+                inv.Hash.ToHexString(),
+                GetIdentification());
+            });
+
+            Network.GetBlocks(
+              getDataMessage.Inventories
+              .Where(i => i.Type == InventoryType.MSG_BLOCK)
+              .Select(i => i.Hash))
+              .ForEach(async b => await SendMessage(
+                new NetworkMessage("block", b)));
+
+            break;
+
+          case "getheaders":
+            var getHeadersMessage = new GetHeadersMessage(message);
+
+            Console.WriteLine("received getheaders tip {0} from {1}",
+              getHeadersMessage.HeaderLocator.First().ToHexString(),
+              GetIdentification());
+
+            var headers = Headerchain.GetHeaders(
+              getHeadersMessage.HeaderLocator,
+              2000,
+              getHeadersMessage.StopHash);
+
+            await SendMessage(
+              new HeadersMessage(headers));
+
+            Console.WriteLine("sent {0} headers tip {1} to {2}",
+              headers.Count,
+              headers.First().HeaderHash.ToHexString(),
+              GetIdentification());
+
+            break;
+
+          case "inv":
+            var invMessage = new InvMessage(message);
+
+            foreach (Inventory inv in invMessage.Inventories
+              .Where(inv => inv.Type == InventoryType.MSG_BLOCK).ToList())
+            {
+              Console.WriteLine("inv message {0} from {1}",
+                   inv.Hash.ToHexString(),
+                   GetIdentification());
+
+              if (Headerchain.TryReadHeader(
+                inv.Hash,
+                out Header headerAdvertized))
+              {
+                //Console.WriteLine(
+                //  "Advertized block {0} already in chain",
+                //  inv.Hash.ToHexString());
+
+                break;
+              }
+
+              Headerchain.Synchronizer.LoadBatch();
+              await Headerchain.Synchronizer.DownloadHeaders(channel);
+
+              if (Headerchain.Synchronizer.TryInsertBatch())
+              {
+                if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
+                {
+                  Console.WriteLine(
+                    "Could not synchronize UTXO, with channel {0}",
+                    GetIdentification());
+                }
+              }
+              else
+              {
+                Console.WriteLine(
+                  "Failed to insert header message from channel {0}",
+                  GetIdentification());
+              }
+            }
+
+            break;
+
+          case "headers":
+            var headersMessage = new HeadersMessage(message);
+
+            Console.WriteLine("headers message {0} from {1}",
+              headersMessage.Headers.First().HeaderHash.ToHexString(),
+              GetIdentification());
+
+            if (Headerchain.TryReadHeader(
+              headersMessage.Headers.First().HeaderHash,
+              out Header header))
+            {
+              //Console.WriteLine(
+              //  "Advertized block {0} already in chain",
+              //  headersMessage.Headers.First().HeaderHash.ToHexString());
+
+              break;
+            }
+
+            if (Headerchain.Synchronizer.TryInsertHeaderBytes(
+              headersMessage.Payload))
+            {
+              headersMessage.Headers.ForEach(
+                h => Console.WriteLine("inserted header {0}",
+                h.HeaderHash.ToHexString()));
+
+              Console.WriteLine("blockheight {0}", Headerchain.GetHeight());
+
+              if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
+              {
+                Console.WriteLine("Could not synchronize UTXO, with channel {0}",
+                  GetIdentification());
+              }
+            }
+            else
+            {
+              Console.WriteLine("Failed to insert header message from channel {0}",
+                GetIdentification());
+            }
+
+            break;
+
+          default:
+            break;
         }
       }
 
@@ -210,7 +336,7 @@ namespace BToken.Networking
         return new List<NetworkMessage>();
       }
 
-      async Task ConnectTCPAsync()
+      public async Task ConnectTCPAsync()
       {
         TcpClient = new TcpClient();
 
@@ -273,7 +399,8 @@ namespace BToken.Networking
             VersionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
         }
 
-        if (VersionMessageRemote.UnixTimeSeconds - GetUnixTimeSeconds() > 2 * 60 * 60)
+        if (VersionMessageRemote.UnixTimeSeconds - 
+          DateTimeOffset.UtcNow.ToUnixTimeSeconds() > 2 * 60 * 60)
         {
           rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.",
             VersionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);

@@ -24,7 +24,9 @@ namespace BToken.Chaining
       public Header Header;
 
       public List<Header> Headers = new List<Header>();
-      public List<int> BufferStartIndexesBlocks = new List<int>();
+
+      public Dictionary<byte[], int[]> BufferStartIndexAndLengthBlocks
+        = new Dictionary<byte[], int[]>(new EqualityComparerByteArray());
 
       public int BlockCount;
       SHA256 SHA256 = SHA256.Create();
@@ -86,14 +88,19 @@ namespace BToken.Chaining
         {
           BufferIndex = 0;
 
-          BufferStartIndexesBlocks.Add(BufferIndex);
-
           HeaderHash =
             SHA256.ComputeHash(
               SHA256.ComputeHash(
                 Buffer,
                 BufferIndex,
                 COUNT_HEADER_BYTES));
+
+          int[] startIndexAndLength = new int[2];
+          BufferStartIndexAndLengthBlocks.Add(
+            HeaderHash, 
+            startIndexAndLength);
+
+          startIndexAndLength[0] = BufferIndex;
 
           BufferIndex += COUNT_HEADER_BYTES;
           TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
@@ -116,18 +123,25 @@ namespace BToken.Chaining
               HeaderHash,
               Header.HeaderHash);
           }
-
+          
           Headers.Add(Header);
-
           HeaderPrevious = Header.HeaderPrevious;
           
           ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
           BlockCount += 1;
           CountItems += TXCount;
 
+          startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
+
           while (BufferIndex < Buffer.Length)
           {
-            BufferStartIndexesBlocks.Add(BufferIndex);
+            startIndexAndLength = new int[2];
+            BufferStartIndexAndLengthBlocks.Add(
+              HeaderHash,
+              startIndexAndLength);
+
+            startIndexAndLength[0] = BufferIndex;
+
 
             HeaderHash =
               SHA256.ComputeHash(
@@ -151,6 +165,8 @@ namespace BToken.Chaining
             ParseBlock(merkleRootIndex);
             BlockCount += 1;
             CountItems += TXCount;
+
+            startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
           }
 
           ConvertTablesToArrays();

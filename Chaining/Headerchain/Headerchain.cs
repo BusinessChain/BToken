@@ -32,7 +32,8 @@ namespace BToken.Chaining
 
     public Headerchain(
       Header genesisHeader,
-      List<HeaderLocation> checkpoints)
+      List<HeaderLocation> checkpoints,
+      Network network)
     {
       GenesisHeader = genesisHeader;
       Checkpoints = checkpoints;
@@ -49,6 +50,7 @@ namespace BToken.Chaining
       Inserter = new ChainInserter(this);
 
       Synchronizer = new HeaderchainSynchronizer(this);
+      Network = network;
     }
 
 

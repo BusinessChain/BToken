@@ -49,18 +49,20 @@ namespace BToken.Chaining
 
     public UTXOTable(
       byte[] genesisBlockBytes,
-      Headerchain headerchain)
+      Headerchain headerchain,
+      Network network)
     {
       Headerchain = headerchain;
 
       Tables = new UTXOIndexCompressed[]{
-          TableUInt32,
-          TableULong64,
-          TableUInt32Array };
+        TableUInt32,
+        TableULong64,
+        TableUInt32Array };
 
       GenesisBlockBytes = genesisBlockBytes;
 
       Synchronizer = new UTXOSynchronizer(this);
+      Network = network;
     }
 
 

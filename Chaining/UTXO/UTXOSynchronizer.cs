@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
@@ -321,68 +322,115 @@ namespace BToken.Chaining
 
       }
 
+      Dictionary<int, BlockContainer> CacheBlockContainers =
+        new Dictionary<int, BlockContainer>();
+      List<int> ArchiveIndexesInCache = new List<int>();
+      List<int> ArchiveIndexesLoading = new List<int>();
+      readonly object LOCK_CacheBlockContainers = new object();
 
-      public bool TryGetBlockFromArchive(
-        byte[] hash,
-        out byte[] blockBytes)
+      public List<byte[]> GetBlocks(
+        IEnumerable<byte[]> hashes)
       {
-        blockBytes = null;
+        List<byte[]> blocks = new List<byte[]>();
 
-        if (!MapBlockToArchiveIndex.TryGetValue(
-          hash,
-          out int archiveIndex))
+        foreach (byte[] hash in hashes)
         {
-          return false;
+          if (!MapBlockToArchiveIndex.TryGetValue(
+            hash,
+            out int archiveIndex))
+          {
+            blocks.Add(null);
+            continue;
+          }
+
+          BlockContainer container;
+          bool sleepThread = false;
+
+          while (true)
+          {
+            if (sleepThread)
+            {
+              Thread.Sleep(10);
+            }
+
+            lock (LOCK_CacheBlockContainers)
+            {
+              if (CacheBlockContainers.TryGetValue(
+                archiveIndex,
+                out container))
+              {
+                break;
+              }
+
+              if (ArchiveIndexesLoading.Contains(archiveIndex))
+              {
+                sleepThread = true;
+                continue;
+              }
+
+              ArchiveIndexesLoading.Add(archiveIndex);
+            }
+          }
+
+          if (container == null)
+          {
+            container = new BlockContainer(
+               UTXOTable.Headerchain,
+               archiveIndex);
+
+            try
+            {
+              container.Buffer = File.ReadAllBytes(
+                Path.Combine(
+                  ArchiveDirectory.FullName,
+                  container.Index.ToString()));
+            }
+            catch (IOException)
+            {
+              blocks.Add(null);
+              continue;
+            }
+
+            if (!container.TryParse())
+            {
+              blocks.Add(null);
+              continue;
+            }
+
+            lock (LOCK_CacheBlockContainers)
+            {
+              if (ArchiveIndexesInCache.Count > 10)
+              {
+                int archiveIndexRemove = ArchiveIndexesInCache[0];
+                ArchiveIndexesInCache.RemoveAt(0);
+                CacheBlockContainers.Remove(archiveIndexRemove);
+              }
+
+              CacheBlockContainers.Add(
+                archiveIndex,
+                container);
+
+              ArchiveIndexesInCache.Add(archiveIndex);
+            }
+          }
+
+          container
+            .BufferStartIndexAndLengthBlocks
+            .TryGetValue(hash, out int[] startIndexAndLength);
+
+          byte[] blockBytes = new byte[startIndexAndLength[1]];
+
+          Array.Copy(
+            container.Buffer,
+            startIndexAndLength[0],
+            blockBytes,
+            0,
+            startIndexAndLength[1]);
+
+          blocks.Add(blockBytes);
         }
-        
-        var container = new BlockContainer(
-          UTXOTable.Headerchain,
-          archiveIndex);
 
-        try
-        {
-          container.Buffer = File.ReadAllBytes(
-            Path.Combine(
-              ArchiveDirectory.FullName,
-              container.Index.ToString()));
-        }
-        catch (IOException)
-        {
-          return false;
-        }
-
-        if(!container.TryParse())
-        {
-          return false;
-        }
-
-        int indexHeader = container.Headers.FindIndex(
-          h => h.HeaderHash.IsEqual(hash));
-
-        int bufferStartIndexBlock = 
-          container.BufferStartIndexesBlocks[indexHeader];
-
-        int blockBytesLength;
-        if(indexHeader == container.Headers.Count - 1)
-        {
-          blockBytesLength = container.Buffer.Length - bufferStartIndexBlock;
-        }
-        else
-        {
-          blockBytesLength = 
-            container.BufferStartIndexesBlocks[indexHeader + 1] - bufferStartIndexBlock;
-        }
-
-        blockBytes = new byte[blockBytesLength];
-
-        Array.Copy(
-          container.Buffer, 
-          bufferStartIndexBlock, 
-          blockBytes, 
-          0, 
-          blockBytesLength);
-
-        return true;
+        return blocks;
       }
     }
   }

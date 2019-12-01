@@ -82,13 +82,13 @@ namespace BToken.Networking
       public VersionMessage() : base("version")
       {
         ProtocolVersion = Network.ProtocolVersion;
-        NetworkServicesLocal = (UInt64)NetworkServicesLocalProvided;
-        UnixTimeSeconds = GetUnixTimeSeconds();
-        NetworkServicesRemote = (UInt64)NetworkServicesRemoteRequired;
+        NetworkServicesLocal = (long)NetworkServicesLocalProvided;
+        UnixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        NetworkServicesRemote = (long)NetworkServicesRemoteRequired;
         IPAddressRemote = IPAddress.Loopback.MapToIPv6();
-        PortRemote = Network.Port;
+        PortRemote = Port;
         IPAddressLocal = IPAddress.Loopback.MapToIPv6();
-        PortLocal = Network.Port;
+        PortLocal = Port;
         Nonce = Network.Nonce;
         UserAgent = Network.UserAgent;
         BlockchainHeight = 0; // We do not have that information at this point. I think this can be ignored.
