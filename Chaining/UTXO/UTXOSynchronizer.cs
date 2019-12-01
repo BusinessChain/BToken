@@ -211,8 +211,6 @@ namespace BToken.Chaining
             h.HeaderHash, 
             blockContainer.Index));
 
-        UTXOTable.LogInsertion(blockContainer);
-
         return true;
       }
 

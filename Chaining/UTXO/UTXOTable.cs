@@ -340,6 +340,8 @@ namespace BToken.Chaining
 
       Header = container.Header;
       BlockHeight += container.BlockCount;
+      
+      LogInsertion(container);
     }
 
     

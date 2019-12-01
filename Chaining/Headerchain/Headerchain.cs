@@ -59,7 +59,8 @@ namespace BToken.Chaining
     {
       await Synchronizer.Start();
 
-      Console.WriteLine("Headerchain height {0}", GetHeight());
+      Console.WriteLine("Headerchain height {0}", 
+        MainChain.Height);
     }
 
 
@@ -79,13 +80,11 @@ namespace BToken.Chaining
 
         Locator.Reorganize();
       }
-    }
 
-
-
-    public int GetHeight()
-    {
-      return MainChain.Height;
+      Console.WriteLine(
+        "Inserted {0} headers, tip {1}",
+        container.CountItems,
+        MainChain.HeaderTip.HeaderHash.ToHexString());
     }
 
 

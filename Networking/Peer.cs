@@ -75,22 +75,9 @@ namespace BToken.Networking
 
           await ProcessNetworkMessages();
         }
-        catch
+        catch(Exception ex)
         {
           Dispose();
-        }
-      }
-
-      public async Task Connect()
-      {
-        try
-        {
-          await ConnectTCPAsync();
-        }
-        catch
-        {
-          Dispose();
-          return;
         }
       }
 
@@ -180,7 +167,7 @@ namespace BToken.Networking
                 GetIdentification());
             });
 
-            Network.GetBlocks(
+            Network.UTXOTable.Synchronizer.GetBlocks(
               getDataMessage.Inventories
               .Where(i => i.Type == InventoryType.MSG_BLOCK)
               .Select(i => i.Hash))
@@ -192,11 +179,19 @@ namespace BToken.Networking
           case "getheaders":
             var getHeadersMessage = new GetHeadersMessage(message);
 
-            Console.WriteLine("received getheaders tip {0} from {1}",
+            Console.WriteLine("received getheaders locator[0] {0} from {1}",
               getHeadersMessage.HeaderLocator.First().ToHexString(),
               GetIdentification());
 
-            var headers = Headerchain.GetHeaders(
+            if(!Network
+              .Headerchain
+              .Synchronizer
+              .GetIsSyncingCompleted())
+            {
+              break;
+            }
+
+            var headers = Network.Headerchain.GetHeaders(
               getHeadersMessage.HeaderLocator,
               2000,
               getHeadersMessage.StopHash);
@@ -206,7 +201,7 @@ namespace BToken.Networking
 
             Console.WriteLine("sent {0} headers tip {1} to {2}",
               headers.Count,
-              headers.First().HeaderHash.ToHexString(),
+              headers.Any() ? headers.First().HeaderHash.ToHexString() : "",
               GetIdentification());
 
             break;
@@ -221,35 +216,35 @@ namespace BToken.Networking
                    inv.Hash.ToHexString(),
                    GetIdentification());
 
-              if (Headerchain.TryReadHeader(
-                inv.Hash,
-                out Header headerAdvertized))
-              {
-                //Console.WriteLine(
-                //  "Advertized block {0} already in chain",
-                //  inv.Hash.ToHexString());
+              //if (Network.Headerchain.TryReadHeader(
+              //  inv.Hash,
+              //  out Header headerAdvertized))
+              //{
+              //  //Console.WriteLine(
+              //  //  "Advertized block {0} already in chain",
+              //  //  inv.Hash.ToHexString());
 
-                break;
-              }
+              //  break;
+              //}
 
-              Headerchain.Synchronizer.LoadBatch();
-              await Headerchain.Synchronizer.DownloadHeaders(channel);
+              //Headerchain.Synchronizer.LoadBatch();
+              //await Headerchain.Synchronizer.DownloadHeaders(channel);
 
-              if (Headerchain.Synchronizer.TryInsertBatch())
-              {
-                if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
-                {
-                  Console.WriteLine(
-                    "Could not synchronize UTXO, with channel {0}",
-                    GetIdentification());
-                }
-              }
-              else
-              {
-                Console.WriteLine(
-                  "Failed to insert header message from channel {0}",
-                  GetIdentification());
-              }
+              //if (Headerchain.Synchronizer.TryInsertBatch())
+              //{
+              //  if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
+              //  {
+              //    Console.WriteLine(
+              ////      "Could not synchronize UTXO, with channel {0}",
+              //      GetIdentification());
+              //  }
+              //}
+              //else
+              //{
+              //  Console.WriteLine(
+              //    "Failed to insert header message from channel {0}",
+              //    GetIdentification());
+              //}
             }
 
             break;
@@ -261,37 +256,37 @@ namespace BToken.Networking
               headersMessage.Headers.First().HeaderHash.ToHexString(),
               GetIdentification());
 
-            if (Headerchain.TryReadHeader(
-              headersMessage.Headers.First().HeaderHash,
-              out Header header))
-            {
-              //Console.WriteLine(
-              //  "Advertized block {0} already in chain",
-              //  headersMessage.Headers.First().HeaderHash.ToHexString());
+            //if (Headerchain.TryReadHeader(
+            //  headersMessage.Headers.First().HeaderHash,
+            //  out Header header))
+            //{
+            //  //Console.WriteLine(
+            //  //  "Advertized block {0} already in chain",
+            //  //  headersMessage.Headers.First().HeaderHash.ToHexString());
 
-              break;
-            }
+            //  break;
+            //}
 
-            if (Headerchain.Synchronizer.TryInsertHeaderBytes(
-              headersMessage.Payload))
-            {
-              headersMessage.Headers.ForEach(
-                h => Console.WriteLine("inserted header {0}",
-                h.HeaderHash.ToHexString()));
+            //if (Headerchain.Synchronizer.TryInsertHeaderBytes(
+            //  headersMessage.Payload))
+            //{
+            //  headersMessage.Headers.ForEach(
+            //    h => Console.WriteLine("inserted header {0}",
+            //    h.HeaderHash.ToHexString()));
 
-              Console.WriteLine("blockheight {0}", Headerchain.GetHeight());
+            //  Console.WriteLine("blockheight {0}", Headerchain.GetHeight());
 
-              if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
-              {
-                Console.WriteLine("Could not synchronize UTXO, with channel {0}",
-                  GetIdentification());
-              }
-            }
-            else
-            {
-              Console.WriteLine("Failed to insert header message from channel {0}",
-                GetIdentification());
-            }
+            //  if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
+            //  {
+            //    Console.WriteLine("Could not synchronize UTXO, with channel {0}",
+            //      GetIdentification());
+            //  }
+            //}
+            //else
+            //{
+            //  Console.WriteLine("Failed to insert header message from channel {0}",
+            //    GetIdentification());
+            //}
 
             break;
 
@@ -336,16 +331,25 @@ namespace BToken.Networking
         return new List<NetworkMessage>();
       }
 
-      public async Task ConnectTCPAsync()
+      public async Task<bool> TryConnect()
       {
-        TcpClient = new TcpClient();
+        try
+        {
+          TcpClient = new TcpClient();
 
-        await TcpClient.ConnectAsync(
-          IPEndPoint.Address,
-          IPEndPoint.Port);
+          await TcpClient.ConnectAsync(
+            IPEndPoint.Address,
+            IPEndPoint.Port);
 
-        NetworkMessageStreamer = new MessageStreamer(
-          TcpClient.GetStream());
+          NetworkMessageStreamer = new MessageStreamer(
+            TcpClient.GetStream());
+
+          return true;
+        }
+        catch
+        {
+          return false;
+        }
       }
       async Task HandshakeAsync()
       {

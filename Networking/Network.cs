@@ -19,7 +19,7 @@ namespace BToken.Networking
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
     const int PEERS_COUNT_INBOUND = 8;
-    const int PEERS_COUNT_OUTBOUND = 4;
+    const int PEERS_COUNT_OUTBOUND = 1;
 
     static ulong Nonce = CreateNonce();
 
@@ -33,6 +33,7 @@ namespace BToken.Networking
 
 
     public UTXOTable UTXOTable;
+    public Headerchain Headerchain;
 
 
     public Network()
@@ -67,26 +68,32 @@ namespace BToken.Networking
 
     async Task CreateOutboundPeer()
     {
-      IPAddress iPAddress = await GetNodeAddress();
-      var iPEndPoint = new IPEndPoint(iPAddress, Port);
-
-      var peer = new Peer(
-        iPEndPoint,
-        ConnectionType.OUTBOUND,
-        this);
-
-      lock (LOCK_Peers)
+      while(true)
       {
-        Peers.Add(peer);
+        IPAddress iPAddress = await GetNodeAddress();
+        var iPEndPoint = new IPEndPoint(iPAddress, Port);
 
-        Console.WriteLine(
-          "created peer {0}, total {1} peers",
-          peer.IPEndPoint,
-          Peers.Count);
+        var peer = new Peer(
+          iPEndPoint,
+          ConnectionType.OUTBOUND,
+          this);
+
+        if (await peer.TryConnect())
+        {
+          lock (LOCK_Peers)
+          {
+            Peers.Add(peer);
+
+            Console.WriteLine(
+              "created peer {0}, total {1} peers",
+              peer.IPEndPoint,
+              Peers.Count);
+          }
+
+          peer.Start();
+          break;
+        }
       }
-
-      peer.Connect();
-      peer.Start();
     }
 
     readonly object LOCK_IsAddressPoolLocked = new object();
@@ -170,10 +177,5 @@ namespace BToken.Networking
       }
     }
 
-
-    List<byte[]> GetBlocks(IEnumerable<byte[]> hashes)
-    {
-      return UTXOTable.Synchronizer.GetBlocks(hashes);
-    }
   }
 }

@@ -38,6 +38,8 @@ namespace BToken
         Checkpoints,
         Network);
 
+      Network.Headerchain = Headerchain;
+
       UTXOTable = new UTXOTable(
         GenesisBlock.BlockBytes,
         Headerchain,

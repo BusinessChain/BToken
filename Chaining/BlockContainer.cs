@@ -96,10 +96,6 @@ namespace BToken.Chaining
                 COUNT_HEADER_BYTES));
 
           int[] startIndexAndLength = new int[2];
-          BufferStartIndexAndLengthBlocks.Add(
-            HeaderHash, 
-            startIndexAndLength);
-
           startIndexAndLength[0] = BufferIndex;
 
           BufferIndex += COUNT_HEADER_BYTES;
@@ -133,13 +129,13 @@ namespace BToken.Chaining
 
           startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
 
+          BufferStartIndexAndLengthBlocks.Add(
+            HeaderHash,
+            startIndexAndLength);
+
           while (BufferIndex < Buffer.Length)
           {
             startIndexAndLength = new int[2];
-            BufferStartIndexAndLengthBlocks.Add(
-              HeaderHash,
-              startIndexAndLength);
-
             startIndexAndLength[0] = BufferIndex;
 
 
@@ -167,6 +163,9 @@ namespace BToken.Chaining
             CountItems += TXCount;
 
             startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
+            BufferStartIndexAndLengthBlocks.Add(
+              HeaderHash,
+              startIndexAndLength);
           }
 
           ConvertTablesToArrays();
