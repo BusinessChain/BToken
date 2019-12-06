@@ -79,6 +79,7 @@
     <Compile Include="Chaining\BatchDataPipe\DataSynchroinizer.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataContainer.cs" />
+    <Compile Include="Chaining\Blockchain.cs" />
     <Compile Include="Chaining\BlockContainer.cs" />
     <Compile Include="Chaining\UTXO\UTXOSynchronizer.cs" />
     <Compile Include="Chaining\Headerchain\HeaderContainer.cs" />
@@ -97,7 +98,6 @@
     <Compile Include="Chaining\TXOutput.cs" />
     <Compile Include="Chaining\TXWitness.cs" />
     <Compile Include="Chaining\GenesisBlock.cs" />
-    <Compile Include="Chaining\UTXO\UTXOException.cs" />
     <Compile Include="Chaining\Wallet\Wallet.cs" />
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocator.cs" />

@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Networking;
+
 
 namespace BToken.Chaining
 {
@@ -46,25 +46,34 @@ namespace BToken.Chaining
           if (header.UnixTimeSeconds < medianTimePast)
           {
             throw new ChainException(
-              string.Format("header {0} with unix time {1} older than median time past {2}",
-              header.HeaderHash.ToHexString(),
-              DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
-              DateTimeOffset.FromUnixTimeSeconds(medianTimePast)));
+              string.Format(
+                "header {0} with unix time {1} older than median time past {2}",
+                header.HeaderHash.ToHexString(),
+                DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
+                DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
+              ErrorCode.INVALID);
           }
 
-          ValidateCheckpoint(header.HeaderHash, Probe.GetHeight() + headersValidated.Count + 1);
+          int heightHeader = 
+            Probe.GetHeight() + headersValidated.Count + 1;
+
+          ValidateCheckpoint(
+            header.HeaderHash,
+            heightHeader);
 
           uint targetBits = TargetManager.GetNextTargetBits(
               header.HeaderPrevious,
-              (uint)(Probe.GetHeight() + headersValidated.Count + 1));
+              (uint)heightHeader);
 
           if (header.NBits != targetBits)
           {
             throw new ChainException(
-              string.Format("In header {0} nBits {1} not equal to target nBits {2}",
-              header.HeaderHash.ToHexString(),
-              header.NBits,
-              targetBits));
+              string.Format(
+                "In header {0} nBits {1} not equal to target nBits {2}",
+                header.HeaderHash.ToHexString(),
+                header.NBits,
+                targetBits),
+              ErrorCode.INVALID);
           }
 
           headersValidated.Add(header);
@@ -129,42 +138,9 @@ namespace BToken.Chaining
           return chainFork;
         }
       }
-      void TryValidateChain(Header headerRoot, int height)
-      {
-        Header header = headerRoot;
-        double accumulatedDifficulty = 0;
 
-        for (int i = 0; i < height; i += 1)
-        {
-          uint medianTimePast = GetMedianTimePast(header.HeaderPrevious);
-          if (header.UnixTimeSeconds < medianTimePast)
-          {
-            throw new ChainException(
-              string.Format("header {0} with unix time {1} older than median time past {2}",
-              header.HeaderHash.ToHexString(),
-              DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
-              DateTimeOffset.FromUnixTimeSeconds(medianTimePast)));
-          }
 
-          ValidateCheckpoint(header.HeaderHash, Probe.GetHeight() + i + 1);
 
-          uint targetBits = TargetManager.GetNextTargetBits(
-              header.HeaderPrevious,
-              (uint)(Probe.GetHeight() + i + 1));
-
-          if (header.NBits != targetBits)
-          {
-            throw new ChainException(
-              string.Format("In header {0} nBits {1} not equal to target nBits {2}",
-              header.HeaderHash.ToHexString(),
-              header.NBits,
-              targetBits));
-          }
-
-          header = header.HeadersNext[0];
-          accumulatedDifficulty += TargetManager.GetDifficulty(header.NBits);
-        }
-      }
       void FindPreviousHeader(Header header)
       {
         Probe.Chain = Headerchain.MainChain;
@@ -184,10 +160,15 @@ namespace BToken.Chaining
         }
 
         throw new ChainException(
-          string.Format("previous header {0}\n of header {1} not found in headerchain",
-          header.HashPrevious.ToHexString(),
-          header.HeaderHash.ToHexString()));
+          string.Format(
+            "previous header {0}\n of header {1} not found in chain",
+            header.HashPrevious.ToHexString(),
+            header.HeaderHash.ToHexString()),
+          ErrorCode.ORPHAN);
       }
+
+
+
       void ValidateCheckpoint(byte[] headerHash, int headerHeight)
       {
         int hightHighestCheckpoint = Headerchain.Checkpoints.Max(x => x.Height);
@@ -197,23 +178,30 @@ namespace BToken.Chaining
           headerHeight <= hightHighestCheckpoint)
         {
           throw new ChainException(
-            string.Format("Attempt to insert header {0} at hight {1} prior to checkpoint hight {2}",
-            headerHash.ToHexString(),
-            headerHeight,
-            hightHighestCheckpoint));
+            string.Format(
+              "Attempt to insert header {0} at hight {1} prior to checkpoint hight {2}",
+              headerHash.ToHexString(),
+              headerHeight,
+              hightHighestCheckpoint),
+            ErrorCode.INVALID);
         }
 
         HeaderLocation checkpoint = Headerchain.Checkpoints.Find(c => c.Height == headerHeight);
         if (checkpoint != null && !checkpoint.Hash.IsEqual(headerHash))
         {
           throw new ChainException(
-            string.Format("Header {0} at hight {1} not equal to checkpoint hash {2}",
-            headerHash.ToHexString(),
-            headerHeight,
-            checkpoint.Hash.ToHexString()));
+            string.Format(
+              "Header {0} at hight {1} not equal to checkpoint hash {2}",
+              headerHash.ToHexString(),
+              headerHeight,
+              checkpoint.Hash.ToHexString()),
+            ErrorCode.INVALID);
         }
 
       }
+
+
+
       uint GetMedianTimePast(Header header)
       {
         const int MEDIAN_TIME_PAST = 11;

@@ -15,8 +15,7 @@ namespace BToken.Networking
       List<NetworkMessage> GetApplicationMessages();
 
       Task<byte[]> GetHeaders(
-        IEnumerable<byte[]> locatorHashes,
-        CancellationToken cancellationToken);
+        IEnumerable<byte[]> locatorHashes);
 
       Task SendMessage(NetworkMessage networkMessage);
 
@@ -26,6 +25,9 @@ namespace BToken.Networking
       void Release();
 
       string GetIdentification();
+
+      void ReportDuplicate();
+      void ReportInvalid();
     }
   }
 }

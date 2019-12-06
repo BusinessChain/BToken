@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-
+using BToken.Chaining;
 
 namespace BToken.Networking
 {
@@ -18,6 +18,7 @@ namespace BToken.Networking
     partial class Peer : INetworkChannel
     {
       Network Network;
+      Blockchain Blockchain;
 
       public IPEndPoint IPEndPoint;
       TcpClient TcpClient;
@@ -167,12 +168,14 @@ namespace BToken.Networking
                 GetIdentification());
             });
 
-            Network.UTXOTable.Synchronizer.GetBlocks(
+            foreach(byte[] block in Network.UTXOTable.Synchronizer.GetBlocks(
               getDataMessage.Inventories
               .Where(i => i.Type == InventoryType.MSG_BLOCK)
-              .Select(i => i.Hash))
-              .ForEach(async b => await SendMessage(
-                new NetworkMessage("block", b)));
+              .Select(i => i.Hash)))
+            {
+              await SendMessage(
+                new NetworkMessage("block", block));
+            }
 
             break;
 
@@ -209,86 +212,54 @@ namespace BToken.Networking
           case "inv":
             var invMessage = new InvMessage(message);
 
-            foreach (Inventory inv in invMessage.Inventories
-              .Where(inv => inv.Type == InventoryType.MSG_BLOCK).ToList())
-            {
-              Console.WriteLine("inv message {0} from {1}",
-                   inv.Hash.ToHexString(),
-                   GetIdentification());
+            //foreach (Inventory inv in invMessage.Inventories
+            //  .Where(inv => inv.Type == InventoryType.MSG_BLOCK).ToList())
+            //{
+            //  Console.WriteLine("inv message {0} from {1}",
+            //       inv.Hash.ToHexString(),
+            //       GetIdentification());
 
-              //if (Network.Headerchain.TryReadHeader(
-              //  inv.Hash,
-              //  out Header headerAdvertized))
-              //{
-              //  //Console.WriteLine(
-              //  //  "Advertized block {0} already in chain",
-              //  //  inv.Hash.ToHexString());
+            //  if (Network.Headerchain.TryReadHeader(
+            //    inv.Hash,
+            //    out Header headerAdvertized))
+            //  {
+            //    //Console.WriteLine(
+            //    //  "Advertized block {0} already in chain",
+            //    //  inv.Hash.ToHexString());
 
-              //  break;
-              //}
+            //    break;
+            //  }
 
-              //Headerchain.Synchronizer.LoadBatch();
-              //await Headerchain.Synchronizer.DownloadHeaders(channel);
+            //  Headerchain.Synchronizer.LoadBatch();
+            //  await Headerchain.Synchronizer.DownloadHeaders(channel);
 
-              //if (Headerchain.Synchronizer.TryInsertBatch())
-              //{
-              //  if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
-              //  {
-              //    Console.WriteLine(
-              ////      "Could not synchronize UTXO, with channel {0}",
-              //      GetIdentification());
-              //  }
-              //}
-              //else
-              //{
-              //  Console.WriteLine(
-              //    "Failed to insert header message from channel {0}",
-              //    GetIdentification());
-              //}
-            }
+            //  if (Headerchain.Synchronizer.TryInsertBatch())
+            //  {
+            //    if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
+            //    {
+            //      Console.WriteLine(
+            //        //      "Could not synchronize UTXO, with channel {0}",
+            //        GetIdentification());
+            //    }
+            //  }
+            //  else
+            //  {
+            //    Console.WriteLine(
+            //      "Failed to insert header message from channel {0}",
+            //      GetIdentification());
+            //  }
+            //}
 
             break;
 
           case "headers":
-            var headersMessage = new HeadersMessage(message);
 
-            Console.WriteLine("headers message {0} from {1}",
-              headersMessage.Headers.First().HeaderHash.ToHexString(),
-              GetIdentification());
-
-            //if (Headerchain.TryReadHeader(
-            //  headersMessage.Headers.First().HeaderHash,
-            //  out Header header))
-            //{
-            //  //Console.WriteLine(
-            //  //  "Advertized block {0} already in chain",
-            //  //  headersMessage.Headers.First().HeaderHash.ToHexString());
-
-            //  break;
-            //}
-
-            //if (Headerchain.Synchronizer.TryInsertHeaderBytes(
-            //  headersMessage.Payload))
-            //{
-            //  headersMessage.Headers.ForEach(
-            //    h => Console.WriteLine("inserted header {0}",
-            //    h.HeaderHash.ToHexString()));
-
-            //  Console.WriteLine("blockheight {0}", Headerchain.GetHeight());
-
-            //  if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
-            //  {
-            //    Console.WriteLine("Could not synchronize UTXO, with channel {0}",
-            //      GetIdentification());
-            //  }
-            //}
-            //else
-            //{
-            //  Console.WriteLine("Failed to insert header message from channel {0}",
-            //    GetIdentification());
-            //}
-
+            await Blockchain.InsertHeaders(
+              message.Payload,
+              this);
+                        
             break;
+
 
           default:
             break;
@@ -465,10 +436,16 @@ namespace BToken.Networking
           .WriteAsync(new PingMessage(Nonce));
       }
 
+
+
+      const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
+
       public async Task<byte[]> GetHeaders(
-        IEnumerable<byte[]> locatorHashes,
-        CancellationToken cancellationToken)
+        IEnumerable<byte[]> locatorHashes)
       {
+        int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
+
+        CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
         await NetworkMessageStreamer.WriteAsync(
           new GetHeadersMessage(
             locatorHashes,

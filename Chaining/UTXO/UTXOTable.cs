@@ -73,7 +73,7 @@ namespace BToken.Chaining
     }
 
 
-
+    
     void InsertUTXO(
       byte[] uTXOKey,
       UTXOIndexCompressed table)
@@ -201,9 +201,11 @@ namespace BToken.Chaining
           }
         }
 
-        throw new UTXOException(string.Format(
-          "Referenced TX {0} not found in UTXO table.",
-          inputs[i].TXIDOutput.ToHexString()));
+        throw new ChainException(
+          string.Format(
+            "Referenced TX {0} not found in UTXO table.",
+            inputs[i].TXIDOutput.ToHexString()),
+          ErrorCode.INVALID);
       }
     }
 
@@ -298,6 +300,8 @@ namespace BToken.Chaining
       }
     }
 
+
+
     // Similar function as LoadCollisionData in UTXOIndexUInt32Compressed
     void LoadMapBlockToArchiveData(byte[] buffer)
     {
@@ -315,7 +319,7 @@ namespace BToken.Chaining
         Synchronizer.MapBlockToArchiveIndex.Add(key, value);
       }
     }
-
+    
 
 
     void InsertContainer(BlockContainer container)

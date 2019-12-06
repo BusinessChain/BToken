@@ -27,7 +27,6 @@ namespace BToken.Chaining
       const int COUNT_HEADER_SESSIONS = 4;
       const int SIZE_BATCH_ARCHIVE = 50000;
 
-      const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
       DataBatch HeaderBatch;
       
       ConcurrentQueue<DataBatch> QueueBatchesCanceled
@@ -124,7 +123,7 @@ namespace BToken.Chaining
         {
           IEnumerable<byte[]> headerLocator;
 
-          lock (Headerchain.LOCK_Chain)
+          lock (Headerchain.LOCK_IsChainLocked)
           {
             headerLocator = Headerchain.Locator.GetHeaderHashes();
           }
@@ -159,18 +158,13 @@ namespace BToken.Chaining
 
       public async Task DownloadHeaders(Network.INetworkChannel channel)
       {
-        int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
-
-        CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
-
         HeaderBatch.CountItems = 0;
 
         foreach (HeaderContainer headerBatchContainer
           in HeaderBatch.DataContainers)
         {
           headerBatchContainer.Buffer = await channel.GetHeaders(
-            headerBatchContainer.LocatorHashes,
-            cancellation.Token);
+            headerBatchContainer.LocatorHashes);
 
           headerBatchContainer.TryParse();
 
@@ -201,59 +195,26 @@ namespace BToken.Chaining
       {
         return new HeaderContainer(index);
       }
+                      
 
 
-      public bool TryInsertHeaderBytes(byte[] buffer)
+      protected override void InsertContainer(
+        DataContainer container)
       {
-        HeaderBatch = new DataBatch()
-        {
-          DataContainers = new List<DataContainer>()
-          {
-            new HeaderContainer(buffer)
-          }
-        };
-
-        HeaderBatch.TryParse();
-
-        return TryInsertBatch();
-      }
-
-      public bool TryInsertBatch()
-      {
-        if (TryInsertBatch(HeaderBatch))
-        {
-          ArchiveContainers();
-          return true;
-        }
-
-        return false;
+        Headerchain.InsertContainer(
+          (HeaderContainer)container);
       }
       
 
 
-      protected override bool TryInsertContainer(
-        DataContainer container)
+      public void InsertHeaderBatch(DataBatch headerBatch)
       {
-        try
-        {
-          Headerchain.InsertContainer(
-            (HeaderContainer)container);
+        InsertBatch(headerBatch);
+        ArchiveContainers();
 
-          return true;
-        }
-        catch(ChainException)
-        {
-          return false;
-        }
-        catch(Exception ex)
-        {
-          Console.WriteLine(
-            "Insertion of headerContainer {0} raised ChainException:\n {1}.",
-            container.Index,
-            ex.Message);
-
-          return false;
-        }
+        Console.WriteLine(
+          "height headerchain {0}",
+          Headerchain.MainChain.Height);
       }
     }
   }

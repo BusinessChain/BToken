@@ -19,7 +19,7 @@ namespace BToken.Networking
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
     const int PEERS_COUNT_INBOUND = 8;
-    const int PEERS_COUNT_OUTBOUND = 1;
+    const int PEERS_COUNT_OUTBOUND = 4;
 
     static ulong Nonce = CreateNonce();
 
@@ -141,7 +141,7 @@ namespace BToken.Networking
         }
 
         Console.WriteLine("waiting for channel to dispatch");
-        await Task.Delay(1000);
+        await Task.Delay(5000);
 
       } while (true);
     }

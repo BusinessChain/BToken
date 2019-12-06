@@ -108,7 +108,7 @@ namespace BToken.Chaining
           container.IsValid = false;
         }
 
-      } while (await SendToQueueAndContinue(container));
+      } while (await SendToQueueAndReturnFlagContinue(container));
     }
     
     protected abstract DataContainer CreateContainer(
@@ -122,7 +122,7 @@ namespace BToken.Chaining
       new Dictionary<int, DataContainer>();
     bool IsArchiveLoadCompleted;
 
-    async Task<bool> SendToQueueAndContinue(
+    async Task<bool> SendToQueueAndReturnFlagContinue(
       DataContainer container)
     {
       while (true)
@@ -149,10 +149,17 @@ namespace BToken.Chaining
         await Task.Delay(2000).ConfigureAwait(false);
       }
 
-      while (
-        container.IsValid &&
-        TryInsertContainer(container))
+      while (container.IsValid)
       {
+        try
+        {
+          InsertContainer(container);
+        }
+        catch(ChainException)
+        {
+          return false;
+        }
+
         if (container.CountItems < SizeBatchArchive)
         {
           Containers.Add(container);
@@ -210,7 +217,7 @@ namespace BToken.Chaining
 
         do
         {
-          TryInsertBatch(batch);
+          InsertBatch(batch);
 
           if (batch.IsCancellationBatch)
           {
@@ -236,23 +243,20 @@ namespace BToken.Chaining
 
 
 
-    protected bool TryInsertBatch(DataBatch batch)
+    public void InsertBatch(DataBatch batch)
     {
       if (batch.IsCancellationBatch)
       {
         ArchiveContainers();
-        return true;
+        return;
       }
 
       foreach (DataContainer container in
         batch.DataContainers)
       {
         container.Index = ArchiveIndexStore;
-        
-        if (!TryInsertContainer(container))
-        {
-          return false;
-        }
+
+        InsertContainer(container);
 
         Containers.Add(container);
         CountItems += container.CountItems;
@@ -269,18 +273,16 @@ namespace BToken.Chaining
           ArchiveIndexStore += 1;
         }
       }
-
-      return true;
     }
 
 
 
-    protected abstract bool TryInsertContainer(
+    protected abstract void InsertContainer(
       DataContainer container);
 
 
 
-    protected async Task ArchiveContainers()
+    public async Task ArchiveContainers()
     {
       string filePath = Path.Combine(
         ArchiveDirectory.FullName,

@@ -24,7 +24,8 @@ namespace BToken.Chaining
 
     ChainInserter Inserter;
 
-    public readonly object LOCK_Chain = new object();
+    public readonly object LOCK_IsChainLocked = new object();
+    bool IsChainLocked;
 
     public HeaderchainSynchronizer Synchronizer;
     public Network Network;
@@ -64,6 +65,34 @@ namespace BToken.Chaining
     }
 
 
+    async Task LockChain()
+    {
+      while(true)
+      {
+        lock(LOCK_IsChainLocked)
+        {
+          if(!IsChainLocked)
+          {
+            IsChainLocked = true;
+            return;
+          }
+        }
+
+        await Task.Delay(100);
+      }
+    }
+
+    void ReleaseChain()
+    {
+      lock (LOCK_IsChainLocked)
+      {
+        if (IsChainLocked)
+        {
+          IsChainLocked = false;
+        }
+      }
+    }
+
 
     void InsertContainer(HeaderContainer container)
     {
@@ -87,7 +116,7 @@ namespace BToken.Chaining
         MainChain.HeaderTip.HeaderHash.ToHexString());
     }
 
-
+    
 
     public bool TryReadHeader(
       byte[] headerHash,

@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Networking;
 
 
 
@@ -172,46 +171,28 @@ namespace BToken.Chaining
 
       
 
-      protected override bool TryInsertContainer(
+      protected override void InsertContainer(
         DataContainer container)
       {
         BlockContainer blockContainer = (BlockContainer)container;
 
         if (blockContainer.HeaderPrevious != UTXOTable.Header)
         {
-          Console.WriteLine(
-            "HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}",
-            blockContainer.HeaderPrevious.HeaderHash.ToHexString(),
-            blockContainer.Index,
-            UTXOTable.Header.HeaderHash.ToHexString());
-
-          return false;
+          throw new ChainException(
+            string.Format(
+              "HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}",
+              blockContainer.HeaderPrevious.HeaderHash.ToHexString(),
+              blockContainer.Index,
+              UTXOTable.Header.HeaderHash.ToHexString()),
+            ErrorCode.ORPHAN);
         }
 
-        try
-        {
-          UTXOTable.InsertContainer(blockContainer);
-        }
-        catch (ChainException)
-        {
-          return false;
-        }
-        catch(Exception ex)
-        {
-          Console.WriteLine(
-            "Insertion of blockBatchContainer {0} raised unexpected Exception:\n {1}.",
-            container.Index,
-            ex.Message);
-
-          return false;
-        }
+        UTXOTable.InsertContainer(blockContainer);
 
         blockContainer.Headers
           .ForEach(h => MapBlockToArchiveIndex.Add(
             h.HeaderHash, 
             blockContainer.Index));
-
-        return true;
       }
 
 
@@ -273,53 +254,7 @@ namespace BToken.Chaining
       }
 
 
-
-      public async Task<bool> TrySynchronize(
-        Network.INetworkChannel channel)
-      {
-        UTXOChannel uTXOChannel = new UTXOChannel(channel);
-
-        while (true)
-        {
-          DataBatch batch = LoadBatch(1);
-
-          try
-          {
-            await uTXOChannel.DownloadBlocks(batch);
-          }
-          catch
-          {
-            Console.WriteLine(
-              "could not download batch {0} from {1}",
-              batch.Index,
-              channel.GetIdentification());
-
-            UTXOTable.UnLoadBatch(batch);
-            return false;
-          }
-          
-          if (TryInsertBatch(batch))
-          {
-            if(batch.IsCancellationBatch)
-            {
-              return true;
-            }
-
-            batch.DataContainers.ForEach(d => ((BlockContainer)d).Headers.ForEach(h => 
-            Console.WriteLine("Inserted block {0} in UTXO", h.HeaderHash.ToHexString())));
-          }
-          else
-          {
-            Console.WriteLine(
-              "could not insert batch {0} in UTXO table",
-              batch.Index);
-
-            return false;
-          }
-        }
-
-      }
-
+      
       Dictionary<int, BlockContainer> CacheBlockContainers =
         new Dictionary<int, BlockContainer>();
       List<int> ArchiveIndexesInCache = new List<int>();
@@ -367,6 +302,7 @@ namespace BToken.Chaining
               }
 
               ArchiveIndexesLoading.Add(archiveIndex);
+              break;
             }
           }
 
