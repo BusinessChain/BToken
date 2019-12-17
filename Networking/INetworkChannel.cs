@@ -17,6 +17,10 @@ namespace BToken.Networking
       Task<byte[]> GetHeaders(
         IEnumerable<byte[]> locatorHashes);
 
+      Task RequestBlocks(List<byte[]> hashes);
+
+      Task<byte[]> ReceiveBlock();
+
       Task SendMessage(NetworkMessage networkMessage);
 
       Task<NetworkMessage> ReceiveApplicationMessage(

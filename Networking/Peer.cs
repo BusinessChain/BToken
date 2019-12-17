@@ -453,7 +453,8 @@ namespace BToken.Networking
 
         while (true)
         {
-          NetworkMessage networkMessage = await ReceiveApplicationMessage(cancellationToken);
+          NetworkMessage networkMessage = await ApplicationMessages
+            .ReceiveAsync(cancellation.Token);
 
           if (networkMessage.Command == "headers")
           {
@@ -462,6 +463,39 @@ namespace BToken.Networking
         }
       }
 
+
+
+      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 5000;
+
+
+      public async Task RequestBlocks(List<byte[]> hashes)
+      {
+        await SendMessage(
+          new GetDataMessage(
+            hashes.Select(h => new Inventory(
+              InventoryType.MSG_BLOCK, h))
+              .ToList()));
+      }
+
+      public async Task<byte[]> ReceiveBlock(CancellationToken cancellationToken)
+      {
+        var cancellation = new CancellationTokenSource(
+          TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
+        while (true)
+        {
+          NetworkMessage networkMessage = 
+            await ApplicationMessages.ReceiveAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+          if (networkMessage.Command != "block")
+          {
+            continue;
+          }
+
+          return networkMessage.Payload;
+        }
+      }
 
       public string GetIdentification()
       {

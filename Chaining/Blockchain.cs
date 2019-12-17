@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 
 using BToken.Networking;
 
+
+
 namespace BToken.Chaining
 {
   class Blockchain
@@ -24,67 +26,159 @@ namespace BToken.Chaining
     }
 
 
-    public async Task InsertHeaders(
-      byte[] headerBytes,
-      Network.INetworkChannel channel)
+    public async Task RunSyncSession(Network.INetworkChannel channel)
     {
-      var headerBatch = new DataBatch()
+      List<byte[]> headerLocator;
+
+      lock (Headerchain.LOCK_IsChainLocked)
       {
-        DataContainers = new List<DataContainer>()
-          {
-            new Headerchain.HeaderContainer(headerBytes)
-          }
-      };
+        headerLocator = 
+          Headerchain.Locator.GetHeaderHashes().ToList();
+      }
 
-      headerBatch.TryParse();
+      var headerContainer = new Headerchain.HeaderContainer(
+        await channel.GetHeaders(headerLocator));
 
-      if (!headerBatch.IsValid)
+      headerContainer.Parse();
+
+      if (headerContainer.CountItems == 0)
+      {
+        return;
+      }
+      
+      int indexLocatorRoot = headerLocator.FindIndex(
+        h => h.IsEqual(headerContainer.HeaderRoot.HashPrevious));
+      
+      if (indexLocatorRoot == -1)
       {
         channel.ReportInvalid();
         return;
       }
+      
+      byte[] stopHash;
+      if (indexLocatorRoot == headerLocator.Count - 1)
+      {
+        stopHash =
+         ("00000000000000000000000000000000" +
+         "00000000000000000000000000000000").ToBinary();
+      }
+      else
+      {
+        stopHash = headerLocator[indexLocatorRoot + 1];
+      }
 
+      while (true)
+      {                
+        try
+        {
+          Headerchain.InsertHeadersTentatively(
+            headerContainer.HeaderRoot,
+            stopHash);
+        }
+        catch (ChainException)
+        {
+          channel.ReportInvalid();
+        }
+        
+        headerContainer = new Headerchain.HeaderContainer(
+          await channel.GetHeaders(
+            new List<byte[]> { headerContainer.HeaderTip.HeaderHash }));
+
+        headerContainer.Parse();
+
+        if (headerContainer.CountItems == 0)
+        {
+          break;
+        }
+      }
+
+      if(Headerchain.IsTentativeChainStrongerThanMainchain())
+      {
+        Header header = Headerchain.HeaderRootTentative;
+
+        UTXOTable.RollBackToHeader(header);
+        
+        while (header.HeadersNext.Any())
+        {
+          header = header.HeadersNext.Last();
+
+          channel.RequestBlocks(
+            new List<byte[]> { header.HeaderHash });
+          
+          var blockContainer = new UTXOTable.BlockContainer(
+            Headerchain,
+            header);
+
+          blockContainer.Buffer = await channel.ReceiveBlock();
+
+          blockContainer.Parse();
+
+          UTXOTable.InsertContainer(blockContainer);
+        }
+
+        Headerchain.ReorgTentativeToMainChain();
+      }
+      else
+      {
+        Headerchain.DismissTentativeChain();
+      }
+      
+    }
+
+
+
+    public async Task InsertHeaders(
+      byte[] headerBytes,
+      Network.INetworkChannel channel)
+    {
+      var headerContainer = 
+        new Headerchain.HeaderContainer(headerBytes);
+
+      headerContainer.Parse();
+
+      var headerBatch = new DataBatch();
+
+      headerBatch.DataContainers.Add(headerContainer);
+      
       await LockChain();
 
-      Header headerRoot = ((Headerchain.HeaderContainer)headerBatch
-        .DataContainers.First()).HeaderRoot;
-
       if (Headerchain.TryReadHeader(
-        headerRoot.HeaderHash, 
+        headerContainer.HeaderRoot.HeaderHash, 
         out Header header))
       {
         if (UTXOTable
           .Synchronizer
           .MapBlockToArchiveIndex
-          .ContainsKey(headerRoot.HeaderHash))
+          .ContainsKey(headerContainer.HeaderRoot.HeaderHash))
         {
           ReleaseChain();
           channel.ReportDuplicate();
           return;
+        }
+        else
+        {
+          // block runterladen
         }
       }
       else
       {
         try
         {
-          Headerchain.Synchronizer.InsertHeaderBatch(headerBatch);
-          
-          Console.WriteLine("inserted {0} headers with root {1} from {2}",
-            headerBatch.CountItems,
-            headerRoot.HeaderHash.ToHexString(),
-            channel.GetIdentification());
+          byte[] stopHash =
+           ("00000000000000000000000000000000" +
+           "00000000000000000000000000000000").ToBinary();
+
+          Headerchain.InsertHeadersTentatively(
+            headerContainer.HeaderRoot,
+            stopHash);
         }
         catch (ChainException ex)
         {
           switch (ex.ErrorCode)
           {
             case ErrorCode.ORPHAN:
-              // synchronize
-              IEnumerable<byte[]> headerLocator = 
-                Headerchain.Locator.GetHeaderHashes();
-
-              byte[] headers = await channel.GetHeaders(headerLocator);
-              break;
+              RunSyncSession(channel);
+              return;
 
             case ErrorCode.INVALID:
               ReleaseChain();
@@ -93,8 +187,7 @@ namespace BToken.Chaining
           }
         }
       }
-
-
+      
       DataBatch blockBatch = 
         await channel.DownloadBlocks(headerBatch);
 
@@ -111,6 +204,9 @@ namespace BToken.Chaining
             break;
 
           case ErrorCode.INVALID:
+            // Roll back inserted blocks
+            // Restore UTXO by going to header tip 
+            // (if there was no fork this doesn't do anything)
             ReleaseChain();
             channel.ReportInvalid();
             return;

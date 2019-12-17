@@ -69,7 +69,7 @@ namespace BToken.Chaining
               await ReceiveBlock(cancellationDownloadBlocks.Token)
               .ConfigureAwait(false);
 
-            blockBatchContainer.TryParse();
+            blockBatchContainer.Parse();
             uTXOBatch.CountItems += blockBatchContainer.CountItems;
           }
         }

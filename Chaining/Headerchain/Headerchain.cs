@@ -12,8 +12,7 @@ namespace BToken.Chaining
 {
   partial class Headerchain
   {
-    Chain MainChain;
-    List<Chain> SecondaryChains = new List<Chain>();
+    public Chain MainChain;
     public Header GenesisHeader;
     List<HeaderLocation> Checkpoints;
 
@@ -29,6 +28,10 @@ namespace BToken.Chaining
 
     public HeaderchainSynchronizer Synchronizer;
     public Network Network;
+
+    public Header HeaderTip;
+    public int Height;
+    public double AccumulatedDifficulty;
 
 
     public Headerchain(
@@ -93,8 +96,38 @@ namespace BToken.Chaining
       }
     }
 
+    
 
-    void InsertContainer(HeaderContainer container)
+    public Header HeaderRootTentative;
+
+    public void InsertHeadersTentatively(
+      Header headerRoot,
+      byte[] stopHash)
+    {
+      Inserter.InsertTentatively(headerRoot, stopHash);
+    }
+    public bool IsTentativeChainStrongerThanMainchain()
+    {
+      return Inserter.AccumulatedDifficulty > 
+        MainChain.AccumulatedDifficulty;
+    }
+    public void ReorgTentativeToMainChain()
+    {
+      HeaderTip = Inserter.Header;
+      Height = Inserter.Height;
+      AccumulatedDifficulty = Inserter.AccumulatedDifficulty;
+
+      Locator.Reorganize();
+    }
+    public void DismissTentativeChain()
+    {
+      HeaderRootTentative.HeadersNext.Remove(
+        HeaderRootTentative.HeadersNext.Last());
+    }
+
+
+
+    public void InsertContainer(HeaderContainer container)
     {
       Chain rivalChain = Inserter.InsertHeaderRoot(
         container.HeaderRoot);

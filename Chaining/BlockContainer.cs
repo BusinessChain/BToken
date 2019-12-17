@@ -80,13 +80,62 @@ namespace BToken.Chaining
       
       Headerchain Headerchain;
 
-      public override bool TryParse()
+      public override void Parse()
       {
         StopwatchParse.Start();
 
-        try
+        BufferIndex = 0;
+
+        HeaderHash =
+          SHA256.ComputeHash(
+            SHA256.ComputeHash(
+              Buffer,
+              BufferIndex,
+              COUNT_HEADER_BYTES));
+
+        int[] startIndexAndLength = new int[2];
+        startIndexAndLength[0] = BufferIndex;
+
+        BufferIndex += COUNT_HEADER_BYTES;
+        TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
+
+        if (Header == null)
         {
-          BufferIndex = 0;
+          if (!Headerchain.TryReadHeader(
+            HeaderHash,
+            SHA256,
+            out Header))
+          {
+            throw new ChainException(string.Format(
+              "Header hash {0} not in chain.",
+              HeaderHash.ToHexString()));
+          }
+        }
+        else
+        {
+          ValidateHeaderHash(
+            HeaderHash,
+            Header.HeaderHash);
+        }
+
+        Headers.Add(Header);
+        HeaderPrevious = Header.HeaderPrevious;
+
+        ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
+        BlockCount += 1;
+        CountItems += TXCount;
+
+        startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
+
+        BufferStartIndexAndLengthBlocks.Add(
+          HeaderHash,
+          startIndexAndLength);
+
+        while (BufferIndex < Buffer.Length)
+        {
+          startIndexAndLength = new int[2];
+          startIndexAndLength[0] = BufferIndex;
+
 
           HeaderHash =
             SHA256.ComputeHash(
@@ -95,97 +144,31 @@ namespace BToken.Chaining
                 BufferIndex,
                 COUNT_HEADER_BYTES));
 
-          int[] startIndexAndLength = new int[2];
-          startIndexAndLength[0] = BufferIndex;
-
+          int merkleRootIndex = BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
           BufferIndex += COUNT_HEADER_BYTES;
           TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
 
-          if (Header == null)
-          {
-            if(!Headerchain.TryReadHeader(
-              HeaderHash, 
-              SHA256,
-              out Header))
-            {
-              throw new ChainException(string.Format(
-                "Header hash {0} not in chain.",
-                HeaderHash.ToHexString()));
-            }
-          }
-          else
-          {
-            ValidateHeaderHash(
-              HeaderHash,
-              Header.HeaderHash);
-          }
-          
+          Header = Header.HeadersNext[0];
+
+          ValidateHeaderHash(
+            HeaderHash,
+            Header.HeaderHash);
+
           Headers.Add(Header);
-          HeaderPrevious = Header.HeaderPrevious;
-          
-          ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
+
+          ParseBlock(merkleRootIndex);
           BlockCount += 1;
           CountItems += TXCount;
 
           startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
-
           BufferStartIndexAndLengthBlocks.Add(
             HeaderHash,
             startIndexAndLength);
-
-          while (BufferIndex < Buffer.Length)
-          {
-            startIndexAndLength = new int[2];
-            startIndexAndLength[0] = BufferIndex;
-
-
-            HeaderHash =
-              SHA256.ComputeHash(
-                SHA256.ComputeHash(
-                  Buffer,
-                  BufferIndex,
-                  COUNT_HEADER_BYTES));
-
-            int merkleRootIndex = BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
-            BufferIndex += COUNT_HEADER_BYTES;
-            TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
-
-            Header = Header.HeadersNext[0];
-
-            ValidateHeaderHash(
-              HeaderHash,
-              Header.HeaderHash);
-
-            Headers.Add(Header);
-
-            ParseBlock(merkleRootIndex);
-            BlockCount += 1;
-            CountItems += TXCount;
-
-            startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
-            BufferStartIndexAndLengthBlocks.Add(
-              HeaderHash,
-              startIndexAndLength);
-          }
-
-          ConvertTablesToArrays();
         }
-        catch (Exception ex)
-        {
-          IsValid = false;
 
-          Console.WriteLine(
-            "Exception {0} loading archive {1}: {2}",
-            ex.GetType().Name,
-            Index,
-            ex.Message);
-
-          return false;
-        }
+        ConvertTablesToArrays();
 
         StopwatchParse.Stop();
-
-        return true;
       }
 
       static void ValidateHeaderHash(

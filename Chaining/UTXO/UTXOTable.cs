@@ -248,7 +248,7 @@ namespace BToken.Chaining
         0,
         GenesisBlockBytes);
 
-      genesisBlockContainer.TryParse();
+      genesisBlockContainer.Parse();
       
       InsertContainer(genesisBlockContainer);
     }
@@ -322,7 +322,7 @@ namespace BToken.Chaining
     
 
 
-    void InsertContainer(BlockContainer container)
+    public void InsertContainer(BlockContainer container)
     {
       container.StopwatchMerging.Start();
 

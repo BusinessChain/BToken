@@ -6,7 +6,7 @@ namespace BToken.Chaining
 {
   partial class Headerchain
   {
-    class Chain
+    public class Chain
     {
       public Header HeaderRoot;
       public Header HeaderTip;
@@ -32,7 +32,15 @@ namespace BToken.Chaining
         AccumulatedDifficulty += TargetManager.GetDifficulty(header.NBits);
       }
 
-      public bool IsStrongerThan(Chain chain) => chain == null ? true : AccumulatedDifficulty > chain.AccumulatedDifficulty;
+      public bool IsStrongerThan(Chain chain)
+      {
+        if(chain == null)
+        {
+          return true;
+        }
+
+        return AccumulatedDifficulty > chain.AccumulatedDifficulty;
+      }
     }
   }
 }

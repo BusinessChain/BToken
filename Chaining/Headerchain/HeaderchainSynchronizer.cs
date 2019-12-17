@@ -53,7 +53,8 @@ namespace BToken.Chaining
         while(true)
         {
           Network.INetworkChannel channel =
-            await Headerchain.Network.DispatchChannelOutbound();
+            await Headerchain.Network.DispatchChannelOutbound()
+            .ConfigureAwait(false);
 
           lock (LOCK_IsAnySessionSyncing)
           {
@@ -72,7 +73,7 @@ namespace BToken.Chaining
             {
               LoadBatch();
 
-              await DownloadHeaders(channel);
+              await DownloadHeaders(channel, HeaderBatch);
 
               if(HeaderBatch.CountItems == 0)
               {
@@ -156,29 +157,22 @@ namespace BToken.Chaining
       
 
 
-      public async Task DownloadHeaders(Network.INetworkChannel channel)
+      public async Task DownloadHeaders(
+        Network.INetworkChannel channel,
+        DataBatch headerBatch)
       {
-        HeaderBatch.CountItems = 0;
+        headerBatch.CountItems = 0;
 
         foreach (HeaderContainer headerBatchContainer
-          in HeaderBatch.DataContainers)
+          in headerBatch.DataContainers)
         {
           headerBatchContainer.Buffer = await channel.GetHeaders(
             headerBatchContainer.LocatorHashes);
 
-          headerBatchContainer.TryParse();
+          headerBatchContainer.Parse();
 
-          HeaderBatch.CountItems += headerBatchContainer.CountItems;
+          headerBatch.CountItems += headerBatchContainer.CountItems;
         }
-      }
-
-
-      public void ReportInvalidBatch(DataBatch batch)
-      {
-        Console.WriteLine("Invalid batch {0} reported",
-          batch.Index);
-
-        throw new NotImplementedException();
       }
 
 

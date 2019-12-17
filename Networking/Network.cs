@@ -140,8 +140,8 @@ namespace BToken.Networking
           }
         }
 
-        Console.WriteLine("waiting for channel to dispatch");
-        await Task.Delay(5000);
+        Console.WriteLine("waiting for channel to dispatch.");
+        await Task.Delay(5000).ConfigureAwait(false);
 
       } while (true);
     }

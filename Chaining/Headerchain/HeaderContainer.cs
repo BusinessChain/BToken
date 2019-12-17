@@ -44,60 +44,43 @@ namespace BToken.Chaining
 
       SHA256 SHA256 = SHA256.Create();
 
-      public override bool TryParse()
+      public override void Parse()
       {
-        try
+        int bufferIndex = 0;
+
+        int headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
+
+        if (headersCount == 0)
         {
-          int bufferIndex = 0;
+          return;
+        }
 
-          int headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
+        CountItems += headersCount;
 
-          if (headersCount == 0)
-          {
-            return true;
-          }
+        HeaderRoot = Header.ParseHeader(
+          Buffer,
+          ref bufferIndex,
+          SHA256);
+
+        bufferIndex += 1; // skip txCount
+
+        ValidateHeader(HeaderRoot);
+
+        headersCount -= 1;
+
+        HeaderTip = HeaderRoot;
+
+        ParseHeaders(ref bufferIndex, headersCount);
+
+
+        while (bufferIndex < Buffer.Length)
+        {
+          headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
 
           CountItems += headersCount;
 
-          HeaderRoot = Header.ParseHeader(
-            Buffer, 
-            ref bufferIndex, 
-            SHA256);
-
-          bufferIndex += 1; // skip txCount
-
-          ValidateHeader(HeaderRoot);
-
-          headersCount -= 1;
-
-          HeaderTip = HeaderRoot;
-
           ParseHeaders(ref bufferIndex, headersCount);
-
-
-          while (bufferIndex < Buffer.Length)
-          {
-            headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
-
-            CountItems += headersCount;
-
-            ParseHeaders(ref bufferIndex, headersCount);
-          }
         }
-        catch (Exception ex)
-        {
-          IsValid = false;
-
-          Console.WriteLine(
-            "Exception {0} loading archive {1}: {2}",
-            ex.GetType().Name,
-            Index,
-            ex.Message);
-
-          return false;
-        }
-
-        return true;
       }
 
       void ParseHeaders(ref int startIndex, int headersCount)
@@ -112,7 +95,9 @@ namespace BToken.Chaining
           if (!header.HashPrevious.IsEqual(HeaderTip.HeaderHash))
           {
             throw new ChainException(
-              string.Format("header {0} with header hash previous {1} not in consecutive order with current tip header {2}",
+              string.Format(
+                "header {0} with header hash previous {1} " +
+                "not in consecutive order with current tip header {2}",
                 header.HeaderHash.ToHexString(),
                 header.HashPrevious.ToHexString(),
                 HeaderTip.HeaderHash.ToHexString()));
@@ -140,9 +125,8 @@ namespace BToken.Chaining
         }
 
         const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-        bool IsTimestampPremature = header.UnixTimeSeconds >
-          (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS);
-        if (IsTimestampPremature)
+        if (header.UnixTimeSeconds >
+          (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS))
         {
           throw new ChainException(
             string.Format("Timestamp premature {0}",

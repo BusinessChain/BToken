@@ -180,7 +180,7 @@ namespace BToken.Chaining
         {
           throw new ChainException(
             string.Format(
-              "HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}",
+              "HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}.",
               blockContainer.HeaderPrevious.HeaderHash.ToHexString(),
               blockContainer.Index,
               UTXOTable.Header.HeaderHash.ToHexString()),
@@ -318,14 +318,10 @@ namespace BToken.Chaining
                 Path.Combine(
                   ArchiveDirectory.FullName,
                   container.Index.ToString()));
-            }
-            catch (IOException)
-            {
-              blocks.Add(null);
-              continue;
-            }
 
-            if (!container.TryParse())
+              container.Parse();
+            }
+            catch
             {
               blocks.Add(null);
               continue;

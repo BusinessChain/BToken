@@ -17,7 +17,6 @@ namespace BToken.Chaining
       new List<DataContainer>();
     public int CountItems;
     public bool IsCancellationBatch;
-    public bool IsValid = true;
 
 
     public DataBatch()
@@ -30,15 +29,13 @@ namespace BToken.Chaining
 
 
 
-    public void TryParse()
+    public void Parse()
     {
       foreach(DataContainer container in DataContainers)
       {
-        IsValid &= container.TryParse();
+        container.Parse();
         CountItems += container.CountItems;
       }
-
-      IsValid &= (CountItems == 0);
     }
   }
 }

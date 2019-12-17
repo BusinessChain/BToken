@@ -22,7 +22,9 @@ namespace BToken.Networking
     {
       ProtocolVersion = protocolVersion;
       HeaderLocator = headerLocator;
-      StopHash = "0000000000000000000000000000000000000000000000000000000000000000".ToBinary();
+      StopHash = 
+        ("00000000000000000000000000000000" +
+        "00000000000000000000000000000000").ToBinary();
 
       SerializePayload();
     }

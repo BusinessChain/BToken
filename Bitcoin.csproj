@@ -102,7 +102,6 @@
     <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocator.cs" />
     <Compile Include="Chaining\Headerchain\HeaderLocation.cs" />
-    <Compile Include="Chaining\Headerchain\ChainProbe.cs" />
     <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Chaining\Headerchain\Chain.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />

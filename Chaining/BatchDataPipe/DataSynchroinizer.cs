@@ -18,8 +18,7 @@ namespace BToken.Chaining
     int SizeBatchArchive;
     int CountSyncSessions;
 
-
-
+    
 
     public DataSynchronizer(
       int sizeBatchArchive,
@@ -28,6 +27,7 @@ namespace BToken.Chaining
       SizeBatchArchive = sizeBatchArchive;
       CountSyncSessions = countSyncSessions;
     }
+
 
 
     public async Task Start()
@@ -101,9 +101,9 @@ namespace BToken.Chaining
               ArchiveDirectory.FullName,
               container.Index.ToString()));
 
-          container.TryParse();
+          container.Parse();
         }
-        catch (IOException)
+        catch
         {
           container.IsValid = false;
         }
@@ -345,16 +345,6 @@ namespace BToken.Chaining
       {
         IsSyncingCompleted = true;
       }
-    }
-
-
-
-    void ReportInvalidBatch(DataBatch batch)
-    {
-      Console.WriteLine("Invalid batch {0} reported",
-        batch.Index);
-
-      throw new NotImplementedException();
     }
   }
 }
