@@ -100,6 +100,7 @@ namespace BToken.Chaining
           GotoHeaderRoot(ref header, stopHash);
 
           Headerchain.HeaderRootTentative = Header;
+          Headerchain.HeightRootTentatively = Height;
         }
         else if(!Header.HeaderHash.IsEqual(header.HashPrevious))
         {

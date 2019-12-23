@@ -32,8 +32,7 @@ namespace BToken.Networking
     BufferBlock<Peer> PeersRequest = new BufferBlock<Peer>();
 
 
-    public UTXOTable UTXOTable;
-    public Headerchain Headerchain;
+    public Blockchain Blockchain;
 
 
     public Network()
@@ -141,7 +140,7 @@ namespace BToken.Networking
         }
 
         Console.WriteLine("waiting for channel to dispatch.");
-        await Task.Delay(5000).ConfigureAwait(false);
+        await Task.Delay(1000).ConfigureAwait(false);
 
       } while (true);
     }

@@ -18,8 +18,8 @@ namespace BToken.Chaining
     {
       Headerchain Headerchain;
 
-      readonly object LOCK_IsAnySessionSyncing = new object();
-      bool IsAnySessionSyncing;
+      readonly object LOCK_IsAnyChannelSyncing = new object();
+      bool IsAnyChannelSyncing;
 
       BufferBlock<Header> HeadersListened =
         new BufferBlock<Header>();
@@ -56,15 +56,15 @@ namespace BToken.Chaining
             await Headerchain.Network.DispatchChannelOutbound()
             .ConfigureAwait(false);
 
-          lock (LOCK_IsAnySessionSyncing)
+          lock (LOCK_IsAnyChannelSyncing)
           {
-            if (IsAnySessionSyncing)
+            if (IsAnyChannelSyncing)
             {
               channel.Release();
               return;
             }
 
-            IsAnySessionSyncing = true;
+            IsAnyChannelSyncing = true;
           }
 
           try
@@ -92,7 +92,7 @@ namespace BToken.Chaining
           catch (Exception ex)
           {
             Console.WriteLine(
-              "{0} in SyncHeaderchainSession {1} with channel {2}: '{3}'",
+              "{0} in SyncHeaderchainSession {1} with channel {2}: {3}",
               ex.GetType().Name,
               GetHashCode(),
               channel == null ? "'null'" : channel.GetIdentification(),
@@ -102,9 +102,9 @@ namespace BToken.Chaining
 
             channel.Dispose();
 
-            lock (LOCK_IsAnySessionSyncing)
+            lock (LOCK_IsAnyChannelSyncing)
             {
-              IsAnySessionSyncing = false;
+              IsAnyChannelSyncing = false;
             }
           }
         }

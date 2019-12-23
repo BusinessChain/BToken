@@ -76,6 +76,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Chaining\BatchDataPipe\DataArchiver.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataSynchroinizer.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
     <Compile Include="Chaining\BatchDataPipe\DataContainer.cs" />

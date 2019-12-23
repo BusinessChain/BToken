@@ -10,7 +10,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain
+  partial class Headerchain : DataArchiver.IDataStructure
   {
     public Chain MainChain;
     public Header GenesisHeader;
@@ -27,7 +27,6 @@ namespace BToken.Chaining
     bool IsChainLocked;
 
     public HeaderchainSynchronizer Synchronizer;
-    public Network Network;
 
     public Header HeaderTip;
     public int Height;
@@ -36,8 +35,7 @@ namespace BToken.Chaining
 
     public Headerchain(
       Header genesisHeader,
-      List<HeaderLocation> checkpoints,
-      Network network)
+      List<HeaderLocation> checkpoints)
     {
       GenesisHeader = genesisHeader;
       Checkpoints = checkpoints;
@@ -54,7 +52,6 @@ namespace BToken.Chaining
       Inserter = new ChainInserter(this);
 
       Synchronizer = new HeaderchainSynchronizer(this);
-      Network = network;
     }
 
 
@@ -99,14 +96,15 @@ namespace BToken.Chaining
     
 
     public Header HeaderRootTentative;
+    public int HeightRootTentatively;
 
     public void InsertHeadersTentatively(
-      Header headerRoot,
+      Header header,
       byte[] stopHash)
     {
-      Inserter.InsertTentatively(headerRoot, stopHash);
+      Inserter.InsertTentatively(header, stopHash);
     }
-    public bool IsTentativeChainStrongerThanMainchain()
+    public bool IsBranchTentativeStrongerThanMain()
     {
       return Inserter.AccumulatedDifficulty > 
         MainChain.AccumulatedDifficulty;

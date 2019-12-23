@@ -14,8 +14,7 @@ namespace BToken
   partial class Node
   {
     Network Network;
-    UTXOTable UTXOTable;
-    Headerchain Headerchain;
+    Blockchain Blockchain;
 
     Wallet Wallet;
 
@@ -30,21 +29,13 @@ namespace BToken
 
     public Node()
     {
-      Network = new Network();
-
-      Headerchain = new Headerchain(
+      Blockchain = new Blockchain(
         GenesisBlock.Header,
-        Checkpoints,
-        Network);
-
-      Network.Headerchain = Headerchain;
-
-      UTXOTable = new UTXOTable(
         GenesisBlock.BlockBytes,
-        Headerchain,
-        Network);
+        Checkpoints);
 
-      Network.UTXOTable = UTXOTable;
+      Network = new Network();
+      Network.Blockchain = Blockchain;
 
       Wallet = new Wallet();
     }
@@ -53,9 +44,7 @@ namespace BToken
     {
       Network.Start();
 
-      await Headerchain.Start();
-
-      await UTXOTable.Start();
+      await Blockchain.Start();
 
       Wallet.GeneratePublicKey();
     }

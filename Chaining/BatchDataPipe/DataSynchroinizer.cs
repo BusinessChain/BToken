@@ -339,7 +339,7 @@ namespace BToken.Chaining
         return IsSyncingCompleted;
       }
     }
-    protected void SetIsSyncingCompleted()
+    void SetIsSyncingCompleted()
     {
       lock (LOCK_IsSyncingCompleted)
       {

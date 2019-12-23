@@ -11,7 +11,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class UTXOTable
+  partial class UTXOTable : DataArchiver.IDataStructure
   {
     byte[] GenesisBlockBytes;
     
@@ -43,14 +43,12 @@ namespace BToken.Chaining
     long UTCTimeStartMerger;
 
     public UTXOSynchronizer Synchronizer;
-    public Network Network;
 
 
 
     public UTXOTable(
       byte[] genesisBlockBytes,
-      Headerchain headerchain,
-      Network network)
+      Headerchain headerchain)
     {
       Headerchain = headerchain;
 
@@ -62,7 +60,6 @@ namespace BToken.Chaining
       GenesisBlockBytes = genesisBlockBytes;
 
       Synchronizer = new UTXOSynchronizer(this);
-      Network = network;
     }
 
 
@@ -211,7 +208,7 @@ namespace BToken.Chaining
 
 
        
-    void LoadImage(out int archiveIndex)
+    public void LoadImage()
     {
       if (TryLoadUTXOState(out archiveIndex))
       {
@@ -285,8 +282,11 @@ namespace BToken.Chaining
 
         return true;
       }
-      catch
+      catch(Exception ex)
       {
+        Console.WriteLine("Cannot load UTXO state: {0}.", 
+          ex.Message);
+
         archiveIndex = 0;
         BlockHeight = -1;
         Header = null;

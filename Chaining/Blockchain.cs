@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading.Tasks;
+using System.Diagnostics;
+using System.Collections.Concurrent;
 
 using BToken.Networking;
 
@@ -13,20 +15,265 @@ namespace BToken.Chaining
   class Blockchain
   {
     Headerchain Headerchain;
+    DataArchiver HeaderArchive;
+
+
     UTXOTable UTXOTable;
+    DataArchiver UTXOArchive;
+
+    Network Network;
 
 
 
     public Blockchain(
-      Headerchain headerchain, 
-      UTXOTable uTXOTable)
+      Header genesisHeader,
+      byte[] genesisBlockBytes,
+      List<HeaderLocation> checkpoints,
+      Network network)
     {
-      Headerchain = headerchain;
-      UTXOTable = uTXOTable;
+      Headerchain = new Headerchain(
+        genesisHeader,
+        checkpoints);
+
+      HeaderArchive = new DataArchiver(
+        Headerchain,
+        Path.Combine(
+          AppDomain.CurrentDomain.BaseDirectory,
+          "HeaderArchive"),
+        50000,
+        4);
+
+
+      UTXOTable = new UTXOTable(
+        genesisBlockBytes,
+        Headerchain);
+
+      UTXOArchive = new DataArchiver(
+        UTXOTable,
+        "J:\\BlockArchivePartitioned",
+        50000,
+        4);
+
+      Network = network;
     }
 
 
-    public async Task RunSyncSession(Network.INetworkChannel channel)
+
+    public async Task Start()
+    {
+      await HeaderArchive.Load();
+      await SynchronizeHeaderchain();
+
+      UTXOTable.LoadImage();
+      await SynchronizeUTXO();
+    }
+
+
+    async Task SynchronizeHeaderchain()
+    {
+      while (true)
+      {
+        Network.INetworkChannel channel =
+          await Network.DispatchChannelOutbound()
+          .ConfigureAwait(false);
+
+        List<byte[]> headerLocator;
+
+        lock (Headerchain.LOCK_IsChainLocked)
+        {
+          headerLocator =
+            Headerchain.Locator.GetHeaderHashes().ToList();
+        }
+
+        try
+        {
+          var headerContainer = new Headerchain.HeaderContainer(
+           await channel.GetHeaders(headerLocator));
+
+          headerContainer.Parse();
+
+          if (headerContainer.CountItems == 0)
+          {
+            return;
+          }
+
+          int indexLocatorRoot = headerLocator.FindIndex(
+            h => h.IsEqual(headerContainer.HeaderRoot.HashPrevious));
+
+          if (indexLocatorRoot == -1)
+          {
+            channel.ReportInvalid();
+            return;
+          }
+
+          byte[] stopHash;
+          if (indexLocatorRoot == headerLocator.Count - 1)
+          {
+            stopHash =
+             ("00000000000000000000000000000000" +
+             "00000000000000000000000000000000").ToBinary();
+          }
+          else
+          {
+            stopHash = headerLocator[indexLocatorRoot + 1];
+          }
+
+          while (true)
+          {
+            Headerchain.InsertHeadersTentatively(
+              headerContainer.HeaderRoot,
+              stopHash);
+
+            headerContainer = new Headerchain.HeaderContainer(
+              await channel.GetHeaders(
+                new List<byte[]> { headerContainer.HeaderTip.HeaderHash }));
+
+            headerContainer.Parse();
+
+            if (headerContainer.CountItems == 0)
+            {
+              return;
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine(
+            "{0} in SyncHeaderchainSession {1} with channel {2}: '{3}'",
+            ex.GetType().Name,
+            GetHashCode(),
+            channel == null ? "'null'" : channel.GetIdentification(),
+            ex.Message);
+
+          channel.Dispose();
+        }
+      }
+    }
+
+    const int COUNT_UTXO_SESSIONS = 4;
+    async Task SynchronizeUTXO()
+    {
+      if (UTXOTable.BlockHeight > Headerchain.HeightRootTentatively)
+      {
+        UTXOTable.RollBackToHeader(Headerchain.HeaderRootTentative);
+      }
+      
+      for (int i = 0; i < COUNT_UTXO_SESSIONS; i += 1)
+      {
+        RunUTXOSyncSession();
+      }
+    }
+
+
+
+    const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
+
+    async Task RunUTXOSyncSession()
+    {
+      Stopwatch stopwatchDownload = new Stopwatch();
+      int countBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+      DataBatch uTXOBatch = null;
+
+      while (true)
+      {
+        UTXOChannel channel = new UTXOChannel(
+          await Network.DispatchChannelOutbound());
+
+        try
+        {
+          do
+          {
+            uTXOBatch = LoadBatch(countBlocks);
+
+            stopwatchDownload.Restart();
+
+            await channel.DownloadBlocks(uTXOBatch);
+
+            stopwatchDownload.Stop();
+
+            //await BatchSynchronizationBuffer.SendAsync(uTXOBatch);
+            await UTXOTable.SendBatch(uTXOBatch);
+
+            CalculateNewCountBlocks(
+              ref countBlocks,
+              stopwatchDownload.ElapsedMilliseconds);
+
+          } while (!uTXOBatch.IsCancellationBatch);
+
+          channel.Release();
+
+          return;
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine("Exception {0} in block download: \n{1}" +
+            "batch {2} queued",
+            ex.GetType().Name,
+            ex.Message,
+            uTXOBatch.Index);
+
+          QueueBatchesCanceled.Enqueue(uTXOBatch);
+
+          channel.Dispose();
+
+          countBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+        }
+      }
+    }
+
+
+
+
+    ConcurrentQueue<DataBatch> QueueBatchesCanceled
+      = new ConcurrentQueue<DataBatch>();
+    static readonly object LOCK_LoadBatch = new object();
+    int IndexLoad;
+    Header HeaderLoad;
+
+    DataBatch LoadBatch(int countHeaders)
+    {
+      if (QueueBatchesCanceled.TryDequeue(out DataBatch uTXOBatch))
+      {
+        return uTXOBatch;
+      }
+
+      lock (LOCK_LoadBatch)
+      {
+        uTXOBatch = new DataBatch(IndexLoad++);
+
+        if (HeaderLoad == null)
+        {
+          HeaderLoad = UTXOTable.Header;
+        }
+
+        for (int i = 0; i < countHeaders; i += 1)
+        {
+          if (HeaderLoad.HeadersNext.Count == 0)
+          {
+            uTXOBatch.IsCancellationBatch = (i == 0);
+            return uTXOBatch;
+          }
+
+          HeaderLoad = HeaderLoad.HeadersNext[0];
+
+          BlockContainer blockContainer =
+            new BlockContainer(
+              UTXOTable.Headerchain,
+              HeaderLoad);
+
+          uTXOBatch.DataContainers.Add(blockContainer);
+        }
+      }
+
+      return uTXOBatch;
+    }
+
+
+
+
+
+    async Task SynchronizeBlockchain(
+      Network.INetworkChannel channel)
     {
       List<byte[]> headerLocator;
 
@@ -75,9 +322,10 @@ namespace BToken.Chaining
             headerContainer.HeaderRoot,
             stopHash);
         }
-        catch (ChainException)
+        catch (ChainException ex)
         {
           channel.ReportInvalid();
+          throw ex;
         }
         
         headerContainer = new Headerchain.HeaderContainer(
@@ -92,7 +340,7 @@ namespace BToken.Chaining
         }
       }
 
-      if(Headerchain.IsTentativeChainStrongerThanMainchain())
+      if(Headerchain.IsBranchTentativeStrongerThanMain())
       {
         Header header = Headerchain.HeaderRootTentative;
 
@@ -177,7 +425,7 @@ namespace BToken.Chaining
           switch (ex.ErrorCode)
           {
             case ErrorCode.ORPHAN:
-              RunSyncSession(channel);
+              SynchronizeBlockchain(channel);
               return;
 
             case ErrorCode.INVALID:
