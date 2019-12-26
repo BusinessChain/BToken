@@ -106,7 +106,7 @@ namespace BToken.Chaining
           headersCount -= 1;
 
           header.HeaderPrevious = HeaderTip;
-          HeaderTip.HeadersNext.Add(header);
+          HeaderTip.HeaderNext = header;
 
           HeaderTip = header;
         }

@@ -118,20 +118,81 @@ namespace BToken.Chaining
             stopHash = headerLocator[indexLocatorRoot + 1];
           }
 
+
+          while (
+            Headerchain.TryReadHeader(
+              headerContainer.HeaderRoot.HeaderHash,
+              out Header header))
+          {
+            if(stopHash.IsEqual(headerContainer.HeaderRoot.HeaderHash))
+            {
+              channel.ReportInvalid();
+              return;
+            }
+
+            if (headerContainer.HeaderRoot.HeaderNext != null)
+            {
+              headerContainer.HeaderRoot =
+                headerContainer.HeaderRoot.HeaderNext;
+            }
+            else
+            {
+              headerLocator = new List<byte[]> {
+                headerContainer.HeaderTip.HeaderHash };
+
+              headerContainer = new Headerchain.HeaderContainer(
+                await channel.GetHeaders(headerLocator));
+
+              headerContainer.Parse();
+              
+              if (headerContainer.CountItems == 0)
+              {
+                channel.ReportDuplicate();
+                // send tip to channel
+                return;
+              }
+
+              indexLocatorRoot = headerLocator.FindIndex(
+                h => h.IsEqual(headerContainer.HeaderRoot.HashPrevious));
+
+              if (indexLocatorRoot == -1)
+              {
+                channel.ReportInvalid();
+                return;
+              }
+            }
+          }
+
           while (true)
           {
-            Headerchain.InsertHeadersTentatively(
-              headerContainer.HeaderRoot,
-              stopHash);
+            if (stopHash.IsEqual(headerContainer.HeaderRoot.HeaderHash))
+            {
+              channel.ReportInvalid();
+              return;
+            }
+
+            Headerchain.InsertHeaderBranchTentative(
+              headerContainer.HeaderRoot);
+
+            headerLocator = new List<byte[]> {
+                headerContainer.HeaderTip.HeaderHash };
 
             headerContainer = new Headerchain.HeaderContainer(
-              await channel.GetHeaders(
-                new List<byte[]> { headerContainer.HeaderTip.HeaderHash }));
+              await channel.GetHeaders(headerLocator));
 
             headerContainer.Parse();
 
             if (headerContainer.CountItems == 0)
             {
+              return;
+            }
+
+            indexLocatorRoot = headerLocator.FindIndex(
+              h => h.IsEqual(headerContainer.HeaderRoot.HashPrevious));
+
+            if (indexLocatorRoot == -1)
+            {
+              channel.ReportInvalid();
               return;
             }
           }
@@ -150,12 +211,13 @@ namespace BToken.Chaining
       }
     }
 
+
     const int COUNT_UTXO_SESSIONS = 4;
     async Task SynchronizeUTXO()
     {
       if (UTXOTable.BlockHeight > Headerchain.HeightRootTentatively)
       {
-        UTXOTable.RollBackToHeader(Headerchain.HeaderRootTentative);
+        UTXOTable.RollBackToHeader(Headerchain.HeaderRootTentativeFork);
       }
       
       for (int i = 0; i < COUNT_UTXO_SESSIONS; i += 1)
@@ -248,13 +310,13 @@ namespace BToken.Chaining
 
         for (int i = 0; i < countHeaders; i += 1)
         {
-          if (HeaderLoad.HeadersNext.Count == 0)
+          if (HeaderLoad.HeaderNext == null)
           {
             uTXOBatch.IsCancellationBatch = (i == 0);
             return uTXOBatch;
           }
 
-          HeaderLoad = HeaderLoad.HeadersNext[0];
+          HeaderLoad = HeaderLoad.HeaderNext;
 
           BlockContainer blockContainer =
             new BlockContainer(
@@ -318,7 +380,7 @@ namespace BToken.Chaining
       {                
         try
         {
-          Headerchain.InsertHeadersTentatively(
+          Headerchain.InsertHeaderBranchTentative(
             headerContainer.HeaderRoot,
             stopHash);
         }
@@ -342,13 +404,13 @@ namespace BToken.Chaining
 
       if(Headerchain.IsBranchTentativeStrongerThanMain())
       {
-        Header header = Headerchain.HeaderRootTentative;
+        Header header = Headerchain.HeaderRootTentativeFork;
 
         UTXOTable.RollBackToHeader(header);
         
-        while (header.HeadersNext.Any())
+        while (header.HeaderNext != null)
         {
-          header = header.HeadersNext.Last();
+          header = header.HeaderNext;
 
           channel.RequestBlocks(
             new List<byte[]> { header.HeaderHash });
@@ -416,7 +478,7 @@ namespace BToken.Chaining
            ("00000000000000000000000000000000" +
            "00000000000000000000000000000000").ToBinary();
 
-          Headerchain.InsertHeadersTentatively(
+          Headerchain.InsertHeaderBranchTentative(
             headerContainer.HeaderRoot,
             stopHash);
         }

@@ -4,8 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
 
-using BToken.Networking;
-
 
 
 namespace BToken.Chaining
@@ -93,16 +91,16 @@ namespace BToken.Chaining
       }
     }
 
-    
 
-    public Header HeaderRootTentative;
-    public int HeightRootTentatively;
 
-    public void InsertHeadersTentatively(
-      Header header,
-      byte[] stopHash)
+    Header HeaderBranchMain;
+    public Header HeaderRootTentativeFork;
+    public int HeightHeaderRootTentativeFork;
+
+    public void InsertHeaderBranchTentative(
+      Header header)
     {
-      Inserter.InsertTentatively(header, stopHash);
+      Inserter.InsertHeaderBranchTentative(header);
     }
     public bool IsBranchTentativeStrongerThanMain()
     {
@@ -119,8 +117,8 @@ namespace BToken.Chaining
     }
     public void DismissTentativeChain()
     {
-      HeaderRootTentative.HeadersNext.Remove(
-        HeaderRootTentative.HeadersNext.Last());
+      HeaderRootTentativeFork.HeadersNext.Remove(
+        HeaderRootTentativeFork.HeadersNext.Last());
     }
 
 
@@ -215,11 +213,11 @@ namespace BToken.Chaining
           List<Header> headers = new List<Header>();
 
           while (
-            header.HeadersNext.Count > 0 &&
+            header.HeaderNext != null &&
             headers.Count < count &&
             !header.HeaderHash.IsEqual(stopHash))
           {
-            Header nextHeader = header.HeadersNext.First();
+            Header nextHeader = header.HeaderNext;
 
             headers.Add(nextHeader);
             header = nextHeader;

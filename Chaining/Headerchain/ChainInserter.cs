@@ -57,49 +57,42 @@ namespace BToken.Chaining
           Header = Header.HeaderPrevious;
         }
 
-        while (true)
+        while (
+          Header.HeaderNext != null &&
+          Header.HeaderNext.HeaderHash.IsEqual(header.HeaderHash))
         {
-          byte[] headerHash = header.HeaderHash;
-
-          if(headerHash.IsEqual(stopHash))
+          if(header.HeaderHash.IsEqual(stopHash))
           {
             throw new ChainException(string.Format(
               "stopHash {0} reached.",
               stopHash.ToHexString()));
           }
 
-          int indexHeaderDuplicate = Header.HeadersNext.FindIndex(
-            h => h.HeaderHash.IsEqual(headerHash));
-
-          if (indexHeaderDuplicate == -1)
+          if (header.HeaderNext == null)
           {
-            break;
+            throw new ChainException(
+              "Attempting to connect duplicate headers only.",
+              ErrorCode.DUPLICATE);
           }
 
-          Header = Header.HeadersNext[indexHeaderDuplicate];
+          header = header.HeaderNext;
+          Header = Header.HeaderNext;
 
           AccumulatedDifficulty += TargetManager.GetDifficulty(
             Header.NBits);
 
           Height++;
-
-          if (header.HeadersNext.Any())
-          {
-            header = header.HeadersNext[0];
-            continue;
-          }
-
-          break;
         }
       }
 
-      public void InsertTentatively(Header header, byte[] stopHash)
+      public void InsertHeaderBranchTentative(
+        Header header)
       {
         if(Header == Chain.HeaderTip)
         {
           GotoHeaderRoot(ref header, stopHash);
 
-          Headerchain.HeaderRootTentative = Header;
+          Headerchain.HeaderRootTentativeFork = Header;
           Headerchain.HeightRootTentatively = Height;
         }
         else if(!Header.HeaderHash.IsEqual(header.HashPrevious))
@@ -117,7 +110,7 @@ namespace BToken.Chaining
 
         List<Header> headersValidated = ValidateChain(header);
 
-        Header.HeadersNext.Add(header);
+        Header.HeaderNext = header;
 
         Header = headersValidated.Last();
         Height += headersValidated.Count;
@@ -139,8 +132,7 @@ namespace BToken.Chaining
             ErrorCode.ORPHAN);
         }
 
-        if (Header.HeadersNext
-          .Any(h => h.HeaderHash.IsEqual(headerRoot.HeaderHash)))
+        if (Header.HeaderNext.HeaderHash.IsEqual(headerRoot.HeaderHash))
         {
           throw new ChainException(
             string.Format(
@@ -284,9 +276,9 @@ namespace BToken.Chaining
 
           headersValidated.Add(header);
 
-          if (header.HeadersNext.Any())
+          if (header.HeaderNext != null)
           {
-            header = header.HeadersNext[0];
+            header = header.HeaderNext;
           }
           else
           {

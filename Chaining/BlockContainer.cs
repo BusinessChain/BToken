@@ -135,8 +135,7 @@ namespace BToken.Chaining
         {
           startIndexAndLength = new int[2];
           startIndexAndLength[0] = BufferIndex;
-
-
+          
           HeaderHash =
             SHA256.ComputeHash(
               SHA256.ComputeHash(
@@ -148,7 +147,7 @@ namespace BToken.Chaining
           BufferIndex += COUNT_HEADER_BYTES;
           TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
 
-          Header = Header.HeadersNext[0];
+          Header = Header.HeaderNext;
 
           ValidateHeaderHash(
             HeaderHash,

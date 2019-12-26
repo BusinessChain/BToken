@@ -143,13 +143,13 @@ namespace BToken.Chaining
 
           for (int i = 0; i < countHeaders; i += 1)
           {
-            if (HeaderLoad.HeadersNext.Count == 0)
+            if (HeaderLoad.HeaderNext == null)
             {
               uTXOBatch.IsCancellationBatch = (i == 0);
               return uTXOBatch;
             }
 
-            HeaderLoad = HeaderLoad.HeadersNext[0];
+            HeaderLoad = HeaderLoad.HeaderNext;
 
             BlockContainer blockContainer =
               new BlockContainer(

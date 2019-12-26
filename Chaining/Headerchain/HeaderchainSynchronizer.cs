@@ -58,7 +58,7 @@ namespace BToken.Chaining
 
           lock (LOCK_IsAnyChannelSyncing)
           {
-            if (IsAnyChannelSyncing)
+            if (IsAnyChannelSyncing) 
             {
               channel.Release();
               return;
