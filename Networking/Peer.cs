@@ -256,7 +256,7 @@ namespace BToken.Networking
 
             await Blockchain.InsertHeaders(
               message.Payload,
-              this);
+              new Blockchain.BlockchainChannel(this));
                         
             break;
 
@@ -438,33 +438,7 @@ namespace BToken.Networking
 
 
 
-      const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
-
-      public async Task<byte[]> GetHeaders(
-        IEnumerable<byte[]> locatorHashes)
-      {
-        int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
-
-        CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
-        await NetworkMessageStreamer.WriteAsync(
-          new GetHeadersMessage(
-            locatorHashes,
-            ProtocolVersion));
-
-        while (true)
-        {
-          NetworkMessage networkMessage = await ApplicationMessages
-            .ReceiveAsync(cancellation.Token);
-
-          if (networkMessage.Command == "headers")
-          {
-            return networkMessage.Payload;
-          }
-        }
-      }
-
-
-
+      
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 5000;
 
 

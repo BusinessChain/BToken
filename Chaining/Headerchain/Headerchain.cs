@@ -92,36 +92,150 @@ namespace BToken.Chaining
     }
 
 
-
-    Header HeaderBranchMain;
-    public Header HeaderRootTentativeFork;
-    public int HeightHeaderRootTentativeFork;
-
-    public void InsertHeaderBranchTentative(
+    
+    public void InsertHeaderBranch(
       Header header)
     {
-      Inserter.InsertHeaderBranchTentative(header);
-    }
-    public bool IsBranchTentativeStrongerThanMain()
-    {
-      return Inserter.AccumulatedDifficulty > 
-        MainChain.AccumulatedDifficulty;
-    }
-    public void ReorgTentativeToMainChain()
-    {
-      HeaderTip = Inserter.Header;
-      Height = Inserter.Height;
-      AccumulatedDifficulty = Inserter.AccumulatedDifficulty;
+      Header headerPrevious = HeaderTip;
+      double accumulatedDifficulty = AccumulatedDifficulty;
+      int height = Height;
 
-      Locator.Reorganize();
+      while (!headerPrevious.HeaderHash.IsEqual(header.HashPrevious))
+      {
+        if (GenesisHeader == headerPrevious)
+        {
+          throw new ChainException(
+            string.Format(
+              "Previous header {0} \n " +
+              "of header {1} not found in chain.",
+              header.HashPrevious.ToHexString(),
+              header.HeaderHash.ToHexString()),
+            ErrorCode.ORPHAN);
+        }
+
+        accumulatedDifficulty -= TargetManager.GetDifficulty(
+          headerPrevious.NBits);
+
+        height--;
+
+        headerPrevious = headerPrevious.HeaderPrevious;
+      }
+
+      header.HeaderPrevious = headerPrevious;
+
+      while (true)
+      {
+        height += 1;
+        accumulatedDifficulty += TargetManager.GetDifficulty(header.NBits);
+
+        uint medianTimePast = GetMedianTimePast(header.HeaderPrevious);
+        if (header.UnixTimeSeconds < medianTimePast)
+        {
+          throw new ChainException(
+            string.Format(
+              "Header {0} with unix time {1} " +
+              "is older than median time past {2}.",
+              header.HeaderHash.ToHexString(),
+              DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
+              DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
+            ErrorCode.INVALID);
+        }
+
+        int hightHighestCheckpoint = Checkpoints.Max(x => x.Height);
+
+        if (
+          hightHighestCheckpoint <= Height &&
+          height <= hightHighestCheckpoint)
+        {
+          throw new ChainException(
+            string.Format(
+              "Attempt to insert header {0} at hight {1} " +
+              "prior to checkpoint hight {2}",
+              header.HeaderHash.ToHexString(),
+              height,
+              hightHighestCheckpoint),
+            ErrorCode.INVALID);
+        }
+
+        HeaderLocation checkpoint =
+          Checkpoints.Find(c => c.Height == height);
+        if (checkpoint != null && !checkpoint.Hash.IsEqual(header.HeaderHash))
+        {
+          throw new ChainException(
+            string.Format(
+              "Header {0} at hight {1} not equal to checkpoint hash {2}",
+              header.HeaderHash.ToHexString(),
+              height,
+              checkpoint.Hash.ToHexString()),
+            ErrorCode.INVALID);
+        }
+
+        uint targetBits = TargetManager.GetNextTargetBits(
+            header.HeaderPrevious,
+            (uint)height);
+
+        if (header.NBits != targetBits)
+        {
+          throw new ChainException(
+            string.Format(
+              "In header {0} nBits {1} not equal to target nBits {2}",
+              header.HeaderHash.ToHexString(),
+              header.NBits,
+              targetBits),
+            ErrorCode.INVALID);
+        }
+        
+        if (header.HeaderNext == null)
+        {
+          break;
+        }
+
+        header = header.HeaderNext;
+      }
+      
+      if (accumulatedDifficulty <= AccumulatedDifficulty)
+      {
+        throw new ChainException(
+          string.Format(
+            "tentative header branch {0} with hight {1} not " +
+            "stronger than main branch {2} with height {3}",
+            header.HeaderHash.ToHexString(),
+            height,
+            HeaderTip.HeaderHash.ToHexString(),
+            Height),
+          ErrorCode.INVALID);
+      }
+
+      HeaderTip = header;
+      Height = height;
+      AccumulatedDifficulty = accumulatedDifficulty;
     }
-    public void DismissTentativeChain()
+
+    
+    uint GetMedianTimePast(Header header)
     {
-      HeaderRootTentativeFork.HeadersNext.Remove(
-        HeaderRootTentativeFork.HeadersNext.Last());
+      const int MEDIAN_TIME_PAST = 11;
+
+      List<uint> timestampsPast = new List<uint>();
+
+      int depth = 0;
+      while (depth < MEDIAN_TIME_PAST)
+      {
+        timestampsPast.Add(header.UnixTimeSeconds);
+
+        if (header.HeaderPrevious == null)
+        { break; }
+
+        header = header.HeaderPrevious;
+        depth++;
+      }
+
+      timestampsPast.Sort();
+
+      return timestampsPast[timestampsPast.Count / 2];
     }
 
-
+           
 
     public void InsertContainer(HeaderContainer container)
     {

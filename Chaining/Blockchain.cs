@@ -12,7 +12,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  class Blockchain
+  partial class Blockchain
   {
     Headerchain Headerchain;
     DataArchiver HeaderArchive;
@@ -59,25 +59,38 @@ namespace BToken.Chaining
 
 
 
+
     public async Task Start()
     {
       await HeaderArchive.Load();
       await SynchronizeHeaderchain();
+
+      // there is a rollback root header, utxo will roll back to (can be main tipHeader)
+      // if roll-back blocks are missing, the entire utxo starts reindexing
+      // when rolled back, start to download tentative blocks (along NextHeader). 
+      // In case of invalid block restore main chain, by again roll back to rollback header.
+      // then connect mainBranchBackup to nextHeader and roll utxo forward.
+
 
       UTXOTable.LoadImage();
       await SynchronizeUTXO();
     }
 
 
+    
+    Header HeaderMain;
+
     async Task SynchronizeHeaderchain()
     {
       while (true)
       {
-        Network.INetworkChannel channel =
-          await Network.DispatchChannelOutbound()
-          .ConfigureAwait(false);
+        BlockchainChannel channel =
+          new BlockchainChannel( 
+            await Network.DispatchChannelOutbound()
+            .ConfigureAwait(false));
 
         List<byte[]> headerLocator;
+        Header headerBranch;
 
         lock (Headerchain.LOCK_IsChainLocked)
         {
@@ -87,18 +100,18 @@ namespace BToken.Chaining
 
         try
         {
-          var headerContainer = new Headerchain.HeaderContainer(
-           await channel.GetHeaders(headerLocator));
-
-          headerContainer.Parse();
-
+          var headerContainer = await channel
+            .GetHeaders(headerLocator);
+          
           if (headerContainer.CountItems == 0)
           {
             return;
           }
 
+          headerBranch = headerContainer.HeaderRoot;
+
           int indexLocatorRoot = headerLocator.FindIndex(
-            h => h.IsEqual(headerContainer.HeaderRoot.HashPrevious));
+            h => h.IsEqual(headerBranch.HashPrevious));
 
           if (indexLocatorRoot == -1)
           {
@@ -117,34 +130,30 @@ namespace BToken.Chaining
           {
             stopHash = headerLocator[indexLocatorRoot + 1];
           }
-
+          
 
           while (
             Headerchain.TryReadHeader(
-              headerContainer.HeaderRoot.HeaderHash,
+              headerBranch.HeaderHash,
               out Header header))
           {
-            if(stopHash.IsEqual(headerContainer.HeaderRoot.HeaderHash))
+            if(stopHash.IsEqual(headerBranch.HeaderHash))
             {
               channel.ReportInvalid();
               return;
             }
 
-            if (headerContainer.HeaderRoot.HeaderNext != null)
+            if (headerBranch.HeaderNext != null)
             {
-              headerContainer.HeaderRoot =
-                headerContainer.HeaderRoot.HeaderNext;
+              headerBranch = headerBranch.HeaderNext;
             }
             else
             {
-              headerLocator = new List<byte[]> {
-                headerContainer.HeaderTip.HeaderHash };
+              headerLocator = new List<byte[]>
+              { headerBranch.HeaderHash };
 
-              headerContainer = new Headerchain.HeaderContainer(
-                await channel.GetHeaders(headerLocator));
+              headerContainer = await channel.GetHeaders(headerLocator);
 
-              headerContainer.Parse();
-              
               if (headerContainer.CountItems == 0)
               {
                 channel.ReportDuplicate();
@@ -152,50 +161,56 @@ namespace BToken.Chaining
                 return;
               }
 
-              indexLocatorRoot = headerLocator.FindIndex(
-                h => h.IsEqual(headerContainer.HeaderRoot.HashPrevious));
-
-              if (indexLocatorRoot == -1)
+              if (
+                !headerContainer.HeaderRoot.HashPrevious
+                .IsEqual(headerBranch.HeaderHash))
               {
                 channel.ReportInvalid();
                 return;
               }
+
+              headerBranch = headerContainer.HeaderRoot;
             }
           }
+
+          if(!Headerchain.TryReadHeader(
+              headerBranch.HashPrevious,
+              out Header headerBranchPrevious))
+          {
+            // orphan
+          }
+          
+          HeaderMain = headerBranchPrevious.HeaderNext;
+          Header headerBranchTip = headerContainer.HeaderTip;
+
 
           while (true)
           {
-            if (stopHash.IsEqual(headerContainer.HeaderRoot.HeaderHash))
-            {
-              channel.ReportInvalid();
-              return;
-            }
-
-            Headerchain.InsertHeaderBranchTentative(
-              headerContainer.HeaderRoot);
-
             headerLocator = new List<byte[]> {
-                headerContainer.HeaderTip.HeaderHash };
+                headerBranchTip.HeaderHash };
 
-            headerContainer = new Headerchain.HeaderContainer(
-              await channel.GetHeaders(headerLocator));
-
-            headerContainer.Parse();
+            headerContainer = await channel.GetHeaders(headerLocator);
 
             if (headerContainer.CountItems == 0)
             {
-              return;
+              break;
             }
 
-            indexLocatorRoot = headerLocator.FindIndex(
-              h => h.IsEqual(headerContainer.HeaderRoot.HashPrevious));
-
-            if (indexLocatorRoot == -1)
+            if (
+              !headerContainer.HeaderRoot.HashPrevious
+              .IsEqual(headerBranchTip.HeaderHash))
             {
               channel.ReportInvalid();
               return;
             }
+
+            headerBranchTip.HeaderNext = headerContainer.HeaderRoot;
+            headerContainer.HeaderRoot.HeaderPrevious = headerBranchTip;
+            headerBranchTip = headerContainer.HeaderTip;
           }
+
+          Headerchain.InsertHeaderBranch(
+            headerBranch);
         }
         catch (Exception ex)
         {
@@ -335,7 +350,7 @@ namespace BToken.Chaining
 
 
     async Task SynchronizeBlockchain(
-      Network.INetworkChannel channel)
+      BlockchainChannel channel)
     {
       List<byte[]> headerLocator;
 
@@ -345,11 +360,8 @@ namespace BToken.Chaining
           Headerchain.Locator.GetHeaderHashes().ToList();
       }
 
-      var headerContainer = new Headerchain.HeaderContainer(
-        await channel.GetHeaders(headerLocator));
-
-      headerContainer.Parse();
-
+      var headerContainer = await channel.GetHeaders(headerLocator);
+      
       if (headerContainer.CountItems == 0)
       {
         return;
@@ -439,7 +451,7 @@ namespace BToken.Chaining
 
     public async Task InsertHeaders(
       byte[] headerBytes,
-      Network.INetworkChannel channel)
+      BlockchainChannel channel)
     {
       var headerContainer = 
         new Headerchain.HeaderContainer(headerBytes);

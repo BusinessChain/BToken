@@ -34,7 +34,7 @@ namespace BToken.Chaining
 
 
 
-      void GotoHeaderRoot(ref Header header, byte[] stopHash)
+      void GotoHeaderRoot(Header header)
       {
         while (!Header.HeaderHash.IsEqual(header.HashPrevious))
         {
@@ -55,67 +55,27 @@ namespace BToken.Chaining
           Height--;
 
           Header = Header.HeaderPrevious;
-        }
-
-        while (
-          Header.HeaderNext != null &&
-          Header.HeaderNext.HeaderHash.IsEqual(header.HeaderHash))
-        {
-          if(header.HeaderHash.IsEqual(stopHash))
-          {
-            throw new ChainException(string.Format(
-              "stopHash {0} reached.",
-              stopHash.ToHexString()));
-          }
-
-          if (header.HeaderNext == null)
-          {
-            throw new ChainException(
-              "Attempting to connect duplicate headers only.",
-              ErrorCode.DUPLICATE);
-          }
-
-          header = header.HeaderNext;
-          Header = Header.HeaderNext;
-
-          AccumulatedDifficulty += TargetManager.GetDifficulty(
-            Header.NBits);
-
-          Height++;
-        }
+        }        
       }
 
-      public void InsertHeaderBranchTentative(
-        Header header)
+      public void InsertHeaderBranch(Header header)
       {
-        if(Header == Chain.HeaderTip)
-        {
-          GotoHeaderRoot(ref header, stopHash);
-
-          Headerchain.HeaderRootTentativeFork = Header;
-          Headerchain.HeightRootTentatively = Height;
-        }
-        else if(!Header.HeaderHash.IsEqual(header.HashPrevious))
-        {
-          throw new ChainException(
-            string.Format(
-              "HeaderPrevious {0} not equal to \n" +
-              "last header inserted tentatively {1}.",
-              header.HashPrevious.ToHexString(),
-              Header.HeaderHash.ToHexString()),
-            ErrorCode.INVALID);
-        }
+        GotoHeaderRoot(header);
 
         header.HeaderPrevious = Header;
 
         List<Header> headersValidated = ValidateChain(header);
 
-        Header.HeaderNext = header;
+        AccumulatedDifficulty += headersValidated
+          .Sum(h => TargetManager.GetDifficulty(h.NBits));
+
+        if(AccumulatedDifficulty > Headerchain.AccumulatedDifficulty)
+        {
+          Header.HeaderNext = header;
+        }
 
         Header = headersValidated.Last();
         Height += headersValidated.Count;
-        AccumulatedDifficulty += headersValidated
-          .Sum(h => TargetManager.GetDifficulty(h.NBits));
       }
 
 
@@ -207,10 +167,9 @@ namespace BToken.Chaining
         }
       }
       
-      List<Header> ValidateChain(Header headerRoot)
+      List<Header> ValidateChain(Header header)
       {
         var headersValidated = new List<Header>();
-        Header header = headerRoot;
 
         while (true)
         {
@@ -276,15 +235,15 @@ namespace BToken.Chaining
 
           headersValidated.Add(header);
 
-          if (header.HeaderNext != null)
+          if (header.HeaderNext == null)
           {
-            header = header.HeaderNext;
+            break;
           }
-          else
-          {
-            return headersValidated;
-          }
+
+          header = header.HeaderNext;
         }
+
+        return headersValidated;
       }
       
       uint GetMedianTimePast(Header header)
