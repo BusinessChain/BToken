@@ -12,8 +12,6 @@ namespace BToken.Networking
   {
     public interface INetworkChannel : IDisposable
     {
-      List<NetworkMessage> GetApplicationMessages();
-
       Task<byte[]> GetHeaders(
         IEnumerable<byte[]> locatorHashes);
 
@@ -23,8 +21,9 @@ namespace BToken.Networking
 
       Task SendMessage(NetworkMessage networkMessage);
 
-      Task<NetworkMessage> ReceiveApplicationMessage(
-          CancellationToken cancellationToken);
+      Task<NetworkMessage> ReceiveMessage(
+          CancellationToken cancellationToken,
+          string messageType);
 
       void Release();
 

@@ -256,7 +256,7 @@ namespace BToken.Networking
 
             await Blockchain.InsertHeaders(
               message.Payload,
-              new Blockchain.BlockchainChannel(this));
+              new Blockchain.BlockchainPeer(this));
                         
             break;
 
@@ -291,17 +291,7 @@ namespace BToken.Networking
           IsDispatched = false;
         }
       }
-
-      public List<NetworkMessage> GetApplicationMessages()
-      {
-        if (ApplicationMessages.TryReceiveAll(out IList<NetworkMessage> messages))
-        {
-          return (List<NetworkMessage>)messages;
-        }
-
-        return new List<NetworkMessage>();
-      }
-
+      
       public async Task<bool> TryConnect()
       {
         try
@@ -424,10 +414,20 @@ namespace BToken.Networking
         await NetworkMessageStreamer.WriteAsync(networkMessage);
       }
 
-      public async Task<NetworkMessage> ReceiveApplicationMessage(
-        CancellationToken cancellationToken)
+      public async Task<NetworkMessage> ReceiveMessage(
+        CancellationToken cancellationToken,
+        string messageType)
       {
-        return await ApplicationMessages.ReceiveAsync(cancellationToken);
+        while (true)
+        {
+          NetworkMessage networkMessage =
+            await ApplicationMessages.ReceiveAsync(cancellationToken);
+
+          if (networkMessage.Command == messageType)
+          {
+            return networkMessage;
+          }
+        }
       }
 
       public async Task PingAsync()

@@ -12,8 +12,8 @@ namespace BToken.Chaining
     {
       void InsertContainer(DataContainer container);
       DataContainer CreateContainer(int archiveLoadIndex);
+      void LoadImage();
 
-      void LoadImage(out int archiveIndexNext);
       void ArchiveImage(int archiveIndexStore);
     }
 
@@ -21,10 +21,12 @@ namespace BToken.Chaining
 
     IDataStructure DataStructure;
 
-
     DirectoryInfo ArchiveDirectory;
     int SizeBatchArchive;
     int CountSyncSessions;
+       
+    Dictionary<byte[], int> MapHashToArchiveIndex =
+      new Dictionary<byte[], int>(new EqualityComparerByteArray());
 
 
 
@@ -47,9 +49,13 @@ namespace BToken.Chaining
     const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
 
-    public async Task Load()
+    public async Task Load(byte[] hashInsertedLast)
     {
-      DataStructure.LoadImage(out int archiveIndex);
+      DataStructure.LoadImage();
+
+      MapHashToArchiveIndex.TryGetValue(
+        hashInsertedLast,
+        out int archiveIndex);
 
       ArchiveIndexLoad = archiveIndex + 1;
       ArchiveIndexStore = ArchiveIndexLoad;

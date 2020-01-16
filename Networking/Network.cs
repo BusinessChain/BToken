@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
@@ -13,13 +14,13 @@ namespace BToken.Networking
   partial class Network
   {
     const UInt16 Port = 8333;
-    const UInt32 ProtocolVersion = 70015;
+    public const UInt32 ProtocolVersion = 70015;
     const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NETWORK;
     const ServiceFlags NetworkServicesLocalProvided = ServiceFlags.NODE_NETWORK;
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
     const int PEERS_COUNT_INBOUND = 8;
-    const int PEERS_COUNT_OUTBOUND = 4;
+    public const int PEERS_COUNT_OUTBOUND = 4;
 
     static ulong Nonce = CreateNonce();
 
@@ -123,7 +124,8 @@ namespace BToken.Networking
       return iPAddress;
     }
 
-    public async Task<INetworkChannel> DispatchChannelOutbound()
+    public async Task<INetworkChannel> DispatchPeerOutbound(
+      CancellationToken cancellationToken)
     {
       do
       {
@@ -140,7 +142,7 @@ namespace BToken.Networking
         }
 
         Console.WriteLine("waiting for channel to dispatch.");
-        await Task.Delay(1000).ConfigureAwait(false);
+        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
 
       } while (true);
     }

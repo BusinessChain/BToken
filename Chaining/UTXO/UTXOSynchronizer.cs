@@ -96,7 +96,9 @@ namespace BToken.Chaining
         }
       }
 
-      static void CalculateNewCountBlocks(ref int countBlocks, long timeDownloadMilliseconds)
+      static void CalculateNewCountBlocks(
+        ref int countBlocks, 
+        long timeDownloadMilliseconds)
       {
         const float safetyFactorTimeout = 10;
         const float marginFactorResetCountBlocksDownload = 5;

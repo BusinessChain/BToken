@@ -38,7 +38,7 @@ namespace BToken.Chaining
     static string PathUTXOStateOld = PathUTXOState + "_Old";
 
     public int BlockHeight;
-    Header Header;
+    public Header Header;
 
     long UTCTimeStartMerger;
 
@@ -210,7 +210,7 @@ namespace BToken.Chaining
        
     public void LoadImage()
     {
-      if (TryLoadUTXOState(out archiveIndex))
+      if (TryLoadUTXOState(out int archiveIndex))
       {
         Console.WriteLine("Load UTXO Image from {0}", 
           PathUTXOState);
@@ -289,7 +289,7 @@ namespace BToken.Chaining
 
         archiveIndex = 0;
         BlockHeight = -1;
-        Header = null;
+        Header = Headerchain.GenesisHeader;
 
         for (int c = 0; c < Tables.Length; c += 1)
         {
@@ -348,8 +348,26 @@ namespace BToken.Chaining
       LogInsertion(container);
     }
 
-    
-    
+    public void RollBackToHeight(int height)
+    {
+      if(BlockHeight <= height)
+      {
+        return;
+      }
+
+      while(BlockHeight > height)
+      {
+        // Get block container by UTXOTable.Header from archive
+        // Reindex if archive does not have the block or if reversion fails
+
+        ReverseBlockInsertion(container);
+
+        Header = Header.HeaderPrevious;
+        BlockHeight--;
+      }
+    }
+
+
     public void UnLoadBatch(DataBatch uTXOBatch)
     {
       throw new NotImplementedException();

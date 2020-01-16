@@ -7,7 +7,7 @@ using System.Security.Cryptography;
 
 namespace BToken.Chaining
 {
-  partial class UTXOTable
+  partial class Blockchain
   {
     public class BlockContainer : DataContainer
     {

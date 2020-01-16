@@ -195,7 +195,7 @@ namespace BToken.Chaining
           throw new ChainException(
             string.Format(
               "Output index {0} already spent.",
-              input.OutputIndex),
+              outputIndex),
             ErrorCode.INVALID);
         }
         uTXO[uintIndex] |= mask;

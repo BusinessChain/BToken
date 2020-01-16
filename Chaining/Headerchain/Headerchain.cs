@@ -63,42 +63,14 @@ namespace BToken.Chaining
     }
 
 
-    async Task LockChain()
-    {
-      while(true)
-      {
-        lock(LOCK_IsChainLocked)
-        {
-          if(!IsChainLocked)
-          {
-            IsChainLocked = true;
-            return;
-          }
-        }
-
-        await Task.Delay(100);
-      }
-    }
-
-    void ReleaseChain()
-    {
-      lock (LOCK_IsChainLocked)
-      {
-        if (IsChainLocked)
-        {
-          IsChainLocked = false;
-        }
-      }
-    }
-
 
     
-    public void InsertHeaderBranch(
-      Header header)
+    public void InsertHeaderBranch(Header header, out int heightHeaderBranchRoot)
     {
       Header headerPrevious = HeaderTip;
       double accumulatedDifficulty = AccumulatedDifficulty;
       int height = Height;
+      heightHeaderBranchRoot = Height;
 
       while (!headerPrevious.HeaderHash.IsEqual(header.HashPrevious))
       {
@@ -117,6 +89,7 @@ namespace BToken.Chaining
           headerPrevious.NBits);
 
         height--;
+        heightHeaderBranchRoot--;
 
         headerPrevious = headerPrevious.HeaderPrevious;
       }
@@ -210,8 +183,7 @@ namespace BToken.Chaining
       Height = height;
       AccumulatedDifficulty = accumulatedDifficulty;
     }
-
-    
+        
     uint GetMedianTimePast(Header header)
     {
       const int MEDIAN_TIME_PAST = 11;

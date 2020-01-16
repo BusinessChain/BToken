@@ -197,7 +197,10 @@ namespace BToken.Chaining
         PrimaryTables[(byte)PrimaryKey][PrimaryKey] = UTXOPrimary;
       }
 
-      static void SpendUTXO(ref uint uTXO, int outputIndex, out bool areAllOutputpsSpent)
+      static void SpendUTXO(
+        ref uint uTXO, 
+        int outputIndex, 
+        out bool areAllOutputpsSpent)
       {
         uint mask = (uint)1 << (COUNT_NON_OUTPUT_BITS + outputIndex);
         if ((uTXO & mask) != 0x00)
