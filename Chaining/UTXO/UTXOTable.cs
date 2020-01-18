@@ -348,7 +348,7 @@ namespace BToken.Chaining
       LogInsertion(container);
     }
 
-    public void RollBackToHeight(int height)
+    public void RollBackChain(int height)
     {
       if(BlockHeight <= height)
       {

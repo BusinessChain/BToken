@@ -215,7 +215,7 @@ namespace BToken.Chaining
 
         if (!GetRoot(merkleList).IsEqual(Buffer, merkleRootIndex))
         {
-          throw new ChainException("Payload merkle root corrupted.");
+          throw new ChainException("Payload hash unequal with merkle root.");
         }
 
         return;

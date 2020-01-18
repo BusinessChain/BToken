@@ -68,29 +68,18 @@ namespace BToken.Chaining
       await UTXOArchive.Load(
         UTXOTable.Header.HeaderHash);
 
-      while (true)
+      for (int i = 0; i < Network.PEERS_COUNT_OUTBOUND; i += 1)
       {
         var peer =
           new BlockchainPeer(
             await Network.DispatchPeerOutbound(default)
             .ConfigureAwait(false));
 
+        int heightHeaderBranchRoot;
+
         try
         {
-          int heightHeaderBranchRoot = await SynchronizeHeaderchain(peer);
-          
-          UTXOTable.RollBackToHeight(heightHeaderBranchRoot);
-
-          if (UTXOTable.Header.HeaderNext != null)
-          {
-            await UTXOArchive.Load(
-              UTXOTable.Header.HeaderHash);
-
-            await SynchronizeUTXO(peer);
-          }
-
-          peer.Release();
-          break;
+          heightHeaderBranchRoot = await SynchronizeHeaderchain(peer);
         }
         catch (Exception ex)
         {
@@ -101,7 +90,25 @@ namespace BToken.Chaining
             ex.Message);
 
           peer.Dispose();
+
+          continue;
+
+          // In welchem Zustand ist hier die Headerchain? 
+          // Ich gehe davon aus, dass alles so ist wie ursprünglich.
         }
+        
+        if (heightHeaderBranchRoot == UTXOTable.BlockHeight)
+        {
+          peer.Release();
+          continue;
+        }
+      
+        UTXOTable.RollBackChain(heightHeaderBranchRoot);
+        
+        await UTXOArchive.Load(
+          UTXOTable.Header.HeaderHash);
+        
+        await SynchronizeUTXO(peer);
       }
     }
 
@@ -257,46 +264,46 @@ namespace BToken.Chaining
     Header HeaderLoad;
     BlockchainPeer PeerSynchronization;
     int CountPeersFailedSynchronizing;
-    CancellationTokenSource CancellationSynchronizeUTXO;
 
     async Task SynchronizeUTXO(BlockchainPeer peer)
     {
       PeerSynchronization = peer;
-      peer.Release();
+      PeerSynchronization.Release();
 
       HeaderLoad = UTXOTable.Header;
 
-      CancellationSynchronizeUTXO = new CancellationTokenSource();
+      Task[] tasksUTXOSyncSession = 
+        new Task[Network.PEERS_COUNT_OUTBOUND];
 
-      try
+      for (int i = 0; i < Network.PEERS_COUNT_OUTBOUND; i += 1)
       {
-        for (int i = 0; i < Network.PEERS_COUNT_OUTBOUND; i += 1)
-        {
-          peer = new BlockchainPeer(
-            await Network.DispatchPeerOutbound(
-              CancellationSynchronizeUTXO.Token));
+        peer = new BlockchainPeer(
+          await Network.DispatchPeerOutbound(default));
 
-          RunUTXOSyncSession(peer);
-        }
+        tasksUTXOSyncSession[i] = RunUTXOSyncSession(peer);
       }
-      catch (TaskCanceledException)
-      {
 
+      await Task.WhenAll(tasksUTXOSyncSession);
+
+      if(IsSynchronizationFailed)
+      {
+        RestoreChain;
       }
     }
-
 
 
     const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 2;
     public BufferBlock<DataBatch> QueueUTXOBatchInsertion =
       new BufferBlock<DataBatch>(
         new DataflowBlockOptions { BoundedCapacity = 10 });
-    List<DataBatch> QueueBatchesCanceled = new List<DataBatch>();
     readonly object LOCK_QueueBatchesCanceled = new object();
+    List<DataBatch> QueueBatchesCanceled = new List<DataBatch>();
     readonly object LOCK_BatchIndex = new object();
-    int CountSessionsLoaded;
-    readonly object LOCK_CountSessionsLoaded = new object();
     int BatchIndex;
+    readonly object LOCK_CountSessionsFailed = new object();
+    int CountSessionsFailed;
+    readonly object LOCK_IsSynchronizationCompleted = new object();
+    bool IsSynchronizationCompleted;
     Dictionary<int, DataBatch> QueueDownloadBatch =
       new Dictionary<int, DataBatch>();
 
@@ -306,69 +313,141 @@ namespace BToken.Chaining
       int countBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
       DataBatch uTXOBatch;
 
-
-      try
+      while (true)
       {
-        while(true)
+      LoopLoadBatch:
+
+        while (true)
         {
-        LoopLoadBatch:
+          uTXOBatch = LoadBatch(countBlocks);
 
-          while (true)
+          if (uTXOBatch != null)
           {
-            lock(LOCK_LoadBatch)
-            {
-              uTXOBatch = LoadBatch(countBlocks);
-
-              if(uTXOBatch != null)
-              {
-                CountSessionsLoaded += 1;
-                break;
-              }
-
-              if (CountSessionsLoaded == 0)
-              {
-                peer.Release();
-                return;
-              }
-            }
-
-            await Task.Delay(1000);
+            break;
           }
 
-          stopwatchDownload.Restart();
+          lock (LOCK_IsSynchronizationCompleted)
+          {
+            if (IsSynchronizationCompleted)
+            {
+              peer.Release();
+              return;
+            }
+          }
 
+          await Task.Delay(1000);
+        }
+      
+        try
+        {
+          stopwatchDownload.Restart();
+          
           await peer.DownloadBlocks(uTXOBatch);
 
           stopwatchDownload.Stop();
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine(
+            "Exception {0} in download of uTXOBatch {1}: \n{2}",
+            ex.GetType().Name,
+            uTXOBatch.Index,
+            ex.Message);
 
-          while(true)
+          peer.Release();
+
+          lock (LOCK_QueueBatchesCanceled)
           {
-            lock (LOCK_LoadBatch)
-            {
-              if (uTXOBatch.Index == BatchIndex)
-              {
-                break;
-              }
-
-              if (QueueDownloadBatch.Count < 10)
-              {
-                QueueDownloadBatch.Add(uTXOBatch.Index, uTXOBatch);
-                CountSessionsLoaded -= 1;
-                goto LoopLoadBatch;
-              }
-            }
-
-            Task.Delay(1000);
+            QueueBatchesCanceled.Add(uTXOBatch);
           }
 
-          do
+          lock (LOCK_CountSessionsFailed)
+          {
+            CountSessionsFailed += 1;
+
+            if (CountSessionsFailed < Network.PEERS_COUNT_OUTBOUND)
+            {
+              return;
+            }
+          }
+
+          PeerSynchronization.ReportInvalid();
+
+          RestoreChain();
+
+          return;
+        }
+
+        while (true)
+        {
+          lock (LOCK_BatchIndex)
+          {
+            if (uTXOBatch.Index == BatchIndex)
+            {
+              break;
+            }
+
+            if (QueueDownloadBatch.Count < 10)
+            {
+              QueueDownloadBatch.Add(uTXOBatch.Index, uTXOBatch);
+              goto LoopLoadBatch;
+            }
+          }
+          
+          lock (LOCK_IsSynchronizationCompleted)
+          {
+            if (IsSynchronizationCompleted)
+            {
+              peer.Release();
+              return;
+            }
+          }
+
+          Task.Delay(1000);
+        }
+
+        do
+        {
+          try
           {
             InsertBatch(uTXOBatch);
+          }
+          catch (ChainException ex)
+          {
+            Console.WriteLine(
+              "ChainException in download of uTXOBatch {0}: \n{1}",
+              uTXOBatch.Index,
+              ex.Message);
 
-            lock (LOCK_LoadBatch)
+            lock(LOCK_IsSynchronizationCompleted)
             {
-              BatchIndex += 1;
+              IsSynchronizationCompleted = true;
             }
+
+            if (peer != PeerSynchronization)
+            {
+              peer.ReportInvalid();
+            }
+
+            PeerSynchronization.ReportInvalid();
+
+            RestoreChain();
+            return;
+          }
+
+          if (uTXOBatch.IsCancellationBatch)
+          {
+            lock (LOCK_IsSynchronizationCompleted)
+            {
+              peer.Release();
+              IsSynchronizationCompleted = true;
+              return;
+            }
+          }
+
+          lock (LOCK_BatchIndex)
+          {
+            BatchIndex += 1;
 
             if (QueueDownloadBatch.TryGetValue(
               BatchIndex,
@@ -380,38 +459,15 @@ namespace BToken.Chaining
             {
               break;
             }
-          } while (true);
-
-          lock (LOCK_LoadBatch)
-          {
-            CountSessionsLoaded -= 1;
           }
 
-          CalculateNewCountBlocks(
-            ref countBlocks,
-            stopwatchDownload.ElapsedMilliseconds);
-        }
+        } while (true);
+        
+        CalculateNewCountBlocks(
+          ref countBlocks,
+          stopwatchDownload.ElapsedMilliseconds);
       }
-      catch (Exception ex)
-      {
-        // If all channels fail, blame PeerSynchronizing and restore
-        // Mainchain
-
-
-        Console.WriteLine("Exception {0} in block download: \n{1}" +
-          "batch {2} queued",
-          ex.GetType().Name,
-          ex.Message,
-          uTXOBatch.Index);
-
-        QueueBatchesCanceled.Add(uTXOBatch);
-
-        peer.Dispose();
-
-        countBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-      }
-    }
-       
+    }       
 
 
     int IndexLoad;
@@ -432,28 +488,31 @@ namespace BToken.Chaining
         }
       }
 
-      if (HeaderLoad.HeaderNext != null)
+      lock (LOCK_LoadBatch)
       {
-        uTXOBatch = new DataBatch(IndexLoad++);
-
-        for (int i = 0; i < countHeaders; i += 1)
+        if (HeaderLoad.HeaderNext != null)
         {
-          if (HeaderLoad.HeaderNext == null)
+          uTXOBatch = new DataBatch(IndexLoad++);
+
+          for (int i = 0; i < countHeaders; i += 1)
           {
-            break;
+            if (HeaderLoad.HeaderNext == null)
+            {
+              break;
+            }
+
+            HeaderLoad = HeaderLoad.HeaderNext;
+
+            BlockContainer blockContainer =
+              new BlockContainer(
+                Headerchain,
+                HeaderLoad);
+
+            uTXOBatch.DataContainers.Add(blockContainer);
           }
 
-          HeaderLoad = HeaderLoad.HeaderNext;
-
-          BlockContainer blockContainer =
-            new BlockContainer(
-              Headerchain,
-              HeaderLoad);
-
-          uTXOBatch.DataContainers.Add(blockContainer);
+          return uTXOBatch;
         }
-
-        return uTXOBatch;
       }
 
       return null;
