@@ -20,7 +20,7 @@ namespace BToken.Networking
     const string UserAgent = "/BToken:0.0.0/";
     const Byte RelayOption = 0x00;
     const int PEERS_COUNT_INBOUND = 8;
-    public const int PEERS_COUNT_OUTBOUND = 4;
+    public const int COUNT_PEERS_OUTBOUND = 4;
 
     static ulong Nonce = CreateNonce();
 
@@ -58,7 +58,7 @@ namespace BToken.Networking
     public void Start()
     {
       Parallel.For(
-        0, PEERS_COUNT_OUTBOUND,
+        0, COUNT_PEERS_OUTBOUND,
         i => CreateOutboundPeer());
 
       StartPeerInboundListener();

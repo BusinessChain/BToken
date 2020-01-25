@@ -122,7 +122,7 @@ namespace BToken.Chaining
       {
         throw new NotImplementedException();
       }
-      public void ReportInvalid()
+      public void ReportInvalid(string message)
       {
         throw new NotImplementedException();
       }

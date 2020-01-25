@@ -59,6 +59,7 @@ namespace BToken.Chaining
       Network = network;
     }
 
+
     
     public async Task Start()
     {
@@ -68,71 +69,62 @@ namespace BToken.Chaining
       await UTXOArchive.Load(
         UTXOTable.Header.HeaderHash);
 
-      for (int i = 0; i < Network.PEERS_COUNT_OUTBOUND; i += 1)
+      BlockchainPeer peerOld = null;
+
+      for (int i = 0; i < Network.COUNT_PEERS_OUTBOUND; i += 1)
       {
         var peer =
           new BlockchainPeer(
             await Network.DispatchPeerOutbound(default)
             .ConfigureAwait(false));
 
-        int heightHeaderBranchRoot;
+        if(peerOld != null)
+        {
+          peerOld.Release();
+          peerOld = null;
+        }
 
         try
         {
-          heightHeaderBranchRoot = await SynchronizeHeaderchain(peer);
+          Header headerBranch = await CreateHeaderBranch(peer);
+
+          if (headerBranch != null)
+          {
+            Headerchain.StageHeaderBranch(
+              headerBranch,
+              out int heightHeaderBranchRoot);
+
+            await SynchronizeUTXO(
+              peer,
+              heightHeaderBranchRoot);
+
+            Headerchain.CommitHeaderBranch();
+          }
+
+          peerOld = peer;
         }
-        catch (Exception ex)
+        catch(Exception ex)
         {
-          Console.WriteLine(
-            "{0} in SyncHeaderchainSession with peer {1}:\n {2}",
-            ex.GetType().Name,
-            peer == null ? "'null'" : peer.GetIdentification(),
-            ex.Message);
-
-          peer.Dispose();
-
-          continue;
-
-          // In welchem Zustand ist hier die Headerchain? 
-          // Ich gehe davon aus, dass alles so ist wie ursprünglich.
+          peer.ReportInvalid(
+            string.Format("Exception {0}: {1}",
+            ex.GetType(),
+            ex.Message));
         }
-        
-        if (heightHeaderBranchRoot == UTXOTable.BlockHeight)
-        {
-          peer.Release();
-          continue;
-        }
-      
-        UTXOTable.RollBackChain(heightHeaderBranchRoot);
-        
-        await UTXOArchive.Load(
-          UTXOTable.Header.HeaderHash);
-        
-        await SynchronizeUTXO(peer);
       }
     }
 
 
 
-    Header HeaderBranchMain;
-
-    async Task<int> SynchronizeHeaderchain(BlockchainPeer peer)
+    async Task<Header> CreateHeaderBranch(BlockchainPeer peer)
     {
-      List<byte[]> headerLocator;
-      Header headerBranch;
+      Header headerBranch = null;
+      List<byte[]> headerLocator = Headerchain.GetLocator();
 
-      lock (Headerchain.LOCK_IsChainLocked)
-      {
-        headerLocator =
-          Headerchain.Locator.GetHeaderHashes().ToList();
-      }
-
-      var headerContainer = await peer
-          .GetHeaders(headerLocator);
+      var headerContainer = await peer.GetHeaders(headerLocator);
 
       if (headerContainer.CountItems == 0)
       {
-        return Headerchain.Height;
+        return headerBranch;
       }
 
       headerBranch = headerContainer.HeaderRoot;
@@ -142,13 +134,8 @@ namespace BToken.Chaining
 
       if (indexLocatorRoot == -1)
       {
-        peer.ReportInvalid();
-
-        throw new ChainException(string.Format(
-          "Received invalid response to getHeaders message:\n" +
-          "Previous header {0} of headerBranch {1} not found in header locator.",
-          headerBranch.HashPrevious.ToHexString(),
-          headerBranch.HeaderHash.ToHexString()));
+        throw new ChainException(
+          "Error in headerchain synchronization.");
       }
 
       byte[] stopHash;
@@ -163,25 +150,15 @@ namespace BToken.Chaining
         stopHash = headerLocator[indexLocatorRoot + 1];
       }
 
-      while (
-        Headerchain.TryReadHeader(
-          headerBranch.HeaderHash,
-          out Header header))
+      while (Headerchain.Contains(headerBranch.HeaderHash))
       {
         if (stopHash.IsEqual(headerBranch.HeaderHash))
         {
-          peer.ReportInvalid();
-
-          throw new ChainException(string.Format(
-            "Received invalid response to getHeaders message:\n" +
-            "Contains only duplicates."));
+          throw new ChainException(
+            "Error in headerchain synchronization.");
         }
 
-        if (headerBranch.HeaderNext != null)
-        {
-          headerBranch = headerBranch.HeaderNext;
-        }
-        else
+        if (headerBranch.HeaderNext == null)
         {
           headerLocator = new List<byte[]>
               { headerBranch.HeaderHash };
@@ -190,39 +167,33 @@ namespace BToken.Chaining
 
           if (headerContainer.CountItems == 0)
           {
-            peer.ReportDuplicate();
-            // send tip to channel
-            return;
+            throw new ChainException(
+              "Error in headerchain synchronization.");
           }
 
-          if (
-            !headerContainer.HeaderRoot.HashPrevious
+          if (!headerContainer.HeaderRoot.HashPrevious
             .IsEqual(headerBranch.HeaderHash))
           {
-            peer.ReportInvalid();
-            return;
+            throw new ChainException(
+              "Error in headerchain synchronization.");
           }
 
           headerBranch = headerContainer.HeaderRoot;
         }
+        else
+        {
+          headerBranch = headerBranch.HeaderNext;
+        }
       }
 
-      if (!Headerchain.TryReadHeader(
-          headerBranch.HashPrevious,
-          out Header headerBranchRoot))
+      if (!Headerchain.Contains(headerBranch.HashPrevious))
       {
-        peer.ReportInvalid();
-
-        throw new ChainException(string.Format(
-          "Received invalid response to getHeaders message:\n" +
-          "Previous header {0} of headerBranch {1} not found in header locator.",
-          headerBranch.HashPrevious.ToHexString(),
-          headerBranch.HeaderHash.ToHexString()));
+        throw new ChainException(
+          "Error in headerchain synchronization.");
       }
 
-      HeaderBranchMain = headerBranchRoot.HeaderNext;
       Header headerBranchTip = headerContainer.HeaderTip;
-      
+
       while (true)
       {
         headerLocator = new List<byte[]> {
@@ -235,17 +206,11 @@ namespace BToken.Chaining
           break;
         }
 
-        if (
-          !headerContainer.HeaderRoot.HashPrevious
+        if (!headerContainer.HeaderRoot.HashPrevious
           .IsEqual(headerBranchTip.HeaderHash))
         {
-          peer.ReportInvalid();
-
-          throw new ChainException(string.Format(
-            "Received invalid response to getHeaders message:\n" +
-            "Previous header {0} of headerContainer not equal to headerBranchTip {1}.",
-            headerContainer.HeaderRoot.HashPrevious.ToHexString(),
-            headerBranchTip.HeaderHash.ToHexString()));
+          throw new ChainException(
+            "Error in headerchain synchronization.");
         }
 
         headerBranchTip.HeaderNext = headerContainer.HeaderRoot;
@@ -253,29 +218,62 @@ namespace BToken.Chaining
         headerBranchTip = headerContainer.HeaderTip;
       }
 
-      Headerchain.InsertHeaderBranch(
-        headerBranch, 
-        out int heightHeaderBranchRoot);
+      return headerBranch;
+    }
 
-      return heightHeaderBranchRoot;
+    int HeightHeaderBranchRoot;
+
+    async Task SynchronizeHeaderchain(BlockchainPeer peer)
+    {
+      try
+      {
+        Headerchain.InsertHeaderBranch(
+            headerBranch,
+            out HeightHeaderBranchRoot);
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine(
+          "{0} in SyncHeaderchainSession with peer {1}:\n {2}",
+          ex.GetType().Name,
+          peer == null ? "'null'" : peer.GetIdentification(),
+          ex.Message);
+
+        peer.Dispose();
+
+        return false;
+      }
+      
+      return true;
     }
 
 
     Header HeaderLoad;
-    BlockchainPeer PeerSynchronization;
     int CountPeersFailedSynchronizing;
 
-    async Task SynchronizeUTXO(BlockchainPeer peer)
+    // Sobald branch stärker, wird per block gestaged, vorher wird alles gestaged
+    // Es gibt also eine Staging area wo alles hineingestaged wird. 
+    // Dann wird per Block oder seltener committed
+    async Task<bool> SynchronizeUTXO(
+      BlockchainPeer peer,
+      int heightHeaderBranchRoot)
     {
-      PeerSynchronization = peer;
-      PeerSynchronization.Release();
+      if(heightHeaderBranchRoot < UTXOTable.BlockHeight)
+      {
+        RollBackUTXO(heightHeaderBranchRoot);
+      }
+
+      await UTXOArchive.Load(
+        UTXOTable.Header.HeaderHash);
 
       HeaderLoad = UTXOTable.Header;
 
       Task[] tasksUTXOSyncSession = 
-        new Task[Network.PEERS_COUNT_OUTBOUND];
+        new Task[Network.COUNT_PEERS_OUTBOUND];
 
-      for (int i = 0; i < Network.PEERS_COUNT_OUTBOUND; i += 1)
+      tasksUTXOSyncSession[0] = RunUTXOSyncSession(peer);
+
+      for (int i = 1; i < Network.COUNT_PEERS_OUTBOUND - 1; i += 1)
       {
         peer = new BlockchainPeer(
           await Network.DispatchPeerOutbound(default));
@@ -285,10 +283,7 @@ namespace BToken.Chaining
 
       await Task.WhenAll(tasksUTXOSyncSession);
 
-      if(IsSynchronizationFailed)
-      {
-        RestoreChain;
-      }
+      return IsSynchronizationUTXOSucceeded;
     }
 
 
@@ -300,10 +295,9 @@ namespace BToken.Chaining
     List<DataBatch> QueueBatchesCanceled = new List<DataBatch>();
     readonly object LOCK_BatchIndex = new object();
     int BatchIndex;
-    readonly object LOCK_CountSessionsFailed = new object();
-    int CountSessionsFailed;
     readonly object LOCK_IsSynchronizationCompleted = new object();
     bool IsSynchronizationCompleted;
+    bool IsSynchronizationUTXOSucceeded;
     Dictionary<int, DataBatch> QueueDownloadBatch =
       new Dictionary<int, DataBatch>();
 
@@ -361,20 +355,6 @@ namespace BToken.Chaining
             QueueBatchesCanceled.Add(uTXOBatch);
           }
 
-          lock (LOCK_CountSessionsFailed)
-          {
-            CountSessionsFailed += 1;
-
-            if (CountSessionsFailed < Network.PEERS_COUNT_OUTBOUND)
-            {
-              return;
-            }
-          }
-
-          PeerSynchronization.ReportInvalid();
-
-          RestoreChain();
-
           return;
         }
 
@@ -424,14 +404,8 @@ namespace BToken.Chaining
               IsSynchronizationCompleted = true;
             }
 
-            if (peer != PeerSynchronization)
-            {
-              peer.ReportInvalid();
-            }
+            peer.ReportInvalid();
 
-            PeerSynchronization.ReportInvalid();
-
-            RestoreChain();
             return;
           }
 
@@ -440,6 +414,7 @@ namespace BToken.Chaining
             lock (LOCK_IsSynchronizationCompleted)
             {
               peer.Release();
+              IsSynchronizationUTXOSucceeded = true;
               IsSynchronizationCompleted = true;
               return;
             }
@@ -519,7 +494,7 @@ namespace BToken.Chaining
     }
 
 
-    public void InsertBatch(DataBatch batch)
+    void InsertBatch(DataBatch batch)
     {
       if (batch.IsCancellationBatch)
       {

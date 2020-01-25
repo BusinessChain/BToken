@@ -189,7 +189,7 @@ namespace BToken.Chaining
             ErrorCode.ORPHAN);
         }
 
-        UTXOTable.InsertContainer(blockContainer);
+        UTXOTable.StageContainer(blockContainer);
 
         blockContainer.Headers
           .ForEach(h => MapBlockToArchiveIndex.Add(

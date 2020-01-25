@@ -31,7 +31,7 @@ namespace BToken.Chaining
       public int BlockCount;
       SHA256 SHA256 = SHA256.Create();
 
-      public Stopwatch StopwatchMerging = new Stopwatch();
+      public Stopwatch StopwatchStaging = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
 
 

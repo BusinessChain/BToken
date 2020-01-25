@@ -69,7 +69,7 @@ namespace BToken.Chaining
         AccumulatedDifficulty += headersValidated
           .Sum(h => TargetManager.GetDifficulty(h.NBits));
 
-        if(AccumulatedDifficulty > Headerchain.AccumulatedDifficulty)
+        if(AccumulatedDifficulty > Headerchain.AccumulatedDifficultyStaged)
         {
           Header.HeaderNext = header;
         }

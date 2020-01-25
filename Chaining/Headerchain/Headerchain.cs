@@ -63,53 +63,50 @@ namespace BToken.Chaining
     }
 
 
+    Header HeaderBranchRootStaged;
+    Header HeaderBranchStaged;
+    Header HeaderTipStaged;
+    int HeightStaged;
+    double AccumulatedDifficultyStaged;
 
-    
-    public void InsertHeaderBranch(Header header, out int heightHeaderBranchRoot)
+    public void StageHeaderBranch(
+      Header headerBranch, 
+      out int heightHeaderBranchRootStaged)
     {
-      Header headerPrevious = HeaderTip;
-      double accumulatedDifficulty = AccumulatedDifficulty;
-      int height = Height;
-      heightHeaderBranchRoot = Height;
+      HeaderBranchStaged = headerBranch;
+      HeaderTipStaged = headerBranch;
+      HeaderBranchRootStaged = HeaderTip;
+      AccumulatedDifficultyStaged = AccumulatedDifficulty;
+      HeightStaged = Height;
 
-      while (!headerPrevious.HeaderHash.IsEqual(header.HashPrevious))
+      while (!HeaderBranchRootStaged.HeaderHash.IsEqual(
+        HeaderBranchStaged.HashPrevious))
       {
-        if (GenesisHeader == headerPrevious)
-        {
-          throw new ChainException(
-            string.Format(
-              "Previous header {0} \n " +
-              "of header {1} not found in chain.",
-              header.HashPrevious.ToHexString(),
-              header.HeaderHash.ToHexString()),
-            ErrorCode.ORPHAN);
-        }
+        AccumulatedDifficultyStaged -= TargetManager.GetDifficulty(
+          HeaderBranchRootStaged.NBits);
 
-        accumulatedDifficulty -= TargetManager.GetDifficulty(
-          headerPrevious.NBits);
+        HeightStaged--;
 
-        height--;
-        heightHeaderBranchRoot--;
-
-        headerPrevious = headerPrevious.HeaderPrevious;
+        HeaderBranchRootStaged = HeaderBranchRootStaged.HeaderPrevious;
       }
 
-      header.HeaderPrevious = headerPrevious;
+      heightHeaderBranchRootStaged = HeightStaged;
+      HeaderBranchStaged.HeaderPrevious = HeaderBranchRootStaged;
 
       while (true)
       {
-        height += 1;
-        accumulatedDifficulty += TargetManager.GetDifficulty(header.NBits);
+        HeightStaged += 1;
+        AccumulatedDifficultyStaged += TargetManager.GetDifficulty(HeaderTipStaged.NBits);
 
-        uint medianTimePast = GetMedianTimePast(header.HeaderPrevious);
-        if (header.UnixTimeSeconds < medianTimePast)
+        uint medianTimePast = GetMedianTimePast(HeaderTipStaged.HeaderPrevious);
+        if (HeaderTipStaged.UnixTimeSeconds < medianTimePast)
         {
           throw new ChainException(
             string.Format(
               "Header {0} with unix time {1} " +
               "is older than median time past {2}.",
-              header.HeaderHash.ToHexString(),
-              DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
+              headerTipStaged.HeaderHash.ToHexString(),
+              DateTimeOffset.FromUnixTimeSeconds(headerTipStaged.UnixTimeSeconds),
               DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
             ErrorCode.INVALID);
         }
@@ -117,71 +114,67 @@ namespace BToken.Chaining
         int hightHighestCheckpoint = Checkpoints.Max(x => x.Height);
 
         if (
-          hightHighestCheckpoint <= Height &&
-          height <= hightHighestCheckpoint)
+          hightHighestCheckpoint <= HeightStaged &&
+          HeightStaged <= hightHighestCheckpoint)
         {
           throw new ChainException(
             string.Format(
               "Attempt to insert header {0} at hight {1} " +
               "prior to checkpoint hight {2}",
-              header.HeaderHash.ToHexString(),
+              headerTipStaged.HeaderHash.ToHexString(),
               height,
               hightHighestCheckpoint),
             ErrorCode.INVALID);
         }
 
         HeaderLocation checkpoint =
-          Checkpoints.Find(c => c.Height == height);
-        if (checkpoint != null && !checkpoint.Hash.IsEqual(header.HeaderHash))
+          Checkpoints.Find(c => c.Height == HeightStaged);
+        if (checkpoint != null && !checkpoint.Hash.IsEqual(HeaderTipStaged.HeaderHash))
         {
           throw new ChainException(
             string.Format(
               "Header {0} at hight {1} not equal to checkpoint hash {2}",
-              header.HeaderHash.ToHexString(),
+              headerTipStaged.HeaderHash.ToHexString(),
               height,
               checkpoint.Hash.ToHexString()),
             ErrorCode.INVALID);
         }
 
         uint targetBits = TargetManager.GetNextTargetBits(
-            header.HeaderPrevious,
-            (uint)height);
+            HeaderTipStaged.HeaderPrevious,
+            (uint)HeightStaged);
 
-        if (header.NBits != targetBits)
+        if (HeaderTipStaged.NBits != targetBits)
         {
           throw new ChainException(
             string.Format(
               "In header {0} nBits {1} not equal to target nBits {2}",
-              header.HeaderHash.ToHexString(),
-              header.NBits,
+              HeaderTipStaged.HeaderHash.ToHexString(),
+              HeaderTipStaged.NBits,
               targetBits),
             ErrorCode.INVALID);
         }
         
-        if (header.HeaderNext == null)
+        if (HeaderTipStaged.HeaderNext == null)
         {
           break;
         }
 
-        header = header.HeaderNext;
+        HeaderTipStaged = HeaderTipStaged.HeaderNext;
       }
       
-      if (accumulatedDifficulty <= AccumulatedDifficulty)
+      if (AccumulatedDifficultyStaged <= AccumulatedDifficulty)
       {
         throw new ChainException(
           string.Format(
-            "tentative header branch {0} with hight {1} not " +
+            "staged header branch {0} with hight {1} not " +
             "stronger than main branch {2} with height {3}",
-            header.HeaderHash.ToHexString(),
-            height,
+            headerTipStaged.HeaderHash.ToHexString(),
+            HeightStaged,
             HeaderTip.HeaderHash.ToHexString(),
             Height),
           ErrorCode.INVALID);
       }
-
-      HeaderTip = header;
-      Height = height;
-      AccumulatedDifficulty = accumulatedDifficulty;
     }
         
     uint GetMedianTimePast(Header header)
@@ -207,7 +200,15 @@ namespace BToken.Chaining
       return timestampsPast[timestampsPast.Count / 2];
     }
 
-           
+    public void CommitHeaderBranch()
+    {
+      HeaderBranchRootStaged.HeaderNext = HeaderBranchStaged;
+      HeaderTip = HeaderTipStaged;
+      AccumulatedDifficulty = AccumulatedDifficultyStaged;
+      Height = HeightStaged;
+    }
+
+
 
     public void InsertContainer(HeaderContainer container)
     {
@@ -231,7 +232,21 @@ namespace BToken.Chaining
         MainChain.HeaderTip.HeaderHash.ToHexString());
     }
 
-    
+
+
+    public bool Contains(byte[] headerHash)
+    {
+      SHA256 sHA256 = SHA256.Create();
+
+      int key = BitConverter.ToInt32(headerHash, 0);
+
+      if (HeaderIndex.TryGetValue(key, out List<Header> headers))
+      {
+        return headers.Any(h => headerHash.IsEqual(h.HeaderHash));
+      }
+
+      return false;
+    }
 
     public bool TryReadHeader(
       byte[] headerHash,
@@ -315,6 +330,13 @@ namespace BToken.Chaining
 
       throw new ChainException(string.Format(
         "Locator does not root in headerchain."));
+    }
+
+
+    public List<byte[]> GetLocator()
+    {
+      return Locator.BlockLocations
+        .Select(b => b.Hash).ToList();
     }
   }
 }
