@@ -66,6 +66,7 @@ namespace BToken.Chaining
     Header HeaderBranchRootStaged;
     Header HeaderBranchStaged;
     Header HeaderTipStaged;
+    Header HeaderNewTipStaged;
     int HeightStaged;
     double AccumulatedDifficultyStaged;
 
@@ -200,7 +201,22 @@ namespace BToken.Chaining
       return timestampsPast[timestampsPast.Count / 2];
     }
 
-    public void CommitHeaderBranch()
+    public void CommitNewTip()
+    {
+      HeaderBranchRootStaged.HeaderNext = HeaderBranchStaged;
+      HeaderTip = HeaderNewTipStaged;
+      AccumulatedDifficulty = AccumulatedDifficultyStaged;
+      Height = HeightStaged;
+    }
+
+    public void CommitNextBlock()
+    {
+
+    }
+
+    // Ich mach staging nur für den Teil bis newTip, danach wird der 
+    // tip blockweise hinaufgeschoben.
+    public void Commit()
     {
       HeaderBranchRootStaged.HeaderNext = HeaderBranchStaged;
       HeaderTip = HeaderTipStaged;

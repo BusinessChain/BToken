@@ -6,101 +6,104 @@ using System.Diagnostics;
 
 namespace BToken.Chaining
 {
-  partial class UTXOTable
+  partial class Blockchain
   {
-    abstract class UTXOIndexCompressed
+    partial class UTXOTable
     {
-      public int Address;
-      protected string Label;
-
-      protected string DirectoryPath;
-
-      protected uint MaskCollisionBits =
-        (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0) |
-        (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1) |
-        (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2);
-
-      public int PrimaryKey;
-
-
-      protected UTXOIndexCompressed(
-        int address,
-        string label)
+      abstract class UTXOIndexCompressed
       {
-        Address = address;
-        Label = label;
+        public int Address;
+        protected string Label;
 
-        DirectoryPath = Path.Combine(PathUTXOState, Label);
-      }
+        protected string DirectoryPath;
 
-      public abstract bool PrimaryTableContainsKey(int primaryKey);
-      public abstract void IncrementCollisionBits(int primaryKey, int collisionAddress);
+        protected uint MaskCollisionBits =
+          (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0) |
+          (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1) |
+          (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2);
 
-      public abstract void SpendPrimaryUTXO(in TXInput input, out bool areAllOutputpsSpent);
-      public abstract bool TryGetValueInPrimaryTable(int primaryKey);
-      public abstract bool HasCollision(int cacheAddress);
-      public abstract void RemovePrimary();
-      public abstract void ResolveCollision(UTXOIndexCompressed tablePrimary);
-      public abstract uint GetCollisionBits();
-      public abstract bool AreCollisionBitsFull();
+        public int PrimaryKey;
 
-      public abstract void AddUTXOAsCollision(byte[] uTXOKey);
-      public abstract void AddUTXOAsPrimary(int primaryKey);
 
-      public bool TrySpendCollision(
-        in TXInput input,
-        UTXOIndexCompressed tablePrimary)
-      {
-        if (TryGetValueInCollisionTable(input.TXIDOutput))
+        protected UTXOIndexCompressed(
+          int address,
+          string label)
         {
-          SpendCollisionUTXO(
-            input.TXIDOutput,
-            input.OutputIndex,
-            out bool allOutputsSpent);
+          Address = address;
+          Label = label;
 
-          if (allOutputsSpent)
-          {
-            RemoveCollision(input.TXIDOutput);
-
-            if (tablePrimary.AreCollisionBitsFull())
-            {
-              if (HasCountCollisions(
-                input.PrimaryKeyTXIDOutput,
-                COUNT_COLLISIONS_MAX))
-              {
-                return true;
-              }
-            }
-
-            tablePrimary.DecrementCollisionBits(Address);
-            tablePrimary.UpdateUTXOInTable();
-          }
-
-          return true;
+          DirectoryPath = Path.Combine(PathUTXOState, Label);
         }
 
-        return false;
+        public abstract bool PrimaryTableContainsKey(int primaryKey);
+        public abstract void IncrementCollisionBits(int primaryKey, int collisionAddress);
+
+        public abstract void SpendPrimaryUTXO(in TXInput input, out bool areAllOutputpsSpent);
+        public abstract bool TryGetValueInPrimaryTable(int primaryKey);
+        public abstract bool HasCollision(int cacheAddress);
+        public abstract void RemovePrimary();
+        public abstract void ResolveCollision(UTXOIndexCompressed tablePrimary);
+        public abstract uint GetCollisionBits();
+        public abstract bool AreCollisionBitsFull();
+
+        public abstract void AddUTXOAsCollision(byte[] uTXOKey);
+        public abstract void AddUTXOAsPrimary(int primaryKey);
+
+        public bool TrySpendCollision(
+          in TXInput input,
+          UTXOIndexCompressed tablePrimary)
+        {
+          if (TryGetValueInCollisionTable(input.TXIDOutput))
+          {
+            SpendCollisionUTXO(
+              input.TXIDOutput,
+              input.OutputIndex,
+              out bool allOutputsSpent);
+
+            if (allOutputsSpent)
+            {
+              RemoveCollision(input.TXIDOutput);
+
+              if (tablePrimary.AreCollisionBitsFull())
+              {
+                if (HasCountCollisions(
+                  input.PrimaryKeyTXIDOutput,
+                  COUNT_COLLISIONS_MAX))
+                {
+                  return true;
+                }
+              }
+
+              tablePrimary.DecrementCollisionBits(Address);
+              tablePrimary.UpdateUTXOInTable();
+            }
+
+            return true;
+          }
+
+          return false;
+        }
+        protected abstract void SpendCollisionUTXO(byte[] key, int outputIndex, out bool areAllOutputpsSpent);
+        protected abstract bool TryGetValueInCollisionTable(byte[] key);
+        protected abstract void RemoveCollision(byte[] key);
+        protected abstract bool HasCountCollisions(int primaryKey, uint countCollisions);
+        public abstract void DecrementCollisionBits(int tableAddress);
+        protected abstract void UpdateUTXOInTable();
+
+        protected abstract int GetCountPrimaryTableItems();
+        protected abstract int GetCountCollisionTableItems();
+
+        public string GetMetricsCSV()
+        {
+          return GetCountPrimaryTableItems() + "," + GetCountCollisionTableItems();
+        }
+
+        public abstract void BackupToDisk(string path);
+        public abstract void Load();
+
+        public abstract void Clear();
+
       }
-      protected abstract void SpendCollisionUTXO(byte[] key, int outputIndex, out bool areAllOutputpsSpent);
-      protected abstract bool TryGetValueInCollisionTable(byte[] key);
-      protected abstract void RemoveCollision(byte[] key);
-      protected abstract bool HasCountCollisions(int primaryKey, uint countCollisions);
-      public abstract void DecrementCollisionBits(int tableAddress);
-      protected abstract void UpdateUTXOInTable();
-
-      protected abstract int GetCountPrimaryTableItems();
-      protected abstract int GetCountCollisionTableItems();
-
-      public string GetMetricsCSV()
-      {
-        return GetCountPrimaryTableItems() + "," + GetCountCollisionTableItems();
-      }
-
-      public abstract void BackupToDisk(string path);
-      public abstract void Load();
-
-      public abstract void Clear();
-
     }
   }
 }

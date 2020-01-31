@@ -44,8 +44,6 @@ namespace BToken.Chaining
 
       long UTCTimeStartMerger;
 
-      public UTXOSynchronizer Synchronizer;
-
 
 
       public UTXOTable(
@@ -60,8 +58,6 @@ namespace BToken.Chaining
         TableUInt32Array };
 
         GenesisBlockBytes = genesisBlockBytes;
-
-        Synchronizer = new UTXOSynchronizer(this);
       }
 
 

@@ -90,15 +90,40 @@ namespace BToken.Chaining
 
           if (headerBranch != null)
           {
+            if (
+              headerBranch != null &&
+              !headerBranch.HashPrevious.IsEqual(
+                Headerchain.HeaderTip.HeaderHash))
+            {
+              StageFork(
+                headerBranch,
+                out Header headerNewTipStaged,
+                out int heightHeaderBranchRoot);
+
+              if (!TryStageRollBackUTXO(heightHeaderBranchRoot))
+              {
+                // Reset everything, prepare for reindexing
+                i = 0;
+                peer.Release();
+                continue;
+              }
+
+              await UTXOSynchronization(peer);
+
+              UTXOTable.Commit();
+              Headerchain.CommitNewTip();
+            }
+            
+            
+            
+            // Gib noch den Header zurück ab welchem branch stärker ist als main
             Headerchain.StageHeaderBranch(
               headerBranch,
+              out Header headerNewTipStaged,
               out int heightHeaderBranchRoot);
-
-            await SynchronizeUTXO(
-              peer,
-              heightHeaderBranchRoot);
-
-            Headerchain.CommitHeaderBranch();
+          
+                               
+            await UTXOSynchronization(peer);
           }
 
           peerOld = peer;
@@ -110,6 +135,12 @@ namespace BToken.Chaining
             ex.GetType(),
             ex.Message));
         }
+      }
+
+      if (peerOld != null)
+      {
+        peerOld.Release();
+        peerOld = null;
       }
     }
 
@@ -254,15 +285,8 @@ namespace BToken.Chaining
     // Sobald branch stärker, wird per block gestaged, vorher wird alles gestaged
     // Es gibt also eine Staging area wo alles hineingestaged wird. 
     // Dann wird per Block oder seltener committed
-    async Task<bool> SynchronizeUTXO(
-      BlockchainPeer peer,
-      int heightHeaderBranchRoot)
+    async Task<bool> UTXOSynchronization(BlockchainPeer peer)
     {
-      if(heightHeaderBranchRoot < UTXOTable.BlockHeight)
-      {
-        RollBackUTXO(heightHeaderBranchRoot);
-      }
-
       await UTXOArchive.Load(
         UTXOTable.Header.HeaderHash);
 
