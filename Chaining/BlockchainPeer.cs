@@ -122,9 +122,9 @@ namespace BToken.Chaining
       {
         throw new NotImplementedException();
       }
-      public void ReportInvalid(string message)
+      public void ReportInvalid()
       {
-        throw new NotImplementedException();
+        NetworkChannel.ReportInvalid();
       }
 
       public string GetIdentification()

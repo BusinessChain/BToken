@@ -52,8 +52,7 @@ namespace BToken.Chaining
       Synchronizer = new HeaderchainSynchronizer(this);
     }
 
-
-
+    
     public async Task Start()
     {
       await Synchronizer.Start();
@@ -66,16 +65,14 @@ namespace BToken.Chaining
     Header HeaderBranchRootStaged;
     Header HeaderBranchStaged;
     Header HeaderTipStaged;
-    Header HeaderNewTipStaged;
     int HeightStaged;
     double AccumulatedDifficultyStaged;
 
-    public void StageHeaderBranch(
-      Header headerBranch, 
-      out int heightHeaderBranchRootStaged)
+    public void StageFork(Header headerBranch)
     {
       HeaderBranchStaged = headerBranch;
-      HeaderTipStaged = headerBranch;
+
+      HeaderTipStaged = HeaderBranchStaged;
       HeaderBranchRootStaged = HeaderTip;
       AccumulatedDifficultyStaged = AccumulatedDifficulty;
       HeightStaged = Height;
@@ -90,8 +87,7 @@ namespace BToken.Chaining
 
         HeaderBranchRootStaged = HeaderBranchRootStaged.HeaderPrevious;
       }
-
-      heightHeaderBranchRootStaged = HeightStaged;
+      
       HeaderBranchStaged.HeaderPrevious = HeaderBranchRootStaged;
 
       while (true)
@@ -156,28 +152,40 @@ namespace BToken.Chaining
             ErrorCode.INVALID);
         }
         
-        if (HeaderTipStaged.HeaderNext == null)
+        if (AccumulatedDifficultyStaged > AccumulatedDifficulty)
         {
-          break;
+          return;
         }
 
-        HeaderTipStaged = HeaderTipStaged.HeaderNext;
-      }
-      
-      if (AccumulatedDifficultyStaged <= AccumulatedDifficulty)
-      {
-        throw new ChainException(
-          string.Format(
-            "staged header branch {0} with hight {1} not " +
-            "stronger than main branch {2} with height {3}",
-            headerTipStaged.HeaderHash.ToHexString(),
-            HeightStaged,
-            HeaderTip.HeaderHash.ToHexString(),
-            Height),
-          ErrorCode.INVALID);
+        if(HeaderTipStaged.HeaderNext != null)
+        {
+          HeaderTipStaged = HeaderTipStaged.HeaderNext;
+        }
+        else
+        {
+          throw new ChainException(
+            string.Format(
+              "staged header branch {0} with hight {1} not " +
+              "stronger than main branch {2} with height {3}",
+              HeaderTipStaged.HeaderHash.ToHexString(),
+              HeightStaged,
+              HeaderTip.HeaderHash.ToHexString(),
+              Height),
+            ErrorCode.INVALID);
+        }
       }
     }
         
+    public bool IsForkStaged()
+    {
+      return HeaderBranchStaged != null;
+    }
+
+    public void UnstageFork()
+    {
+      HeaderBranchStaged = null;
+    }
+
     uint GetMedianTimePast(Header header)
     {
       const int MEDIAN_TIME_PAST = 11;
@@ -200,28 +208,20 @@ namespace BToken.Chaining
 
       return timestampsPast[timestampsPast.Count / 2];
     }
-
-    public void CommitNewTip()
+    
+    public bool IsHeaderCommitFork(Header header)
     {
-      HeaderBranchRootStaged.HeaderNext = HeaderBranchStaged;
-      HeaderTip = HeaderNewTipStaged;
-      AccumulatedDifficulty = AccumulatedDifficultyStaged;
-      Height = HeightStaged;
+      return HeaderTipStaged == header;
     }
 
-    public void CommitNextBlock()
-    {
-
-    }
-
-    // Ich mach staging nur für den Teil bis newTip, danach wird der 
-    // tip blockweise hinaufgeschoben.
-    public void Commit()
+    public void CommitFork()
     {
       HeaderBranchRootStaged.HeaderNext = HeaderBranchStaged;
       HeaderTip = HeaderTipStaged;
       AccumulatedDifficulty = AccumulatedDifficultyStaged;
       Height = HeightStaged;
+
+      HeaderBranchStaged = null;
     }
 
 

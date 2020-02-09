@@ -30,6 +30,10 @@ namespace BToken.Networking
       string GetIdentification();
 
       void ReportDuplicate();
+
+      /// <summary>
+      /// Reports and also disposes a peer.
+      /// </summary>
       void ReportInvalid();
     }
   }

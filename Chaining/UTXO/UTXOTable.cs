@@ -92,7 +92,7 @@ namespace BToken.Chaining
         table.AddUTXOAsPrimary(primaryKey);
       }
 
-      void StageUTXOsUInt32(
+      void InsertUTXOsUInt32(
         KeyValuePair<byte[], uint>[] uTXOsUInt32,
         int archiveIndex)
       {
@@ -112,7 +112,7 @@ namespace BToken.Chaining
         }
       }
 
-      void StageUTXOsULong64(
+      void InsertUTXOsULong64(
         KeyValuePair<byte[], ulong>[] uTXOsULong64,
         int archiveIndex)
       {
@@ -132,7 +132,7 @@ namespace BToken.Chaining
         }
       }
 
-      void StageUTXOsUInt32Array(
+      void InsertUTXOsUInt32Array(
         KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array,
         int archiveIndex)
       {
@@ -152,7 +152,7 @@ namespace BToken.Chaining
         }
       }
 
-      void StageSpendUTXOs(List<TXInput> inputs)
+      void InsertSpendUTXOs(List<TXInput> inputs)
       {
         int i = 0;
       LoopSpendUTXOs:
@@ -245,7 +245,7 @@ namespace BToken.Chaining
 
         genesisBlockContainer.Parse();
 
-        StageContainer(genesisBlockContainer);
+        InsertContainer(genesisBlockContainer);
       }
 
 
@@ -320,23 +320,23 @@ namespace BToken.Chaining
 
 
 
-      public void StageContainer(BlockContainer container)
+      public void InsertContainer(BlockContainer container)
       {
         container.StopwatchStaging.Start();
 
-        StageUTXOsUInt32(
+        InsertUTXOsUInt32(
           container.UTXOsUInt32,
           container.Index);
 
-        StageUTXOsULong64(
+        InsertUTXOsULong64(
           container.UTXOsULong64,
           container.Index);
 
-        StageUTXOsUInt32Array(
+        InsertUTXOsUInt32Array(
           container.UTXOsUInt32Array,
           container.Index);
 
-        StageSpendUTXOs(container.Inputs);
+        InsertSpendUTXOs(container.Inputs);
 
         container.StopwatchStaging.Stop();
 

@@ -24,8 +24,6 @@ namespace BToken.Networking
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
 
-      VersionMessage VersionMessageRemote;
-
       readonly object LOCK_IsDispatched = new object();
       bool IsDispatched = true;
 
@@ -66,43 +64,35 @@ namespace BToken.Networking
         IPEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
       }
 
-      public async Task Start()
+      public async Task Connect()
       {
-        try
-        {
-          await HandshakeAsync();
+        TcpClient = new TcpClient();
 
-          Release();
+        await TcpClient.ConnectAsync(
+          IPEndPoint.Address,
+          IPEndPoint.Port);
 
-          await ProcessNetworkMessages();
-        }
-        catch(Exception ex)
-        {
-          Dispose();
-        }
+        NetworkMessageStreamer = new MessageStreamer(
+          TcpClient.GetStream());
+      }
+
+      public async Task Run()
+      {
+        await HandshakeAsync();
+
+        Release();
+
+        await ProcessNetworkMessages();
       }
 
 
       public void Dispose()
       {
         TcpClient.Dispose();
-
-        lock (Network.LOCK_Peers)
-        {
-          Network.Peers.Remove(this);
-
-          Console.WriteLine(
-            "disposed {0} peer {1}, total peers {2}",
-            ConnectionType.ToString(),
-            IPEndPoint,
-            Network.Peers.Count);
-        }
-
-        if (ConnectionType == ConnectionType.OUTBOUND)
-        {
-          Network.CreateOutboundPeer();
-        }
       }
+
+
+
 
       async Task ProcessNetworkMessages()
       {
@@ -151,8 +141,7 @@ namespace BToken.Networking
           }
         }
       }
-
-
+      
       async Task ProcessRequest(NetworkMessage message)
       {
         switch (message.Command)
@@ -282,8 +271,6 @@ namespace BToken.Networking
         }
       }
 
-
-
       public void Release()
       {
         lock (LOCK_IsDispatched)
@@ -292,105 +279,6 @@ namespace BToken.Networking
         }
       }
       
-      public async Task<bool> TryConnect()
-      {
-        try
-        {
-          TcpClient = new TcpClient();
-
-          await TcpClient.ConnectAsync(
-            IPEndPoint.Address,
-            IPEndPoint.Port);
-
-          NetworkMessageStreamer = new MessageStreamer(
-            TcpClient.GetStream());
-
-          return true;
-        }
-        catch
-        {
-          return false;
-        }
-      }
-      async Task HandshakeAsync()
-      {
-        await NetworkMessageStreamer.WriteAsync(new VersionMessage());
-
-        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(3))
-          .Token;
-
-        bool VerAckReceived = false;
-        bool VersionReceived = false;
-
-        while (!VerAckReceived || !VersionReceived)
-        {
-          NetworkMessage messageRemote =
-            await NetworkMessageStreamer.ReadAsync(cancellationToken);
-
-          switch (messageRemote.Command)
-          {
-            case "verack":
-              VerAckReceived = true;
-              break;
-
-            case "version":
-              VersionMessageRemote = new VersionMessage(messageRemote.Payload);
-              VersionReceived = true;
-              await ProcessVersionMessageRemoteAsync().ConfigureAwait(false);
-              break;
-
-            case "reject":
-              RejectMessage rejectMessage = new RejectMessage(messageRemote.Payload);
-              throw new NetworkException(string.Format("Peer rejected handshake: '{0}'", rejectMessage.RejectionReason));
-
-            default:
-              throw new NetworkException(string.Format("Handshake aborted: Received improper message '{0}' during handshake session.", messageRemote.Command));
-          }
-        }
-      }
-      async Task ProcessVersionMessageRemoteAsync()
-      {
-        string rejectionReason = "";
-
-        if (VersionMessageRemote.ProtocolVersion < ProtocolVersion)
-        {
-          rejectionReason = string.Format("Outdated version '{0}', minimum expected version is '{1}'.",
-            VersionMessageRemote.ProtocolVersion, ProtocolVersion);
-        }
-
-        if (!((ServiceFlags)VersionMessageRemote.NetworkServicesLocal).HasFlag(NetworkServicesRemoteRequired))
-        {
-          rejectionReason = string.Format("Network services '{0}' do not meet requirement '{1}'.",
-            VersionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
-        }
-
-        if (VersionMessageRemote.UnixTimeSeconds - 
-          DateTimeOffset.UtcNow.ToUnixTimeSeconds() > 2 * 60 * 60)
-        {
-          rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.",
-            VersionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
-        }
-
-        if (VersionMessageRemote.Nonce == Nonce)
-        {
-          rejectionReason = string.Format("Duplicate Nonce '{0}'.", Nonce);
-        }
-
-        if (rejectionReason != "")
-        {
-          await SendMessage(
-            new RejectMessage(
-              "version",
-              RejectMessage.RejectCode.OBSOLETE,
-              rejectionReason)).ConfigureAwait(false);
-
-          throw new NetworkException("Remote peer rejected: " + rejectionReason);
-        }
-
-        await SendMessage(new VerAckMessage());
-      }
-
-
 
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
       {

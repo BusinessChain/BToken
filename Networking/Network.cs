@@ -59,39 +59,71 @@ namespace BToken.Networking
     {
       Parallel.For(
         0, COUNT_PEERS_OUTBOUND,
-        i => CreateOutboundPeer());
+        i => RunOutboundPeer());
 
       StartPeerInboundListener();
     }
 
 
 
-    async Task CreateOutboundPeer()
+    async Task RunOutboundPeer()
     {
-      while(true)
+      while (true)
       {
-        IPAddress iPAddress = await GetNodeAddress();
-        var iPEndPoint = new IPEndPoint(iPAddress, Port);
+        Peer peer;
 
-        var peer = new Peer(
-          iPEndPoint,
-          ConnectionType.OUTBOUND,
-          this);
-
-        if (await peer.TryConnect())
+        try
         {
+          IPAddress iPAddress = await GetNodeAddress();
+          var iPEndPoint = new IPEndPoint(iPAddress, Port);
+
+          peer = new Peer(
+            iPEndPoint,
+            ConnectionType.OUTBOUND,
+            this);
+        }
+        catch(Exception ex)
+        {
+          Console.WriteLine(
+            "{0} when creating outbound peer: {1}",
+            ex.GetType(),
+            ex.Message);
+
+          Task.Delay(5000);
+          continue;
+        }
+
+        lock (LOCK_Peers)
+        {
+          Peers.Add(peer);
+
+          Console.WriteLine(
+            "Created peer {0}, total {1} peers created.",
+            peer.IPEndPoint,
+            Peers.Count);
+        }
+
+        try
+        {
+          await peer.Connect();
+          await peer.Run();
+        }
+        catch(Exception ex)
+        {
+          peer.Dispose();
+
           lock (LOCK_Peers)
           {
-            Peers.Add(peer);
+            Peers.Remove(peer);
 
             Console.WriteLine(
-              "created peer {0}, total {1} peers",
-              peer.IPEndPoint,
+              "{0} with peer {1}: {2}\n" +
+              "total peers {3}",
+              ex.GetType(),
+              peer.GetIdentification(),
+              ex.Message,
               Peers.Count);
           }
-
-          peer.Start();
-          break;
         }
       }
     }
@@ -124,6 +156,88 @@ namespace BToken.Networking
       return iPAddress;
     }
 
+
+    async Task HandshakeAsync(Peer peer)
+    {
+      await peer.SendMessage(new VersionMessage());
+
+      CancellationToken cancellationToken =
+        new CancellationTokenSource(TimeSpan.FromSeconds(3))
+        .Token;
+
+      bool verAckReceived = false;
+      bool versionReceived = false;
+
+      while (!verAckReceived || !versionReceived)
+      {
+        NetworkMessage messageRemote =
+          await peer.ReceiveMessage(cancellationToken);
+
+        switch (messageRemote.Command)
+        {
+          case "verack":
+            verAckReceived = true;
+            break;
+
+          case "version":
+            var versionMessageRemote = new VersionMessage(messageRemote.Payload);
+            versionReceived = true;
+            await ProcessVersionMessageRemoteAsync(versionMessageRemote);
+            break;
+
+          case "reject":
+            RejectMessage rejectMessage = new RejectMessage(messageRemote.Payload);
+            throw new NetworkException(string.Format("Peer rejected handshake: '{0}'", rejectMessage.RejectionReason));
+
+          default:
+            throw new NetworkException(string.Format("Handshake aborted: Received improper message '{0}' during handshake session.", messageRemote.Command));
+        }
+      }
+    }
+    async Task ProcessVersionMessageRemoteAsync(VersionMessage versionMessage)
+    {
+      string rejectionReason = "";
+
+      if (versionMessage.ProtocolVersion < ProtocolVersion)
+      {
+        rejectionReason = string.Format("Outdated version '{0}', minimum expected version is '{1}'.",
+          versionMessage.ProtocolVersion, ProtocolVersion);
+      }
+
+      if (!((ServiceFlags)versionMessage.NetworkServicesLocal).HasFlag(NetworkServicesRemoteRequired))
+      {
+        rejectionReason = string.Format("Network services '{0}' do not meet requirement '{1}'.",
+          versionMessage.NetworkServicesLocal, NetworkServicesRemoteRequired);
+      }
+
+      if (versionMessage.UnixTimeSeconds -
+        DateTimeOffset.UtcNow.ToUnixTimeSeconds() > 2 * 60 * 60)
+      {
+        rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.",
+          versionMessage.NetworkServicesLocal, NetworkServicesRemoteRequired);
+      }
+
+      if (versionMessage.Nonce == Nonce)
+      {
+        rejectionReason = string.Format("Duplicate Nonce '{0}'.", Nonce);
+      }
+
+      if (rejectionReason != "")
+      {
+        await SendMessage(
+          new RejectMessage(
+            "version",
+            RejectMessage.RejectCode.OBSOLETE,
+            rejectionReason)).ConfigureAwait(false);
+
+        throw new NetworkException("Remote peer rejected: " + rejectionReason);
+      }
+
+      await SendMessage(new VerAckMessage());
+    }
+
+
+
     public async Task<INetworkChannel> DispatchPeerOutbound(
       CancellationToken cancellationToken)
     {
@@ -142,7 +256,9 @@ namespace BToken.Networking
         }
 
         Console.WriteLine("waiting for channel to dispatch.");
-        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+
+        await Task.Delay(1000, cancellationToken)
+          .ConfigureAwait(false);
 
       } while (true);
     }
@@ -174,7 +290,7 @@ namespace BToken.Networking
           Peers.Add(peer);
         }
 
-        peer.Start();
+        peer.Run();
       }
     }
 

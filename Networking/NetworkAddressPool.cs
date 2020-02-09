@@ -47,19 +47,10 @@ namespace BToken.Networking
             continue;
           }
 
-          try
-          {
-            IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
+          IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
 
-            SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList
-              .Where(a => a.AddressFamily == AddressFamily.InterNetwork));
-          }
-          catch(Exception ex)
-          {
-            Console.WriteLine("DNS seed error {0}: {1}",
-              dnsSeed, 
-              ex.Message);
-          }
+          SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList
+            .Where(a => a.AddressFamily == AddressFamily.InterNetwork));
         }
 
         if (SeedNodeIPAddresses.Count == 0)
