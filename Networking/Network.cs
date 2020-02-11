@@ -57,6 +57,8 @@ namespace BToken.Networking
 
     public void Start()
     {
+      // Mache das im Blockchain Objekt. Sobald mit einem Peer verbunden
+      // werden kann machen starten wir die Blockchain-Synchronisierung
       Parallel.For(
         0, COUNT_PEERS_OUTBOUND,
         i => RunOutboundPeer());
@@ -89,7 +91,7 @@ namespace BToken.Networking
             ex.GetType(),
             ex.Message);
 
-          Task.Delay(5000);
+          Task.Delay(10000);
           continue;
         }
 
@@ -128,6 +130,11 @@ namespace BToken.Networking
       }
     }
 
+    public async Task<INetworkChannel> CreateNetworkPeer()
+    {
+
+    }
+
     readonly object LOCK_IsAddressPoolLocked = new object();
     bool IsAddressPoolLocked;
     async Task<IPAddress> GetNodeAddress()
@@ -156,88 +163,7 @@ namespace BToken.Networking
       return iPAddress;
     }
 
-
-    async Task HandshakeAsync(Peer peer)
-    {
-      await peer.SendMessage(new VersionMessage());
-
-      CancellationToken cancellationToken =
-        new CancellationTokenSource(TimeSpan.FromSeconds(3))
-        .Token;
-
-      bool verAckReceived = false;
-      bool versionReceived = false;
-
-      while (!verAckReceived || !versionReceived)
-      {
-        NetworkMessage messageRemote =
-          await peer.ReceiveMessage(cancellationToken);
-
-        switch (messageRemote.Command)
-        {
-          case "verack":
-            verAckReceived = true;
-            break;
-
-          case "version":
-            var versionMessageRemote = new VersionMessage(messageRemote.Payload);
-            versionReceived = true;
-            await ProcessVersionMessageRemoteAsync(versionMessageRemote);
-            break;
-
-          case "reject":
-            RejectMessage rejectMessage = new RejectMessage(messageRemote.Payload);
-            throw new NetworkException(string.Format("Peer rejected handshake: '{0}'", rejectMessage.RejectionReason));
-
-          default:
-            throw new NetworkException(string.Format("Handshake aborted: Received improper message '{0}' during handshake session.", messageRemote.Command));
-        }
-      }
-    }
-    async Task ProcessVersionMessageRemoteAsync(VersionMessage versionMessage)
-    {
-      string rejectionReason = "";
-
-      if (versionMessage.ProtocolVersion < ProtocolVersion)
-      {
-        rejectionReason = string.Format("Outdated version '{0}', minimum expected version is '{1}'.",
-          versionMessage.ProtocolVersion, ProtocolVersion);
-      }
-
-      if (!((ServiceFlags)versionMessage.NetworkServicesLocal).HasFlag(NetworkServicesRemoteRequired))
-      {
-        rejectionReason = string.Format("Network services '{0}' do not meet requirement '{1}'.",
-          versionMessage.NetworkServicesLocal, NetworkServicesRemoteRequired);
-      }
-
-      if (versionMessage.UnixTimeSeconds -
-        DateTimeOffset.UtcNow.ToUnixTimeSeconds() > 2 * 60 * 60)
-      {
-        rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.",
-          versionMessage.NetworkServicesLocal, NetworkServicesRemoteRequired);
-      }
-
-      if (versionMessage.Nonce == Nonce)
-      {
-        rejectionReason = string.Format("Duplicate Nonce '{0}'.", Nonce);
-      }
-
-      if (rejectionReason != "")
-      {
-        await SendMessage(
-          new RejectMessage(
-            "version",
-            RejectMessage.RejectCode.OBSOLETE,
-            rejectionReason)).ConfigureAwait(false);
-
-        throw new NetworkException("Remote peer rejected: " + rejectionReason);
-      }
-
-      await SendMessage(new VerAckMessage());
-    }
-
-
-
+         
     public async Task<INetworkChannel> DispatchPeerOutbound(
       CancellationToken cancellationToken)
     {

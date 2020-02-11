@@ -68,11 +68,11 @@ namespace BToken.Chaining
     int HeightStaged;
     double AccumulatedDifficultyStaged;
 
-    public void StageFork(Header headerBranch)
+    public Header StageFork(ref Header headerBranch)
     {
       HeaderBranchStaged = headerBranch;
+      HeaderTipStaged = headerBranch;
 
-      HeaderTipStaged = HeaderBranchStaged;
       HeaderBranchRootStaged = HeaderTip;
       AccumulatedDifficultyStaged = AccumulatedDifficulty;
       HeightStaged = Height;
@@ -102,8 +102,8 @@ namespace BToken.Chaining
             string.Format(
               "Header {0} with unix time {1} " +
               "is older than median time past {2}.",
-              headerTipStaged.HeaderHash.ToHexString(),
-              DateTimeOffset.FromUnixTimeSeconds(headerTipStaged.UnixTimeSeconds),
+              HeaderTipStaged.HeaderHash.ToHexString(),
+              DateTimeOffset.FromUnixTimeSeconds(HeaderTipStaged.UnixTimeSeconds),
               DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
             ErrorCode.INVALID);
         }
@@ -118,8 +118,8 @@ namespace BToken.Chaining
             string.Format(
               "Attempt to insert header {0} at hight {1} " +
               "prior to checkpoint hight {2}",
-              headerTipStaged.HeaderHash.ToHexString(),
-              height,
+              HeaderTipStaged.HeaderHash.ToHexString(),
+              Height,
               hightHighestCheckpoint),
             ErrorCode.INVALID);
         }
@@ -131,8 +131,8 @@ namespace BToken.Chaining
           throw new ChainException(
             string.Format(
               "Header {0} at hight {1} not equal to checkpoint hash {2}",
-              headerTipStaged.HeaderHash.ToHexString(),
-              height,
+              HeaderTipStaged.HeaderHash.ToHexString(),
+              Height,
               checkpoint.Hash.ToHexString()),
             ErrorCode.INVALID);
         }
@@ -154,7 +154,9 @@ namespace BToken.Chaining
         
         if (AccumulatedDifficultyStaged > AccumulatedDifficulty)
         {
-          return;
+          headerBranch = HeaderTipStaged.HeaderNext;
+          HeaderTipStaged.HeaderNext = null;
+          return HeaderBranchStaged;
         }
 
         if(HeaderTipStaged.HeaderNext != null)

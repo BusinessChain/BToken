@@ -6,10 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.Diagnostics;
-using System.Collections.Concurrent;
 
 using BToken.Networking;
-
 
 
 namespace BToken.Chaining
@@ -60,8 +58,12 @@ namespace BToken.Chaining
     }
 
 
+
     
-    
+    object LOCK_Peers = new object();
+    List<BlockchainPeer> Peers = new List<BlockchainPeer>();
+    BlockchainPeer PeerSynchronizing;
+
     public async Task Start()
     {
       await HeaderArchive.Load(
@@ -69,41 +71,42 @@ namespace BToken.Chaining
       
       await UTXOArchive.Load(
         UTXOTable.Header.HeaderHash);
+
+
+      Parallel.For(
+        0, Network.COUNT_PEERS_OUTBOUND,
+        i => RunBlockchainPeer());
+
+      var cancellationPeerLoader = new CancellationTokenSource();
+
+      StartPeerLoading(cancellationPeerLoader.Token);
       
-      LoadPeers();
-
-
-      while(true)
+      while (true)
       {
-
-
-
-        lock(LOCK_PeersSynchronizationDone)
+        while (true)
         {
-          if (peersDone.Count < Network.COUNT_PEERS_OUTBOUND)
+          lock (LOCK_Peers)
           {
-            break;
+            if (Peers.Any())
+            {
+              PeerSynchronizing = Peers.ElementAt(0);
+              Peers.RemoveAt(0);
+              break;
+            }
           }
+
+          await Task.Delay(3000);
         }
-      }
-
-
-      for (int i = 0; i < Network.COUNT_PEERS_OUTBOUND; i += 1)
-      {
-        var peer =
-          new BlockchainPeer(
-            await Network.DispatchPeerOutbound(default)
-            .ConfigureAwait(false));
-
+        
         try
         {
-          Header headerBranch = await CreateHeaderBranch(peer);
+          Header headerBranch = await CreateHeaderBranch(PeerSynchronizing);
 
           if (headerBranch != null)
           {
             if (IsFork(headerBranch))
             {
-              Header headerFork = 
+              Header headerFork =
                 Headerchain.StageFork(ref headerBranch);
 
               UTXOTable.BackupToDisk();
@@ -112,14 +115,13 @@ namespace BToken.Chaining
               {
                 // Reset everything, prepare for reindexing
                 // If possible, try to use the UTXOImage
-                i = 0;
-                peer.Release();
-                continue;
+
+                throw new NotImplementedException();
               }
 
-              if(await UTXOSynchronization(
-                peer, 
-                headerBranch,
+              if (await UTXOSynchronization(
+                peer,
+                headerFork,
                 insertHeaders: false))
               {
                 Headerchain.CommitFork();
@@ -130,29 +132,65 @@ namespace BToken.Chaining
                 peer.ReportInvalid();
                 continue;
               }
-            }    
+            }
 
             await UTXOSynchronization(
-              peer, 
+              peer,
               headerBranch,
               insertHeaders: true);
           }
 
-          peerOld = peer;
+          lock (LOCK_PeersSynchronizationDone)
+          {
+            PeersSynchronizationDone.Add(PeerSynchronizing);
+
+            if(PeersSynchronizationDone.Count >= Network.COUNT_PEERS_OUTBOUND)
+            {
+              cancellationPeerLoader.Cancel();
+              break;
+            }
+          }
+
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
           Console.WriteLine(
             string.Format("Exception {0}: {1} when syncing with peer {2}",
             ex.GetType(),
             ex.Message,
-            peer.GetIdentification()));
+            PeerSynchronizing.GetIdentification()));
 
-          peer.ReportInvalid();
+          PeerSynchronizing.ReportInvalid();
         }
+
       }
 
+      await SignalPeerLoadingCompleted.Task;
+
+      Peers.ForEach(p => p.Release());
+      PeersSynchronizationDone.ForEach(p => p.Release());
+
       StartListener();
+    }
+
+
+    async Task RunBlockchainPeer()
+    {
+      while (true)
+      {
+        BlockchainPeer peer = new BlockchainPeer(
+          await Network.CreateNetworkPeer());
+        
+        lock (LOCK_Peers)
+        {
+          Peers.Add(peer);
+
+          Console.WriteLine(
+            "Created peer {0}, total {1} peers created.",
+            peer.GetIdentification(),
+            Peers.Count);
+        }
+      }
     }
 
     async Task<Header> CreateHeaderBranch(BlockchainPeer peer)
@@ -266,32 +304,57 @@ namespace BToken.Chaining
         Headerchain.HeaderTip.HeaderHash);
 
 
-    object LOCK_peers = new object();
-    List<BlockchainPeer> Peers = new List<BlockchainPeer>();
     object LOCK_PeersSynchronizationDone = new object();
-    List<BlockchainPeer> PeersSynchronizationDone = new List<BlockchainPeer>();
+    List<BlockchainPeer> PeersSynchronizationDone = 
+      new List<BlockchainPeer>();
+    TaskCompletionSource<object> SignalPeerLoadingCompleted =
+      new TaskCompletionSource<object>();
 
-    async Task LoadPeers()
+    async Task StartPeerLoading(CancellationToken cancellationToken)
     {
-      while (true)
+      bool isPeerRequested = false;
+
+      try
       {
-        var peer = new BlockchainPeer(
-          await Network.DispatchPeerOutbound(default));
-
-        lock (LOCK_peers)
+        while (true)
         {
-          Peers.Add(peer);
-        }
+          lock (LOCK_Peers)
+            lock (LOCK_PeersSynchronizationDone)
+            {
+              if (Peers.Count + PeersSynchronizationDone.Count
+                < Network.COUNT_PEERS_OUTBOUND)
+              {
+                isPeerRequested = true;
+              }
+            }
 
-        lock (LOCK_PeersSynchronizationDone)
-        {
-          if (PeersSynchronizationDone.Count == Network.COUNT_PEERS_OUTBOUND)
+          if(isPeerRequested)
           {
-            return;
+            var peer = new BlockchainPeer(
+              await Network.DispatchPeerOutbound(cancellationToken));
+
+            lock (LOCK_Peers)
+            {
+              Peers.Add(peer);
+            }
+          }
+          else
+          {
+            await Task.Delay(3000, cancellationToken);
           }
         }
       }
+      catch(TaskCanceledException)
+      {
+        SignalPeerLoadingCompleted.SetResult(null);
+      }
     }
+
+    bool TryRollBackUTXO(byte[] headerHash)
+    {
+      return true;
+    }
+
 
 
     Header HeaderLoad;

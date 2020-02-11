@@ -76,12 +76,18 @@ namespace BToken.Networking
           TcpClient.GetStream());
       }
 
+      
       public async Task Run()
       {
         await HandshakeAsync();
 
         Release();
 
+
+        // Will that throw an exception when in some Application session 
+        // an exception is thrown. Or is it, that in the app always a timeout
+        // occurs when here an exception is thrown. Can it be that both the app and 
+        // the network attempt to renew a peer in case of an exception.
         await ProcessNetworkMessages();
       }
 
@@ -91,8 +97,7 @@ namespace BToken.Networking
         TcpClient.Dispose();
       }
 
-
-
+      
 
       async Task ProcessNetworkMessages()
       {
@@ -278,7 +283,82 @@ namespace BToken.Networking
           IsDispatched = false;
         }
       }
-      
+
+      async Task HandshakeAsync()
+      {
+        await NetworkMessageStreamer.WriteAsync(new VersionMessage());
+
+        CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(3))
+          .Token;
+
+        bool verAckReceived = false;
+        bool versionReceived = false;
+
+        while (!verAckReceived || !versionReceived)
+        {
+          NetworkMessage messageRemote =
+            await NetworkMessageStreamer.ReadAsync(cancellationToken);
+
+          switch (messageRemote.Command)
+          {
+            case "verack":
+              verAckReceived = true;
+              break;
+
+            case "version":
+              var versionMessageRemote = new VersionMessage(messageRemote.Payload);
+
+              versionReceived = true;
+              string rejectionReason = "";
+
+              if (versionMessageRemote.ProtocolVersion < ProtocolVersion)
+              {
+                rejectionReason = string.Format("Outdated version '{0}', minimum expected version is '{1}'.",
+                  versionMessageRemote.ProtocolVersion, ProtocolVersion);
+              }
+
+              if (!((ServiceFlags)versionMessageRemote.NetworkServicesLocal).HasFlag(NetworkServicesRemoteRequired))
+              {
+                rejectionReason = string.Format("Network services '{0}' do not meet requirement '{1}'.",
+                  versionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
+              }
+
+              if (versionMessageRemote.UnixTimeSeconds -
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds() > 2 * 60 * 60)
+              {
+                rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.",
+                  versionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
+              }
+
+              if (versionMessageRemote.Nonce == Nonce)
+              {
+                rejectionReason = string.Format("Duplicate Nonce '{0}'.", Nonce);
+              }
+
+              if (rejectionReason != "")
+              {
+                await SendMessage(
+                  new RejectMessage(
+                    "version",
+                    RejectMessage.RejectCode.OBSOLETE,
+                    rejectionReason)).ConfigureAwait(false);
+
+                throw new NetworkException("Remote peer rejected: " + rejectionReason);
+              }
+
+              await SendMessage(new VerAckMessage());
+              break;
+
+            case "reject":
+              RejectMessage rejectMessage = new RejectMessage(messageRemote.Payload);
+              throw new NetworkException(string.Format("Peer rejected handshake: '{0}'", rejectMessage.RejectionReason));
+
+            default:
+              throw new NetworkException(string.Format("Handshake aborted: Received improper message '{0}' during handshake session.", messageRemote.Command));
+          }
+        }
+      }
+
 
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
       {
@@ -303,19 +383,9 @@ namespace BToken.Networking
       }
 
       public async Task<NetworkMessage> ReceiveMessage(
-        CancellationToken cancellationToken,
-        string messageType)
+        CancellationToken cancellationToken)
       {
-        while (true)
-        {
-          NetworkMessage networkMessage =
-            await ApplicationMessages.ReceiveAsync(cancellationToken);
-
-          if (networkMessage.Command == messageType)
-          {
-            return networkMessage;
-          }
-        }
+        return await ApplicationMessages.ReceiveAsync(cancellationToken);
       }
 
       public async Task PingAsync()

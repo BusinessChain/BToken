@@ -15,7 +15,7 @@ namespace BToken.Chaining
   {
     public class BlockchainPeer
     {
-      Network.INetworkChannel NetworkChannel;
+      Network.INetworkChannel NetworkPeer;
 
       const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
 
@@ -23,23 +23,31 @@ namespace BToken.Chaining
 
       public BlockchainPeer(Network.INetworkChannel networkChannel)
       {
-        NetworkChannel = networkChannel;
+        NetworkPeer = networkChannel;
       }
 
 
       public async Task<Headerchain.HeaderContainer> GetHeaders(
         IEnumerable<byte[]> locatorHashes)
       {
-        await NetworkChannel.SendMessage(
+        await NetworkPeer.SendMessage(
           new GetHeadersMessage(locatorHashes));
 
         int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
         CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
 
-        byte[] headerBytes = 
-          (await NetworkChannel.ReceiveMessage(
-            cancellation.Token,
-            "headers")).Payload;
+        byte[] headerBytes;
+        while (true)
+        {
+          NetworkMessage networkMessage =
+            await NetworkPeer.ReceiveMessage(cancellation.Token);
+
+          if (networkMessage.Command == "headers")
+          {
+            headerBytes = networkMessage.Payload;
+            break;
+          }
+        }
 
         var headerContainer = 
           new Headerchain.HeaderContainer(headerBytes);
@@ -70,7 +78,7 @@ namespace BToken.Chaining
           }
         }
 
-        await NetworkChannel.SendMessage(
+        await NetworkPeer.SendMessage(
           new GetDataMessage(
             hashesRequested
             .Select(h => new Inventory(
@@ -104,7 +112,7 @@ namespace BToken.Chaining
         while (true)
         {
           NetworkMessage networkMessage =
-            await NetworkChannel
+            await NetworkPeer
             .ReceiveApplicationMessage(cancellationToken)
             .ConfigureAwait(false);
 
@@ -124,23 +132,23 @@ namespace BToken.Chaining
       }
       public void ReportInvalid()
       {
-        NetworkChannel.ReportInvalid();
+        NetworkPeer.ReportInvalid();
       }
 
       public string GetIdentification()
       {
-        return NetworkChannel.GetIdentification();
+        return NetworkPeer.GetIdentification();
       }
 
 
       public void Release()
       {
-        NetworkChannel.Release();
+        NetworkPeer.Release();
       }
 
       public void Dispose()
       {
-        NetworkChannel.Dispose();
+        NetworkPeer.Dispose();
       }
     }
   }

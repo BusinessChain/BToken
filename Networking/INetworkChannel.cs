@@ -22,8 +22,7 @@ namespace BToken.Networking
       Task SendMessage(NetworkMessage networkMessage);
 
       Task<NetworkMessage> ReceiveMessage(
-          CancellationToken cancellationToken,
-          string messageType);
+          CancellationToken cancellationToken);
 
       void Release();
 
