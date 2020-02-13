@@ -38,11 +38,11 @@ namespace BToken.Networking
 
 
       public Peer(
-        IPEndPoint iPEndPoint,
+        IPAddress iPAddress,
         ConnectionType connectionType,
         Network network)
       {
-        IPEndPoint = iPEndPoint;
+        IPEndPoint = new IPEndPoint(iPAddress, Port);
         ConnectionType = connectionType;
         Network = network;
       }
@@ -74,12 +74,13 @@ namespace BToken.Networking
 
         NetworkMessageStreamer = new MessageStreamer(
           TcpClient.GetStream());
+
+        await HandshakeAsync();
       }
 
       
       public async Task Run()
       {
-        await HandshakeAsync();
 
         Release();
 
@@ -91,59 +92,67 @@ namespace BToken.Networking
         await ProcessNetworkMessages();
       }
 
+      readonly object LOCK_FlagIsDisposed;
+      bool FlagIsDisposed;
 
       public void Dispose()
       {
+        lock (LOCK_FlagIsDisposed)
+        {
+          FlagIsDisposed = true;
+        }
+
         TcpClient.Dispose();
       }
 
-      
-
-      async Task ProcessNetworkMessages()
+      public bool IsDisposed()
       {
-        while (true)
+        lock (LOCK_FlagIsDisposed)
         {
-          NetworkMessage message = await NetworkMessageStreamer
-            .ReadAsync(default).ConfigureAwait(false);
+          return FlagIsDisposed;
+        }
+      }
 
-          switch (message.Command)
+
+
+      public async Task ProcessNetworkMessages()
+      {
+        try
+        {
+          while (true)
           {
-            case "ping":
-              Task processPingMessageTask = ProcessPingMessageAsync(message);
-              break;
+            NetworkMessage message = await NetworkMessageStreamer
+              .ReadAsync(default).ConfigureAwait(false);
 
-            case "addr":
-              ProcessAddressMessage(message);
-              break;
+            switch (message.Command)
+            {
+              case "ping":
+                Task processPingMessageTask = ProcessPingMessageAsync(message);
+                break;
 
-            case "sendheaders":
-              Task processSendHeadersMessageTask = ProcessSendHeadersMessageAsync(message);
-              break;
+              case "addr":
+                ProcessAddressMessage(message);
+                break;
 
-            case "feefilter":
-              ProcessFeeFilterMessage(message);
-              break;
+              case "sendheaders":
+                Task processSendHeadersMessageTask = ProcessSendHeadersMessageAsync(message);
+                break;
 
-            default:
-              lock (LOCK_IsDispatched)
-              {
-                if (IsDispatched)
-                {
-                  ApplicationMessages.Post(message);
-                  break;
-                }
-                else
-                {
-                  IsDispatched = true;
-                }
-              }
+              case "feefilter":
+                ProcessFeeFilterMessage(message);
+                break;
 
-              await ProcessRequest(message);
-
-              Release();
-
-              break;
+              default:
+                ApplicationMessages.Post(message);
+                break;
+            }
           }
+        }
+        catch
+        {
+          Dispose();
+
+          // Blacklist this peer
         }
       }
       

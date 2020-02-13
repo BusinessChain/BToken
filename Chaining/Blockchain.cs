@@ -14,6 +14,8 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
+    public const int COUNT_PEERS_MAX = 4;
+
     Headerchain Headerchain;
     DataArchiver HeaderArchive;
     
@@ -62,7 +64,6 @@ namespace BToken.Chaining
     
     object LOCK_Peers = new object();
     List<BlockchainPeer> Peers = new List<BlockchainPeer>();
-    BlockchainPeer PeerSynchronizing;
 
     public async Task Start()
     {
@@ -72,126 +73,137 @@ namespace BToken.Chaining
       await UTXOArchive.Load(
         UTXOTable.Header.HeaderHash);
 
-
-      Parallel.For(
-        0, Network.COUNT_PEERS_OUTBOUND,
-        i => RunBlockchainPeer());
-
-      var cancellationPeerLoader = new CancellationTokenSource();
-
-      StartPeerLoading(cancellationPeerLoader.Token);
-      
       while (true)
       {
-        while (true)
+        bool flagAddPeer = false;
+
+        lock (LOCK_Peers)
+        {
+          Peers.RemoveAll(p => p.IsDisposed());
+
+          if (
+            Peers.Count <
+            (COUNT_PEERS_MAX - (IsAnyPeerSynchronizing ? 1 : 0)))
+          {
+            flagAddPeer = true;
+          }
+        }
+
+        if (flagAddPeer)
+        {
+          var peer = new BlockchainPeer(
+            await Network.DispatchPeerOutbound());
+
+          lock (LOCK_Peers)
+          {
+            Peers.Add(peer);
+          }
+        }
+
+        BlockchainPeer peerSynchronizing;
+
+        if (!IsAnyPeerSynchronizing)
         {
           lock (LOCK_Peers)
           {
-            if (Peers.Any())
+            peerSynchronizing = Peers.Find(p => !p.IsSynchronized);
+
+            if (peerSynchronizing != null)
             {
-              PeerSynchronizing = Peers.ElementAt(0);
-              Peers.RemoveAt(0);
-              break;
+              Peers.Remove(peerSynchronizing);
             }
           }
 
-          await Task.Delay(3000);
-        }
-        
-        try
-        {
-          Header headerBranch = await CreateHeaderBranch(PeerSynchronizing);
-
-          if (headerBranch != null)
+          if (peerSynchronizing != null)
           {
-            if (IsFork(headerBranch))
-            {
-              Header headerFork =
-                Headerchain.StageFork(ref headerBranch);
-
-              UTXOTable.BackupToDisk();
-
-              if (!TryRollBackUTXO(headerFork.HashPrevious))
-              {
-                // Reset everything, prepare for reindexing
-                // If possible, try to use the UTXOImage
-
-                throw new NotImplementedException();
-              }
-
-              if (await UTXOSynchronization(
-                peer,
-                headerFork,
-                insertHeaders: false))
-              {
-                Headerchain.CommitFork();
-              }
-              else
-              {
-                UTXOTable.RestoreFromDisk();
-                peer.ReportInvalid();
-                continue;
-              }
-            }
-
-            await UTXOSynchronization(
-              peer,
-              headerBranch,
-              insertHeaders: true);
+            IsAnyPeerSynchronizing = true;
+            SynchronizePeer(peerSynchronizing);
           }
-
-          lock (LOCK_PeersSynchronizationDone)
-          {
-            PeersSynchronizationDone.Add(PeerSynchronizing);
-
-            if(PeersSynchronizationDone.Count >= Network.COUNT_PEERS_OUTBOUND)
-            {
-              cancellationPeerLoader.Cancel();
-              break;
-            }
-          }
-
-        }
-        catch (Exception ex)
-        {
-          Console.WriteLine(
-            string.Format("Exception {0}: {1} when syncing with peer {2}",
-            ex.GetType(),
-            ex.Message,
-            PeerSynchronizing.GetIdentification()));
-
-          PeerSynchronizing.ReportInvalid();
         }
 
+        await Task.Delay(5000);
       }
-
-      await SignalPeerLoadingCompleted.Task;
-
-      Peers.ForEach(p => p.Release());
-      PeersSynchronizationDone.ForEach(p => p.Release());
-
-      StartListener();
     }
 
+    bool IsAnyPeerSynchronizing;
 
-    async Task RunBlockchainPeer()
+
+    async Task SynchronizePeer(BlockchainPeer peerSynchronizing)
     {
-      while (true)
+      try
       {
-        BlockchainPeer peer = new BlockchainPeer(
-          await Network.CreateNetworkPeer());
-        
+        Header headerBranch = await CreateHeaderBranch(peerSynchronizing);
+
+        if (headerBranch != null)
+        {
+          if (IsFork(headerBranch))
+          {
+            Header headerFork =
+              Headerchain.StageFork(ref headerBranch);
+
+            UTXOTable.BackupToDisk();
+
+            if (!TryRollBackUTXO(headerFork.HashPrevious))
+            {
+              // Reset everything, prepare for reindexing
+              // If possible, try to use the UTXOImage
+
+              throw new NotImplementedException();
+            }
+
+            if (await UTXOSynchronization(
+              peerSynchronizing,
+              headerFork,
+              insertHeaders: false))
+            {
+              Headerchain.CommitFork();
+            }
+            else
+            {
+              UTXOTable.RestoreFromDisk();
+
+              peerSynchronizing.ReportInvalid();
+
+              lock (LOCK_Peers)
+              {
+                IsAnyPeerSynchronizing = false;
+              }
+
+              return;
+            }
+          }
+
+          await UTXOSynchronization(
+            peerSynchronizing,
+            headerBranch,
+            insertHeaders: true);
+        }
+
+        peerSynchronizing.IsSynchronized = true;
+
         lock (LOCK_Peers)
         {
-          Peers.Add(peer);
+          Peers.Add(peerSynchronizing);
+          IsAnyPeerSynchronizing = false;
+        }
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine(
+          string.Format("Exception {0}: {1} when syncing with peer {2}",
+          ex.GetType(),
+          ex.Message,
+          peerSynchronizing.GetIdentification()));
 
-          Console.WriteLine(
-            "Created peer {0}, total {1} peers created.",
-            peer.GetIdentification(),
-            Peers.Count);
+        peerSynchronizing.ReportInvalid();
+
+        lock (LOCK_Peers)
+        {
+          IsAnyPeerSynchronizing = false;
         }
       }
     }
+
 
     async Task<Header> CreateHeaderBranch(BlockchainPeer peer)
     {
@@ -303,53 +315,6 @@ namespace BToken.Chaining
       !headerBranch.HashPrevious.IsEqual(
         Headerchain.HeaderTip.HeaderHash);
 
-
-    object LOCK_PeersSynchronizationDone = new object();
-    List<BlockchainPeer> PeersSynchronizationDone = 
-      new List<BlockchainPeer>();
-    TaskCompletionSource<object> SignalPeerLoadingCompleted =
-      new TaskCompletionSource<object>();
-
-    async Task StartPeerLoading(CancellationToken cancellationToken)
-    {
-      bool isPeerRequested = false;
-
-      try
-      {
-        while (true)
-        {
-          lock (LOCK_Peers)
-            lock (LOCK_PeersSynchronizationDone)
-            {
-              if (Peers.Count + PeersSynchronizationDone.Count
-                < Network.COUNT_PEERS_OUTBOUND)
-              {
-                isPeerRequested = true;
-              }
-            }
-
-          if(isPeerRequested)
-          {
-            var peer = new BlockchainPeer(
-              await Network.DispatchPeerOutbound(cancellationToken));
-
-            lock (LOCK_Peers)
-            {
-              Peers.Add(peer);
-            }
-          }
-          else
-          {
-            await Task.Delay(3000, cancellationToken);
-          }
-        }
-      }
-      catch(TaskCanceledException)
-      {
-        SignalPeerLoadingCompleted.SetResult(null);
-      }
-    }
-
     bool TryRollBackUTXO(byte[] headerHash)
     {
       return true;
@@ -370,11 +335,11 @@ namespace BToken.Chaining
       HeaderLoad = headerBranch;
 
       Task[] tasksUTXOSyncSession = 
-        new Task[Network.COUNT_PEERS_OUTBOUND];
+        new Task[COUNT_PEERS_MAX];
       
       tasksUTXOSyncSession[0] = RunUTXOSyncSession(peer);
 
-      for (int i = 1; i < Network.COUNT_PEERS_OUTBOUND; i += 1)
+      for (int i = 1; i < COUNT_PEERS_MAX; i += 1)
       {
         peer = new BlockchainPeer(
           await Network.DispatchPeerOutbound(default));

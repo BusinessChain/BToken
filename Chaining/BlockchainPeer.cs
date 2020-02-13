@@ -17,6 +17,8 @@ namespace BToken.Chaining
     {
       Network.INetworkChannel NetworkPeer;
 
+      public bool IsSynchronized;
+
       const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
 
 
@@ -149,6 +151,11 @@ namespace BToken.Chaining
       public void Dispose()
       {
         NetworkPeer.Dispose();
+      }
+
+      public bool IsDisposed()
+      {
+        return NetworkPeer.IsDisposed();
       }
     }
   }

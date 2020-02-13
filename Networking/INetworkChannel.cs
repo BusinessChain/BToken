@@ -30,6 +30,8 @@ namespace BToken.Networking
 
       void ReportDuplicate();
 
+      bool IsDisposed();
+
       /// <summary>
       /// Reports and also disposes a peer.
       /// </summary>
