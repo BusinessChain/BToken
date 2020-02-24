@@ -23,9 +23,7 @@ namespace BToken.Networking
 
       Task<NetworkMessage> ReceiveMessage(
           CancellationToken cancellationToken);
-
-      void Release();
-
+      
       string GetIdentification();
 
       void ReportDuplicate();

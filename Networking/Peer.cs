@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Chaining;
+using BToken.Blockchain;
 
 namespace BToken.Networking
 {
@@ -151,8 +151,6 @@ namespace BToken.Networking
         catch
         {
           Dispose();
-
-          // Blacklist this peer
         }
       }
       
@@ -416,26 +414,6 @@ namespace BToken.Networking
             hashes.Select(h => new Inventory(
               InventoryType.MSG_BLOCK, h))
               .ToList()));
-      }
-
-      public async Task<byte[]> ReceiveBlock(CancellationToken cancellationToken)
-      {
-        var cancellation = new CancellationTokenSource(
-          TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-
-        while (true)
-        {
-          NetworkMessage networkMessage = 
-            await ApplicationMessages.ReceiveAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-          if (networkMessage.Command != "block")
-          {
-            continue;
-          }
-
-          return networkMessage.Payload;
-        }
       }
 
       public string GetIdentification()

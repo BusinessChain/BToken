@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 
-using BToken.Chaining;
+using BToken.Blockchain;
 using BToken.Networking;
 
 // Test

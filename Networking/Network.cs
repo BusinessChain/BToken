@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Chaining;
+using BToken.Blockchain;
 
 namespace BToken.Networking
 {
@@ -73,6 +73,7 @@ namespace BToken.Networking
         }
         catch
         {
+          Console.WriteLine("Can not create peer: No node address available.");
           Task.Delay(10000);
           continue;
         }
