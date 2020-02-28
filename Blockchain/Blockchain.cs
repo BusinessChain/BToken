@@ -80,7 +80,7 @@ namespace BToken.Blockchain
 
         lock (LOCK_Peers)
         {
-          Peers.RemoveAll(p => p.IsDisposed());
+          Peers.RemoveAll(p => p.IsStatusDisposed());
 
           if (
             Peers.Count <
@@ -223,18 +223,18 @@ namespace BToken.Blockchain
       {
         lock (LOCK_Peers)
         {
-          if(Peers.All(p => p.IsCompleted()))
+          if(Peers.All(p => p.IsStatusCompleted()))
           {
-            Peers.ForEach(p => p.SetIdle());
+            Peers.ForEach(p => p.SetStatusIdle());
 
             return IsUTXOSyncSessionsSuccess;
           }
 
-          peers = Peers.Where(p => p.IsIdle())
+          peers = Peers.Where(p => p.IsStatusIdle())
             .ToList();
         }
         
-        peers.ForEach(p => p.SetBusy());
+        peers.ForEach(p => p.SetStatusBusy());
         peers.Select(p => RunUTXOSyncSession(p)).ToArray();
 
         await Task.Delay(1000);
@@ -243,178 +243,92 @@ namespace BToken.Blockchain
 
 
     const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 2;
-    public BufferBlock<DataBatch> QueueUTXOBatchInsertion =
-      new BufferBlock<DataBatch>(
-        new DataflowBlockOptions { BoundedCapacity = 10 });
-    readonly object LOCK_QueueBatchesCanceled = new object();
-    List<DataBatch> QueueBatchesCanceled = new List<DataBatch>();
+    readonly object LOCK_QueuePeersWithBatches = new object();
+    Dictionary<int, BlockchainPeer> QueuePeersWithBatches =
+      new Dictionary<int, BlockchainPeer>();
     readonly object LOCK_BatchIndex = new object();
     int BatchIndex;
 
-    async Task RunUTXOSyncSession(BlockchainPeer peer)
+    async Task RunUTXOSyncSession()
     {
       Stopwatch stopwatchDownload = new Stopwatch();
       int countBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-      DataBatch uTXOBatch = null;
+
+      BlockchainPeer peer = null;
+      DataBatch uTXOBatch = LoadBatch(countBlocks);
 
       while (true)
       {
-        while (true)
+        if (uTXOBatch == null)
         {
-          lock (LOCK_IsUTXOSyncSessionsSuccess)
+          if(peer != null)
           {
-            if (IsUTXOSyncSessionsSuccess)
+            peer.SetStatusIdle();
+          }
+
+          return;
+        }
+
+        while (peer == null)
+        {
+          lock (LOCK_Peers)
+          {
+            if(Peers.All(p => p.IsStatusCompleted()))
             {
-              peer.SetCompleted();
               return;
             }
-          }
 
-          lock (LOCK_QueueBatchesCanceled)
-          {
-            if (QueueBatchesCanceled.Any())
+            peer =
+              Peers.Find(p => p.IsStatusIdle()) ??
+              Peers.Find(p => p.IsStatusAwaitingInsertion());
+
+            if(peer != null)
             {
-              uTXOBatch = QueueBatchesCanceled
-                .Find(b => b.Index == QueueBatchesCanceled
-                .Min(c => c.Index));
-
-              QueueBatchesCanceled.Remove(uTXOBatch);
+              peer.SetStatusBusy();
+              break;
             }
-          }
-
-          if (uTXOBatch == null)
-          {
-            LoadBatch(
-              countBlocks,
-              ref uTXOBatch);
-          }
-          
-          if (uTXOBatch != null)
-          {
-            peer.UTXOBatchDownloadNext = uTXOBatch;
-            break;
           }
 
           await Task.Delay(1000);
         }
 
-        try
+        await peer.DownloadBlocks(uTXOBatch);
+
+        if(uTXOBatch.CountDataContainerDownloaded == 0)
         {
-          await peer.DownloadBlocks();
+          peer = null;
+          continue;
         }
-        catch
+        
+        lock (LOCK_BatchIndex)
         {
-          lock (LOCK_QueueBatchesCanceled)
+          if(uTXOBatch.Index != BatchIndex)
           {
-            QueueBatchesCanceled.Add(uTXOBatch);
-          }
+            peer.UTXOBatchesDownloaded.Insert(0, uTXOBatch);
 
-          peer.Dispose();
-
-          return;
-        }
-
-        while (true)
-        {
-          lock (LOCK_BatchIndex)
-          {
-            uTXOBatch = peer.UTXOBatchesDownloaded
-              .Find(b => b.Index == BatchIndex);
-          }
-
-          if (uTXOBatch != null)
-          {
-            peer.UTXOBatchesDownloaded.Remove(uTXOBatch);
-            break;
-          }
-
-          // Wenn ein UTXOBatch canceled wird muss dort gerade auf einen
-          // neuen peer gewartet und ihm der batch übergeben werden
-          // in der Liste Peers kann ein peer gezogen werden wenn er Status Idle 
-          // oder Awaiting_insertion hat. Es braucht kein BatchCanceledQueue.
-          // Wenn Insertion schief läuft, werden alle Prozesse abgebrochen
-
-          //lock
-          QueuePeersWithDownladedBatches.Add(uTXO.Index, peer);
-          peer.SetAwaitingInsertion();
-          return;
-
-
-
-
-
-          DataBatch batchCanceled = null;
-
-          if(!peer.IsDisposed())
-          {
-            lock (LOCK_QueueBatchesCanceled)
+            lock (LOCK_QueuePeersWithBatches)
             {
-              if (QueueBatchesCanceled.Any())
-              {
-                int batchIndexCanceledMin = QueueBatchesCanceled
-                  .Min(b => b.Index);
-
-                if (batchIndexCanceledMin < peer.UTXOBatchesDownloaded
-                  .Min(b => b.Index))
-                {
-                  batchCanceled = QueueBatchesCanceled
-                    .Find(b => b.Index == batchIndexCanceledMin);
-
-                  QueueBatchesCanceled.Remove(batchCanceled);
-
-                  peer.UTXOBatchesDownloaded.Add(batchCanceled);
-                }
-              }
+              QueuePeersWithBatches.Add(
+                uTXOBatch.Index,
+                peer);
             }
 
-            if (batchCanceled != null)
-            {
-              peer.UTXOBatchDownloadNext = batchCanceled;
-
-              try
-              {
-                await peer.DownloadBlocks();
-              }
-              catch
-              {
-                lock (LOCK_QueueBatchesCanceled)
-                {
-                  QueueBatchesCanceled.Add(batchCanceled);
-                }
-
-                peer.Dispose();
-              }
-
-              continue;
-            }
-          }
-
-          // Das wegbringen, peers mit batches in einem Dict speichern, 
-          // das das ein peer immer den nächsten peer hohlen kann der dran ist.
-          Task.Delay(100);
-        }
-
-        foreach (UTXOTable.BlockContainer blockContainer in
-          uTXOBatch.DataContainers)
-        {
-          blockContainer.Index = ArchiveIndexStore;
-
-          if(blockContainer.Buffer == null)
-          {
-            uTXOBatch.DataContainers = uTXOBatch.DataContainers.Skip(
-              uTXOBatch.DataContainers.IndexOf(blockContainer))
-              .ToList();
-
-            lock (LOCK_QueueBatchesCanceled)
-            {
-              QueueBatchesCanceled.Add(uTXOBatch);
-            }
-
-            peer.SetCompleted();
+            peer.SetStatusAwaitingInsertion();
 
             return;
           }
+        }
 
+      LoopInsertUTXOBatch:
+        
+        for (
+          int i = 0; 
+          i < uTXOBatch.CountDataContainerDownloaded; 
+          i += 1)
+        {
+          var blockContainer =
+            (UTXOTable.BlockContainer)uTXOBatch.DataContainers[i];
+          
           try
           {
             UTXOTable.InsertBlockContainer(blockContainer);
@@ -426,44 +340,35 @@ namespace BToken.Blockchain
               blockContainer.Header.HeaderHash.ToHexString(),
               ex.Message);
 
-            lock (LOCK_QueueBatchesCanceled)
-            {
-              QueueBatchesCanceled.Add(uTXOBatch);
-            }
-
-            peer.Dispose();
-
-            //ArchiveContainers();
-
-            return;
-          }
-          
-          Containers.Add(blockContainer);
-          CountItems += blockContainer.CountItems;
-
-          if (CountItems >= SizeBatchArchive)
-          {
-            ArchiveContainers();
-
-            Containers = new List<DataContainer>();
-            CountItems = 0;
-
-            ArchiveImage(ArchiveIndexStore);
-
-            ArchiveIndexStore += 1;
+            throw ex;
           }
         }
         
+
+        if (countContainersInserted < uTXOBatch.DataContainers.Count)
+        {
+          uTXOBatch.DataContainers = uTXOBatch.DataContainers
+            .Skip(countContainersInserted)
+            .ToList();
+
+          uTXOBatch.CountItems = 0;
+
+          peer.SetStatusCompleted();
+          peer = null;
+
+          continue;
+        }
+
         if (uTXOBatch.IsCancellationBatch)
         {
           ArchiveContainers();
-          
+
           lock (LOCK_IsUTXOSyncSessionsSuccess)
           {
             IsUTXOSyncSessionsSuccess = true;
           }
 
-          peer.SetCompleted();
+          peer.SetStatusCompleted();
 
           return;
         }
@@ -471,28 +376,70 @@ namespace BToken.Blockchain
         lock (LOCK_BatchIndex)
         {
           BatchIndex += 1;
+
+          uTXOBatch = peer.UTXOBatchesDownloaded
+            .Find(b => b.Index == BatchIndex);
         }
 
+        if (uTXOBatch != null)
+        {
+          goto LoopInsertUTXOBatch;
+        }
+
+        lock (LOCK_QueuePeersWithBatches)
+        {
+          if (QueuePeersWithBatches.TryGetValue(
+            BatchIndex,
+            out peer))
+          {
+            uTXOBatch = peer.UTXOBatchesDownloaded
+              .Find(b => b.Index == BatchIndex);
+
+            QueuePeersWithBatches.Remove(BatchIndex);
+
+            goto LoopInsertUTXOBatch;
+          }
+        }
+                
         CalculateNewCountBlocks(
           ref countBlocks,
           stopwatchDownload.ElapsedMilliseconds);
-      }
-    }       
 
+        uTXOBatch = LoadBatch(countBlocks);
+      }
+    }
+
+
+    //blockContainer.Index = ArchiveIndexStore;
+
+    //Containers.Add(blockContainer);
+    //CountItems += blockContainer.CountItems;
+
+    //if (CountItems >= SizeBatchArchive)
+    //{
+    //  ArchiveContainers();
+
+    //  Containers = new List<DataContainer>();
+    //  CountItems = 0;
+
+    //  ArchiveImage(ArchiveIndexStore);
+
+    //  ArchiveIndexStore += 1;
+    //}
 
     int IndexLoad;
     readonly object LOCK_LoadBatch = new object();
 
-    void LoadBatch(int countHeaders, ref DataBatch uTXOBatch)
+    DataBatch LoadBatch(int countHeaders)
     {
       lock (LOCK_LoadBatch)
       {
         if (HeaderLoad.HeaderNext == null)
         {
-          uTXOBatch = null;
+          return null;
         }
 
-        uTXOBatch = new DataBatch(IndexLoad++);
+        var uTXOBatch = new DataBatch(IndexLoad++);
 
         for (int i = 0; i < countHeaders; i += 1)
         {
@@ -513,6 +460,8 @@ namespace BToken.Blockchain
 
         uTXOBatch.IsCancellationBatch =
           HeaderLoad.HeaderNext == null;
+
+        return uTXOBatch;
       }
     }
 

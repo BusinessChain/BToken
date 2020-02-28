@@ -11,11 +11,12 @@ namespace BToken.Blockchain
   public class DataBatch
   {
     public int Index;
+    public int CountDataContainerDownloaded;
     public List<DataContainer> DataContainers =
       new List<DataContainer>();
     public int CountItems;
     public bool IsCancellationBatch;
-    
+
 
     public DataBatch()
     { }

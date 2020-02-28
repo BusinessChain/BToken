@@ -17,6 +17,7 @@ namespace BToken.Blockchain
     {
       IDLE,
       BUSY,
+      AWAITING_INSERTION,
       COMPLETED,
       DISPOSED
     }
@@ -76,41 +77,58 @@ namespace BToken.Blockchain
     }
 
 
-    public async Task DownloadBlocks()
+    public async Task DownloadBlocks(DataBatch uTXOBatch)
     {
+      uTXOBatch.CountItems = 0;
+      uTXOBatch.CountDataContainerDownloaded = 0;
+
       try
       {
         await RequestBlocks(
-          UTXOBatchDownloadNext.DataContainers
+          uTXOBatch.DataContainers
           .Select(container => ((UTXOTable.BlockContainer)container)
           .Header.HeaderHash));
-
+        
         var cancellationDownloadBlocks =
-          new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+          new CancellationTokenSource(
+            TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
 
         foreach (UTXOTable.BlockContainer blockContainer in
-          UTXOBatchDownloadNext.DataContainers)
+          uTXOBatch.DataContainers)
         {
-          blockContainer.Buffer =
-            await ReceiveBlock(cancellationDownloadBlocks.Token)
-            .ConfigureAwait(false);
+          while (true)
+          {
+            NetworkMessage networkMessage =
+              await NetworkPeer
+              .ReceiveMessage(cancellationDownloadBlocks.Token)
+              .ConfigureAwait(false);
 
-          blockContainer.Parse();
-          UTXOBatchDownloadNext.CountItems += blockContainer.CountItems;
+            if (networkMessage.Command == "notfound")
+            {
+              SetStatusCompleted();
+              return;
+            }
+            if (networkMessage.Command == "block")
+            {
+              blockContainer.Buffer = networkMessage.Payload;
+
+              blockContainer.Parse();
+              uTXOBatch.CountItems += blockContainer.CountItems;
+              uTXOBatch.CountDataContainerDownloaded += 1;
+              break;
+            }
+          }
         }
-
-        UTXOBatchesDownloaded.Add(UTXOBatchDownloadNext);
-        UTXOBatchDownloadNext = null;
       }
       catch (Exception ex)
       {
         Console.WriteLine(
           "Exception {0} in download of uTXOBatch {1}: \n{2}",
           ex.GetType().Name,
-          UTXOBatchDownloadNext.Index,
+          uTXOBatch.Index,
           ex.Message);
 
-        throw ex;
+        Dispose();
       }
     }
 
@@ -124,27 +142,6 @@ namespace BToken.Blockchain
 
       await NetworkPeer.SendMessage(
         new GetDataMessage(inventories));
-    }
-
-    public async Task<byte[]> ReceiveBlock(
-      CancellationToken cancellationToken)
-    {
-      while (true)
-      {
-        NetworkMessage networkMessage =
-          await NetworkPeer
-          .ReceiveMessage(cancellationToken)
-          .ConfigureAwait(false);
-
-        if (networkMessage.Command == "notfound")
-        {
-          return null;
-        }
-        if (networkMessage.Command == "block")
-        {
-          return networkMessage.Payload;
-        }
-      }
     }
 
 
@@ -163,7 +160,7 @@ namespace BToken.Blockchain
     }
 
 
-    public void SetCompleted()
+    public void SetStatusCompleted()
     {
       lock (LOCK_Status)
       {
@@ -171,8 +168,7 @@ namespace BToken.Blockchain
           .COMPLETED;
       }
     }
-
-    public bool IsCompleted()
+    public bool IsStatusCompleted()
     {
       lock (LOCK_Status)
       {
@@ -196,7 +192,7 @@ namespace BToken.Blockchain
       }
     }
 
-    public bool IsDisposed()
+    public bool IsStatusDisposed()
     {
       lock (LOCK_Status)
       {
@@ -204,8 +200,7 @@ namespace BToken.Blockchain
           .DISPOSED;
       }
     }
-
-    public void SetBusy()
+    public void SetStatusBusy()
     {
       lock (LOCK_Status)
       {
@@ -213,8 +208,23 @@ namespace BToken.Blockchain
           .BUSY;
       }
     }
-
-    public void SetIdle()
+    public void SetStatusAwaitingInsertion()
+    {
+      lock (LOCK_Status)
+      {
+        Status = StatusUTXOSyncSession
+          .AWAITING_INSERTION;
+      }
+    }
+    public bool IsStatusAwaitingInsertion()
+    {
+      lock (LOCK_Status)
+      {
+        return Status == StatusUTXOSyncSession
+          .AWAITING_INSERTION;
+      }
+    }
+    public void SetStatusIdle()
     {
       lock (LOCK_Status)
       {
@@ -222,7 +232,7 @@ namespace BToken.Blockchain
           .IDLE;
       }
     }
-    public bool IsIdle()
+    public bool IsStatusIdle()
     {
       lock (LOCK_Status)
       {
@@ -230,7 +240,7 @@ namespace BToken.Blockchain
           .IDLE;
       }
     }
-    public bool IsBusy()
+    public bool IsStatusBusy()
     {
       lock (LOCK_Status)
       {
