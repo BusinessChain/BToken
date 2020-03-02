@@ -97,6 +97,11 @@ namespace BToken.Networking
 
       public void Dispose()
       {
+        // Der peer soll grundsätzlich nicht
+        // häufig reconnecten, daher führt einfach jedes Disposen
+        // zu Blame.
+        Blame();
+
         lock (LOCK_FlagIsDisposed)
         {
           FlagIsDisposed = true;

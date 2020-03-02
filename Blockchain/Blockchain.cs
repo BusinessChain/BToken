@@ -63,7 +63,6 @@ namespace BToken.Blockchain
     
     object LOCK_Peers = new object();
     List<BlockchainPeer> Peers = new List<BlockchainPeer>();
-    object LOCK_IsAnyPeerSynchronizing = new object();
     bool IsAnyPeerSynchronizing;
 
     public async Task Start()
@@ -137,8 +136,8 @@ namespace BToken.Blockchain
     {
       try
       {
-        Header headerBranch = await Headerchain.CreateHeaderBranch(
-          peer);
+        Header headerBranch = await Headerchain
+          .CreateHeaderBranch(peer);
 
         if (headerBranch != null)
         {
@@ -197,10 +196,8 @@ namespace BToken.Blockchain
     }
 
     Header HeaderLoad;
-    readonly object LOCK_FlagUTXOSyncSessionsCompleted = new object();
-    bool FlagUTXOSyncSessionsCompleted;
-    readonly object LOCK_IsUTXOSyncSessionsSuccess = new object();
-    bool IsUTXOSyncSessionsSuccess;
+    bool IsUTXOSynchronizationSuccess;
+    bool FlagAllBatchesLoaded;
 
     async Task<bool> UTXOSynchronization(
       Header headerBranch,
@@ -211,31 +208,32 @@ namespace BToken.Blockchain
         return true;
       }
 
-      IsUTXOSyncSessionsSuccess = false;
+      IsUTXOSynchronizationSuccess = false;
       HeaderLoad = headerBranch;
 
       await UTXOArchive.Load(
         UTXOTable.Header.HeaderHash);
-
-      List<BlockchainPeer> peers;
-
+      
       while (true)
       {
+        var peersIdle = new List<BlockchainPeer>();
+
         lock (LOCK_Peers)
         {
-          if(Peers.All(p => p.IsStatusCompleted()))
+          if (Peers.All(p => p.IsStatusCompleted()))
           {
-            Peers.ForEach(p => p.SetStatusIdle());
-
-            return IsUTXOSyncSessionsSuccess;
+            return IsUTXOSynchronizationSuccess;
           }
 
-          peers = Peers.Where(p => p.IsStatusIdle())
-            .ToList();
+          if (!FlagAllBatchesLoaded)
+          {
+            peersIdle = Peers.FindAll(p => p.IsStatusIdle());
+          }
         }
-        
-        peers.ForEach(p => p.SetStatusBusy());
-        peers.Select(p => RunUTXOSyncSession(p)).ToArray();
+
+        peersIdle.ForEach(p => p.SetStatusBusy());
+        peersIdle.Select(p => RunUTXOSyncSession(p))
+          .ToList();
 
         await Task.Delay(1000);
       }
@@ -243,92 +241,150 @@ namespace BToken.Blockchain
 
 
     const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 2;
-    readonly object LOCK_QueuePeersWithBatches = new object();
-    Dictionary<int, BlockchainPeer> QueuePeersWithBatches =
-      new Dictionary<int, BlockchainPeer>();
     readonly object LOCK_BatchIndex = new object();
     int BatchIndex;
 
-    async Task RunUTXOSyncSession()
-    {
-      Stopwatch stopwatchDownload = new Stopwatch();
-      int countBlocks = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-
-      BlockchainPeer peer = null;
-      DataBatch uTXOBatch = LoadBatch(countBlocks);
-
-      while (true)
+    async Task RunUTXOSyncSession(BlockchainPeer peer)
+    {      
+      if (peer.UTXOBatchesDownloaded.Count == 0)
       {
+        DataBatch uTXOBatch = LoadBatch(peer.CountBlocksLoad);
+
         if (uTXOBatch == null)
         {
-          if(peer != null)
-          {
-            peer.SetStatusIdle();
-          }
-
+          FlagAllBatchesLoaded = true;
+          peer.SetStatusIdle();
           return;
         }
 
-        while (peer == null)
+        while(true)
         {
-          lock (LOCK_Peers)
+          await peer.DownloadBlocks(uTXOBatch);
+          
+          if(uTXOBatch.CountDataContainerDownloaded > 0)
           {
-            if(Peers.All(p => p.IsStatusCompleted()))
-            {
-              return;
-            }
+            peer.UTXOBatchesDownloaded.Push(uTXOBatch);
 
-            peer =
-              Peers.Find(p => p.IsStatusIdle()) ??
-              Peers.Find(p => p.IsStatusAwaitingInsertion());
-
-            if(peer != null)
+            if (uTXOBatch.CountDataContainerDownloaded ==
+              uTXOBatch.DataContainers.Count)
             {
-              peer.SetStatusBusy();
               break;
             }
           }
 
-          await Task.Delay(1000);
-        }
+          BlockchainPeer peerNew = null;
 
-        await peer.DownloadBlocks(uTXOBatch);
-
-        if(uTXOBatch.CountDataContainerDownloaded == 0)
-        {
-          peer = null;
-          continue;
-        }
-        
-        lock (LOCK_BatchIndex)
-        {
-          if(uTXOBatch.Index != BatchIndex)
+          while (peerNew == null)
           {
-            peer.UTXOBatchesDownloaded.Insert(0, uTXOBatch);
-
-            lock (LOCK_QueuePeersWithBatches)
+            lock (LOCK_Peers)
             {
-              QueuePeersWithBatches.Add(
-                uTXOBatch.Index,
-                peer);
+              if (Peers.All(p => p.IsStatusCompleted()))
+              {
+                return;
+              }
+
+              peerNew =
+                Peers.Find(p => p.IsStatusIdle()) ??
+                Peers.Find(p => p.IsStatusAwaitingInsertion());
+
+              if (peerNew != null)
+              {
+                peerNew.SetStatusBusy();
+                break;
+              }
             }
 
-            peer.SetStatusAwaitingInsertion();
-
-            return;
+            await Task.Delay(1000);
           }
+
+          if (uTXOBatch.CountDataContainerDownloaded == 0)
+          {
+            peer = peerNew;
+            continue;
+          }
+
+          queuePeersSplitBatches.Add(peer);
+
+          DataBatch uTXOBatchSplit = new DataBatch(uTXOBatch.Index);
+
+          uTXOBatchSplit.DataContainers = uTXOBatch.DataContainers
+            .Skip(uTXOBatch.CountDataContainerDownloaded)
+            .ToList();
+
+          uTXOBatch.DataContainers = uTXOBatch.DataContainers
+            .Take(uTXOBatch.CountDataContainerDownloaded)
+            .ToList();
+
+          uTXOBatch = uTXOBatchSplit;
+        }
+      }
+
+      DataBatch uTXOBatchPeek = peer.UTXOBatchesDownloaded.Peek();
+
+      lock (LOCK_BatchIndex)
+      {
+        if (uTXOBatchPeek.Index != BatchIndex)
+        {
+          peer.SetStatusAwaitingInsertion();
+          return;
+        }
+      }
+
+      while(true)
+      {
+        QueuePeersUTXOInserter.Post(peer);
+
+        BlockchainPeer nextPeer;
+
+        lock (LOCK_Peers)
+        {
+          nextPeer = Peers.Find(p =>
+          p.IsStatusAwaitingInsertion() &&
+          p.UTXOBatchesDownloaded.Peek().Index == BatchIndex + 1);
         }
 
-      LoopInsertUTXOBatch:
-        
+        lock (LOCK_BatchIndex)
+        {
+          BatchIndex += 1;
+        }
+
+        if (nextPeer == null)
+        {
+          return;
+        }
+
+        nextPeer.SetStatusBusy();
+        peer = nextPeer;
+      }
+      
+      //CalculateNewCountBlocks(
+      //  ref countBlocks,
+      //  stopwatchDownload.ElapsedMilliseconds);
+    }
+
+
+
+    BufferBlock<BlockchainPeer> QueuePeersUTXOInserter = 
+      new BufferBlock<BlockchainPeer>();
+
+    async Task RunUTXOBatchInserter()
+    {
+      while(true)
+      {
+        BlockchainPeer peer = await QueuePeersUTXOInserter
+          .ReceiveAsync()
+          .ConfigureAwait(false);
+
+        DataBatch uTXOBatch = peer.UTXOBatchesDownloaded.Pop();
+
         for (
-          int i = 0; 
-          i < uTXOBatch.CountDataContainerDownloaded; 
+          int i = 0;
+          i < uTXOBatch.CountDataContainerDownloaded;
           i += 1)
         {
           var blockContainer =
             (UTXOTable.BlockContainer)uTXOBatch.DataContainers[i];
-          
+
           try
           {
             UTXOTable.InsertBlockContainer(blockContainer);
@@ -340,72 +396,24 @@ namespace BToken.Blockchain
               blockContainer.Header.HeaderHash.ToHexString(),
               ex.Message);
 
-            throw ex;
+            peer.Dispose();
+
+            return;
           }
-        }
-        
-
-        if (countContainersInserted < uTXOBatch.DataContainers.Count)
-        {
-          uTXOBatch.DataContainers = uTXOBatch.DataContainers
-            .Skip(countContainersInserted)
-            .ToList();
-
-          uTXOBatch.CountItems = 0;
-
-          peer.SetStatusCompleted();
-          peer = null;
-
-          continue;
         }
 
         if (uTXOBatch.IsCancellationBatch)
         {
-          ArchiveContainers();
+          //ArchiveContainers();
 
-          lock (LOCK_IsUTXOSyncSessionsSuccess)
-          {
-            IsUTXOSyncSessionsSuccess = true;
-          }
+          IsUTXOSynchronizationSuccess = true;
 
           peer.SetStatusCompleted();
 
           return;
         }
 
-        lock (LOCK_BatchIndex)
-        {
-          BatchIndex += 1;
-
-          uTXOBatch = peer.UTXOBatchesDownloaded
-            .Find(b => b.Index == BatchIndex);
-        }
-
-        if (uTXOBatch != null)
-        {
-          goto LoopInsertUTXOBatch;
-        }
-
-        lock (LOCK_QueuePeersWithBatches)
-        {
-          if (QueuePeersWithBatches.TryGetValue(
-            BatchIndex,
-            out peer))
-          {
-            uTXOBatch = peer.UTXOBatchesDownloaded
-              .Find(b => b.Index == BatchIndex);
-
-            QueuePeersWithBatches.Remove(BatchIndex);
-
-            goto LoopInsertUTXOBatch;
-          }
-        }
-                
-        CalculateNewCountBlocks(
-          ref countBlocks,
-          stopwatchDownload.ElapsedMilliseconds);
-
-        uTXOBatch = LoadBatch(countBlocks);
+        RunUTXOSyncSession(peer);
       }
     }
 

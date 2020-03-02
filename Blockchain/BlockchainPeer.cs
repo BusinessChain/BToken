@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,10 +31,12 @@ namespace BToken.Blockchain
     const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
     const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
 
+    Stopwatch StopwatchDownload = new Stopwatch();
+    public int CountBlocksLoad = 2;
 
     public DataBatch UTXOBatchDownloadNext;
-    public List<DataBatch> UTXOBatchesDownloaded =
-      new List<DataBatch>();
+    public Stack<DataBatch> UTXOBatchesDownloaded =
+      new Stack<DataBatch>();
 
 
 
@@ -179,10 +181,6 @@ namespace BToken.Blockchain
 
     public void Dispose()
     {
-      // Der Blockchain peer soll grundsätzlich nicht
-      // häufig reconnecten, daher führt einfach jedes Disposen
-      // zu Blame.
-      NetworkPeer.Blame();
       NetworkPeer.Dispose();
 
       lock (LOCK_Status)
