@@ -30,11 +30,11 @@ namespace BToken.Blockchain
 
     const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
     const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
-
+    
+    const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 2;
     Stopwatch StopwatchDownload = new Stopwatch();
-    public int CountBlocksLoad = 2;
-
-    public DataBatch UTXOBatchDownloadNext;
+    public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+    
     public Stack<DataBatch> UTXOBatchesDownloaded =
       new Stack<DataBatch>();
 
@@ -79,10 +79,10 @@ namespace BToken.Blockchain
     }
 
 
-    public async Task DownloadBlocks(DataBatch uTXOBatch)
+    public async Task<bool> TryDownloadBlocks(
+      DataBatch uTXOBatch)
     {
       uTXOBatch.CountItems = 0;
-      uTXOBatch.CountDataContainerDownloaded = 0;
 
       try
       {
@@ -108,15 +108,15 @@ namespace BToken.Blockchain
             if (networkMessage.Command == "notfound")
             {
               SetStatusCompleted();
-              return;
+              return false;
             }
+
             if (networkMessage.Command == "block")
             {
               blockContainer.Buffer = networkMessage.Payload;
 
               blockContainer.Parse();
               uTXOBatch.CountItems += blockContainer.CountItems;
-              uTXOBatch.CountDataContainerDownloaded += 1;
               break;
             }
           }
@@ -131,8 +131,42 @@ namespace BToken.Blockchain
           ex.Message);
 
         Dispose();
+
+        return false;
+      }
+
+      UTXOBatchesDownloaded.Push(uTXOBatch);
+
+      CalculateNewCountBlocks();
+
+      return true;
+    }
+       
+
+    void CalculateNewCountBlocks()
+    {
+      const float safetyFactorTimeout = 10;
+      const float marginFactorResetCountBlocksDownload = 5;
+
+      float ratioTimeoutToDownloadTime = TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS
+        / (1 + StopwatchDownload.ElapsedMilliseconds);
+
+      if (ratioTimeoutToDownloadTime > safetyFactorTimeout)
+      {
+        CountBlocksLoad += 1;
+      }
+      else if (ratioTimeoutToDownloadTime < 
+        marginFactorResetCountBlocksDownload)
+      {
+        CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+      }
+      else if (CountBlocksLoad > 1)
+      {
+        CountBlocksLoad -= 1;
       }
     }
+
+
 
     public async Task RequestBlocks(
       IEnumerable<byte[]> hashes)
