@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Blockchain;
+using BToken.Chaining;
 
 namespace BToken.Networking
 {
@@ -262,7 +262,7 @@ namespace BToken.Networking
 
             await Blockchain.InsertHeaders(
               message.Payload,
-              new Blockchain.BlockchainPeer(this));
+              new Chaining.BlockchainPeer(this));
                         
             break;
 

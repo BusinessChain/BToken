@@ -7,11 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-using BToken.Blockchain;
+using BToken.Chaining;
 
 namespace BToken.Networking
 {
-  partial class Network
+  public partial class Network
   {
     const UInt16 Port = 8333;
     public const UInt32 ProtocolVersion = 70015;
@@ -32,7 +32,6 @@ namespace BToken.Networking
     BufferBlock<Peer> PeersRequest = new BufferBlock<Peer>();
 
 
-    public Blockchain Blockchain;
 
 
     public Network()

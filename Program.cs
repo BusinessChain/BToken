@@ -19,7 +19,7 @@ namespace BToken
       try
       {
         Node = new Node();
-        Task startNodeTask = Node.StartAsync();
+        Node.Start();
       }
       catch (Exception ex)
       {

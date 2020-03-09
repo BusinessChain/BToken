@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 
-using BToken.Blockchain;
+using BToken.Chaining;
 using BToken.Networking;
 
 // Test
@@ -29,22 +29,22 @@ namespace BToken
 
     public Node()
     {
+      Network = new Network();
+
       Blockchain = new Blockchain(
         GenesisBlock.Header,
         GenesisBlock.BlockBytes,
-        Checkpoints);
-
-      Network = new Network();
-      Network.Blockchain = Blockchain;
+        Checkpoints,
+        Network);
 
       Wallet = new Wallet();
     }
 
-    public async Task StartAsync()
+    public void Start()
     {
       Network.Start();
 
-      await Blockchain.Start();
+      Blockchain.Start();
 
       Wallet.GeneratePublicKey();
     }
