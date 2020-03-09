@@ -5,7 +5,6 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using System.Diagnostics;
 
 using BToken.Networking;
 
@@ -67,11 +66,13 @@ namespace BToken.Blockchain
 
     public async Task Start()
     {
-      await HeaderArchive.Load(
-        Headerchain.GenesisHeader.HeaderHash);
+      // First implement archiving, only then loading
+
+      //  await HeaderArchive.Load(
+      //  Headerchain.GenesisHeader.HeaderHash);
       
-      await UTXOArchive.Load(
-        UTXOTable.Header.HeaderHash);
+      //await UTXOArchive.Load(
+      //  UTXOTable.Header.HeaderHash);
 
       while (true)
       {
@@ -122,61 +123,75 @@ namespace BToken.Blockchain
       }
     }
 
-    bool IsFork(Header headerBranch) => 
-      !headerBranch.HashPrevious.IsEqual(
-        Headerchain.HeaderTip.HeaderHash);
 
-    bool TryRollBackUTXO(byte[] headerHash)
-    {
-      return true;
-    }
-
+    Headerchain.HeaderBranch HeaderBranch;
+    Header HeaderLoad;
+    bool FlagAllBatchesLoaded;
 
     async Task SynchronizeWithPeer(BlockchainPeer peer)
     {
       try
       {
-        Header headerBranch = await Headerchain
-          .CreateHeaderBranch(peer);
+        HeaderBranch = await Headerchain.CreateHeaderBranch(peer);
 
-        if (headerBranch != null)
+        if (HeaderBranch != null)
         {
-          if (IsFork(headerBranch))
-          {
-            Header headerFork =
-              Headerchain.StageFork(ref headerBranch);
+          Headerchain.StageBranch(HeaderBranch);
 
+          if (HeaderBranch.IsFork)
+          {
             UTXOTable.BackupToDisk();
 
-            if (!TryRollBackUTXO(headerFork.HashPrevious))
+            if (!TryRollBackUTXO(
+              HeaderBranch.HeaderRoot.HashPrevious))
             {
               // Reset everything, prepare for reindexing
               // If possible, try to use the UTXOImage
 
               throw new NotImplementedException();
             }
+          }
+          
+          HeaderLoad = HeaderBranch.HeaderRoot;
+          
+          while (true)
+          {
+            var peersIdle = new List<BlockchainPeer>();
 
-            if (await UTXOSynchronization(
-              headerFork,
-              isHeaderBrancheStaged: true))
+            lock (LOCK_Peers)
             {
-              Headerchain.CommitFork();
-            }
-            else
-            {
-              UTXOTable.RestoreFromDisk();
-              headerBranch = null;
+              if (Peers.All(p => p.IsStatusCompleted()))
+              {
+                break;
+              }
 
-              peer.Dispose();
+              if (!FlagAllBatchesLoaded)
+              {
+                peersIdle = Peers.FindAll(p => p.IsStatusIdle());
+              }
             }
+
+            peersIdle.ForEach(p => p.SetStatusBusy());
+            peersIdle.Select(p => RunUTXOSyncSession(p))
+              .ToList();
+
+            await Task.Delay(1000);
           }
 
-          if (!await UTXOSynchronization(
-            headerBranch,
-            isHeaderBrancheStaged: false))
+          if (HeaderBranch.IsFork && 
+            !HeaderBranch.IsForkTipInserted)
+          {
+            UTXOTable.RestoreFromDisk();
+            peer.Dispose();
+            return;
+          }
+
+          if(!HeaderBranch.IsHeaderTipInserted)
           {
             peer.Dispose();
           }
+
+          Headerchain.CommitBranch(HeaderBranch);
         }
 
         peer.IsSynchronized = true;
@@ -194,50 +209,12 @@ namespace BToken.Blockchain
 
       IsAnyPeerSynchronizing = false;
     }
-
-    Header HeaderLoad;
-    bool IsUTXOSynchronizationSuccess;
-    bool FlagAllBatchesLoaded;
-
-    async Task<bool> UTXOSynchronization(
-      Header headerBranch,
-      bool isHeaderBrancheStaged)
+         
+    bool TryRollBackUTXO(byte[] headerHash)
     {
-      if(headerBranch == null)
-      {
-        return true;
-      }
-
-      IsUTXOSynchronizationSuccess = false;
-      HeaderLoad = headerBranch;
-
-      await UTXOArchive.Load(
-        UTXOTable.Header.HeaderHash);
-      
-      while (true)
-      {
-        var peersIdle = new List<BlockchainPeer>();
-
-        lock (LOCK_Peers)
-        {
-          if (Peers.All(p => p.IsStatusCompleted()))
-          {
-            return IsUTXOSynchronizationSuccess;
-          }
-
-          if (!FlagAllBatchesLoaded)
-          {
-            peersIdle = Peers.FindAll(p => p.IsStatusIdle());
-          }
-        }
-
-        peersIdle.ForEach(p => p.SetStatusBusy());
-        peersIdle.Select(p => RunUTXOSyncSession(p))
-          .ToList();
-
-        await Task.Delay(1000);
-      }
+      return true;
     }
+    
 
 
     readonly object LOCK_BatchIndex = new object();
@@ -295,7 +272,12 @@ namespace BToken.Blockchain
         }
       }
 
-      while(true)
+      if(!IsUTXOBatchInserterRunning)
+      {
+        RunUTXOBatchInserter();
+      }
+
+      while (true)
       {
         QueuePeersUTXOInserter.Post(peer);
 
@@ -324,10 +306,13 @@ namespace BToken.Blockchain
 
     BufferBlock<BlockchainPeer> QueuePeersUTXOInserter = 
       new BufferBlock<BlockchainPeer>();
+    bool IsUTXOBatchInserterRunning;
 
     async Task RunUTXOBatchInserter()
     {
-      while(true)
+      IsUTXOBatchInserterRunning = true;
+
+      while (true)
       {
         BlockchainPeer peer = await QueuePeersUTXOInserter
           .ReceiveAsync()
@@ -335,7 +320,7 @@ namespace BToken.Blockchain
 
         DataBatch uTXOBatch = peer.UTXOBatchesDownloaded.Pop();
 
-        foreach (UTXOTable.BlockContainer blockContainer in 
+        foreach (UTXOTable.BlockContainer blockContainer in
           uTXOBatch.DataContainers)
         {
           try
@@ -345,24 +330,21 @@ namespace BToken.Blockchain
           catch (ChainException ex)
           {
             Console.WriteLine(
-              "ChainException when inserting block {1}: \n{2}",
-              blockContainer.Header.HeaderHash.ToHexString(),
+              "Exception when inserting block {1}: \n{2}",
+              blockContainer.Header.Hash.ToHexString(),
               ex.Message);
 
             peer.Dispose();
-
             return;
           }
+
+          HeaderBranch.ReportHeaderInsertion(
+            blockContainer.Header);
         }
 
         if (uTXOBatch.IsCancellationBatch)
         {
-          //ArchiveContainers();
-
-          IsUTXOSynchronizationSuccess = true;
-
           peer.SetStatusCompleted();
-
           return;
         }
 
@@ -447,13 +429,13 @@ namespace BToken.Blockchain
       await LockChain();
 
       if (Headerchain.TryReadHeader(
-        headerContainer.HeaderRoot.HeaderHash, 
+        headerContainer.HeaderRoot.Hash, 
         out Header header))
       {
         if (UTXOTable
           .Synchronizer
           .MapBlockToArchiveIndex
-          .ContainsKey(headerContainer.HeaderRoot.HeaderHash))
+          .ContainsKey(headerContainer.HeaderRoot.Hash))
         {
           ReleaseChain();
           channel.ReportDuplicate();

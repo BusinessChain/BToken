@@ -13,7 +13,7 @@ namespace BToken
     
     const int COUNT_HEADER_BYTES = 80;
 
-    public byte[] HeaderHash;
+    public byte[] Hash;
     public uint Version;
     public byte[] HashPrevious;
     public byte[] MerkleRoot;
@@ -31,7 +31,7 @@ namespace BToken
       uint nBits,
       uint nonce)
     {
-      HeaderHash = headerHash;
+      Hash = headerHash;
       Version = version;
       HashPrevious = hashPrevious;
       MerkleRoot = merkleRootHash;

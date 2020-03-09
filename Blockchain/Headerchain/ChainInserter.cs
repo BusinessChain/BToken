@@ -36,7 +36,7 @@ namespace BToken.Blockchain
 
       void GotoHeaderRoot(Header header)
       {
-        while (!Header.HeaderHash.IsEqual(header.HashPrevious))
+        while (!Header.Hash.IsEqual(header.HashPrevious))
         {
           if (Headerchain.MainChain.HeaderRoot == Header)
           {
@@ -45,7 +45,7 @@ namespace BToken.Blockchain
                 "Previous header {0} \n " +
                 "of header {1} not found in chain.",
                 header.HashPrevious.ToHexString(),
-                header.HeaderHash.ToHexString()),
+                header.Hash.ToHexString()),
               ErrorCode.ORPHAN);
           }
 
@@ -57,28 +57,7 @@ namespace BToken.Blockchain
           Header = Header.HeaderPrevious;
         }        
       }
-
-      public void InsertHeaderBranch(Header header)
-      {
-        GotoHeaderRoot(header);
-
-        header.HeaderPrevious = Header;
-
-        List<Header> headersValidated = ValidateChain(header);
-
-        AccumulatedDifficulty += headersValidated
-          .Sum(h => TargetManager.GetDifficulty(h.NBits));
-
-        if(AccumulatedDifficulty > Headerchain.AccumulatedDifficultyStaged)
-        {
-          Header.HeaderNext = header;
-        }
-
-        Header = headersValidated.Last();
-        Height += headersValidated.Count;
-      }
-
-
+           
 
       public Chain InsertHeaderRoot(Header headerRoot)
       {
@@ -88,16 +67,16 @@ namespace BToken.Blockchain
             string.Format(
               "previous header {0}\n of header {1} not found in chain",
               headerRoot.HashPrevious.ToHexString(),
-              headerRoot.HeaderHash.ToHexString()),
+              headerRoot.Hash.ToHexString()),
             ErrorCode.ORPHAN);
         }
 
-        if (Header.HeaderNext.HeaderHash.IsEqual(headerRoot.HeaderHash))
+        if (Header.HeaderNext.Hash.IsEqual(headerRoot.Hash))
         {
           throw new ChainException(
             string.Format(
               "duplicate header {0} \n attempting to connect to header {1}",
-              headerRoot.HeaderHash.ToHexString(),
+              headerRoot.Hash.ToHexString(),
               headerRoot.HashPrevious.ToHexString()),
             ErrorCode.DUPLICATE);
         }
@@ -148,7 +127,7 @@ namespace BToken.Blockchain
       {
         while (true)
         {
-          if (Header.HeaderHash.IsEqual(hash))
+          if (Header.Hash.IsEqual(hash))
           {
             return true;
           }
@@ -180,7 +159,7 @@ namespace BToken.Blockchain
               string.Format(
                 "Header {0} with unix time {1} " +
                 "is older than median time past {2}.",
-                header.HeaderHash.ToHexString(),
+                header.Hash.ToHexString(),
                 DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
                 DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
               ErrorCode.INVALID);
@@ -199,7 +178,7 @@ namespace BToken.Blockchain
               string.Format(
                 "Attempt to insert header {0} at hight {1} " +
                 "prior to checkpoint hight {2}",
-                header.HeaderHash.ToHexString(),
+                header.Hash.ToHexString(),
                 heightHeader,
                 hightHighestCheckpoint),
               ErrorCode.INVALID);
@@ -207,12 +186,12 @@ namespace BToken.Blockchain
 
           HeaderLocation checkpoint = 
             Headerchain.Checkpoints.Find(c => c.Height == heightHeader);
-          if (checkpoint != null && !checkpoint.Hash.IsEqual(header.HeaderHash))
+          if (checkpoint != null && !checkpoint.Hash.IsEqual(header.Hash))
           {
             throw new ChainException(
               string.Format(
                 "Header {0} at hight {1} not equal to checkpoint hash {2}",
-                header.HeaderHash.ToHexString(),
+                header.Hash.ToHexString(),
                 heightHeader,
                 checkpoint.Hash.ToHexString()),
               ErrorCode.INVALID);
@@ -227,7 +206,7 @@ namespace BToken.Blockchain
             throw new ChainException(
               string.Format(
                 "In header {0} nBits {1} not equal to target nBits {2}",
-                header.HeaderHash.ToHexString(),
+                header.Hash.ToHexString(),
                 header.NBits,
                 targetBits),
               ErrorCode.INVALID);

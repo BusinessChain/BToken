@@ -89,7 +89,7 @@ namespace BToken.Blockchain
         await RequestBlocks(
           uTXOBatch.DataContainers
           .Select(container => ((UTXOTable.BlockContainer)container)
-          .Header.HeaderHash));
+          .Header.Hash));
         
         var cancellationDownloadBlocks =
           new CancellationTokenSource(

@@ -358,18 +358,18 @@ namespace BToken.Blockchain
       }
     }
 
-
-    public void UnLoadBatch(DataBatch uTXOBatch)
-    {
-      throw new NotImplementedException();
-    }
-
+    
     public void BackupToDisk()
     {
       Parallel.ForEach(Tables, t =>
       {
         t.BackupToDisk(PathUTXOState);
       });
+    }
+    
+    public void RestoreFromDisk()
+    {
+      throw new NotImplementedException();
     }
 
 

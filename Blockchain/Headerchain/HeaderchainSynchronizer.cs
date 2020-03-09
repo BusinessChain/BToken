@@ -150,7 +150,7 @@ namespace BToken.Blockchain
           {
             new HeaderContainer(
               HeaderBatch.DataContainers
-              .Select(d => ((HeaderContainer)d).HeaderTip.HeaderHash))
+              .Select(d => ((HeaderContainer)d).HeaderTip.Hash))
           }
         };
       }

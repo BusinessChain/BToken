@@ -62,50 +62,172 @@ namespace BToken.Blockchain
     }
 
 
-    Header HeaderBranchRoot;
-    Header HeaderBranchStaged;
-    Header HeaderTipStaged;
-    int HeightStaged;
-    double AccumulatedDifficultyStaged;
 
-    public Header StageFork(ref Header headerBranch)
+    public async Task<HeaderBranch> CreateHeaderBranch(
+      BlockchainPeer peer)
     {
-      HeaderBranchStaged = headerBranch;
-      HeaderTipStaged = headerBranch;
+      List<byte[]> headerLocator = Locator.BlockLocations
+        .Select(b => b.Hash).ToList();
 
-      HeaderBranchRoot = HeaderTip;
-      AccumulatedDifficultyStaged = AccumulatedDifficulty;
-      HeightStaged = Height;
+      var headerContainer = await peer.GetHeaders(headerLocator);
 
-      while (!HeaderBranchRoot.HeaderHash.IsEqual(
-        HeaderBranchStaged.HashPrevious))
+      if (headerContainer.CountItems == 0)
       {
-        AccumulatedDifficultyStaged -= TargetManager.GetDifficulty(
-          HeaderBranchRoot.NBits);
-
-        HeightStaged--;
-
-        HeaderBranchRoot = HeaderBranchRoot.HeaderPrevious;
+        return null;
       }
-      
-      HeaderBranchStaged.HeaderPrevious = HeaderBranchRoot;
+
+      int indexLocatorRoot = headerLocator.FindIndex(
+        h => h.IsEqual(
+          headerContainer.HeaderRoot.HashPrevious));
+
+      if (indexLocatorRoot == -1)
+      {
+        throw new ChainException(
+          "Error in headerchain synchronization.");
+      }
+
+      byte[] stopHash;
+      if (indexLocatorRoot == headerLocator.Count - 1)
+      {
+        stopHash =
+         ("00000000000000000000000000000000" +
+         "00000000000000000000000000000000").ToBinary();
+      }
+      else
+      {
+        stopHash = headerLocator[indexLocatorRoot + 1];
+      }
+
+      Header headerBranchRoot = headerContainer.HeaderRoot;
+
+      while (Contains(headerBranchRoot.Hash))
+      {
+        if (stopHash.IsEqual(headerBranchRoot.Hash))
+        {
+          throw new ChainException(
+            "Error in headerchain synchronization.");
+        }
+
+        if (headerBranchRoot.HeaderNext == null)
+        {
+          headerLocator = new List<byte[]>
+              { headerBranchRoot.Hash };
+
+          headerContainer = await peer.GetHeaders(headerLocator);
+
+          if (headerContainer.CountItems == 0)
+          {
+            throw new ChainException(
+              "Error in headerchain synchronization.");
+          }
+
+          if (!headerContainer.HeaderRoot.HashPrevious
+            .IsEqual(headerBranchRoot.Hash))
+          {
+            throw new ChainException(
+              "Error in headerchain synchronization.");
+          }
+
+          headerBranchRoot = headerContainer.HeaderRoot;
+        }
+        else
+        {
+          headerBranchRoot = headerBranchRoot.HeaderNext;
+        }
+      }
+
+      if (!Contains(headerBranchRoot.HashPrevious))
+      {
+        throw new ChainException(
+          "Error in headerchain synchronization.");
+      }
+
+      Header headerBranchTip = headerContainer.HeaderTip;
 
       while (true)
       {
-        HeightStaged += 1;
-        AccumulatedDifficultyStaged += TargetManager.GetDifficulty(
-          HeaderTipStaged.NBits);
+        headerLocator = new List<byte[]> {
+                headerBranchTip.Hash };
+
+        headerContainer = await peer.GetHeaders(headerLocator);
+
+        if (headerContainer.CountItems == 0)
+        {
+          break;
+        }
+
+        if (!headerContainer.HeaderRoot.HashPrevious
+          .IsEqual(headerBranchTip.Hash))
+        {
+          throw new ChainException(
+            "Error in headerchain synchronization.");
+        }
+
+        headerBranchTip.HeaderNext = headerContainer.HeaderRoot;
+        headerContainer.HeaderRoot.HeaderPrevious = headerBranchTip;
+        headerBranchTip = headerContainer.HeaderTip;
+      }
+
+      return new HeaderBranch(
+        headerBranchRoot,
+        headerBranchTip);
+    }
+
+
+
+    Header HeaderBranchAncestor;
+
+    public void StageBranch(HeaderBranch headerBranch)
+    {
+      Header headerTipStaged = headerBranch.HeaderRoot;
+
+      HeaderBranchAncestor = HeaderTip;
+      double accumulatedDifficultyStaged = AccumulatedDifficulty;
+      int heightStaged = Height;
+
+      while (!HeaderBranchAncestor.Hash.IsEqual(
+        headerBranch.HeaderRoot.HashPrevious))
+      {
+        headerBranch.IsFork = true;
+
+        accumulatedDifficultyStaged -= TargetManager.GetDifficulty(
+          HeaderBranchAncestor.NBits);
+
+        heightStaged--;
+
+        HeaderBranchAncestor = HeaderBranchAncestor.HeaderPrevious;
+      }
+
+      headerBranch.HeaderRoot.HeaderPrevious = HeaderBranchAncestor;
+      headerBranch.AccumulatedDifficultyInserted = accumulatedDifficultyStaged;
+
+      while (true)
+      {
+        heightStaged += 1;
+
+        double difficulty = TargetManager.GetDifficulty(
+          headerTipStaged.NBits);
+
+        headerBranch.HeaderDifficulties.Add(difficulty);
+
+        accumulatedDifficultyStaged += difficulty;
+
+        if (headerBranch.HeaderForkTip == null &&
+          accumulatedDifficultyStaged > AccumulatedDifficulty)
+        {
+          headerBranch.HeaderForkTip = headerTipStaged;
+        }
 
         uint medianTimePast = GetMedianTimePast(
-          HeaderTipStaged.HeaderPrevious);
-        if (HeaderTipStaged.UnixTimeSeconds < medianTimePast)
+          headerTipStaged.HeaderPrevious);
+        if (headerTipStaged.UnixTimeSeconds < medianTimePast)
         {
           throw new ChainException(
             string.Format(
               "Header {0} with unix time {1} " +
               "is older than median time past {2}.",
-              HeaderTipStaged.HeaderHash.ToHexString(),
-              DateTimeOffset.FromUnixTimeSeconds(HeaderTipStaged.UnixTimeSeconds),
+              headerTipStaged.Hash.ToHexString(),
+              DateTimeOffset.FromUnixTimeSeconds(headerTipStaged.UnixTimeSeconds),
               DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
             ErrorCode.INVALID);
         }
@@ -113,83 +235,71 @@ namespace BToken.Blockchain
         int hightHighestCheckpoint = Checkpoints.Max(x => x.Height);
 
         if (
-          hightHighestCheckpoint <= HeightStaged &&
-          HeightStaged <= hightHighestCheckpoint)
+          hightHighestCheckpoint <= heightStaged &&
+          heightStaged <= hightHighestCheckpoint)
         {
           throw new ChainException(
             string.Format(
               "Attempt to insert header {0} at hight {1} " +
               "prior to checkpoint hight {2}",
-              HeaderTipStaged.HeaderHash.ToHexString(),
+              headerTipStaged.Hash.ToHexString(),
               Height,
               hightHighestCheckpoint),
             ErrorCode.INVALID);
         }
 
         HeaderLocation checkpoint =
-          Checkpoints.Find(c => c.Height == HeightStaged);
+          Checkpoints.Find(c => c.Height == heightStaged);
         if (
           checkpoint != null && 
-          !checkpoint.Hash.IsEqual(HeaderTipStaged.HeaderHash))
+          !checkpoint.Hash.IsEqual(headerTipStaged.Hash))
         {
           throw new ChainException(
             string.Format(
               "Header {0} at hight {1} not equal to checkpoint hash {2}",
-              HeaderTipStaged.HeaderHash.ToHexString(),
+              headerTipStaged.Hash.ToHexString(),
               Height,
               checkpoint.Hash.ToHexString()),
             ErrorCode.INVALID);
         }
 
         uint targetBits = TargetManager.GetNextTargetBits(
-            HeaderTipStaged.HeaderPrevious,
-            (uint)HeightStaged);
+            headerTipStaged.HeaderPrevious,
+            (uint)heightStaged);
 
-        if (HeaderTipStaged.NBits != targetBits)
+        if (headerTipStaged.NBits != targetBits)
         {
           throw new ChainException(
             string.Format(
               "In header {0} nBits {1} not equal to target nBits {2}",
-              HeaderTipStaged.HeaderHash.ToHexString(),
-              HeaderTipStaged.NBits,
+              headerTipStaged.Hash.ToHexString(),
+              headerTipStaged.NBits,
               targetBits),
             ErrorCode.INVALID);
         }
         
-        if (AccumulatedDifficultyStaged > AccumulatedDifficulty)
+        if(headerTipStaged.HeaderNext != null)
         {
-          headerBranch = HeaderTipStaged.HeaderNext;
-          HeaderTipStaged.HeaderNext = null;
-          return HeaderBranchStaged;
-        }
-
-        if(HeaderTipStaged.HeaderNext != null)
-        {
-          HeaderTipStaged = HeaderTipStaged.HeaderNext;
+          headerTipStaged = headerTipStaged.HeaderNext;
         }
         else
         {
+          if (accumulatedDifficultyStaged > AccumulatedDifficulty)
+          {
+            return;
+          }
+
           throw new ChainException(
             string.Format(
               "staged header branch {0} with hight {1} not " +
               "stronger than main branch {2} with height {3}",
-              HeaderTipStaged.HeaderHash.ToHexString(),
-              HeightStaged,
-              HeaderTip.HeaderHash.ToHexString(),
+              headerTipStaged.Hash.ToHexString(),
+              heightStaged,
+              HeaderTip.Hash.ToHexString(),
               Height),
             ErrorCode.INVALID);
         }
       }
-    }
-        
-    public bool IsForkStaged()
-    {
-      return HeaderBranchStaged != null;
-    }
-
-    public void UnstageFork()
-    {
-      HeaderBranchStaged = null;
     }
 
     uint GetMedianTimePast(Header header)
@@ -215,45 +325,17 @@ namespace BToken.Blockchain
       return timestampsPast[timestampsPast.Count / 2];
     }
     
-    public bool IsHeaderCommitFork(Header header)
+    public void CommitBranch(HeaderBranch headerBranch)
     {
-      return HeaderTipStaged == header;
+      HeaderBranchAncestor.HeaderNext = headerBranch.HeaderRoot;
+
+      HeaderTip = headerBranch.HeaderLastInserted;
+      
+      AccumulatedDifficulty = 
+        headerBranch.AccumulatedDifficultyInserted;
+
+      Height = headerBranch.HeightInserted;
     }
-
-    public void CommitFork()
-    {
-      HeaderBranchRoot.HeaderNext = HeaderBranchStaged;
-      HeaderTip = HeaderTipStaged;
-      AccumulatedDifficulty = AccumulatedDifficultyStaged;
-      Height = HeightStaged;
-
-      HeaderBranchStaged = null;
-    }
-
-
-
-    public void InsertContainer(HeaderContainer container)
-    {
-      Chain rivalChain = Inserter.InsertHeaderRoot(
-        container.HeaderRoot);
-
-      if (
-        rivalChain != null
-        && rivalChain.IsStrongerThan(MainChain))
-      {
-        SecondaryChains.Remove(rivalChain);
-        SecondaryChains.Add(MainChain);
-        MainChain = rivalChain;
-
-        Locator.Reorganize();
-      }
-
-      Console.WriteLine(
-        "Inserted {0} headers, tip {1}",
-        container.CountItems,
-        MainChain.HeaderTip.HeaderHash.ToHexString());
-    }
-
 
 
     public bool Contains(byte[] headerHash)
@@ -264,11 +346,12 @@ namespace BToken.Blockchain
 
       if (HeaderIndex.TryGetValue(key, out List<Header> headers))
       {
-        return headers.Any(h => headerHash.IsEqual(h.HeaderHash));
+        return headers.Any(h => headerHash.IsEqual(h.Hash));
       }
 
       return false;
     }
+
 
     public bool TryReadHeader(
       byte[] headerHash,
@@ -295,7 +378,7 @@ namespace BToken.Blockchain
         {
           foreach (Header h in headers)
           {
-            if (headerHash.IsEqual(h.HeaderHash))
+            if (headerHash.IsEqual(h.Hash))
             {
               header = h;
               return true;
@@ -310,7 +393,7 @@ namespace BToken.Blockchain
 
     void UpdateHeaderIndex(Header header)
     {
-      int keyHeader = BitConverter.ToInt32(header.HeaderHash, 0);
+      int keyHeader = BitConverter.ToInt32(header.Hash, 0);
 
       lock (HeaderIndexLOCK)
       {
@@ -338,7 +421,7 @@ namespace BToken.Blockchain
           while (
             header.HeaderNext != null &&
             headers.Count < count &&
-            !header.HeaderHash.IsEqual(stopHash))
+            !header.Hash.IsEqual(stopHash))
           {
             Header nextHeader = header.HeaderNext;
 
@@ -352,122 +435,6 @@ namespace BToken.Blockchain
 
       throw new ChainException(string.Format(
         "Locator does not root in headerchain."));
-    }
-
-
-    public List<byte[]> GetLocator()
-    {
-      return Locator.BlockLocations
-        .Select(b => b.Hash).ToList();
-    }
-
-
-
-    public async Task<Header> CreateHeaderBranch(
-      BlockchainPeer peer)
-    {
-      Header headerBranch = null;
-      List<byte[]> headerLocator = GetLocator();
-
-      var headerContainer = await peer.GetHeaders(headerLocator);
-
-      if (headerContainer.CountItems == 0)
-      {
-        return headerBranch;
-      }
-
-      headerBranch = headerContainer.HeaderRoot;
-
-      int indexLocatorRoot = headerLocator.FindIndex(
-        h => h.IsEqual(headerBranch.HashPrevious));
-
-      if (indexLocatorRoot == -1)
-      {
-        throw new ChainException(
-          "Error in headerchain synchronization.");
-      }
-
-      byte[] stopHash;
-      if (indexLocatorRoot == headerLocator.Count - 1)
-      {
-        stopHash =
-         ("00000000000000000000000000000000" +
-         "00000000000000000000000000000000").ToBinary();
-      }
-      else
-      {
-        stopHash = headerLocator[indexLocatorRoot + 1];
-      }
-
-      while (Contains(headerBranch.HeaderHash))
-      {
-        if (stopHash.IsEqual(headerBranch.HeaderHash))
-        {
-          throw new ChainException(
-            "Error in headerchain synchronization.");
-        }
-
-        if (headerBranch.HeaderNext == null)
-        {
-          headerLocator = new List<byte[]>
-              { headerBranch.HeaderHash };
-
-          headerContainer = await peer.GetHeaders(headerLocator);
-
-          if (headerContainer.CountItems == 0)
-          {
-            throw new ChainException(
-              "Error in headerchain synchronization.");
-          }
-
-          if (!headerContainer.HeaderRoot.HashPrevious
-            .IsEqual(headerBranch.HeaderHash))
-          {
-            throw new ChainException(
-              "Error in headerchain synchronization.");
-          }
-
-          headerBranch = headerContainer.HeaderRoot;
-        }
-        else
-        {
-          headerBranch = headerBranch.HeaderNext;
-        }
-      }
-
-      if (!Contains(headerBranch.HashPrevious))
-      {
-        throw new ChainException(
-          "Error in headerchain synchronization.");
-      }
-
-      Header headerBranchTip = headerContainer.HeaderTip;
-
-      while (true)
-      {
-        headerLocator = new List<byte[]> {
-                headerBranchTip.HeaderHash };
-
-        headerContainer = await peer.GetHeaders(headerLocator);
-
-        if (headerContainer.CountItems == 0)
-        {
-          break;
-        }
-
-        if (!headerContainer.HeaderRoot.HashPrevious
-          .IsEqual(headerBranchTip.HeaderHash))
-        {
-          throw new ChainException(
-            "Error in headerchain synchronization.");
-        }
-
-        headerBranchTip.HeaderNext = headerContainer.HeaderRoot;
-        headerContainer.HeaderRoot.HeaderPrevious = headerBranchTip;
-        headerBranchTip = headerContainer.HeaderTip;
-      }
-
-      return headerBranch;
     }
   }
 }

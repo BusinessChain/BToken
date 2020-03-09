@@ -115,7 +115,7 @@ namespace BToken.Blockchain
         {
           ValidateHeaderHash(
             HeaderHash,
-            Header.HeaderHash);
+            Header.Hash);
         }
 
         Headers.Add(Header);
@@ -151,7 +151,7 @@ namespace BToken.Blockchain
 
           ValidateHeaderHash(
             HeaderHash,
-            Header.HeaderHash);
+            Header.Hash);
 
           Headers.Add(Header);
 

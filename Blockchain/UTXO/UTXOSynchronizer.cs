@@ -183,9 +183,9 @@ namespace BToken.Blockchain
           throw new ChainException(
             string.Format(
               "HeaderPrevious {0} of batch {1} not equal to \nHeaderMergedLast {2}.",
-              blockContainer.HeaderPrevious.HeaderHash.ToHexString(),
+              blockContainer.HeaderPrevious.Hash.ToHexString(),
               blockContainer.Index,
-              UTXOTable.Header.HeaderHash.ToHexString()),
+              UTXOTable.Header.Hash.ToHexString()),
             ErrorCode.ORPHAN);
         }
 
@@ -193,7 +193,7 @@ namespace BToken.Blockchain
 
         blockContainer.Headers
           .ForEach(h => MapBlockToArchiveIndex.Add(
-            h.HeaderHash, 
+            h.Hash, 
             blockContainer.Index));
       }
 
@@ -219,7 +219,7 @@ namespace BToken.Blockchain
         byte[] uTXOState = new byte[40];
         BitConverter.GetBytes(archiveIndex).CopyTo(uTXOState, 0);
         BitConverter.GetBytes(UTXOTable.BlockHeight).CopyTo(uTXOState, 4);
-        UTXOTable.Header.HeaderHash.CopyTo(uTXOState, 8);
+        UTXOTable.Header.Hash.CopyTo(uTXOState, 8);
 
         using (FileStream stream = new FileStream(
            Path.Combine(PathUTXOState, "UTXOState"),

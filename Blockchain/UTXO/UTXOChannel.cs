@@ -43,7 +43,7 @@ namespace BToken.Blockchain
             if (blockBatchContainer.Buffer == null)
             {
               hashesRequested.Add(
-                blockBatchContainer.Header.HeaderHash);
+                blockBatchContainer.Header.Hash);
             }
           }
           

@@ -83,6 +83,7 @@
     <Compile Include="Blockchain\Blockchain.cs" />
     <Compile Include="Blockchain\BlockchainPeer.cs" />
     <Compile Include="Blockchain\BlockContainer.cs" />
+    <Compile Include="Blockchain\Headerchain\HeaderBranch.cs" />
     <Compile Include="Blockchain\UTXO\UTXOSynchronizer.cs" />
     <Compile Include="Blockchain\Headerchain\HeaderContainer.cs" />
     <Compile Include="Blockchain\UTXO\UTXOChannel.cs" />

@@ -87,20 +87,24 @@ namespace BToken.Blockchain
       {
         while (headersCount > 0)
         {
-          var header = Header.ParseHeader(Buffer, ref startIndex, SHA256);
+          var header = Header.ParseHeader(
+            Buffer, 
+            ref startIndex, 
+            SHA256);
+
           startIndex += 1; // skip txCount
 
           ValidateHeader(header);
 
-          if (!header.HashPrevious.IsEqual(HeaderTip.HeaderHash))
+          if (!header.HashPrevious.IsEqual(HeaderTip.Hash))
           {
             throw new ChainException(
               string.Format(
                 "header {0} with header hash previous {1} " +
                 "not in consecutive order with current tip header {2}",
-                header.HeaderHash.ToHexString(),
+                header.Hash.ToHexString(),
                 header.HashPrevious.ToHexString(),
-                HeaderTip.HeaderHash.ToHexString()));
+                HeaderTip.Hash.ToHexString()));
           }
 
           headersCount -= 1;
@@ -116,11 +120,11 @@ namespace BToken.Blockchain
 
       void ValidateHeader(Header header)
       {
-        if (header.HeaderHash.IsGreaterThan(header.NBits))
+        if (header.Hash.IsGreaterThan(header.NBits))
         {
           throw new ChainException(
             string.Format("header hash {0} greater than NBits {1}",
-              header.HeaderHash.ToHexString(),
+              header.Hash.ToHexString(),
               header.NBits));
         }
 
