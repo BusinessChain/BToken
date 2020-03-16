@@ -41,14 +41,13 @@ namespace BToken.Chaining
       }
 
 
-
-      SHA256 SHA256 = SHA256.Create();
-
-      public override void Parse()
+      
+      public override void Parse(SHA256 sHA256)
       {
         int bufferIndex = 0;
 
-        int headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
+        int headersCount = VarInt.GetInt32(
+          Buffer, ref bufferIndex);
 
         if (headersCount == 0)
         {
@@ -60,17 +59,18 @@ namespace BToken.Chaining
         HeaderRoot = Header.ParseHeader(
           Buffer,
           ref bufferIndex,
-          SHA256);
+          sHA256);
 
         bufferIndex += 1; // skip txCount
-
-        ValidateHeader(HeaderRoot);
-
+        
         headersCount -= 1;
 
         HeaderTip = HeaderRoot;
 
-        ParseHeaders(ref bufferIndex, headersCount);
+        ParseHeaders(
+          ref bufferIndex, 
+          headersCount,
+          sHA256);
 
 
         while (bufferIndex < Buffer.Length)
@@ -79,23 +79,27 @@ namespace BToken.Chaining
 
           CountItems += headersCount;
 
-          ParseHeaders(ref bufferIndex, headersCount);
+          ParseHeaders(
+            ref bufferIndex,
+            headersCount,
+            sHA256);
         }
       }
 
-      void ParseHeaders(ref int startIndex, int headersCount)
+      void ParseHeaders(
+        ref int startIndex, 
+        int headersCount,
+        SHA256 sHA256)
       {
         while (headersCount > 0)
         {
           var header = Header.ParseHeader(
             Buffer, 
             ref startIndex, 
-            SHA256);
+            sHA256);
 
           startIndex += 1; // skip txCount
-
-          ValidateHeader(header);
-
+          
           if (!header.HashPrevious.IsEqual(HeaderTip.Hash))
           {
             throw new ChainException(
@@ -110,31 +114,7 @@ namespace BToken.Chaining
           headersCount -= 1;
 
           header.HeaderPrevious = HeaderTip;
-          HeaderTip.HeaderNext = header;
-
           HeaderTip = header;
-        }
-      }
-
-
-
-      void ValidateHeader(Header header)
-      {
-        if (header.Hash.IsGreaterThan(header.NBits))
-        {
-          throw new ChainException(
-            string.Format("header hash {0} greater than NBits {1}",
-              header.Hash.ToHexString(),
-              header.NBits));
-        }
-
-        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
-        if (header.UnixTimeSeconds >
-          (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + MAX_FUTURE_TIME_SECONDS))
-        {
-          throw new ChainException(
-            string.Format("Timestamp premature {0}",
-              new DateTime(header.UnixTimeSeconds).Date));
         }
       }
     }

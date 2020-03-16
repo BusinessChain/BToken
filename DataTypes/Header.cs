@@ -59,7 +59,7 @@ namespace BToken
       ref int index, 
       SHA256 sHA256)
     {
-      byte[] headerHash =
+      byte[] hash =
         sHA256.ComputeHash(
           sHA256.ComputeHash(
             buffer,
@@ -79,15 +79,33 @@ namespace BToken
 
       uint unixTimeSeconds = BitConverter.ToUInt32(buffer, index);
       index += 4;
+      
+      const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+      if (unixTimeSeconds >
+        (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 
+        MAX_FUTURE_TIME_SECONDS))
+      {
+        throw new ChainException(
+          string.Format("Timestamp premature {0}",
+            new DateTime(unixTimeSeconds).Date));
+      }
 
       uint nBits = BitConverter.ToUInt32(buffer, index);
       index += 4;
+
+      if (hash.IsGreaterThan(nBits))
+      {
+        throw new ChainException(
+          string.Format("header hash {0} greater than NBits {1}",
+            hash.ToHexString(),
+            nBits));
+      }
 
       uint nonce = BitConverter.ToUInt32(buffer, index);
       index += 4;
 
       return new Header(
-        headerHash,
+        hash,
         version, 
         previousHeaderHash, 
         merkleRootHash, 

@@ -94,12 +94,12 @@ namespace BToken.Chaining{
           var peer = new BlockchainPeer(
             await Network.CreateNetworkPeer());
 
+          peer.StartListener();
+
           lock (LOCK_Peers)
           {
             Peers.Add(peer);
           }
-
-          peer.StartListener();
         }
 
 
@@ -132,84 +132,82 @@ namespace BToken.Chaining{
 
     async Task SynchronizeWithPeer(BlockchainPeer peer)
     {
+      HeaderBranch = null;
+
       try
       {
-        HeaderBranch = await Headerchain.CreateHeaderBranch(peer);
-
-        if (HeaderBranch != null)
-        {
-          Headerchain.StageBranch(HeaderBranch);
-
-          if (HeaderBranch.IsFork)
-          {
-            UTXOTable.BackupToDisk();
-
-            if (!TryRollBackUTXO(
-              HeaderBranch.HeaderRoot.HashPrevious))
-            {
-              // Reset everything, prepare for reindexing
-              // If possible, try to use the UTXOImage
-
-              throw new NotImplementedException();
-            }
-          }
-          
-          HeaderLoad = HeaderBranch.HeaderRoot;
-          
-          while (true)
-          {
-            var peersIdle = new List<BlockchainPeer>();
-
-            lock (LOCK_Peers)
-            {
-              if (Peers.All(p => p.IsStatusCompleted()))
-              {
-                if (!HeaderBranch.AreAllHeadersInserted)
-                {
-                  peer.Dispose();
-                }
-
-                peer.IsSynchronized = true;
-
-                break;
-              }
-
-              if (!FlagAllBatchesLoaded)
-              {
-                peersIdle = Peers.FindAll(p => p.IsStatusIdle());
-              }
-            }
-
-            peersIdle.ForEach(p => p.SetStatusBusy());
-            peersIdle.Select(p => RunUTXOSyncSession(p))
-              .ToList();
-
-            await Task.Delay(1000);
-          }
-
-          if (HeaderBranch.AccumulatedDifficultyInserted >
-            Headerchain.AccumulatedDifficulty)
-          {
-            Headerchain.CommitBranch(HeaderBranch);
-          }
-          else
-          {
-            UTXOTable.RestoreFromDisk();
-          }
-        }
-
+        HeaderBranch = await Headerchain.StageBranch(peer);
       }
       catch (Exception ex)
       {
         Console.WriteLine(
-          string.Format("Exception {0}: {1} when syncing with peer {2}",
+          string.Format("Exception {0} when syncing with peer {1}: \n{2}",
           ex.GetType(),
-          ex.Message,
-          peer.GetIdentification()));
+          peer.GetIdentification(),
+          ex.Message));
 
         peer.Dispose();
       }
 
+      if (HeaderBranch != null)
+      {
+        if (HeaderBranch.IsFork)
+        {
+          UTXOTable.BackupToDisk();
+
+          if (!TryRollBackUTXO(
+            HeaderBranch.HeaderRoot.HashPrevious))
+          {
+            // Reset everything, prepare for reindexing
+            // If possible, try to use the UTXOImage
+
+            throw new NotImplementedException();
+          }
+        }
+
+        HeaderLoad = HeaderBranch.HeaderRoot;
+
+        while (true)
+        {
+          var peersIdle = new List<BlockchainPeer>();
+
+          lock (LOCK_Peers)
+          {
+            if (Peers.All(p => p.IsStatusCompleted()))
+            {
+              if (!HeaderBranch.AreAllHeadersInserted)
+              {
+                peer.Dispose();
+              }
+
+              break;
+            }
+
+            if (!FlagAllBatchesLoaded)
+            {
+              peersIdle = Peers.FindAll(p => p.IsStatusIdle());
+            }
+          }
+
+          peersIdle.ForEach(p => p.SetStatusBusy());
+          peersIdle.Select(p => RunUTXOSyncSession(p))
+            .ToList();
+
+          await Task.Delay(1000);
+        }
+
+        if (HeaderBranch.AccumulatedDifficultyInserted >
+          Headerchain.AccumulatedDifficulty)
+        {
+          Headerchain.CommitBranch(HeaderBranch);
+        }
+        else
+        {
+          UTXOTable.RestoreFromDisk();
+        }
+      }
+
+      peer.IsSynchronized = true;
       IsAnyPeerSynchronizing = false;
     }
          

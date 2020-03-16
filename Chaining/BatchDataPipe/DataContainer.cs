@@ -4,6 +4,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
+using System.Security.Cryptography;
 
 
 namespace BToken.Chaining
@@ -38,6 +39,6 @@ namespace BToken.Chaining
 
     
 
-    public abstract void Parse();
+    public abstract void Parse(SHA256 sHA256);
   }
 }

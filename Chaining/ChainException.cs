@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Chaining
+namespace BToken
 {
   enum ErrorCode {
     DUPLICATE,

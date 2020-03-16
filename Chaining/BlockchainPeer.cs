@@ -4,6 +4,7 @@ using System.Linq;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 using BToken.Networking;
 
@@ -38,6 +39,8 @@ namespace BToken.Chaining
     public Stack<DataBatch> UTXOBatchesDownloaded =
       new Stack<DataBatch>();
 
+    SHA256 SHA256 = SHA256.Create();
+
 
 
 
@@ -51,13 +54,14 @@ namespace BToken.Chaining
 
 
     public async Task<Headerchain.HeaderContainer> GetHeaders(
-      IEnumerable<byte[]> locatorHashes)
+      List<byte[]> locator)
     {
       await NetworkPeer.SendMessage(
-        new GetHeadersMessage(locatorHashes));
+        new GetHeadersMessage(locator));
 
       int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
-      CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
+      CancellationTokenSource cancellation = 
+        new CancellationTokenSource(timeout);
 
       byte[] headerBytes;
       while (true)
@@ -75,7 +79,37 @@ namespace BToken.Chaining
       var headerContainer =
         new Headerchain.HeaderContainer(headerBytes);
 
-      headerContainer.Parse();
+      headerContainer.Parse(SHA256);
+
+      int indexLocatorAncestor = locator.FindIndex(
+        h => h.IsEqual(headerContainer.HeaderRoot.HashPrevious));
+
+      if (indexLocatorAncestor == -1)
+      {
+        throw new ChainException(
+          "In getHeaders message received headers do not root in locator.");
+      }
+
+      locator = locator
+        .Skip(indexLocatorAncestor)
+        .Take(2)
+        .ToList();
+
+      if (locator.Count > 1)
+      {
+        Header header = headerContainer.HeaderRoot;
+
+        do
+        {
+          if (header.Hash.IsEqual(locator[1]))
+          {
+            throw new ChainException(
+              "In getHeaders message, received headers root in locator more than once.");
+          }
+
+          header = header.HeaderNext;
+        } while (header != null);
+      }
 
       return headerContainer;
     }
