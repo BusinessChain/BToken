@@ -122,7 +122,7 @@ namespace BToken.Chaining
       headerBranch.HeaderAncestor.HeaderNext = 
         headerBranch.HeaderRoot;
 
-      HeaderTip = headerBranch.HeaderLastInserted;
+      HeaderTip = headerBranch.HeaderInsertedLast;
       
       AccumulatedDifficulty = 
         headerBranch.AccumulatedDifficultyInserted;

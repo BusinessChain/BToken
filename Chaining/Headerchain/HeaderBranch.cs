@@ -10,13 +10,10 @@ namespace BToken.Chaining
   {
     public class HeaderBranch
     {
-      public bool IsFork;
-      public Header HeaderForkTip;
-      public bool IsForkTipInserted;
       public bool IsHeaderTipInserted;
       public Header HeaderRoot;
       public Header HeaderTip;
-      public Header HeaderLastInserted;
+      public Header HeaderInsertedLast;
       public List<double> HeaderDifficulties = new List<double>();
       public double AccumulatedDifficulty;
       public int Height;
@@ -39,13 +36,8 @@ namespace BToken.Chaining
 
       public void ReportHeaderInsertion(Header header)
       {
-        HeaderLastInserted = header;
-
-        if (header == HeaderForkTip)
-        {
-          IsForkTipInserted = true;
-        }
-
+        HeaderInsertedLast = header;
+        
         if (header == HeaderTip)
         {
           IsHeaderTipInserted = true;
@@ -90,6 +82,7 @@ namespace BToken.Chaining
           
           HeaderRoot = container.HeaderRoot;
           HeaderRoot.HeaderPrevious = HeaderAncestor;
+          AccumulatedDifficultyInserted = AccumulatedDifficulty;
         }
 
         Header headerNext = container.HeaderRoot;

@@ -43,18 +43,15 @@ namespace BToken.Networking
         Network network)
       {
         IPEndPoint = new IPEndPoint(iPAddress, Port);
+
         ConnectionType = connectionType;
         Network = network;
       }
 
       public Peer(
-        TcpClient tcpClient, 
+        TcpClient tcpClient,
         ConnectionType connectionType,
         Network network)
-        : this(
-            (IPEndPoint)tcpClient.Client.RemoteEndPoint,
-            connectionType,
-            network)
       {
         TcpClient = tcpClient;
 
@@ -62,6 +59,9 @@ namespace BToken.Networking
           tcpClient.GetStream());
 
         IPEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
+
+        ConnectionType = connectionType;
+        Network = network;
       }
 
       public async Task Connect()

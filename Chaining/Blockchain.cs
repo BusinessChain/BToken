@@ -81,9 +81,7 @@ namespace BToken.Chaining{
         {
           Peers.RemoveAll(p => p.IsStatusDisposed());
 
-          if (
-            Peers.Count <
-            (COUNT_PEERS_MAX - (IsAnyPeerSynchronizing ? 1 : 0)))
+          if (Peers.Count < COUNT_PEERS_MAX)
           {
             flagCreatePeer = true;
           }
@@ -151,18 +149,30 @@ namespace BToken.Chaining{
 
       if (HeaderBranch != null)
       {
-        if (HeaderBranch.IsFork)
+        Header header = Headerchain.HeaderTip;
+
+        if (header != HeaderBranch.HeaderAncestor)
         {
           UTXOTable.BackupToDisk();
 
-          if (!TryRollBackUTXO(
-            HeaderBranch.HeaderRoot.HashPrevious))
+          do
           {
-            // Reset everything, prepare for reindexing
-            // If possible, try to use the UTXOImage
+            try
+            {
+              var blockContainer = new UTXOTable.BlockContainer(header);
+              blockContainer.Parse();
+              UTXOTable.RollBack(blockContainer);
+            }
+            catch
+            {
+              // Reset everything, prepare for reindexing
+              // If possible, try to use the UTXOImage
 
-            throw new NotImplementedException();
-          }
+              throw new NotImplementedException();
+            }
+
+            header = header.HeaderPrevious;
+          } while (header != HeaderBranch.HeaderAncestor);
         }
 
         HeaderLoad = HeaderBranch.HeaderRoot;
@@ -186,10 +196,10 @@ namespace BToken.Chaining{
             if (!FlagAllBatchesLoaded)
             {
               peersIdle = Peers.FindAll(p => p.IsStatusIdle());
+              peersIdle.ForEach(p => p.SetStatusBusy());
             }
           }
 
-          peersIdle.ForEach(p => p.SetStatusBusy());
           peersIdle.Select(p => RunUTXOSyncSession(p))
             .ToList();
 
@@ -210,13 +220,8 @@ namespace BToken.Chaining{
       peer.IsSynchronized = true;
       IsAnyPeerSynchronizing = false;
     }
-         
-    bool TryRollBackUTXO(byte[] headerHash)
-    {
-      return true;
-    }
-    
 
+    
 
     readonly object LOCK_BatchIndex = new object();
     int BatchIndex;
@@ -338,6 +343,8 @@ namespace BToken.Chaining{
             peer.Dispose();
             return;
           }
+
+          UTXOArchive
 
           HeaderBranch.ReportHeaderInsertion(
             blockContainer.Header);
