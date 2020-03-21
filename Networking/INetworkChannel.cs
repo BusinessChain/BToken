@@ -15,8 +15,6 @@ namespace BToken.Networking
       Task<byte[]> GetHeaders(
         IEnumerable<byte[]> locatorHashes);
 
-      Task RequestBlocks(List<byte[]> hashes);
-
       Task<byte[]> ReceiveBlock();
 
       Task SendMessage(NetworkMessage networkMessage);
@@ -30,10 +28,7 @@ namespace BToken.Networking
 
       bool IsDisposed();
 
-      /// <summary>
-      /// Reports and also disposes a peer.
-      /// </summary>
-      void ReportInvalid();
+      bool IsInbound();
     }
   }
 }

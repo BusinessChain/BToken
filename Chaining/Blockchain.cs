@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+using System.Security.Cryptography;
 
 using BToken.Networking;
 
@@ -14,7 +15,7 @@ namespace BToken.Chaining{
   {
     public const int COUNT_PEERS_MAX = 4;
 
-    Headerchain Headerchain;
+    public Headerchain Headerchain;
     DataArchiver HeaderArchive;
     
     UTXOTable UTXOTable;
@@ -61,7 +62,8 @@ namespace BToken.Chaining{
     
     object LOCK_Peers = new object();
     List<BlockchainPeer> Peers = new List<BlockchainPeer>();
-    bool IsAnyPeerSynchronizing;
+    readonly object LOCK_IsChainLocked = new object();
+    bool IsChainLocked;
 
     public async Task Start()
     {
@@ -69,11 +71,17 @@ namespace BToken.Chaining{
 
       //  await HeaderArchive.Load(
       //  Headerchain.GenesisHeader.HeaderHash);
-      
+
       //await UTXOArchive.Load(
       //  UTXOTable.Header.HeaderHash);
 
-      while (true)
+      StartPeerGenerator();
+      StartPeerSynchronizer();
+    }
+
+    async Task StartPeerGenerator()
+    {
+      while(true)
       {
         bool flagCreatePeer = false;
 
@@ -90,6 +98,7 @@ namespace BToken.Chaining{
         if (flagCreatePeer)
         {
           var peer = new BlockchainPeer(
+            this,
             await Network.CreateNetworkPeer());
 
           peer.StartListener();
@@ -100,41 +109,115 @@ namespace BToken.Chaining{
           }
         }
 
-
-        BlockchainPeer peerSynchronizing;
-
-        if (!IsAnyPeerSynchronizing)
-        {
-          lock (LOCK_Peers)
-          {
-            peerSynchronizing = Peers
-              .Find(p => !p.IsSynchronized && p.IsStatusIdle());
-          }
-
-          if (peerSynchronizing != null)
-          {
-            IsAnyPeerSynchronizing = true;
-
-            SynchronizeWithPeer(peerSynchronizing);
-          }
-        }
-
-        await Task.Delay(1000);
+        await Task.Delay(2000);
       }
     }
 
+    async Task StartPeerSynchronizer()
+    {
+      while (true)
+      {
+        await Task.Delay(1000);
+
+        BlockchainPeer peerSynchronizing = null;
+
+        lock (LOCK_IsChainLocked)
+        {
+          if (IsChainLocked)
+          {
+            continue;
+          }
+
+          lock (LOCK_IsSynchronizing)
+          {
+            if (IsSynchronizing)
+            {
+              continue;
+            }
+
+            lock (LOCK_Peers)
+            {
+              peerSynchronizing = Peers.Find(p =>
+                !p.IsSynchronized && p.IsStatusIdle());
+            }
+
+            if (peerSynchronizing != null)
+            {
+              IsChainLocked = true;
+            }
+          }
+        }
+
+        if (peerSynchronizing != null)
+        {
+          await SynchronizeWithPeer(peerSynchronizing);
+        }
+
+        IsChainLocked = false;
+      }
+    }
 
     Headerchain.HeaderBranch HeaderBranch;
     Header HeaderLoad;
     bool FlagAllBatchesLoaded;
 
-    async Task SynchronizeWithPeer(BlockchainPeer peer)
+    public async Task SynchronizeWithPeer(BlockchainPeer peer)
     {
+      IsSynchronizing = true;
+      peer.SetIsSynchronizing();
+
       HeaderBranch = null;
 
       try
       {
-        HeaderBranch = await Headerchain.StageBranch(peer);
+        List<byte[]> locator = Headerchain.GetLocator();
+        
+        HeaderContainer headerContainer = 
+          await peer.GetHeaders(locator);
+        
+        if (headerContainer.HeaderRoot != null)
+        {
+          HeaderBranch = Headerchain.CreateBranch();
+
+          HeaderContainer headerContainerNext;
+
+          while(true)
+          {
+            HeaderBranch.AddContainer(headerContainer);
+
+            headerContainerNext = await peer.GetHeaders(locator);
+
+            if(headerContainerNext.HeaderRoot == null)
+            {
+              break;
+            }
+
+            if (!headerContainerNext.HeaderRoot.HeaderPrevious.Hash
+              .IsEqual(headerContainer.HeaderTip.Hash))
+            {
+              throw new ChainException(
+                "Received header container does not chain.");
+            }
+
+            headerContainer = headerContainerNext;
+          }
+        
+          if (HeaderBranch.AccumulatedDifficulty <= 
+            Headerchain.AccumulatedDifficulty)
+          {
+            if (peer.IsInbound())
+            {
+              throw new ChainException(
+                string.Format(
+                  "Received header branch is weaker than main chain.",
+                  peer.GetIdentification()));
+            }
+
+            HeaderBranch = null;
+
+            peer.SendHeaderTip();
+          }
+        }
       }
       catch (Exception ex)
       {
@@ -217,8 +300,10 @@ namespace BToken.Chaining{
         }
       }
 
+      IsSynchronizing = false;
+
       peer.IsSynchronized = true;
-      IsAnyPeerSynchronizing = false;
+      peer.ClearIsSynchronizing();
     }
 
     
@@ -266,6 +351,8 @@ namespace BToken.Chaining{
             await Task.Delay(1000);
           }
         }
+
+        peer.CalculateNewCountBlocks();
       }
 
       lock (LOCK_BatchIndex)
@@ -343,9 +430,7 @@ namespace BToken.Chaining{
             peer.Dispose();
             return;
           }
-
-          UTXOArchive
-
+          
           HeaderBranch.ReportHeaderInsertion(
             blockContainer.Header);
         }
@@ -418,125 +503,83 @@ namespace BToken.Chaining{
         return true;
       }
     }
-    
-       
 
-    public async Task InsertHeaders(
-      byte[] headerBytes,
-      BlockchainPeer channel)
-    {
-      var headerContainer = 
-        new Headerchain.HeaderContainer(headerBytes);
 
-      headerContainer.Parse();
 
-      var headerBatch = new DataBatch();
+    readonly object LOCK_IsSynchronizing = new object();
+    bool IsSynchronizing;
 
-      headerBatch.DataContainers.Add(headerContainer);
-      
-      await LockChain();
 
-      if (Headerchain.TryReadHeader(
-        headerContainer.HeaderRoot.Hash, 
-        out Header header))
-      {
-        if (UTXOTable
-          .Synchronizer
-          .MapBlockToArchiveIndex
-          .ContainsKey(headerContainer.HeaderRoot.Hash))
-        {
-          ReleaseChain();
-          channel.ReportDuplicate();
-          return;
-        }
-        else
-        {
-          // block runterladen
-        }
-      }
-      else
-      {
-        try
-        {
-          byte[] stopHash =
-           ("00000000000000000000000000000000" +
-           "00000000000000000000000000000000").ToBinary();
-
-          Headerchain.InsertHeaderBranchTentative(
-            headerContainer.HeaderRoot,
-            stopHash);
-        }
-        catch (ChainException ex)
-        {
-          switch (ex.ErrorCode)
-          {
-            case ErrorCode.ORPHAN:
-              SynchronizeBlockchain(channel);
-              return;
-
-            case ErrorCode.INVALID:
-              ReleaseChain();
-              channel.ReportInvalid();
-              return;
-          }
-        }
-      }
-      
-      DataBatch blockBatch = 
-        await channel.DownloadBlocks(headerBatch);
-
-      try
-      {
-        UTXOTable.Synchronizer.InsertBatch(blockBatch);
-      }
-      catch (ChainException ex)
-      {
-        switch (ex.ErrorCode)
-        {
-          case ErrorCode.ORPHAN:
-            // Block is not in Main chain
-            break;
-
-          case ErrorCode.INVALID:
-            // Roll back inserted blocks
-            // Restore UTXO by going to header tip 
-            // (if there was no fork this doesn't do anything)
-            ReleaseChain();
-            channel.ReportInvalid();
-            return;
-        }
-      }
-
-      ReleaseChain();
-    }
-    
-
-    public readonly object LOCK_IsChainLocked = new object();
-    bool IsChainLocked;
-
-    async Task LockChain()
+    public async Task InsertHeader(
+      HeaderContainer headerContainer,
+      BlockchainPeer peer)
     {
       while (true)
       {
         lock (LOCK_IsChainLocked)
         {
-          if (!IsChainLocked)
+          if (IsChainLocked)
+          {
+            if (IsSynchronizing)
+            {
+              return;
+            }
+          }
+          else
           {
             IsChainLocked = true;
-            return;
+            break;
           }
         }
 
         await Task.Delay(200);
       }
-    }
 
-    void ReleaseChain()
-    {
-      lock (LOCK_IsChainLocked)
+      if (Headerchain.TryReadHeader(
+        headerContainer.HeaderRoot.Hash,
+        out Header header))
       {
-        IsChainLocked = false;
+        peer.ReportDuplicate();
       }
+      else if (Headerchain.HeaderTip.Hash.IsEqual(
+        headerContainer.HeaderRoot.HashPrevious))
+      {
+        var headerBranch = Headerchain.CreateBranch();
+
+        headerBranch.AddContainer(headerContainer);
+        
+        var blockBatch = new DataBatch(IndexLoad++);
+
+        var blockContainer =
+          new UTXOTable.BlockContainer(
+            Headerchain,
+            headerContainer.HeaderRoot);
+
+        blockBatch.DataContainers.Add(blockContainer);
+
+        if (await peer.TryDownloadBlocks(blockBatch))
+        {
+          UTXOTable.InsertBlockContainer(blockContainer);
+
+          headerBranch.ReportHeaderInsertion(
+            headerContainer.HeaderRoot);
+
+          Headerchain.CommitBranch(headerBranch);
+        }
+        else
+        {
+          throw new ChainException(
+            string.Format(
+              "Could not download announced block {0}", 
+              headerContainer.HeaderRoot));
+        }
+      }
+      else
+      {
+        await SynchronizeWithPeer(peer);
+      }
+
+      IsChainLocked = false;
     }
   }
 }

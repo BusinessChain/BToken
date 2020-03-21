@@ -24,8 +24,6 @@ namespace BToken.Networking
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
 
-      readonly object LOCK_IsDispatched = new object();
-      bool IsDispatched = true;
 
       BufferBlock<NetworkMessage> ApplicationMessages =
         new BufferBlock<NetworkMessage>();
@@ -33,8 +31,7 @@ namespace BToken.Networking
       ulong FeeFilterValue;
 
       public ConnectionType ConnectionType;
-
-
+      
 
 
       public Peer(
@@ -76,224 +73,6 @@ namespace BToken.Networking
           TcpClient.GetStream());
 
         await HandshakeAsync();
-      }
-
-      
-      public async Task Run()
-      {
-
-        Release();
-
-
-        // Will that throw an exception when in some Application session 
-        // an exception is thrown. Or is it, that in the app always a timeout
-        // occurs when here an exception is thrown. Can it be that both the app and 
-        // the network attempt to renew a peer in case of an exception.
-        await ProcessNetworkMessages();
-      }
-
-      readonly object LOCK_FlagIsDisposed;
-      bool FlagIsDisposed;
-
-      public void Dispose()
-      {
-        // Der peer soll grundsätzlich nicht
-        // häufig reconnecten, daher führt einfach jedes Disposen
-        // zu Blame.
-        Blame();
-
-        lock (LOCK_FlagIsDisposed)
-        {
-          FlagIsDisposed = true;
-        }
-
-        TcpClient.Dispose();
-      }
-
-      public bool IsDisposed()
-      {
-        lock (LOCK_FlagIsDisposed)
-        {
-          return FlagIsDisposed;
-        }
-      }
-
-
-
-      public async Task ProcessNetworkMessages()
-      {
-        try
-        {
-          while (true)
-          {
-            NetworkMessage message = await NetworkMessageStreamer
-              .ReadAsync(default).ConfigureAwait(false);
-
-            switch (message.Command)
-            {
-              case "ping":
-                Task processPingMessageTask = ProcessPingMessageAsync(message);
-                break;
-
-              case "addr":
-                ProcessAddressMessage(message);
-                break;
-
-              case "sendheaders":
-                Task processSendHeadersMessageTask = ProcessSendHeadersMessageAsync(message);
-                break;
-
-              case "feefilter":
-                ProcessFeeFilterMessage(message);
-                break;
-
-              default:
-                ApplicationMessages.Post(message);
-                break;
-            }
-          }
-        }
-        catch
-        {
-          Dispose();
-        }
-      }
-      
-      async Task ProcessRequest(NetworkMessage message)
-      {
-        switch (message.Command)
-        {
-          case "getdata":
-            var getDataMessage = new GetDataMessage(message);
-
-            getDataMessage.Inventories.ForEach(inv =>
-            {
-              Console.WriteLine("getdata {0}: {1} from {2}",
-                inv.Type,
-                inv.Hash.ToHexString(),
-                GetIdentification());
-            });
-
-            foreach(byte[] block in Network.UTXOTable.Synchronizer.GetBlocks(
-              getDataMessage.Inventories
-              .Where(i => i.Type == InventoryType.MSG_BLOCK)
-              .Select(i => i.Hash)))
-            {
-              await SendMessage(
-                new NetworkMessage("block", block));
-            }
-
-            break;
-
-          case "getheaders":
-            var getHeadersMessage = new GetHeadersMessage(message);
-
-            Console.WriteLine("received getheaders locator[0] {0} from {1}",
-              getHeadersMessage.HeaderLocator.First().ToHexString(),
-              GetIdentification());
-
-            if(!Network
-              .Headerchain
-              .Synchronizer
-              .GetIsSyncingCompleted())
-            {
-              break;
-            }
-
-            var headers = Network.Headerchain.GetHeaders(
-              getHeadersMessage.HeaderLocator,
-              2000,
-              getHeadersMessage.StopHash);
-
-            await SendMessage(
-              new HeadersMessage(headers));
-
-            Console.WriteLine("sent {0} headers tip {1} to {2}",
-              headers.Count,
-              headers.Any() ? headers.First().HeaderHash.ToHexString() : "",
-              GetIdentification());
-
-            break;
-
-          case "inv":
-            var invMessage = new InvMessage(message);
-
-            //foreach (Inventory inv in invMessage.Inventories
-            //  .Where(inv => inv.Type == InventoryType.MSG_BLOCK).ToList())
-            //{
-            //  Console.WriteLine("inv message {0} from {1}",
-            //       inv.Hash.ToHexString(),
-            //       GetIdentification());
-
-            //  if (Network.Headerchain.TryReadHeader(
-            //    inv.Hash,
-            //    out Header headerAdvertized))
-            //  {
-            //    //Console.WriteLine(
-            //    //  "Advertized block {0} already in chain",
-            //    //  inv.Hash.ToHexString());
-
-            //    break;
-            //  }
-
-            //  Headerchain.Synchronizer.LoadBatch();
-            //  await Headerchain.Synchronizer.DownloadHeaders(channel);
-
-            //  if (Headerchain.Synchronizer.TryInsertBatch())
-            //  {
-            //    if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
-            //    {
-            //      Console.WriteLine(
-            //        //      "Could not synchronize UTXO, with channel {0}",
-            //        GetIdentification());
-            //    }
-            //  }
-            //  else
-            //  {
-            //    Console.WriteLine(
-            //      "Failed to insert header message from channel {0}",
-            //      GetIdentification());
-            //  }
-            //}
-
-            break;
-
-          case "headers":
-
-            await Blockchain.InsertHeaders(
-              message.Payload,
-              new Chaining.BlockchainPeer(this));
-                        
-            break;
-
-
-          default:
-            break;
-        }
-      }
-
-
-
-      public bool TryDispatch()
-      {
-        lock (LOCK_IsDispatched)
-        {
-          if(IsDispatched)
-          {
-            return false;
-          }
-
-          IsDispatched = true;
-          return true;
-        }
-      }
-
-      public void Release()
-      {
-        lock (LOCK_IsDispatched)
-        {
-          IsDispatched = false;
-        }
       }
 
       async Task HandshakeAsync()
@@ -371,6 +150,78 @@ namespace BToken.Networking
         }
       }
 
+      readonly object LOCK_FlagIsDisposed;
+      bool FlagIsDisposed;
+
+      public void Dispose()
+      {
+        // Der peer soll grundsätzlich nicht
+        // häufig reconnecten, daher führt einfach jedes Disposen
+        // zu Blame.
+        Blame();
+
+        lock (LOCK_FlagIsDisposed)
+        {
+          FlagIsDisposed = true;
+        }
+
+        TcpClient.Dispose();
+      }
+
+      public bool IsDisposed()
+      {
+        lock (LOCK_FlagIsDisposed)
+        {
+          return FlagIsDisposed;
+        }
+      }
+
+
+
+      // Will that throw an exception when in some Application session 
+      // an exception is thrown. Or is it, that in the app always a timeout
+      // occurs when here an exception is thrown. Can it be that both the app and 
+      // the network attempt to renew a peer in case of an exception.
+
+      public async Task Run()
+      {
+        try
+        {
+          while (true)
+          {
+            NetworkMessage message = await NetworkMessageStreamer
+              .ReadAsync(default)
+              .ConfigureAwait(false);
+
+            switch (message.Command)
+            {
+              case "ping":
+                Task processPingMessageTask = ProcessPingMessageAsync(message);
+                break;
+
+              case "addr":
+                ProcessAddressMessage(message);
+                break;
+
+              case "sendheaders":
+                Task processSendHeadersMessageTask = ProcessSendHeadersMessageAsync(message);
+                break;
+
+              case "feefilter":
+                ProcessFeeFilterMessage(message);
+                break;
+
+              default:
+                ApplicationMessages.Post(message);
+                break;
+            }
+          }
+        }
+        catch
+        {
+          Dispose();
+        }
+      }
 
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
       {
@@ -411,16 +262,7 @@ namespace BToken.Networking
       
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 5000;
 
-
-      public async Task RequestBlocks(List<byte[]> hashes)
-      {
-        await SendMessage(
-          new GetDataMessage(
-            hashes.Select(h => new Inventory(
-              InventoryType.MSG_BLOCK, h))
-              .ToList()));
-      }
-
+      
       public string GetIdentification()
       {
         string signConnectionType =

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using System.Security.Cryptography;
 
 using BToken.Networking;
@@ -12,7 +13,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  class BlockchainPeer
+  public class BlockchainPeer
   {
     enum StatusUTXOSyncSession
     {
@@ -23,6 +24,7 @@ namespace BToken.Chaining
       DISPOSED
     }
 
+    Blockchain Blockchain;
     Network.INetworkChannel NetworkPeer;
 
     public bool IsSynchronized;
@@ -31,43 +33,186 @@ namespace BToken.Chaining
 
     const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
     const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
-    
+
     const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 2;
     Stopwatch StopwatchDownload = new Stopwatch();
     public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-    
+
     public Stack<DataBatch> UTXOBatchesDownloaded =
       new Stack<DataBatch>();
+
+    BufferBlock<NetworkMessage> MessageBufferSynchronization = 
+      new BufferBlock<NetworkMessage>();
 
     SHA256 SHA256 = SHA256.Create();
 
 
 
-
     public BlockchainPeer(
+      Blockchain blockchain,
       Network.INetworkChannel networkChannel)
     {
+      Blockchain = blockchain;
       NetworkPeer = networkChannel;
 
       Status = StatusUTXOSyncSession.IDLE;
     }
 
 
-    public async Task<Headerchain.HeaderContainer> GetHeaders(
+    public async Task StartListener()
+    {
+      try
+      {
+        while (true)
+        {
+          NetworkMessage message = await NetworkPeer
+            .ReceiveMessage(default)
+            .ConfigureAwait(false);
+
+          if(IsSynchronizing())
+          {
+            MessageBufferSynchronization.Post(message);
+            continue;
+          }
+
+          switch (message.Command)
+          {
+            //case "getdata":
+            //  var getDataMessage = new GetDataMessage(message);
+
+            //  getDataMessage.Inventories.ForEach(inv =>
+            //  {
+            //    Console.WriteLine("getdata {0}: {1} from {2}",
+            //      inv.Type,
+            //      inv.Hash.ToHexString(),
+            //      GetIdentification());
+            //  });
+
+            //  foreach (byte[] block in Blockchain.UTXOTable.Synchronizer.GetBlocks(
+            //    getDataMessage.Inventories
+            //    .Where(i => i.Type == InventoryType.MSG_BLOCK)
+            //    .Select(i => i.Hash)))
+            //  {
+            //    await SendMessage(
+            //      new NetworkMessage("block", block));
+            //  }
+
+            //  break;
+
+            //case "getheaders":
+            //  var getHeadersMessage = new GetHeadersMessage(message);
+
+            //  Console.WriteLine("received getheaders locator[0] {0} from {1}",
+            //    getHeadersMessage.HeaderLocator.First().ToHexString(),
+            //    GetIdentification());
+
+            //  if (!Network
+            //    .Headerchain
+            //    .Synchronizer
+            //    .GetIsSyncingCompleted())
+            //  {
+            //    break;
+            //  }
+
+            //  var headers = Network.Headerchain.GetHeaders(
+            //    getHeadersMessage.HeaderLocator,
+            //    2000,
+            //    getHeadersMessage.StopHash);
+
+            //  await SendMessage(
+            //    new HeadersMessage(headers));
+
+            //  Console.WriteLine("sent {0} headers tip {1} to {2}",
+            //    headers.Count,
+            //    headers.Any() ? headers.First().HeaderHash.ToHexString() : "",
+            //    GetIdentification());
+
+            //  break;
+
+            //case "inv":
+            //  var invMessage = new InvMessage(message);
+
+            //  foreach (Inventory inv in invMessage.Inventories
+            //    .Where(inv => inv.Type == InventoryType.MSG_BLOCK).ToList())
+            //  {
+            //    Console.WriteLine("inv message {0} from {1}",
+            //         inv.Hash.ToHexString(),
+            //         GetIdentification());
+
+            //    if (Network.Headerchain.TryReadHeader(
+            //      inv.Hash,
+            //      out Header headerAdvertized))
+            //    {
+            //      //Console.WriteLine(
+            //      //  "Advertized block {0} already in chain",
+            //      //  inv.Hash.ToHexString());
+
+            //      break;
+            //    }
+
+            //    Headerchain.Synchronizer.LoadBatch();
+            //    await Headerchain.Synchronizer.DownloadHeaders(channel);
+
+            //    if (Headerchain.Synchronizer.TryInsertBatch())
+            //    {
+            //      if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
+            //      {
+            //        Console.WriteLine(
+            //          //      "Could not synchronize UTXO, with channel {0}",
+            //          GetIdentification());
+            //      }
+            //    }
+            //    else
+            //    {
+            //      Console.WriteLine(
+            //        "Failed to insert header message from channel {0}",
+            //        GetIdentification());
+            //    }
+            //  }
+
+            //  break;
+
+            case "headers":
+              var headerContainer =
+                new HeaderContainer(message.Payload);
+
+              headerContainer.Parse(SHA256);
+              
+              await Blockchain.InsertHeader(
+                headerContainer, 
+                this);
+              
+              break;
+
+
+            default:
+              break;
+          }
+        }
+      }
+      catch
+      {
+        Dispose();
+      }
+    }
+
+
+    public async Task<HeaderContainer> GetHeaders(
       List<byte[]> locator)
     {
       await NetworkPeer.SendMessage(
         new GetHeadersMessage(locator));
 
       int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
-      CancellationTokenSource cancellation = 
+      CancellationTokenSource cancellation =
         new CancellationTokenSource(timeout);
 
       byte[] headerBytes;
       while (true)
       {
         NetworkMessage networkMessage =
-          await NetworkPeer.ReceiveMessage(cancellation.Token);
+          await MessageBufferSynchronization.ReceiveAsync(
+            cancellation.Token);
 
         if (networkMessage.Command == "headers")
         {
@@ -77,7 +222,7 @@ namespace BToken.Chaining
       }
 
       var headerContainer =
-        new Headerchain.HeaderContainer(headerBytes);
+        new HeaderContainer(headerBytes);
 
       headerContainer.Parse(SHA256);
 
@@ -114,7 +259,7 @@ namespace BToken.Chaining
       return headerContainer;
     }
 
-
+    
     public async Task<bool> TryDownloadBlocks(
       DataBatch uTXOBatch)
     {
@@ -122,11 +267,15 @@ namespace BToken.Chaining
 
       try
       {
-        await RequestBlocks(
-          uTXOBatch.DataContainers
-          .Select(container => ((UTXOTable.BlockContainer)container)
-          .Header.Hash));
-        
+        List<Inventory> inventories = uTXOBatch.DataContainers
+          .Select(container => new Inventory(
+            InventoryType.MSG_BLOCK,
+            ((UTXOTable.BlockContainer)container).Header.Hash))
+          .ToList();
+
+        await NetworkPeer.SendMessage(
+          new GetDataMessage(inventories));
+
         var cancellationDownloadBlocks =
           new CancellationTokenSource(
             TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
@@ -173,13 +322,10 @@ namespace BToken.Chaining
 
       UTXOBatchesDownloaded.Push(uTXOBatch);
 
-      CalculateNewCountBlocks();
-
       return true;
     }
-       
 
-    void CalculateNewCountBlocks()
+    public void CalculateNewCountBlocks()
     {
       const float safetyFactorTimeout = 10;
       const float marginFactorResetCountBlocksDownload = 5;
@@ -191,7 +337,7 @@ namespace BToken.Chaining
       {
         CountBlocksLoad += 1;
       }
-      else if (ratioTimeoutToDownloadTime < 
+      else if (ratioTimeoutToDownloadTime <
         marginFactorResetCountBlocksDownload)
       {
         CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
@@ -204,26 +350,17 @@ namespace BToken.Chaining
 
 
 
-    public async Task RequestBlocks(
-      IEnumerable<byte[]> hashes)
-    {
-      List<Inventory> inventories = hashes
-        .Select(h => new Inventory(
-          InventoryType.MSG_BLOCK, h))
-        .ToList();
-
-      await NetworkPeer.SendMessage(
-        new GetDataMessage(inventories));
-    }
-
 
     public void ReportDuplicate()
     {
+      // if number of duplicates exceeds number of headers
+      // appended within the last hour, then dispose()
       throw new NotImplementedException();
     }
-    public void ReportInvalid()
+
+    public bool IsInbound()
     {
-      NetworkPeer.ReportInvalid();
+      return NetworkPeer.IsInbound();
     }
 
     public string GetIdentification()
@@ -314,6 +451,31 @@ namespace BToken.Chaining
       {
         return Status == StatusUTXOSyncSession
           .BUSY;
+      }
+    }
+
+    readonly object LOCK_FlagIsSynchronizing = new object();
+    bool FlagIsSynchronizing;
+
+    public bool IsSynchronizing()
+    {
+      lock (LOCK_FlagIsSynchronizing)
+      {
+        return FlagIsSynchronizing;
+      }
+    }
+    public void SetIsSynchronizing()
+    {
+      lock (LOCK_FlagIsSynchronizing)
+      {
+        FlagIsSynchronizing = true;
+      }
+    }
+    public void ClearIsSynchronizing()
+    {
+      lock (LOCK_FlagIsSynchronizing)
+      {
+        FlagIsSynchronizing = true;
       }
     }
   }

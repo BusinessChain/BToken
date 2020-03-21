@@ -51,8 +51,8 @@ namespace BToken.Chaining
       {
         if (HeaderRoot == null) 
         {
-          while (!container.HeaderRoot.HashPrevious.IsEqual(
-            HeaderAncestor.Hash))
+          while (!HeaderAncestor.Hash.IsEqual(
+            container.HeaderRoot.HashPrevious))
           {
             AccumulatedDifficulty -= TargetManager.GetDifficulty(
               HeaderAncestor.NBits);
@@ -62,8 +62,9 @@ namespace BToken.Chaining
             HeaderAncestor = HeaderAncestor.HeaderPrevious;
           }
 
-          while (HeaderAncestor.HeaderNext.Hash
-            .IsEqual(container.HeaderRoot.Hash))
+          while (HeaderAncestor.HeaderNext != null && 
+            HeaderAncestor.HeaderNext.Hash.IsEqual(
+              container.HeaderRoot.Hash))
           {
             HeaderAncestor = HeaderAncestor.HeaderNext;
 
@@ -85,30 +86,30 @@ namespace BToken.Chaining
           AccumulatedDifficultyInserted = AccumulatedDifficulty;
         }
 
-        Header headerNext = container.HeaderRoot;
-        int heightNext = Height + 1;
+        Header header = container.HeaderRoot;
+        int height = Height + 1;
 
         do
         {
           ValidateHeaderNext(
-            headerNext, 
-            heightNext);
+            header, 
+            height);
 
           if(HeaderTip != null)
           {
-            HeaderTip.HeaderNext = headerNext;
+            HeaderTip.HeaderNext = header;
           }
-          HeaderTip = headerNext;
-          Height = heightNext;
+          HeaderTip = header;
+          Height = height;
 
           double difficulty = TargetManager.GetDifficulty(
-            headerNext.NBits);
+            header.NBits);
           HeaderDifficulties.Add(difficulty);
           AccumulatedDifficulty += difficulty;
 
-          headerNext = headerNext.HeaderNext;
+          header = header.HeaderNext;
 
-        } while (headerNext != null);
+        } while (header != null);
       }
            
       void ValidateHeaderNext(

@@ -8,7 +8,7 @@ using System.Security.Cryptography;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain : DataArchiver.IDataStructure
+  public partial class Headerchain : DataArchiver.IDataStructure
   {
     public Chain MainChain;
     public Header GenesisHeader;
@@ -62,61 +62,21 @@ namespace BToken.Chaining
     }
 
 
-    
-    public async Task<HeaderBranch> StageBranch(BlockchainPeer peer)
+    public HeaderBranch CreateBranch()
     {
-      List<byte[]> locator = Locator.BlockLocations
-          .Select(b => b.Hash)
-          .ToList();
-
-      HeaderContainer headerContainer = await peer.GetHeaders(locator);
-
-      if(headerContainer.HeaderRoot == null)
-      {
-        return null;
-      }
-
-      var headerBranch = new HeaderBranch(
-        HeaderTip, 
+      return new HeaderBranch(
+        HeaderTip,
         AccumulatedDifficulty,
         Height);
-
-      HeaderContainer headerContainerNext;
-
-      do
-      {
-        headerBranch.AddContainer(headerContainer);
-
-        headerContainerNext = await peer.GetHeaders(locator);
-        
-        if (!headerContainerNext.HeaderRoot.HeaderPrevious.Hash
-          .IsEqual(headerContainer.HeaderTip.Hash))
-        {
-          throw new ChainException("Received headers do not chain.");
-        }
-
-        headerContainer = headerContainerNext;
-
-      } while (headerContainerNext.HeaderRoot != null);
-
-      if (headerBranch.AccumulatedDifficulty > AccumulatedDifficulty)
-      {
-        return headerBranch;
-      }
-
-      throw new ChainException(
-        string.Format(
-          "staged header branch {0} with hight {1} not " +
-          "stronger than main branch {2} with height {3}",
-          headerBranch.HeaderTip.Hash.ToHexString(),
-          headerBranch.Height,
-          HeaderTip.Hash.ToHexString(),
-          Height),
-        ErrorCode.INVALID);
     }
-    
-        
-    
+
+    public List<byte[]> GetLocator()
+    {
+      return Locator.BlockLocations
+          .Select(b => b.Hash)
+          .ToList();
+    }
+       
     public void CommitBranch(HeaderBranch headerBranch)
     {
       headerBranch.HeaderAncestor.HeaderNext = 
@@ -131,18 +91,15 @@ namespace BToken.Chaining
     }
 
 
-    public bool Contains(byte[] headerHash)
+    public async Task InsertHeader(
+      HeaderContainer headerContainer)
     {
-      SHA256 sHA256 = SHA256.Create();
-
-      int key = BitConverter.ToInt32(headerHash, 0);
-
-      if (HeaderIndex.TryGetValue(key, out List<Header> headers))
+      if(!HeaderTip.Hash.IsEqual(
+        headerContainer.HeaderRoot.Hash))
       {
-        return headers.Any(h => headerHash.IsEqual(h.Hash));
+
       }
 
-      return false;
     }
 
 

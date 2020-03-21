@@ -94,7 +94,7 @@ namespace BToken.Networking
           continue;
         }
 
-        peer.ProcessNetworkMessages();
+        peer.Run();
 
         return peer;
       }
@@ -129,29 +129,6 @@ namespace BToken.Networking
     }
 
          
-    public async Task<INetworkChannel> DispatchPeerOutbound()
-    {
-      do
-      {
-        lock (LOCK_Peers)
-        {
-          Peer peer = Peers.Find(p =>
-            p.ConnectionType == ConnectionType.OUTBOUND &&
-            p.TryDispatch());
-
-          if(peer != null)
-          {
-            return peer;
-          }
-        }
-
-        Console.WriteLine("waiting for channel to dispatch.");
-
-        await Task.Delay(1000).ConfigureAwait(false);
-
-      } while (true);
-    }
-
     public async Task<INetworkChannel> AcceptChannelRequest()
     {
       return await PeersRequest.ReceiveAsync();
