@@ -10,7 +10,6 @@ namespace BToken.Chaining
   {
     public class HeaderBranch
     {
-      public bool IsHeaderTipInserted;
       public Header HeaderRoot;
       public Header HeaderTip;
       public Header HeaderInsertedLast;
@@ -37,22 +36,17 @@ namespace BToken.Chaining
       public void ReportHeaderInsertion(Header header)
       {
         HeaderInsertedLast = header;
-        
-        if (header == HeaderTip)
-        {
-          IsHeaderTipInserted = true;
-        }
 
         AccumulatedDifficultyInserted +=
           HeaderDifficulties[HeightInserted++];
       }
 
-      public void AddContainer(HeaderContainer container)
+      public void AddContainer(Header header)
       {
         if (HeaderRoot == null) 
         {
           while (!HeaderAncestor.Hash.IsEqual(
-            container.HeaderRoot.HashPrevious))
+            header.HashPrevious))
           {
             AccumulatedDifficulty -= TargetManager.GetDifficulty(
               HeaderAncestor.NBits);
@@ -64,43 +58,39 @@ namespace BToken.Chaining
 
           while (HeaderAncestor.HeaderNext != null && 
             HeaderAncestor.HeaderNext.Hash.IsEqual(
-              container.HeaderRoot.Hash))
+              header.Hash))
           {
             HeaderAncestor = HeaderAncestor.HeaderNext;
 
             AccumulatedDifficulty += TargetManager.GetDifficulty(
               HeaderAncestor.NBits);
 
-            Height++;
+            Height += 1;
 
-            if (container.HeaderRoot.HeaderNext == null)
+            if (header.HeaderNext == null)
             {
               return;
             }
 
-            container.HeaderRoot = container.HeaderRoot.HeaderNext;
+            header = header.HeaderNext;
           }
-          
-          HeaderRoot = container.HeaderRoot;
-          HeaderRoot.HeaderPrevious = HeaderAncestor;
-          AccumulatedDifficultyInserted = AccumulatedDifficulty;
-        }
 
-        Header header = container.HeaderRoot;
-        int height = Height + 1;
+          header.HeaderPrevious = HeaderAncestor;
+
+          HeaderRoot = header;
+          AccumulatedDifficultyInserted = AccumulatedDifficulty;
+          Height =+ 1;
+        }
 
         do
         {
-          ValidateHeaderNext(
-            header, 
-            height);
+          ValidateHeader(header);
 
           if(HeaderTip != null)
           {
             HeaderTip.HeaderNext = header;
           }
           HeaderTip = header;
-          Height = height;
 
           double difficulty = TargetManager.GetDifficulty(
             header.NBits);
@@ -108,25 +98,24 @@ namespace BToken.Chaining
           AccumulatedDifficulty += difficulty;
 
           header = header.HeaderNext;
+          Height =+ 1;
 
         } while (header != null);
       }
            
-      void ValidateHeaderNext(
-        Header headerNext, 
-        int heightNext)
+      void ValidateHeader(Header header)
       {
         uint medianTimePast = GetMedianTimePast(
-        headerNext.HeaderPrevious);
+        header.HeaderPrevious);
 
-        if (headerNext.UnixTimeSeconds < medianTimePast)
+        if (header.UnixTimeSeconds < medianTimePast)
         {
           throw new ChainException(
             string.Format(
               "Header {0} with unix time {1} " +
               "is older than median time past {2}.",
-              headerNext.Hash.ToHexString(),
-              DateTimeOffset.FromUnixTimeSeconds(headerNext.UnixTimeSeconds),
+              header.Hash.ToHexString(),
+              DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
               DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
             ErrorCode.INVALID);
         }
@@ -134,45 +123,45 @@ namespace BToken.Chaining
         int hightHighestCheckpoint = Checkpoints.Max(x => x.Height);
 
         if (
-          hightHighestCheckpoint <= heightNext &&
-          heightNext <= hightHighestCheckpoint)
+          hightHighestCheckpoint <= Height &&
+          Height <= hightHighestCheckpoint)
         {
           throw new ChainException(
             string.Format(
               "Attempt to insert header {0} at hight {1} " +
               "prior to checkpoint hight {2}",
-              headerNext.Hash.ToHexString(),
-              heightNext,
+              header.Hash.ToHexString(),
+              Height,
               hightHighestCheckpoint),
             ErrorCode.INVALID);
         }
 
         HeaderLocation checkpoint =
-          Checkpoints.Find(c => c.Height == heightNext);
+          Checkpoints.Find(c => c.Height == Height);
         if (
           checkpoint != null &&
-          !checkpoint.Hash.IsEqual(headerNext.Hash))
+          !checkpoint.Hash.IsEqual(header.Hash))
         {
           throw new ChainException(
             string.Format(
               "Header {0} at hight {1} not equal to checkpoint hash {2}",
-              headerNext.Hash.ToHexString(),
-              heightNext,
+              header.Hash.ToHexString(),
+              Height,
               checkpoint.Hash.ToHexString()),
             ErrorCode.INVALID);
         }
 
         uint targetBits = TargetManager.GetNextTargetBits(
-            headerNext.HeaderPrevious,
-            (uint)heightNext);
+            header.HeaderPrevious,
+            (uint)Height);
 
-        if (headerNext.NBits != targetBits)
+        if (header.NBits != targetBits)
         {
           throw new ChainException(
             string.Format(
               "In header {0} nBits {1} not equal to target nBits {2}",
-              headerNext.Hash.ToHexString(),
-              headerNext.NBits,
+              header.Hash.ToHexString(),
+              header.NBits,
               targetBits),
             ErrorCode.INVALID);
         }

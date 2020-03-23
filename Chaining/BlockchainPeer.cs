@@ -179,7 +179,7 @@ namespace BToken.Chaining
               headerContainer.Parse(SHA256);
               
               await Blockchain.InsertHeader(
-                headerContainer, 
+                headerContainer.HeaderRoot, 
                 this);
               
               break;
@@ -196,6 +196,11 @@ namespace BToken.Chaining
       }
     }
 
+    public async Task SendHeaders(List<Header> headers)
+    {
+      await NetworkPeer.SendMessage(
+        new HeadersMessage(headers));
+    }
 
     public async Task<HeaderContainer> GetHeaders(
       List<byte[]> locator)
@@ -350,12 +355,25 @@ namespace BToken.Chaining
 
 
 
+    public List<byte[]> HeaderDuplicates = new List<byte[]>();
 
-    public void ReportDuplicate()
+    public void ReportDuplicateHeader(byte[] headerHash)
     {
-      // if number of duplicates exceeds number of headers
-      // appended within the last hour, then dispose()
-      throw new NotImplementedException();
+      if(HeaderDuplicates.Any(h => h.IsEqual(headerHash)))
+      {
+        throw new ChainException(
+          string.Format(
+            "Received duplicate header {0} more than once.",
+            headerHash.ToHexString()));
+      }
+
+      HeaderDuplicates.Add(headerHash);
+      if(HeaderDuplicates.Count > 3)
+      {
+        HeaderDuplicates = HeaderDuplicates.Skip(1)
+          .ToList();
+      }
+
     }
 
     public bool IsInbound()

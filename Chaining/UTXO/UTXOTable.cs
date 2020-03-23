@@ -60,13 +60,6 @@ namespace BToken.Chaining
 
 
 
-    public async Task Start()
-    {
-      await Synchronizer.Start();
-    }
-
-
-
     void InsertUTXO(
       byte[] uTXOKey,
       UTXOIndexCompressed table)

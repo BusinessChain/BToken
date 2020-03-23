@@ -183,7 +183,7 @@ namespace BToken.Chaining{
 
           while(true)
           {
-            HeaderBranch.AddContainer(headerContainer);
+            HeaderBranch.AddContainer(headerContainer.HeaderRoot);
 
             headerContainerNext = await peer.GetHeaders(locator);
 
@@ -196,7 +196,7 @@ namespace BToken.Chaining{
               .IsEqual(headerContainer.HeaderTip.Hash))
             {
               throw new ChainException(
-                "Received header container does not chain.");
+                "Received header container does not link to chain.");
             }
 
             headerContainer = headerContainerNext;
@@ -215,7 +215,8 @@ namespace BToken.Chaining{
 
             HeaderBranch = null;
 
-            peer.SendHeaderTip();
+            peer.SendHeaders(
+              new List<Header>() { Headerchain.HeaderTip });
           }
         }
       }
@@ -511,7 +512,7 @@ namespace BToken.Chaining{
 
 
     public async Task InsertHeader(
-      HeaderContainer headerContainer,
+      Header header,
       BlockchainPeer peer)
     {
       while (true)
@@ -535,25 +536,67 @@ namespace BToken.Chaining{
         await Task.Delay(200);
       }
 
-      if (Headerchain.TryReadHeader(
-        headerContainer.HeaderRoot.Hash,
-        out Header header))
+      if (Headerchain.ContainsHeader(
+        header.Hash))
       {
-        peer.ReportDuplicate();
+        Header headerContained = Headerchain.HeaderTip;
+
+        int depthDuplicateAcceptedMax = 3;
+        int depthDuplicate = 0;
+
+        while (depthDuplicate < depthDuplicateAcceptedMax)
+        {
+          if (headerContained.Hash.IsEqual(header.Hash))
+          {
+            if (peer.HeaderDuplicates.Any(h => h.IsEqual(header.Hash)))
+            {
+              throw new ChainException(
+                string.Format(
+                  "Received duplicate header {0} more than once.",
+                  header.Hash.ToHexString()));
+            }
+
+            peer.HeaderDuplicates.Add(header.Hash);
+            if (peer.HeaderDuplicates.Count > depthDuplicateAcceptedMax)
+            {
+              peer.HeaderDuplicates = peer.HeaderDuplicates.Skip(1)
+                .ToList();
+            }
+
+            break;
+          }
+
+          if (headerContained.HeaderPrevious != null)
+          {
+            break;
+          }
+
+          headerContained = header.HeaderPrevious;
+          depthDuplicate += 1;
+        }
+
+        if(depthDuplicate == depthDuplicateAcceptedMax)
+        {
+          throw new ChainException(
+            string.Format(
+              "Received duplicate header {0} with depth greater than {1}.",
+              header.Hash.ToHexString(),
+              depthDuplicateAcceptedMax));
+        }
       }
       else if (Headerchain.HeaderTip.Hash.IsEqual(
-        headerContainer.HeaderRoot.HashPrevious))
+        header.HashPrevious))
       {
         var headerBranch = Headerchain.CreateBranch();
 
-        headerBranch.AddContainer(headerContainer);
+        headerBranch.AddContainer(header);
         
         var blockBatch = new DataBatch(IndexLoad++);
 
         var blockContainer =
           new UTXOTable.BlockContainer(
             Headerchain,
-            headerContainer.HeaderRoot);
+            header);
 
         blockBatch.DataContainers.Add(blockContainer);
 
@@ -561,8 +604,7 @@ namespace BToken.Chaining{
         {
           UTXOTable.InsertBlockContainer(blockContainer);
 
-          headerBranch.ReportHeaderInsertion(
-            headerContainer.HeaderRoot);
+          headerBranch.ReportHeaderInsertion(header);
 
           Headerchain.CommitBranch(headerBranch);
         }
@@ -571,12 +613,22 @@ namespace BToken.Chaining{
           throw new ChainException(
             string.Format(
               "Could not download announced block {0}", 
-              headerContainer.HeaderRoot));
+              header.Hash.ToHexString()));
         }
       }
       else
       {
         await SynchronizeWithPeer(peer);
+
+        if (!Headerchain.ContainsHeader(
+          header.Hash))
+        {
+          throw new ChainException(
+            string.Format(
+              "Advertized header {0} could not" + 
+              "be inserted in Headerchain",
+              header.Hash.ToHexString()));
+        }
       }
 
       IsChainLocked = false;

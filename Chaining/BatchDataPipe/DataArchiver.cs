@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 namespace BToken.Chaining
 {
@@ -74,6 +75,7 @@ namespace BToken.Chaining
 
     async Task StartArchiveLoaderAsync()
     {
+      SHA256 sHA256 = SHA256.Create();
       DataContainer container;
       int archiveLoadIndex;
 
@@ -95,7 +97,7 @@ namespace BToken.Chaining
               ArchiveDirectory.FullName,
               container.Index.ToString()));
 
-          container.Parse();
+          container.Parse(sHA256);
         }
         catch
         {

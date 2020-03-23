@@ -91,18 +91,13 @@ namespace BToken.Chaining
     }
 
 
-    public async Task InsertHeader(
-      HeaderContainer headerContainer)
+    public bool ContainsHeader(
+      byte[] headerHash)
     {
-      if(!HeaderTip.Hash.IsEqual(
-        headerContainer.HeaderRoot.Hash))
-      {
-
-      }
-
+      return TryReadHeader(
+        headerHash,
+        out Header header);
     }
-
-
     public bool TryReadHeader(
       byte[] headerHash,
       out Header header)
