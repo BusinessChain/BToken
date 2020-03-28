@@ -41,7 +41,10 @@ namespace BToken.Chaining
     public Stack<DataBatch> UTXOBatchesDownloaded =
       new Stack<DataBatch>();
 
-    BufferBlock<NetworkMessage> MessageBufferSynchronization = 
+    readonly object LOCK_IsExpectingMessageResponse = new object();
+    bool IsExpectingMessageResponse;
+
+    BufferBlock<NetworkMessage> MessageResponseBuffer = 
       new BufferBlock<NetworkMessage>();
 
     SHA256 SHA256 = SHA256.Create();
@@ -69,10 +72,13 @@ namespace BToken.Chaining
             .ReceiveMessage(default)
             .ConfigureAwait(false);
 
-          if(IsSynchronizing())
+          lock(LOCK_IsExpectingMessageResponse)
           {
-            MessageBufferSynchronization.Post(message);
-            continue;
+            if (IsExpectingMessageResponse)
+            {
+              MessageResponseBuffer.Post(message);
+              continue;
+            }
           }
 
           switch (message.Command)
@@ -202,7 +208,7 @@ namespace BToken.Chaining
         new HeadersMessage(headers));
     }
 
-    public async Task<HeaderContainer> GetHeaders(
+    public async Task<Header> GetHeaders(
       List<byte[]> locator)
     {
       await NetworkPeer.SendMessage(
@@ -212,18 +218,28 @@ namespace BToken.Chaining
       CancellationTokenSource cancellation =
         new CancellationTokenSource(timeout);
 
+      lock (LOCK_IsExpectingMessageResponse)
+      {
+        IsExpectingMessageResponse = true;
+      }
+
       byte[] headerBytes;
       while (true)
       {
-        NetworkMessage networkMessage =
-          await MessageBufferSynchronization.ReceiveAsync(
-            cancellation.Token);
+        NetworkMessage networkMessage = await MessageResponseBuffer
+          .ReceiveAsync(cancellation.Token)
+          .ConfigureAwait(false);
 
         if (networkMessage.Command == "headers")
         {
           headerBytes = networkMessage.Payload;
           break;
         }
+      }
+
+      lock (LOCK_IsExpectingMessageResponse)
+      {
+        IsExpectingMessageResponse = false;
       }
 
       var headerContainer =
@@ -261,7 +277,7 @@ namespace BToken.Chaining
         } while (header != null);
       }
 
-      return headerContainer;
+      return headerContainer.HeaderRoot;
     }
 
     
@@ -281,18 +297,21 @@ namespace BToken.Chaining
         await NetworkPeer.SendMessage(
           new GetDataMessage(inventories));
 
-        var cancellationDownloadBlocks =
-          new CancellationTokenSource(
+        var cancellation = new CancellationTokenSource(
             TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
+        lock (LOCK_IsExpectingMessageResponse)
+        {
+          IsExpectingMessageResponse = true;
+        }
 
         foreach (UTXOTable.BlockContainer blockContainer in
           uTXOBatch.DataContainers)
         {
           while (true)
           {
-            NetworkMessage networkMessage =
-              await NetworkPeer
-              .ReceiveMessage(cancellationDownloadBlocks.Token)
+            NetworkMessage networkMessage = await MessageResponseBuffer
+              .ReceiveAsync(cancellation.Token)
               .ConfigureAwait(false);
 
             if (networkMessage.Command == "notfound")
@@ -310,6 +329,11 @@ namespace BToken.Chaining
               break;
             }
           }
+        }
+
+        lock (LOCK_IsExpectingMessageResponse)
+        {
+          IsExpectingMessageResponse = false;
         }
       }
       catch (Exception ex)
@@ -404,6 +428,15 @@ namespace BToken.Chaining
       }
     }
 
+    public void Dispose(string message)
+    {
+      Console.WriteLine(string.Format(
+        "Dispose peer {0}: \n{1}",
+        GetIdentification(),
+        message));
+
+      Dispose();
+    }
     public void Dispose()
     {
       NetworkPeer.Dispose();
@@ -471,30 +504,6 @@ namespace BToken.Chaining
           .BUSY;
       }
     }
-
-    readonly object LOCK_FlagIsSynchronizing = new object();
-    bool FlagIsSynchronizing;
-
-    public bool IsSynchronizing()
-    {
-      lock (LOCK_FlagIsSynchronizing)
-      {
-        return FlagIsSynchronizing;
-      }
-    }
-    public void SetIsSynchronizing()
-    {
-      lock (LOCK_FlagIsSynchronizing)
-      {
-        FlagIsSynchronizing = true;
-      }
-    }
-    public void ClearIsSynchronizing()
-    {
-      lock (LOCK_FlagIsSynchronizing)
-      {
-        FlagIsSynchronizing = true;
-      }
-    }
+    
   }
 }

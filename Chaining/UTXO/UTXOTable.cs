@@ -311,7 +311,8 @@ namespace BToken.Chaining
 
 
 
-    public void InsertBlockContainer(BlockContainer blockContainer)
+    public void InsertBlockContainer(
+      BlockContainer blockContainer)
     {
       blockContainer.StopwatchStaging.Start();
 
@@ -337,30 +338,16 @@ namespace BToken.Chaining
       LogInsertion(blockContainer);
     }
 
-    public void RollBackChain(int height)
-    {
-      while (BlockHeight > height)
-      {
-        // Get block container by UTXOTable.Header from archive
-        // Reindex if archive does not have the block or if reversion fails
-
-        ReverseBlockInsertion(container);
-
-        Header = Header.HeaderPrevious;
-        BlockHeight--;
-      }
-    }
-
     
-    public void BackupToDisk()
+    public void Backup()
     {
       Parallel.ForEach(Tables, t =>
       {
-        t.BackupToDisk(PathUTXOState);
+        t.BackupImage(PathUTXOState);
       });
     }
     
-    public void RestoreFromDisk()
+    public void Restore()
     {
       throw new NotImplementedException();
     }

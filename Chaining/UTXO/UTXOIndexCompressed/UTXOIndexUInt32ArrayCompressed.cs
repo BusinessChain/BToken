@@ -219,7 +219,7 @@ namespace BToken.Chaining
         return true;
       }
 
-      public override void BackupToDisk(string path)
+      public override void BackupImage(string path)
       {
         string directoryPath = Path.Combine(path, Label);
         Directory.CreateDirectory(directoryPath);

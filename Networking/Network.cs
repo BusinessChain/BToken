@@ -72,7 +72,7 @@ namespace BToken.Networking
         }
         catch
         {
-          Console.WriteLine("Can not create peer: No node address available.");
+          Console.WriteLine("Cannot create peer: No node address available.");
           Task.Delay(10000);
           continue;
         }

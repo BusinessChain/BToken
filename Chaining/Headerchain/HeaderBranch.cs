@@ -14,10 +14,9 @@ namespace BToken.Chaining
       public Header HeaderTip;
       public Header HeaderInsertedLast;
       public List<double> HeaderDifficulties = new List<double>();
-      public double AccumulatedDifficulty;
+      public double Difficulty;
       public int Height;
-      public double AccumulatedDifficultyInserted;
-      public bool AreAllHeadersInserted;
+      public double DifficultyInserted;
       public int HeightInserted;
       public Header HeaderAncestor;
 
@@ -29,7 +28,7 @@ namespace BToken.Chaining
         int height)
       {
         HeaderAncestor = headerchainTip;
-        AccumulatedDifficulty = accumulatedDifficulty;
+        Difficulty = accumulatedDifficulty;
         Height = height;
       }
 
@@ -37,18 +36,32 @@ namespace BToken.Chaining
       {
         HeaderInsertedLast = header;
 
-        AccumulatedDifficultyInserted +=
+        DifficultyInserted +=
           HeaderDifficulties[HeightInserted++];
       }
 
-      public void AddContainer(Header header)
+
+      Header Header;
+
+      public void AddHeaders(Header headerRoot)
       {
+        if(Header != null)
+        {
+          if (!Header.Hash.IsEqual(headerRoot.HashPrevious))
+          {
+            throw new ChainException(
+              "Received header does not link to last header.");
+          }
+        }
+
+        Header = headerRoot;
+
         if (HeaderRoot == null) 
         {
           while (!HeaderAncestor.Hash.IsEqual(
-            header.HashPrevious))
+            Header.HashPrevious))
           {
-            AccumulatedDifficulty -= TargetManager.GetDifficulty(
+            Difficulty -= TargetManager.GetDifficulty(
               HeaderAncestor.NBits);
 
             Height--;
@@ -58,64 +71,71 @@ namespace BToken.Chaining
 
           while (HeaderAncestor.HeaderNext != null && 
             HeaderAncestor.HeaderNext.Hash.IsEqual(
-              header.Hash))
+              Header.Hash))
           {
             HeaderAncestor = HeaderAncestor.HeaderNext;
 
-            AccumulatedDifficulty += TargetManager.GetDifficulty(
+            Difficulty += TargetManager.GetDifficulty(
               HeaderAncestor.NBits);
 
             Height += 1;
 
-            if (header.HeaderNext == null)
+            if (Header.HeaderNext == null)
             {
               return;
             }
 
-            header = header.HeaderNext;
+            Header = Header.HeaderNext;
           }
 
-          header.HeaderPrevious = HeaderAncestor;
+          Header.HeaderPrevious = HeaderAncestor;
 
-          HeaderRoot = header;
-          AccumulatedDifficultyInserted = AccumulatedDifficulty;
+          HeaderRoot = Header;
+          DifficultyInserted = Difficulty;
           Height =+ 1;
         }
 
         do
         {
-          ValidateHeader(header);
+          // Irgendwo müssen die ungültigen Header abgeschnitten werden
+          // Oder vielleicht gar nicht nötig?
+          ValidateHeader();
 
           if(HeaderTip != null)
           {
-            HeaderTip.HeaderNext = header;
+            HeaderTip.HeaderNext = Header;
           }
-          HeaderTip = header;
+          HeaderTip = Header;
 
           double difficulty = TargetManager.GetDifficulty(
-            header.NBits);
+            Header.NBits);
           HeaderDifficulties.Add(difficulty);
-          AccumulatedDifficulty += difficulty;
+          Difficulty += difficulty;
+          Height = +1;
 
-          header = header.HeaderNext;
-          Height =+ 1;
+          if (Header.HeaderNext == null)
+          {
+            break;
+          }
 
-        } while (header != null);
+          Header = Header.HeaderNext;
+
+        } while (true);
       }
            
-      void ValidateHeader(Header header)
+      void ValidateHeader()
       {
         uint medianTimePast = GetMedianTimePast(
-        header.HeaderPrevious);
+        Header.HeaderPrevious);
 
-        if (header.UnixTimeSeconds < medianTimePast)
+        if (Header.UnixTimeSeconds < medianTimePast)
         {
           throw new ChainException(
             string.Format(
               "Header {0} with unix time {1} " +
               "is older than median time past {2}.",
-              header.Hash.ToHexString(),
-              DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
+              Header.Hash.ToHexString(),
+              DateTimeOffset.FromUnixTimeSeconds(Header.UnixTimeSeconds),
               DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
             ErrorCode.INVALID);
         }
@@ -130,7 +150,7 @@ namespace BToken.Chaining
             string.Format(
               "Attempt to insert header {0} at hight {1} " +
               "prior to checkpoint hight {2}",
-              header.Hash.ToHexString(),
+              Header.Hash.ToHexString(),
               Height,
               hightHighestCheckpoint),
             ErrorCode.INVALID);
@@ -140,28 +160,28 @@ namespace BToken.Chaining
           Checkpoints.Find(c => c.Height == Height);
         if (
           checkpoint != null &&
-          !checkpoint.Hash.IsEqual(header.Hash))
+          !checkpoint.Hash.IsEqual(Header.Hash))
         {
           throw new ChainException(
             string.Format(
               "Header {0} at hight {1} not equal to checkpoint hash {2}",
-              header.Hash.ToHexString(),
+              Header.Hash.ToHexString(),
               Height,
               checkpoint.Hash.ToHexString()),
             ErrorCode.INVALID);
         }
 
         uint targetBits = TargetManager.GetNextTargetBits(
-            header.HeaderPrevious,
+            Header.HeaderPrevious,
             (uint)Height);
 
-        if (header.NBits != targetBits)
+        if (Header.NBits != targetBits)
         {
           throw new ChainException(
             string.Format(
               "In header {0} nBits {1} not equal to target nBits {2}",
-              header.Hash.ToHexString(),
-              header.NBits,
+              Header.Hash.ToHexString(),
+              Header.NBits,
               targetBits),
             ErrorCode.INVALID);
         }

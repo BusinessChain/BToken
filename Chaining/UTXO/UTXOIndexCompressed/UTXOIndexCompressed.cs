@@ -96,7 +96,7 @@ namespace BToken.Chaining
         return GetCountPrimaryTableItems() + "," + GetCountCollisionTableItems();
       }
 
-      public abstract void BackupToDisk(string path);
+      public abstract void BackupImage(string path);
       public abstract void Load();
 
       public abstract void Clear();

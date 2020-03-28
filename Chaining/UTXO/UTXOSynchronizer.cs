@@ -244,7 +244,7 @@ namespace BToken.Chaining
           }
         }
 
-        UTXOTable.BackupToDisk();
+        UTXOTable.Backup();
       }
 
       protected override DataContainer CreateContainer(

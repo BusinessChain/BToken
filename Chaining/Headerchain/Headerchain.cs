@@ -28,7 +28,7 @@ namespace BToken.Chaining
 
     public Header HeaderTip;
     public int Height;
-    public double AccumulatedDifficulty;
+    public double Difficulty;
 
 
     public Headerchain(
@@ -66,7 +66,7 @@ namespace BToken.Chaining
     {
       return new HeaderBranch(
         HeaderTip,
-        AccumulatedDifficulty,
+        Difficulty,
         Height);
     }
 
@@ -84,8 +84,8 @@ namespace BToken.Chaining
 
       HeaderTip = headerBranch.HeaderInsertedLast;
       
-      AccumulatedDifficulty = 
-        headerBranch.AccumulatedDifficultyInserted;
+      Difficulty = 
+        headerBranch.DifficultyInserted;
 
       Height = headerBranch.HeightInserted;
     }

@@ -46,7 +46,7 @@ namespace BToken.Chaining
 
 
     int ArchiveIndexLoad;
-    int ArchiveIndexStore;
+    public int ArchiveIndex;
     const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
     Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
 
@@ -59,7 +59,7 @@ namespace BToken.Chaining
         out int archiveIndex);
 
       ArchiveIndexLoad = archiveIndex + 1;
-      ArchiveIndexStore = ArchiveIndexLoad;
+      ArchiveIndex = ArchiveIndexLoad;
 
       Parallel.For(
         0,
@@ -128,7 +128,7 @@ namespace BToken.Chaining
 
         lock (LOCK_OutputQueue)
         {
-          if (container.Index == ArchiveIndexStore)
+          if (container.Index == ArchiveIndex)
           {
             break;
           }
@@ -162,16 +162,16 @@ namespace BToken.Chaining
           break;
         }
 
-        DataStructure.ArchiveImage(ArchiveIndexStore);
+        DataStructure.ArchiveImage(ArchiveIndex);
 
         lock (LOCK_OutputQueue)
         {
-          ArchiveIndexStore += 1;
+          ArchiveIndex += 1;
 
           if (OutputQueue.TryGetValue(
-            ArchiveIndexStore, out container))
+            ArchiveIndex, out container))
           {
-            OutputQueue.Remove(ArchiveIndexStore);
+            OutputQueue.Remove(ArchiveIndex);
             continue;
           }
           else
@@ -184,5 +184,6 @@ namespace BToken.Chaining
       IsArchiveLoadCompleted = true;
       return false;
     }
+
   }
 }
