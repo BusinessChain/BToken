@@ -15,12 +15,17 @@ namespace BToken.Chaining{
   {
     public const int COUNT_PEERS_MAX = 4;
 
-    // Mainchain könnte als HeaderBranch objekt dargestellt sein.
-    public Headerchain Headerchain;
+    Header HeaderTip;
+    int Height;
+    double Difficulty;
+
+    Headerchain Headerchain;
+    static List<HeaderLocation> Checkpoints;
     DataArchiver HeaderArchive;
     
     UTXOTable UTXOTable;
     DataArchiver UTXOArchive;
+
 
     Network Network;
 
@@ -33,9 +38,16 @@ namespace BToken.Chaining{
       List<HeaderLocation> checkpoints,
       Network network)
     {
+      HeaderTip = genesisHeader;
+      Height = 0;
+      Difficulty = TargetManager.GetDifficulty(
+        GenesisHeader.NBits);
+
       Headerchain = new Headerchain(
         genesisHeader,
         checkpoints);
+
+      Checkpoints = checkpoints;
 
       HeaderArchive = new DataArchiver(
         Headerchain,
@@ -113,7 +125,7 @@ namespace BToken.Chaining{
         await Task.Delay(2000);
       }
     }
-
+    
     async Task StartPeerSynchronizer()
     {
       BlockchainPeer peer;
@@ -147,20 +159,61 @@ namespace BToken.Chaining{
           }
         }
 
-        await CreateHeaderBranch(peer);
+        await SynchronizeWithPeer(peer);
 
-        if (Branch.Difficulty > Headerchain.Difficulty)
+        peer.IsSynchronized = true;
+
+        IsChainLocked = false;
+      }
+    }
+
+    async Task SynchronizeWithPeer(BlockchainPeer peer)
+    {
+      SHA256 sHA256 = SHA256.Create();
+
+      Branch = new HeaderBranch(
+        Headerchain.HeaderTip,
+        Headerchain.Difficulty,
+        Headerchain.Height);
+
+      await LoadBranchHeaders(peer);
+
+      if (Branch.Difficulty > Headerchain.Difficulty)
+      {
+        Header header = Headerchain.HeaderTip;
+
+        if (Branch.HeaderAncestor != header)
         {
-          Header header = Headerchain.HeaderTip;
-          while (header != Branch.HeaderAncestor)
-          {
-            UTXOTable.BlockContainer blockcontainer =
-              await UTXOArchive.PopContainer();
+          Branch.IsFork = true;
 
+          Branch.BlockContainers = BlockContainers;
+          Branch.ArchiveIndex = ArchiveIndex;
+
+          do
+          {
             try
             {
-              var blockContainer = new UTXOTable.BlockContainer(header);
-              blockContainer.Parse();
+              if (!Branch.TryDequeueContainer(
+                out UTXOTable.BlockContainer blockContainer))
+              {
+                Branch.ArchiveIndex -= 1;
+
+                blockContainer = new UTXOTable.BlockContainer(
+                  Headerchain,
+                  Branch.ArchiveIndex);
+
+                blockContainer.Buffer = File.ReadAllBytes(
+                  Path.Combine(
+                    "main",
+                    blockContainer.Index.ToString()));
+
+                blockContainer.Parse(sHA256);
+
+                Branch.BlockContainers = blockContainer.Split();
+
+                continue;
+              }
+
               UTXOTable.RollBack(blockContainer);
             }
             catch
@@ -170,53 +223,47 @@ namespace BToken.Chaining{
             }
 
             header = header.HeaderPrevious;
-          }
-          
-          RunUTXOSyncSessions();
 
-          await RunUTXOInserter();
-
-          if (Branch.DifficultyInserted > Headerchain.Difficulty)
-          {
-            Headerchain.CommitBranch(Branch);
-            CommitBranchToArchive();
-
-            UTXOTable.Backup();
-          }
-          else
-          {
-            UTXOTable.Restore();
-          }
-
-          if (Branch.DifficultyInserted <  Branch.Difficulty)
-          {
-            peer.Dispose();
-          }
+          } while (header != Branch.HeaderAncestor);
         }
-        else if (Branch.Difficulty < Headerchain.Difficulty)
+
+        StartUTXOSyncSessions();
+
+        await RunUTXOInserter();
+
+        if (Branch.DifficultyInserted > Headerchain.Difficulty)
         {
-          if (peer.IsInbound())
-          {
-            peer.Dispose();
-          }
-          else
-          {
-            peer.SendHeaders(
-              new List<Header>() { Headerchain.HeaderTip });
-          }
+          Headerchain.CommitBranch(Branch);
+
+          UTXOTable.Backup();
+        }
+        else
+        {
+          UTXOTable.Restore();
         }
 
-        peer.IsSynchronized = true;
-
-        IsChainLocked = false;
+        if (Branch.DifficultyInserted < Branch.Difficulty)
+        {
+          peer.Dispose();
+        }
+      }
+      else if (Branch.Difficulty < Headerchain.Difficulty)
+      {
+        if (peer.IsInbound())
+        {
+          peer.Dispose();
+        }
+        else
+        {
+          peer.SendHeaders(
+            new List<Header>() { Headerchain.HeaderTip });
+        }
       }
     }
 
-    async Task CreateHeaderBranch(BlockchainPeer peer)
+    async Task LoadBranchHeaders(BlockchainPeer peer)
     {
       List<byte[]> locator = Headerchain.GetLocator();
-      Branch = Headerchain.CreateBranch();
-
       try
       {
         Header header = await peer.GetHeaders(locator);
@@ -235,69 +282,45 @@ namespace BToken.Chaining{
           ex.Message));
       }
     }
-
-    bool TryRollBackUTXO()
+    
+    async Task StartUTXOSyncSessions()
     {
-      Header header = Headerchain.HeaderTip;
+      HeaderLoad = Branch.HeaderRoot;
 
-      while (header != Branch.HeaderAncestor)
+      while (true)
       {
-        UTXOArchive.RemoveContainer();
+        var peersIdle = new List<BlockchainPeer>();
 
-        try
+        lock (LOCK_Peers)
         {
-          var blockContainer = new UTXOTable.BlockContainer(header);
-          blockContainer.Parse();
-          UTXOTable.RollBack(blockContainer);
-        }
-        catch
-        {
-          return false;
-        }
+          if (Peers.All(p => p.IsStatusCompleted()))
+          {
+            return;
+          }
 
-        header = header.HeaderPrevious;
-      }
-
-      return true;
-    }
-
-    static void CommitBranchToArchive()
-    {
-      DirectoryInfo main = new DirectoryInfo("main");
-
-      string[] fileNames = Directory.GetFiles("Inserter");
-
-      int i = 0;
-      while (i < fileNames.Length)
-      {
-        string destName = Path.Combine(
-          "main",
-          Path.GetFileName(fileNames[i]));
-
-        try
-        {
-          File.Move(fileNames[i], destName);
-        }
-        catch (IOException)
-        {
-          File.Delete(destName);
-          continue;
+          if (!FlagAllBatchesLoaded)
+          {
+            peersIdle = Peers.FindAll(p => p.IsStatusIdle());
+            peersIdle.ForEach(p => p.SetStatusBusy());
+          }
         }
 
-        i += 1;
+        peersIdle.Select(p => RunUTXOSyncSession(p))
+          .ToList();
+
+        await Task.Delay(1000)
+          .ConfigureAwait(false);
       }
     }
 
 
 
-    Headerchain.HeaderBranch Branch;
+    HeaderBranch Branch;
     Header HeaderLoad;
     bool FlagAllBatchesLoaded;
     BufferBlock<BlockchainPeer> QueuePeersUTXOInserter =
       new BufferBlock<BlockchainPeer>();
     int ArchiveIndex;
-    double DifficultyInserted;
-    string PathArchive = "PathInserter";
 
     async Task RunUTXOInserter()
     {
@@ -329,23 +352,24 @@ namespace BToken.Chaining{
             return;
           }
 
-          if (DifficultyInserted <= Headerchain.Difficulty)
-          {
-            DifficultyInserted += blockContainer.AccumulatedDifficulty;
+          Branch.ReportBlockInsertion(blockContainer.Header);
 
-            if (DifficultyInserted > Headerchain.Difficulty)
+          if (Branch.IsFork)
+          {
+            Branch.ArchiveContainer(blockContainer);
+
+            if (Branch.DifficultyInserted > Headerchain.Difficulty)
             {
-              ReorganizeArchive();
-              PathArchive = "PathMainchain";
+              ReorgBranchToMain();
+              Branch.IsFork = false;
             }
           }
-
-          ArchiveContainer(blockContainer, PathArchive);
-
-          Branch.ReportHeaderInsertion(
-            blockContainer.Header);
-
+          else
+          {
+            ArchiveContainer(blockContainer);
+          }
         }
+
         if (uTXOBatch.IsCancellationBatch)
         {
           peer.SetStatusCompleted();
@@ -355,35 +379,34 @@ namespace BToken.Chaining{
         RunUTXOSyncSession(peer);
       }
     }
-
-    async Task RunUTXOSyncSessions()
+    
+    void ReorgBranchToMain()
     {
-      HeaderLoad = Branch.HeaderRoot;
+      string[] fileNames = Directory.GetFiles("branch");
 
-      while (true)
+      int i = 0;
+      while (i < fileNames.Length)
       {
-        var peersIdle = new List<BlockchainPeer>();
+        string destName = Path.Combine(
+          "main",
+          Path.GetFileName(fileNames[i]));
 
-        lock (LOCK_Peers)
+        try
         {
-          if (Peers.All(p => p.IsStatusCompleted()))
-          {
-            return;
-          }
-
-          if (!FlagAllBatchesLoaded)
-          {
-            peersIdle = Peers.FindAll(p => p.IsStatusIdle());
-            peersIdle.ForEach(p => p.SetStatusBusy());
-          }
+          File.Move(fileNames[i], destName);
+        }
+        catch (IOException)
+        {
+          File.Delete(destName);
+          continue;
         }
 
-        peersIdle.Select(p => RunUTXOSyncSession(p))
-          .ToList();
-
-        await Task.Delay(1000)
-          .ConfigureAwait(false);
+        i += 1;
       }
+
+      BlockContainers = Branch.BlockContainers;
+      CountTXs = Branch.CountTXs;
+      ArchiveIndex = Branch.ArchiveIndex;
     }
 
 
@@ -593,10 +616,13 @@ namespace BToken.Chaining{
               depthDuplicateAcceptedMax));
         }
       }
-      else if (Headerchain.HeaderTip.Hash.IsEqual(
-        header.HashPrevious))
+      else if (header.HashPrevious.IsEqual(
+        Headerchain.HeaderTip.Hash))
       {
-        var headerBranch = Headerchain.CreateBranch();
+        var headerBranch = new HeaderBranch(
+          Headerchain.HeaderTip,
+          Headerchain.Difficulty,
+          Headerchain.Height);
 
         headerBranch.AddHeaders(header);
 
@@ -622,9 +648,9 @@ namespace BToken.Chaining{
 
         UTXOTable.InsertBlockContainer(blockContainer);
 
-        ArchiveContainer(blockContainer, "pathMain");
+        ArchiveContainer(blockContainer);
 
-        headerBranch.ReportHeaderInsertion(header);
+        headerBranch.ReportBlockInsertion(header);
 
         Headerchain.CommitBranch(headerBranch);
       }

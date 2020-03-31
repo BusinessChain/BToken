@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain
+  partial class Blockchain
   {
     static class TargetManager
     {

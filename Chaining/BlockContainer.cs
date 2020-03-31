@@ -29,7 +29,7 @@ namespace BToken.Chaining
         = new Dictionary<byte[], int[]>(new EqualityComparerByteArray());
 
       public int BlockCount;
-      SHA256 SHA256 = SHA256.Create();
+      SHA256 SHA256;
 
       public Stopwatch StopwatchStaging = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
@@ -80,8 +80,10 @@ namespace BToken.Chaining
       
       Headerchain Headerchain;
 
-      public override void Parse()
+      public override void Parse(SHA256 sHA256)
       {
+        SHA256 = sHA256;
+
         StopwatchParse.Start();
 
         BufferIndex = 0;

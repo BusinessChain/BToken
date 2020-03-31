@@ -270,7 +270,7 @@ namespace BToken.Chaining
           if (header.Hash.IsEqual(locator[1]))
           {
             throw new ChainException(
-              "In getHeaders message, received headers root in locator more than once.");
+              "Received headers do root in locator more than once.");
           }
 
           header = header.HeaderNext;

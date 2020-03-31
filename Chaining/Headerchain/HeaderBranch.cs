@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain
+  partial class Blockchain
   {
     public class HeaderBranch
     {
@@ -19,6 +19,11 @@ namespace BToken.Chaining
       public double DifficultyInserted;
       public int HeightInserted;
       public Header HeaderAncestor;
+      public bool IsFork;
+
+      public int ArchiveIndex;
+      public List<UTXOTable.BlockContainer> BlockContainers =
+        new List<UTXOTable.BlockContainer>();
 
 
 
@@ -32,7 +37,7 @@ namespace BToken.Chaining
         Height = height;
       }
 
-      public void ReportHeaderInsertion(Header header)
+      public void ReportBlockInsertion(Header header)
       {
         HeaderInsertedLast = header;
 
@@ -209,6 +214,87 @@ namespace BToken.Chaining
 
         return timestampsPast[timestampsPast.Count / 2];
       }
-    };
+
+      public bool TryDequeueContainer(
+        out UTXOTable.BlockContainer blockContainer)
+      {        
+        if (BlockContainers.Count == 0)
+        {
+          blockContainer = null;
+          return false;
+        }
+
+        blockContainer = BlockContainers.Last();
+
+        BlockContainers.RemoveAt(BlockContainers.Count);
+
+        return true;
+      }
+
+
+
+      public int CountTXs;
+
+      public async Task ArchiveContainer(
+        UTXOTable.BlockContainer blockontainer)
+      {
+        BlockContainers.Add(blockontainer);
+        CountTXs += blockontainer.CountItems;
+
+        if (CountTXs >= SIZE_BATCH_ARCHIVE)
+        {
+          string filePath = Path.Combine(
+            "branch",
+            ArchiveIndex.ToString());
+
+          while (true)
+          {
+            try
+            {
+              using (FileStream file = new FileStream(
+                filePath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 65536,
+                useAsync: true))
+              {
+                foreach (DataContainer container in BlockContainers)
+                {
+                  await file.WriteAsync(
+                    container.Buffer,
+                    0,
+                    container.Buffer.Length)
+                    .ConfigureAwait(false);
+                }
+              }
+
+              break;
+            }
+            catch (IOException ex)
+            {
+              Console.WriteLine(ex.GetType().Name + ": " + ex.Message);
+              await Task.Delay(2000);
+              continue;
+            }
+            catch (Exception ex)
+            {
+              Console.WriteLine(ex.GetType().Name + ": " + ex.Message);
+              break;
+            }
+          }
+
+          BlockContainers.Clear();
+          CountTXs = 0;
+
+          if (ArchiveIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0)
+          {
+            ArchiveImage();
+          }
+
+          ArchiveIndex += 1;
+        }
+      }
+    }
   }
 }

@@ -11,7 +11,7 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class UTXOTable : DataArchiver.IDataStructure
+  public partial class UTXOTable : DataArchiver.IDataStructure
   {
     byte[] GenesisBlockBytes;
 

@@ -62,14 +62,6 @@ namespace BToken.Chaining
     }
 
 
-    public HeaderBranch CreateBranch()
-    {
-      return new HeaderBranch(
-        HeaderTip,
-        Difficulty,
-        Height);
-    }
-
     public List<byte[]> GetLocator()
     {
       return Locator.BlockLocations
@@ -77,7 +69,7 @@ namespace BToken.Chaining
           .ToList();
     }
        
-    public void CommitBranch(HeaderBranch headerBranch)
+    public void CommitBranch(Blockchain.HeaderBranch headerBranch)
     {
       headerBranch.HeaderAncestor.HeaderNext = 
         headerBranch.HeaderRoot;
