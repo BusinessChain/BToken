@@ -32,7 +32,7 @@ namespace BToken.Chaining
       foreach(DataContainer container in DataContainers)
       {
         container.Parse();
-        CountItems += container.CountItems;
+        CountItems += container.CountTX;
       }
     }
   }

@@ -8,46 +8,90 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    public class HeaderBranch
+    class BranchInserter
     {
+      Blockchain Blockchain;
+
+      Header Header;
+
+      public Header HeaderAncestor;
+
       public Header HeaderRoot;
-      public Header HeaderTip;
-      public Header HeaderInsertedLast;
-      public List<double> HeaderDifficulties = new List<double>();
       public double Difficulty;
       public int Height;
+
       public double DifficultyInserted;
       public int HeightInserted;
-      public Header HeaderAncestor;
       public bool IsFork;
+      public Header HeaderTipInserted;
+      public List<double> HeaderDifficulties = 
+        new List<double>();
 
-      public int ArchiveIndex;
-      public List<UTXOTable.BlockContainer> BlockContainers =
-        new List<UTXOTable.BlockContainer>();
+      public DataArchiver Archive;
 
 
-
-      public HeaderBranch(
-        Header headerchainTip, 
-        double accumulatedDifficulty,
-        int height)
+      public BranchInserter(Blockchain blockchain)
       {
-        HeaderAncestor = headerchainTip;
-        Difficulty = accumulatedDifficulty;
-        Height = height;
+        Blockchain = blockchain;
+      }
+
+      public void Initialize()
+      {
+        Header = null;
+
+        HeaderAncestor = Blockchain.HeaderTip;
+
+        HeaderRoot = null;
+        Difficulty = Blockchain.Difficulty;
+        Height = Blockchain.Height;
+
+        DifficultyInserted = Difficulty;
+        HeightInserted = Height;
+
+        IsFork = false;
+
+        HeaderDifficulties.Clear();
+
+        Archive.Branch(Blockchain.Archive);
+      }
+
+      public async Task LoadHeaders(
+        BlockchainPeer peer)
+      {
+        List<byte[]> locator = Blockchain.Locator.Locations
+          .Select(b => b.Hash)
+          .ToList();
+
+        try
+        {
+          Header header = await peer.GetHeaders(locator);
+
+          while (header != null)
+          {
+            AddHeaders(header);
+            header = await peer.GetHeaders(locator);
+          }
+        }
+        catch (Exception ex)
+        {
+          peer.Dispose(string.Format(
+            "Exception {0} when syncing: \n{1}",
+            ex.GetType(),
+            ex.Message));
+        }
       }
 
       public void ReportBlockInsertion(Header header)
       {
-        HeaderInsertedLast = header;
+        HeaderTipInserted = header;
+
+        HeightInserted += 1;
 
         DifficultyInserted +=
-          HeaderDifficulties[HeightInserted++];
+          HeaderDifficulties[HeightInserted];
       }
 
-
-      Header Header;
-
+      
       public void AddHeaders(Header headerRoot)
       {
         if(Header != null)
@@ -96,8 +140,6 @@ namespace BToken.Chaining
           Header.HeaderPrevious = HeaderAncestor;
 
           HeaderRoot = Header;
-          DifficultyInserted = Difficulty;
-          Height =+ 1;
         }
 
         do
@@ -106,15 +148,10 @@ namespace BToken.Chaining
           // Oder vielleicht gar nicht nötig?
           ValidateHeader();
 
-          if(HeaderTip != null)
-          {
-            HeaderTip.HeaderNext = Header;
-          }
-          HeaderTip = Header;
-
           double difficulty = TargetManager.GetDifficulty(
             Header.NBits);
           HeaderDifficulties.Add(difficulty);
+
           Difficulty += difficulty;
           Height = +1;
 
@@ -214,87 +251,7 @@ namespace BToken.Chaining
 
         return timestampsPast[timestampsPast.Count / 2];
       }
-
-      public bool TryDequeueContainer(
-        out UTXOTable.BlockContainer blockContainer)
-      {        
-        if (BlockContainers.Count == 0)
-        {
-          blockContainer = null;
-          return false;
-        }
-
-        blockContainer = BlockContainers.Last();
-
-        BlockContainers.RemoveAt(BlockContainers.Count);
-
-        return true;
-      }
-
-
-
-      public int CountTXs;
-
-      public async Task ArchiveContainer(
-        UTXOTable.BlockContainer blockontainer)
-      {
-        BlockContainers.Add(blockontainer);
-        CountTXs += blockontainer.CountItems;
-
-        if (CountTXs >= SIZE_BATCH_ARCHIVE)
-        {
-          string filePath = Path.Combine(
-            "branch",
-            ArchiveIndex.ToString());
-
-          while (true)
-          {
-            try
-            {
-              using (FileStream file = new FileStream(
-                filePath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 65536,
-                useAsync: true))
-              {
-                foreach (DataContainer container in BlockContainers)
-                {
-                  await file.WriteAsync(
-                    container.Buffer,
-                    0,
-                    container.Buffer.Length)
-                    .ConfigureAwait(false);
-                }
-              }
-
-              break;
-            }
-            catch (IOException ex)
-            {
-              Console.WriteLine(ex.GetType().Name + ": " + ex.Message);
-              await Task.Delay(2000);
-              continue;
-            }
-            catch (Exception ex)
-            {
-              Console.WriteLine(ex.GetType().Name + ": " + ex.Message);
-              break;
-            }
-          }
-
-          BlockContainers.Clear();
-          CountTXs = 0;
-
-          if (ArchiveIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0)
-          {
-            ArchiveImage();
-          }
-
-          ArchiveIndex += 1;
-        }
-      }
+      
     }
   }
 }

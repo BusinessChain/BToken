@@ -36,8 +36,12 @@ namespace BToken.Chaining
 
 
 
+      public BlockContainer(byte[] buffer)
+        : base(buffer)
+      { }
+     
+
       public BlockContainer(
-        Headerchain headerchain,
         int archiveIndex)
         : base(archiveIndex)
       {
@@ -56,11 +60,8 @@ namespace BToken.Chaining
       }
 
 
-      public BlockContainer(
-        Headerchain headerchain,
-        Header header)
+      public BlockContainer(Header header)
       {
-        Headerchain = headerchain;
         Header = header;
       }
 
@@ -125,7 +126,7 @@ namespace BToken.Chaining
 
         ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
         BlockCount += 1;
-        CountItems += TXCount;
+        CountTX += TXCount;
 
         startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
 
@@ -159,7 +160,7 @@ namespace BToken.Chaining
 
           ParseBlock(merkleRootIndex);
           BlockCount += 1;
-          CountItems += TXCount;
+          CountTX += TXCount;
 
           startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
           BufferStartIndexAndLengthBlocks.Add(
@@ -172,16 +173,14 @@ namespace BToken.Chaining
         StopwatchParse.Stop();
       }
 
-      static void ValidateHeaderHash(
-        byte[] headerHash,
-        byte[] headerHashValidator)
+      public void ValidateHeaderHash(byte[] hashValidator)
       {
-        if (!headerHash.IsEqual(headerHashValidator))
+        if (!HeaderHash.IsEqual(hashValidator))
         {
           throw new ChainException(
             string.Format("Unexpected header hash {0}, \nexpected {1}",
-            headerHash.ToHexString(),
-            headerHashValidator.ToHexString()));
+            HeaderHash.ToHexString(),
+            hashValidator.ToHexString()));
         }
       }
 

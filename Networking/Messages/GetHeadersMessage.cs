@@ -8,7 +8,9 @@ namespace BToken.Networking
 {
   class GetHeadersMessage : NetworkMessage
   {
-    public IEnumerable<byte[]> HeaderLocator = new List<byte[]>();
+    public IEnumerable<byte[]> HeaderLocator = 
+      new List<byte[]>();
+
     public byte[] StopHash = new byte[32];
 
 

@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Linq;
-
-using BToken.Networking;
 
 
 
@@ -28,7 +25,6 @@ namespace BToken.Chaining
       COUNT_BATCHINDEX_BITS +
       COUNT_COLLISION_BITS_PER_TABLE * 3;
 
-    Headerchain Headerchain;
     UTXOIndexCompressed[] Tables;
     UTXOIndexUInt32Compressed TableUInt32 = new UTXOIndexUInt32Compressed();
     UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
@@ -44,12 +40,8 @@ namespace BToken.Chaining
 
 
 
-    public UTXOTable(
-      byte[] genesisBlockBytes,
-      Headerchain headerchain)
+    public UTXOTable(byte[] genesisBlockBytes)
     {
-      Headerchain = headerchain;
-
       Tables = new UTXOIndexCompressed[]{
         TableUInt32,
         TableULong64,
@@ -278,7 +270,7 @@ namespace BToken.Chaining
 
         archiveIndex = 0;
         BlockHeight = -1;
-        Header = Headerchain.GenesisHeader;
+        Header = GenesisHeader;
 
         for (int c = 0; c < Tables.Length; c += 1)
         {

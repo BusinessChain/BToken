@@ -52,7 +52,7 @@ namespace BToken.Chaining
         return;
       }
 
-      CountItems += headersCount;
+      CountTX += headersCount;
 
       HeaderRoot = Header.ParseHeader(
         Buffer,
@@ -75,7 +75,7 @@ namespace BToken.Chaining
       {
         headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
 
-        CountItems += headersCount;
+        CountTX += headersCount;
 
         ParseHeaders(
           ref bufferIndex,

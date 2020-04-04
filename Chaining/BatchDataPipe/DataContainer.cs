@@ -13,7 +13,7 @@ namespace BToken.Chaining
   {
     public bool IsValid = true;
     public int Index;
-    public int CountItems;
+    public int CountTX;
     public byte[] Buffer;
 
 

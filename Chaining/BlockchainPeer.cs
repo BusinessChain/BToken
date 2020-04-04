@@ -196,9 +196,12 @@ namespace BToken.Chaining
           }
         }
       }
-      catch
+      catch(Exception ex)
       {
-        Dispose();
+        Dispose(string.Format(
+          "Exception {0} when syncing: \n{1}",
+          ex.GetType(),
+          ex.Message));
       }
     }
 
@@ -247,8 +250,11 @@ namespace BToken.Chaining
 
       headerContainer.Parse(SHA256);
 
+      locator = locator.ToList();
+
       int indexLocatorAncestor = locator.FindIndex(
-        h => h.IsEqual(headerContainer.HeaderRoot.HashPrevious));
+        h => h.IsEqual(
+          headerContainer.HeaderRoot.HashPrevious));
 
       if (indexLocatorAncestor == -1)
       {
@@ -280,18 +286,34 @@ namespace BToken.Chaining
       return headerContainer.HeaderRoot;
     }
 
+    public async Task<UTXOTable.BlockContainer> DownloadBlock(
+      Header header)
+    {
+      var batch = new DataBatch();
+
+      if(!await TryDownloadBlocks(
+        batch, 
+        new List<Header> { header }))
+      {
+        throw new ChainException(
+          string.Format(
+            "Could not download advertized block {0}",
+            header.Hash.ToHexString()));
+      }
+
+      return (UTXOTable.BlockContainer)batch.DataContainers[0];
+    }
     
     public async Task<bool> TryDownloadBlocks(
-      DataBatch uTXOBatch)
+      DataBatch uTXOBatch,
+      List<Header> headers)
     {
-      uTXOBatch.CountItems = 0;
-
       try
       {
-        List<Inventory> inventories = uTXOBatch.DataContainers
-          .Select(container => new Inventory(
+        List<Inventory> inventories = headers
+          .Select(header => new Inventory(
             InventoryType.MSG_BLOCK,
-            ((UTXOTable.BlockContainer)container).Header.Hash))
+            header.Hash))
           .ToList();
 
         await NetworkPeer.SendMessage(
@@ -305,8 +327,7 @@ namespace BToken.Chaining
           IsExpectingMessageResponse = true;
         }
 
-        foreach (UTXOTable.BlockContainer blockContainer in
-          uTXOBatch.DataContainers)
+        for(int i = 0; i < headers.Count; i += 1)
         {
           while (true)
           {
@@ -322,10 +343,15 @@ namespace BToken.Chaining
 
             if (networkMessage.Command == "block")
             {
-              blockContainer.Buffer = networkMessage.Payload;
+              var blockContainer = new UTXOTable.BlockContainer(
+                networkMessage.Payload);
+              
+              blockContainer.Parse(SHA256);
 
-              blockContainer.Parse();
-              uTXOBatch.CountItems += blockContainer.CountItems;
+              blockContainer.ValidateHeaderHash(headers[i].Hash);
+
+              uTXOBatch.DataContainers.Add(blockContainer);
+              uTXOBatch.CountItems += blockContainer.CountTX;
               break;
             }
           }

@@ -160,10 +160,10 @@ namespace BToken.Chaining
           return false;
         }
 
-        if (container.CountItems < SizeBatchArchive)
+        if (container.CountTX < SizeBatchArchive)
         {
           Containers.Add(container);
-          CountItems = container.CountItems;
+          CountItems = container.CountTX;
 
           break;
         }
@@ -259,7 +259,7 @@ namespace BToken.Chaining
         InsertContainer(container);
 
         Containers.Add(container);
-        CountItems += container.CountItems;
+        CountItems += container.CountTX;
 
         if (CountItems >= SizeBatchArchive)
         {

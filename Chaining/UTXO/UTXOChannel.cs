@@ -70,7 +70,7 @@ namespace BToken.Chaining
               .ConfigureAwait(false);
 
             blockBatchContainer.Parse();
-            uTXOBatch.CountItems += blockBatchContainer.CountItems;
+            uTXOBatch.CountItems += blockBatchContainer.CountTX;
           }
         }
 

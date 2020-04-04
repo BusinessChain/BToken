@@ -171,7 +171,7 @@ namespace BToken.Chaining
 
           headerBatchContainer.Parse();
 
-          headerBatch.CountItems += headerBatchContainer.CountItems;
+          headerBatch.CountItems += headerBatchContainer.CountTX;
         }
       }
 
