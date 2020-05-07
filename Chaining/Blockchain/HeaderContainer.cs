@@ -9,10 +9,14 @@ namespace BToken.Chaining
 {
   public class HeaderContainer : DataContainer
   {
-    public IEnumerable<byte[]> LocatorHashes;
+    readonly byte[] ZERO_HASH = new byte[32];
 
     public Header HeaderRoot;
     public Header HeaderTip;
+    public int Count;
+
+    public byte[] Buffer;
+    public int IndexBuffer;
 
 
 
@@ -32,71 +36,46 @@ namespace BToken.Chaining
     { }
 
 
-    public HeaderContainer(
-      IEnumerable<byte[]> locatorHashes)
-    {
-      LocatorHashes = locatorHashes;
-    }
-
-
-
     public override void Parse(SHA256 sHA256)
     {
-      int bufferIndex = 0;
+      Parse(sHA256, ZERO_HASH);
+    }
+
+    public void Parse(SHA256 sHA256, byte[] stopHash)
+    {
+      IndexBuffer = 0;
 
       int headersCount = VarInt.GetInt32(
-        Buffer, ref bufferIndex);
+        Buffer, ref IndexBuffer);
 
       if (headersCount == 0)
       {
+        HeaderRoot = null;
+        HeaderTip = null;
         return;
       }
 
-      CountTX += headersCount;
-
       HeaderRoot = Header.ParseHeader(
         Buffer,
-        ref bufferIndex,
+        ref IndexBuffer,
         sHA256);
 
-      bufferIndex += 1; // skip txCount
+      IndexBuffer += 1;
 
-      headersCount -= 1;
+      Count += 1;
 
       HeaderTip = HeaderRoot;
 
-      ParseHeaders(
-        ref bufferIndex,
-        headersCount,
-        sHA256);
-
-
-      while (bufferIndex < Buffer.Length)
-      {
-        headersCount = VarInt.GetInt32(Buffer, ref bufferIndex);
-
-        CountTX += headersCount;
-
-        ParseHeaders(
-          ref bufferIndex,
-          headersCount,
-          sHA256);
-      }
-    }
-
-    void ParseHeaders(
-      ref int startIndex,
-      int headersCount,
-      SHA256 sHA256)
-    {
-      while (headersCount > 0)
+      while (
+        !stopHash.IsEqual(HeaderTip.Hash) && 
+        IndexBuffer < Buffer.Length)
       {
         var header = Header.ParseHeader(
           Buffer,
-          ref startIndex,
+          ref IndexBuffer,
           sHA256);
 
-        startIndex += 1; // skip txCount
+        IndexBuffer += 1;
 
         if (!header.HashPrevious.IsEqual(HeaderTip.Hash))
         {
@@ -108,8 +87,6 @@ namespace BToken.Chaining
               header.HashPrevious.ToHexString(),
               HeaderTip.Hash.ToHexString()));
         }
-
-        headersCount -= 1;
 
         header.HeaderPrevious = HeaderTip;
         HeaderTip = header;

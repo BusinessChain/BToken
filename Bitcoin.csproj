@@ -82,7 +82,7 @@
     <Compile Include="Chaining\BatchDataPipe\DataContainer.cs" />
     <Compile Include="Chaining\Blockchain.cs" />
     <Compile Include="Chaining\BlockchainPeer.cs" />
-    <Compile Include="Chaining\BlockContainer.cs" />
+    <Compile Include="Chaining\BlockArchive.cs" />
     <Compile Include="Chaining\Blockchain\BranchInserter.cs" />
     <Compile Include="Chaining\UTXO\UTXOSynchronizer.cs" />
     <Compile Include="Chaining\Blockchain\HeaderContainer.cs" />

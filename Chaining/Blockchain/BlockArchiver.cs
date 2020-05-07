@@ -2,286 +2,319 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
+
 
 namespace BToken.Chaining
 {
   public partial class Blockchain
   {
-    public class DataArchiver
+    class BlockArchiver
     {
-      public interface IDataStructure
-      {
-        void InsertContainer(DataContainer container);
-        DataContainer CreateContainer(int archiveLoadIndex);
-        void LoadImage();
-
-        void ArchiveImage(int archiveIndexStore);
-      }
-
-
-
-      IDataStructure DataStructure;
-
       readonly DirectoryInfo ArchiveDirectory =
         Directory.CreateDirectory("J:\\BlockArchivePartitioned");
 
-      const int SIZE_BATCH_ARCHIVE = 50000;
-      int CountSyncSessions;
+      int SIZE_HEADER_ARCHIVE = 2000;
+      int SIZE_BLOCK_ARCHIVE = 50000;
 
-      public int ArchiveIndex;
-      public List<UTXOTable.BlockContainer> Containers =
-        new List<UTXOTable.BlockContainer>();
-      public int CountTX;
+      FileStream HeaderArchive;
+      int IndexHeaderArchive;
+      int CountHeaders;
 
-      SHA256 SHA256 = SHA256.Create();
+      FileStream BlockArchive;
+      int IndexBlockArchiveLoad;
+      int IndexBlockArchive;
+      int CountTXs;
+
+      UTXOTable UTXOTable;
 
 
-      public DataArchiver(
-        IDataStructure dataStructure,
-        int countSyncSessions)
+      public BlockArchiver(UTXOTable uTXOTable)
       {
-        DataStructure = dataStructure;
-        CountSyncSessions = countSyncSessions;
+        UTXOTable = uTXOTable;
+        Initialize();
       }
 
-
-
-      int ArchiveIndexLoad;
-      const int COUNT_ARCHIVE_LOADER_PARALLEL = 8;
-      Task[] ArchiveLoaderTasks = new Task[COUNT_ARCHIVE_LOADER_PARALLEL];
-
-      public async Task Load(byte[] hashInsertedLast)
+      public void Initialize()
       {
-        DataStructure.LoadImage();
-
-        ArchiveIndexLoad = archiveIndex + 1;
-        ArchiveIndex = ArchiveIndexLoad;
-
-        Parallel.For(
-          0,
-          COUNT_ARCHIVE_LOADER_PARALLEL,
-          i => ArchiveLoaderTasks[i] = StartArchiveLoaderAsync());
-
-        await Task.WhenAll(ArchiveLoaderTasks);
-      }
-
-
-
-      readonly object LOCK_ArchiveLoadIndex = new object();
-
-      async Task StartArchiveLoaderAsync()
-      {
-        SHA256 sHA256 = SHA256.Create();
-        DataContainer container;
-        int archiveLoadIndex;
-
-        do
+        if (HeaderArchive != null)
         {
-          lock (LOCK_ArchiveLoadIndex)
-          {
-            archiveLoadIndex = ArchiveIndexLoad;
-            ArchiveIndexLoad += 1;
-          }
+          HeaderArchive.Dispose();
+          HeaderArchive = null;
+        }
 
-          container = DataStructure.CreateContainer(
-            archiveLoadIndex);
+        IndexHeaderArchive = 0;
+        CountHeaders = 0;
+        CreateHeaderArchive();
 
+        if (BlockArchive != null)
+        {
+          BlockArchive.Dispose();
+          BlockArchive = null;
+        }
+
+        IndexBlockArchive = 0;
+        CreateBlockArchive();
+      }
+
+
+      public void Initialize(int archiveIndex)
+      {
+        IndexBlockArchive = archiveIndex;
+        CreateBlockArchive();
+      }
+
+      public void Initialize(
+        UTXOTable.BlockArchive blockArchive)
+      {
+        if (blockArchive.CountTX < SIZE_BLOCK_ARCHIVE)
+        {
+          IndexBlockArchive = blockArchive.Index;
+          OpenBlockArchive();
+        }
+        else
+        {
+          IndexBlockArchive = blockArchive.Index + 1;
+          CreateBlockArchive();
+        }
+      }
+
+
+      public void LoadHeaderArchive(
+        BranchInserter branch,
+        byte[] stopHash,
+        SHA256 sHA256)
+      {
+        HeaderContainer headerContainer = new HeaderContainer();
+
+        while (true)
+        {
           try
           {
-            container.Buffer = File.ReadAllBytes(
-              Path.Combine(
-                ArchiveDirectory.FullName,
-                container.Index.ToString()));
+            headerContainer.Buffer = ReadHeaderArchive();
 
-            container.Parse(sHA256);
+            headerContainer.Parse(sHA256, stopHash);
+
+            branch.InsertHeaders(headerContainer.HeaderRoot);
           }
           catch
           {
-            container.IsValid = false;
+            CreateHeaderArchive();
+            return;
           }
 
-        } while (await SendToQueueAndReturnFlagContinue(container));
-      }
-
-
-
-      Dictionary<int, DataContainer> OutputQueue =
-        new Dictionary<int, DataContainer>();
-      bool IsArchiveLoadCompleted;
-      readonly object LOCK_OutputQueue = new object();
-
-      async Task<bool> SendToQueueAndReturnFlagContinue(
-        DataContainer container)
-      {
-        while (true)
-        {
-          if (IsArchiveLoadCompleted)
+          if (headerContainer.Count < SIZE_HEADER_ARCHIVE)
           {
-            return false;
-          }
-
-          lock (LOCK_OutputQueue)
-          {
-            if (container.Index == ArchiveIndex)
-            {
-              break;
-            }
-
-            if (OutputQueue.Count < 10)
-            {
-              OutputQueue.Add(container.Index, container);
-              return container.IsValid;
-            }
-          }
-
-          await Task.Delay(2000).ConfigureAwait(false);
-        }
-
-        while (container.IsValid)
-        {
-          try
-          {
-            DataStructure.InsertContainer(container);
-          }
-          catch (ChainException)
-          {
-            return false;
-          }
-
-          if (container.CountTX < SIZE_BATCH_ARCHIVE)
-          {
-            Containers.Add(container);
-            CountTX = container.CountTX;
-
             break;
           }
 
-          DataStructure.ArchiveImage(ArchiveIndex);
+          IndexHeaderArchive += 1;
 
-          lock (LOCK_OutputQueue)
+          if (stopHash.IsEqual(headerContainer.HeaderTip.Hash))
           {
-            ArchiveIndex += 1;
-
-            if (OutputQueue.TryGetValue(
-              ArchiveIndex, out container))
-            {
-              OutputQueue.Remove(ArchiveIndex);
-              continue;
-            }
-            else
-            {
-              return true;
-            }
+            CreateHeaderArchive();
+            return;
           }
         }
 
-        IsArchiveLoadCompleted = true;
-        return false;
-      }
-
-
-      public async Task ArchiveContainer(
-        UTXOTable.BlockContainer container)
-      {
-        Containers.Add(container);
-        CountTX += container.CountTX;
-
-        if (CountTX >= SIZE_BATCH_ARCHIVE)
+        if (stopHash.IsEqual(headerContainer.HeaderTip.Hash))
         {
-          string filePath = Path.Combine(
-            "branch",
-            ArchiveIndex.ToString());
+          CreateHeaderArchive();
 
-          while (true)
-          {
-            try
-            {
-              using (FileStream file = new FileStream(
-                filePath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 65536,
-                useAsync: true))
-              {
-                foreach (UTXOTable.BlockContainer c
-                  in Containers)
-                {
-                  await file.WriteAsync(
-                    c.Buffer,
-                    0,
-                    c.Buffer.Length);
-                }
-              }
-
-              break;
-            }
-            catch (IOException ex)
-            {
-              Console.WriteLine(ex.GetType().Name + ": " + ex.Message);
-              await Task.Delay(2000);
-              continue;
-            }
-            catch (Exception ex)
-            {
-              Console.WriteLine(ex.GetType().Name + ": " + ex.Message);
-              break;
-            }
-          }
-
-          Containers.Clear();
-          CountTX = 0;
-
-          if (ArchiveIndex % UTXOSTATE_ARCHIVING_INTERVAL == 0)
-          {
-            ArchiveImage();
-          }
-
-          ArchiveIndex += 1;
+          HeaderArchive.Write(
+            headerContainer.Buffer,
+            0,
+            headerContainer.Index);
         }
-      }
-
-      public UTXOTable.BlockContainer PopContainer(Header header)
-      {
-        UTXOTable.BlockContainer blockContainer;
-
-        if (Containers.Count == 0)
+        else
         {
-          ArchiveIndex -= 1;
-
-          blockContainer = new UTXOTable.BlockContainer(
-            File.ReadAllBytes(
-              Path.Combine("main", ArchiveIndex.ToString())));
-
-          blockContainer.Parse(SHA256);
-
-          Containers = blockContainer.Split();
+          OpenHeaderArchive();
         }
-
-        blockContainer = Containers.Last();
-
-        blockContainer.ValidateHeaderHash(header.Hash);
-
-        CountTX -= blockContainer.CountTX;
-        Containers.RemoveAt(Containers.Count);
-
-        return blockContainer;
       }
 
-      public void Branch(DataArchiver archiver)
+      byte[] ReadHeaderArchive()
       {
-        ArchiveDirectory.GetFiles()
-          .ToList()
+        return File.ReadAllBytes(
+          Path.Combine(
+            "Headerchain",
+            IndexHeaderArchive.ToString()));
+      }
+
+      void OpenHeaderArchive()
+      {
+        string filePathHeaderArchive = Path.Combine(
+          ArchiveDirectory.FullName,
+          "Headerchain",
+          IndexHeaderArchive.ToString());
+
+        HeaderArchive = new FileStream(
+          filePathHeaderArchive,
+          FileMode.Append,
+          FileAccess.Write,
+          FileShare.None,
+          bufferSize: 65536);
+      }
+
+      void CreateHeaderArchive()
+      {
+        CountHeaders = 0;
+
+        if (HeaderArchive != null)
+        {
+          HeaderArchive.Dispose();
+        }
+
+        string filePathHeaderArchive = Path.Combine(
+          ArchiveDirectory.FullName,
+          "Headerchain",
+          IndexHeaderArchive.ToString());
+
+        HeaderArchive = new FileStream(
+          filePathHeaderArchive,
+          FileMode.Create,
+          FileAccess.Write,
+          FileShare.None,
+          bufferSize: 65536);
+      }
+
+
+
+      List<UTXOTable.BlockArchive> BlockContainers = 
+        new List<UTXOTable.BlockArchive>();
+      List<Header> HeaderArchiveQueue = new List<Header>();
+
+      public void ArchiveContainer(
+        UTXOTable.BlockArchive container)
+      {
+        HeaderArchiveQueue.Add(container.HeaderRoot);
+
+        if (HeaderArchiveQueue.Count >= SIZE_HEADER_ARCHIVE)
+        {
+          HeaderArchiveQueue.ForEach(
+            h => WriteToArchive(HeaderArchive, h.GetBytes()));
+
+          HeaderArchiveQueue.Clear();
+
+          CreateHeaderArchive();
+        }
+
+        BlockContainers.Add(container);
+        CountTXs += container.CountTX;
+
+        if (CountTXs >= SIZE_BLOCK_ARCHIVE)
+        {
+          BlockContainers.ForEach(
+            c => WriteToArchive(BlockArchive, c.Buffer));
+
+          BlockContainers.Clear();
+
+          if (IndexBlockArchive % UTXOIMAGE_INTERVAL
+            == 0)
+          {
+            UTXOTable.ArchiveImage(IndexBlockArchive);
+          }
+
+          IndexBlockArchive += 1;
+
+          CreateBlockArchive();
+        }
+      }
+            
+      void CreateBlockArchive()
+      {
+        CountTXs = 0;
+
+        if (BlockArchive != null)
+        {
+          BlockArchive.Dispose();
+        }
+
+        string filePathBlockArchive = Path.Combine(
+          ArchiveDirectory.FullName,
+          IndexBlockArchive.ToString());
+
+        BlockArchive = new FileStream(
+          filePathBlockArchive,
+          FileMode.Create,
+          FileAccess.Write,
+          FileShare.None,
+          bufferSize: 65536);
+      }
+
+      void OpenBlockArchive()
+      {
+        string filePathBlockArchive = Path.Combine(
+          ArchiveDirectory.FullName,
+          IndexBlockArchive.ToString());
+
+        BlockArchive = new FileStream(
+          filePathBlockArchive,
+          FileMode.Append,
+          FileAccess.Write,
+          FileShare.None,
+          bufferSize: 65536);
+      }
+
+
+
+      static void WriteToArchive(
+        FileStream file,
+        byte[] bytes)
+      {
+        while (true)
+        {
+          try
+          {
+            file.Write(bytes, 0, bytes.Length);
+            break;
+          }
+          catch (IOException ex)
+          {
+            Console.WriteLine(
+              ex.GetType().Name + ": " + ex.Message);
+
+            Thread.Sleep(2000);
+            continue;
+          }
+        }
+      }
+
+
+      public byte[] ReadBlockArchive(int index)
+      {
+        return File.ReadAllBytes(
+          Path.Combine(
+            ArchiveDirectory.Name,
+            index.ToString()));
+      }
+
+      
+      public void Restore()
+      {
+        // Copy back the files from the rollbackFolder to main archive
+      }
+      public void CommitBranch()
+      {
+        // delete files in rollbackFolder
+      }
+
+      public void Branch(BlockArchiver archiver)
+      {
+        ArchiveDirectory.GetFiles().ToList()
           .ForEach(f => f.Delete());
 
-        Containers = archiver.Containers;
-        ArchiveIndex = archiver.ArchiveIndex;
-        CountTX = archiver.CountTX;
+        HeaderArchive = archiver.HeaderArchive;
+        IndexHeaderArchive = archiver.IndexHeaderArchive;
+        CountHeaders = archiver.IndexHeaderArchive;
+
+        BlockArchive = archiver.BlockArchive;
+        IndexBlockArchive = archiver.IndexBlockArchive;
+        CountTXs = archiver.CountTXs;
       }
 
-      public void Export(DataArchiver archiverDestination)
+      public void Export(BlockArchiver archiveDestination)
       {
         FileInfo[] files = ArchiveDirectory.GetFiles();
 
@@ -289,7 +322,7 @@ namespace BToken.Chaining
         while (i < files.Length)
         {
           string nameFileDest = Path.Combine(
-                archiverDestination.ArchiveDirectory.Name,
+                archiveDestination.ArchiveDirectory.Name,
                 files[i].Name);
           try
           {
@@ -304,12 +337,10 @@ namespace BToken.Chaining
           i += 1;
         }
 
-        archiverDestination.Containers = Containers;
-        archiverDestination.CountTX = CountTX;
-        archiverDestination.ArchiveIndex = ArchiveIndex;
+        archiveDestination.BlockContainers = BlockContainers;
+        archiveDestination.CountTXs = CountTXs;
+        archiveDestination.IndexBlockArchive = IndexBlockArchive;
       }
     }
   }
-
-
 }

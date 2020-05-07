@@ -153,8 +153,8 @@ namespace BToken.Chaining
 
             HeaderLoad = HeaderLoad.HeaderNext;
 
-            BlockContainer blockContainer =
-              new BlockContainer(
+            BlockArchive blockContainer =
+              new BlockArchive(
                 UTXOTable.Headerchain,
                 HeaderLoad);
 
@@ -176,7 +176,7 @@ namespace BToken.Chaining
       protected override void InsertContainer(
         DataContainer container)
       {
-        BlockContainer blockContainer = (BlockContainer)container;
+        BlockArchive blockContainer = (BlockArchive)container;
 
         if (blockContainer.HeaderPrevious != UTXOTable.Header)
         {
@@ -250,15 +250,15 @@ namespace BToken.Chaining
       protected override DataContainer CreateContainer(
         int index)
       {
-        return new BlockContainer(
+        return new BlockArchive(
           UTXOTable.Headerchain,
           index);
       }
 
 
       
-      Dictionary<int, BlockContainer> CacheBlockContainers =
-        new Dictionary<int, BlockContainer>();
+      Dictionary<int, BlockArchive> CacheBlockContainers =
+        new Dictionary<int, BlockArchive>();
       List<int> ArchiveIndexesInCache = new List<int>();
       List<int> ArchiveIndexesLoading = new List<int>();
       readonly object LOCK_CacheBlockContainers = new object();
@@ -278,7 +278,7 @@ namespace BToken.Chaining
             continue;
           }
 
-          BlockContainer container;
+          BlockArchive container;
           bool sleepThread = false;
 
           while (true)
@@ -310,7 +310,7 @@ namespace BToken.Chaining
 
           if (container == null)
           {
-            container = new BlockContainer(
+            container = new BlockArchive(
                UTXOTable.Headerchain,
                archiveIndex);
 

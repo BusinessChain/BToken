@@ -42,16 +42,26 @@ namespace BToken
 
     public byte[] GetBytes()
     {
-      List<byte> headerSerialized = new List<byte>();
+      byte[] headerSerialized = 
+        new byte[COUNT_HEADER_BYTES];
 
-      headerSerialized.AddRange(BitConverter.GetBytes(Version));
-      headerSerialized.AddRange(HashPrevious);
-      headerSerialized.AddRange(MerkleRoot);
-      headerSerialized.AddRange(BitConverter.GetBytes(UnixTimeSeconds));
-      headerSerialized.AddRange(BitConverter.GetBytes(NBits));
-      headerSerialized.AddRange(BitConverter.GetBytes(Nonce));
+      BitConverter.GetBytes(Version)
+        .CopyTo(headerSerialized, 0);
 
-      return headerSerialized.ToArray();
+      HashPrevious.CopyTo(headerSerialized, 4);
+
+      MerkleRoot.CopyTo(headerSerialized, 36);
+
+      BitConverter.GetBytes(UnixTimeSeconds)
+        .CopyTo(headerSerialized, 68);
+
+      BitConverter.GetBytes(NBits)
+        .CopyTo(headerSerialized, 72);
+
+      BitConverter.GetBytes(Nonce)
+        .CopyTo(headerSerialized, 76);
+
+      return headerSerialized;
     }
 
     public static Header ParseHeader(

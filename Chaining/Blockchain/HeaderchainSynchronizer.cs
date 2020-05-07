@@ -12,204 +12,201 @@ using BToken.Networking;
 
 namespace BToken.Chaining
 {
-  partial class Headerchain
+  public partial class HeaderchainSynchronizer : DataSynchronizer
   {
-    public partial class HeaderchainSynchronizer : DataSynchronizer
+    Headerchain Headerchain;
+
+    readonly object LOCK_IsAnyChannelSyncing = new object();
+    bool IsAnyChannelSyncing;
+
+    BufferBlock<Header> HeadersListened =
+      new BufferBlock<Header>();
+
+    const int COUNT_HEADER_SESSIONS = 4;
+    const int SIZE_BATCH_ARCHIVE = 50000;
+
+    DataBatch HeaderBatch;
+
+    ConcurrentQueue<DataBatch> QueueBatchesCanceled
+      = new ConcurrentQueue<DataBatch>();
+
+
+    public HeaderchainSynchronizer(Headerchain headerchain)
+      : base(
+          SIZE_BATCH_ARCHIVE,
+          COUNT_HEADER_SESSIONS)
     {
-      Headerchain Headerchain;
+      ArchiveDirectory = Directory.CreateDirectory(
+        Path.Combine(
+          AppDomain.CurrentDomain.BaseDirectory,
+          "HeaderArchive"));
 
-      readonly object LOCK_IsAnyChannelSyncing = new object();
-      bool IsAnyChannelSyncing;
-
-      BufferBlock<Header> HeadersListened =
-        new BufferBlock<Header>();
-
-      const int COUNT_HEADER_SESSIONS = 4;
-      const int SIZE_BATCH_ARCHIVE = 50000;
-
-      DataBatch HeaderBatch;
-      
-      ConcurrentQueue<DataBatch> QueueBatchesCanceled
-        = new ConcurrentQueue<DataBatch>();
+      Headerchain = headerchain;
+    }
 
 
-      public HeaderchainSynchronizer(Headerchain headerchain)
-        : base(
-            SIZE_BATCH_ARCHIVE,
-            COUNT_HEADER_SESSIONS)
+
+    protected override async Task RunSyncSession()
+    {
+      while (true)
       {
-        ArchiveDirectory = Directory.CreateDirectory(
-          Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory,
-            "HeaderArchive"));
+        Network.INetworkChannel channel =
+          await Headerchain.Network.DispatchChannelOutbound()
+          .ConfigureAwait(false);
 
-        Headerchain = headerchain;
-      }
-
-
-
-      protected override async Task RunSyncSession()
-      {
-        while(true)
+        lock (LOCK_IsAnyChannelSyncing)
         {
-          Network.INetworkChannel channel =
-            await Headerchain.Network.DispatchChannelOutbound()
-            .ConfigureAwait(false);
+          if (IsAnyChannelSyncing)
+          {
+            channel.Release();
+            return;
+          }
+
+          IsAnyChannelSyncing = true;
+        }
+
+        try
+        {
+          do
+          {
+            LoadBatch();
+
+            await DownloadHeaders(channel, HeaderBatch);
+
+            if (HeaderBatch.CountItems == 0)
+            {
+              HeaderBatch.IsCancellationBatch = true;
+            }
+
+            await BatchSynchronizationBuffer
+              .SendAsync(HeaderBatch);
+
+          } while (!HeaderBatch.IsCancellationBatch);
+
+          channel.Release();
+
+          return;
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine(
+            "{0} in SyncHeaderchainSession {1} with channel {2}: {3}",
+            ex.GetType().Name,
+            GetHashCode(),
+            channel == null ? "'null'" : channel.GetIdentification(),
+            ex.Message);
+
+          QueueBatchesCanceled.Enqueue(HeaderBatch);
+
+          channel.Dispose();
 
           lock (LOCK_IsAnyChannelSyncing)
           {
-            if (IsAnyChannelSyncing) 
-            {
-              channel.Release();
-              return;
-            }
-
-            IsAnyChannelSyncing = true;
-          }
-
-          try
-          {
-            do
-            {
-              LoadBatch();
-
-              await DownloadHeaders(channel, HeaderBatch);
-
-              if(HeaderBatch.CountItems == 0)
-              {
-                HeaderBatch.IsCancellationBatch = true;
-              }
-
-              await BatchSynchronizationBuffer
-                .SendAsync(HeaderBatch);
-
-            } while (!HeaderBatch.IsCancellationBatch);
-            
-            channel.Release();
-
-            return;
-          }
-          catch (Exception ex)
-          {
-            Console.WriteLine(
-              "{0} in SyncHeaderchainSession {1} with channel {2}: {3}",
-              ex.GetType().Name,
-              GetHashCode(),
-              channel == null ? "'null'" : channel.GetIdentification(),
-              ex.Message);
-
-            QueueBatchesCanceled.Enqueue(HeaderBatch);
-
-            channel.Dispose();
-
-            lock (LOCK_IsAnyChannelSyncing)
-            {
-              IsAnyChannelSyncing = false;
-            }
+            IsAnyChannelSyncing = false;
           }
         }
       }
+    }
 
 
 
-      public void LoadBatch()
+    public void LoadBatch()
+    {
+      if (QueueBatchesCanceled.TryDequeue(out DataBatch headerBatch))
       {
-        if (QueueBatchesCanceled.TryDequeue(out DataBatch headerBatch))
+        HeaderBatch = headerBatch;
+        return;
+      }
+
+      if (HeaderBatch == null || HeaderBatch.IsCancellationBatch)
+      {
+        IEnumerable<byte[]> headerLocator;
+
+        lock (Headerchain.LOCK_IsChainLocked)
         {
-          HeaderBatch = headerBatch;
-          return;
-        }
-
-        if (HeaderBatch == null || HeaderBatch.IsCancellationBatch)
-        {
-          IEnumerable<byte[]> headerLocator;
-
-          lock (Headerchain.LOCK_IsChainLocked)
-          {
-            headerLocator = Headerchain.Locator.GetHeaderHashes();
-          }
-          
-          HeaderBatch = new DataBatch()
-          {
-            Index = 0,
-
-            DataContainers = new List<DataContainer>()
-            {
-              new HeaderContainer(headerLocator)
-            }
-          };
-
-          return;
+          headerLocator = Headerchain.Locator.GetHeaderHashes();
         }
 
         HeaderBatch = new DataBatch()
         {
-          Index = HeaderBatch.Index + 1,
+          Index = 0,
 
           DataContainers = new List<DataContainer>()
+            {
+              new HeaderContainer(headerLocator)
+            }
+        };
+
+        return;
+      }
+
+      HeaderBatch = new DataBatch()
+      {
+        Index = HeaderBatch.Index + 1,
+
+        DataContainers = new List<DataContainer>()
           {
             new HeaderContainer(
               HeaderBatch.DataContainers
               .Select(d => ((HeaderContainer)d).HeaderTip.Hash))
           }
-        };
-      }
-      
+      };
+    }
 
 
-      public async Task DownloadHeaders(
-        Network.INetworkChannel channel,
-        DataBatch headerBatch)
+
+    public async Task DownloadHeaders(
+      Network.INetworkChannel channel,
+      DataBatch headerBatch)
+    {
+      headerBatch.CountItems = 0;
+
+      foreach (HeaderContainer headerBatchContainer
+        in headerBatch.DataContainers)
       {
-        headerBatch.CountItems = 0;
+        headerBatchContainer.Buffer = await channel.GetHeaders(
+          headerBatchContainer.LocatorHashes);
 
-        foreach (HeaderContainer headerBatchContainer
-          in headerBatch.DataContainers)
-        {
-          headerBatchContainer.Buffer = await channel.GetHeaders(
-            headerBatchContainer.LocatorHashes);
+        headerBatchContainer.Parse();
 
-          headerBatchContainer.Parse();
-
-          headerBatch.CountItems += headerBatchContainer.CountTX;
-        }
+        headerBatch.CountItems += headerBatchContainer.CountTX;
       }
+    }
 
 
-      protected override void LoadImage(out int archiveIndexNext)
-      {
-        archiveIndexNext = 0;
-      }
+    protected override void LoadImage(out int archiveIndexNext)
+    {
+      archiveIndexNext = 0;
+    }
 
-      protected override void ArchiveImage(int archiveIndex)
-      { }
+    protected override void ArchiveImage(int archiveIndex)
+    { }
 
-      protected override DataContainer CreateContainer(
-        int index)
-      {
-        return new HeaderContainer(index);
-      }
-                      
-
-
-      protected override void InsertContainer(
-        DataContainer container)
-      {
-        Headerchain.InsertContainer(
-          (HeaderContainer)container);
-      }
-      
+    protected override DataContainer CreateContainer(
+      int index)
+    {
+      return new HeaderContainer(index);
+    }
 
 
-      public void InsertHeaderBatch(DataBatch headerBatch)
-      {
-        InsertBatch(headerBatch);
-        ArchiveContainers();
 
-        Console.WriteLine(
-          "height headerchain {0}",
-          Headerchain.MainChain.Height);
-      }
+    protected override void InsertContainer(
+      DataContainer container)
+    {
+      Headerchain.InsertContainer(
+        (HeaderContainer)container);
+    }
+
+
+
+    public void InsertHeaderBatch(DataBatch headerBatch)
+    {
+      InsertBatch(headerBatch);
+      ArchiveContainers();
+
+      Console.WriteLine(
+        "height headerchain {0}",
+        Headerchain.MainChain.Height);
     }
   }
 }

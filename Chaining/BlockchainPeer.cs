@@ -38,7 +38,7 @@ namespace BToken.Chaining
     Stopwatch StopwatchDownload = new Stopwatch();
     public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
-    public Stack<DataBatch> UTXOBatchesDownloaded =
+    public Stack<DataBatch> UTXOBatches =
       new Stack<DataBatch>();
 
     readonly object LOCK_IsExpectingMessageResponse = new object();
@@ -211,6 +211,9 @@ namespace BToken.Chaining
         new HeadersMessage(headers));
     }
 
+
+    HeaderContainer HeaderContainer = new HeaderContainer();
+
     public async Task<Header> GetHeaders(
       List<byte[]> locator)
     {
@@ -225,8 +228,7 @@ namespace BToken.Chaining
       {
         IsExpectingMessageResponse = true;
       }
-
-      byte[] headerBytes;
+      
       while (true)
       {
         NetworkMessage networkMessage = await MessageResponseBuffer
@@ -235,7 +237,7 @@ namespace BToken.Chaining
 
         if (networkMessage.Command == "headers")
         {
-          headerBytes = networkMessage.Payload;
+          HeaderContainer.Buffer = networkMessage.Payload;
           break;
         }
       }
@@ -245,16 +247,13 @@ namespace BToken.Chaining
         IsExpectingMessageResponse = false;
       }
 
-      var headerContainer =
-        new HeaderContainer(headerBytes);
-
-      headerContainer.Parse(SHA256);
+      HeaderContainer.Parse(SHA256);
 
       locator = locator.ToList();
 
       int indexLocatorAncestor = locator.FindIndex(
         h => h.IsEqual(
-          headerContainer.HeaderRoot.HashPrevious));
+          HeaderContainer.HeaderRoot.HashPrevious));
 
       if (indexLocatorAncestor == -1)
       {
@@ -269,7 +268,7 @@ namespace BToken.Chaining
 
       if (locator.Count > 1)
       {
-        Header header = headerContainer.HeaderRoot;
+        Header header = HeaderContainer.HeaderRoot;
 
         do
         {
@@ -283,10 +282,10 @@ namespace BToken.Chaining
         } while (header != null);
       }
 
-      return headerContainer.HeaderRoot;
+      return HeaderContainer.HeaderRoot;
     }
 
-    public async Task<UTXOTable.BlockContainer> DownloadBlock(
+    public async Task<UTXOTable.BlockArchive> DownloadBlock(
       Header header)
     {
       var batch = new DataBatch();
@@ -301,7 +300,7 @@ namespace BToken.Chaining
             header.Hash.ToHexString()));
       }
 
-      return (UTXOTable.BlockContainer)batch.DataContainers[0];
+      return (UTXOTable.BlockArchive)batch.DataContainers[0];
     }
     
     public async Task<bool> TryDownloadBlocks(
@@ -327,7 +326,7 @@ namespace BToken.Chaining
           IsExpectingMessageResponse = true;
         }
 
-        for(int i = 0; i < headers.Count; i += 1)
+        for (int i = 0; i < headers.Count; i += 1)
         {
           while (true)
           {
@@ -343,9 +342,9 @@ namespace BToken.Chaining
 
             if (networkMessage.Command == "block")
             {
-              var blockContainer = new UTXOTable.BlockContainer(
+              var blockContainer = new UTXOTable.BlockArchive(
                 networkMessage.Payload);
-              
+
               blockContainer.Parse(SHA256);
 
               blockContainer.ValidateHeaderHash(headers[i].Hash);
@@ -374,8 +373,6 @@ namespace BToken.Chaining
 
         return false;
       }
-
-      UTXOBatchesDownloaded.Push(uTXOBatch);
 
       return true;
     }

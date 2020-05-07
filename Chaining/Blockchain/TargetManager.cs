@@ -63,7 +63,8 @@ namespace BToken.Chaining
 
       public static double GetDifficulty(UInt32 nBits)
       {
-        double difficulty = MAX_TARGET / (double)UInt256.ParseFromCompact(nBits);
+        double difficulty = 
+          MAX_TARGET / (double)UInt256.ParseFromCompact(nBits);
 
         return difficulty;
       }

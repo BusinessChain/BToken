@@ -8,7 +8,7 @@ using System.Linq;
 
 namespace BToken.Chaining
 {
-  public partial class UTXOTable : DataArchiver.IDataStructure
+  public partial class UTXOTable
   {
     byte[] GenesisBlockBytes;
 
@@ -30,8 +30,8 @@ namespace BToken.Chaining
     UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
     UTXOIndexUInt32ArrayCompressed TableUInt32Array = new UTXOIndexUInt32ArrayCompressed();
 
-    static string PathUTXOState = "UTXOArchive";
-    static string PathUTXOStateOld = PathUTXOState + "_Old";
+
+    const int UTXOIMAGE_INTERVAL = 10;
 
     public int BlockHeight;
     public Header Header;
@@ -188,103 +188,44 @@ namespace BToken.Chaining
     }
 
 
+    string PathUTXOState = "UTXOArchive";
 
-    public void LoadImage()
-    {
-      if (TryLoadUTXOState(out int archiveIndex))
-      {
-        Console.WriteLine("Load UTXO Image from {0}",
-          PathUTXOState);
-        return;
-      }
-
-      if (Directory.Exists(PathUTXOState))
-      {
-        Directory.Delete(PathUTXOState, true);
-      }
-
-      if (Directory.Exists(PathUTXOStateOld))
-      {
-        Directory.Move(PathUTXOStateOld, PathUTXOState);
-
-        if (TryLoadUTXOState(out archiveIndex))
-        {
-          Console.WriteLine("Load UTXO Image from {0}",
-            PathUTXOStateOld);
-          return;
-        }
-
-        Directory.Delete(PathUTXOState, true);
-      }
-
-      Console.WriteLine("no image loaded, build from genesis",
-        PathUTXOState,
-        PathUTXOStateOld);
-
-      BlockContainer genesisBlockContainer = new BlockContainer(
-        Headerchain,
-        0,
-        GenesisBlockBytes);
-
-      genesisBlockContainer.Parse();
-
-      InsertBlockContainer(genesisBlockContainer);
-    }
-
-
-
-    bool TryLoadUTXOState(out int archiveIndex)
+    public bool TryLoadImage()
     {
       try
       {
-        byte[] uTXOState = File.ReadAllBytes(
-          Path.Combine(PathUTXOState, "UTXOState"));
-
-        archiveIndex = BitConverter.ToInt32(uTXOState, 0);
-        BlockHeight = BitConverter.ToInt32(uTXOState, 4);
-
-        byte[] headerHashMergedLast = new byte[HASH_BYTE_SIZE];
-        Array.Copy(uTXOState, 8, headerHashMergedLast, 0, HASH_BYTE_SIZE);
-
-        if (!Headerchain.TryReadHeader(headerHashMergedLast, out Header))
-        {
-          throw new ChainException(string.Format(
-            "Header hash {0} merged last not in chain.",
-            headerHashMergedLast.ToHexString()));
-        }
-
-        LoadMapBlockToArchiveData(File.ReadAllBytes(
-          Path.Combine(PathUTXOState, "MapBlockHeader")));
+        LoadMapBlockToArchiveData(
+          File.ReadAllBytes(
+            Path.Combine(PathUTXOState, "MapBlockHeader")));
 
         for (int c = 0; c < Tables.Length; c += 1)
         {
           Tables[c].Load();
         }
 
+        Console.WriteLine(
+          "Load UTXO Image from {0}",
+          PathUTXOState);
+
         return true;
       }
-      catch (Exception ex)
+      catch
       {
-        Console.WriteLine("Cannot load UTXO state: {0}.",
-          ex.Message);
-
-        archiveIndex = 0;
-        BlockHeight = -1;
-        Header = GenesisHeader;
-
-        for (int c = 0; c < Tables.Length; c += 1)
-        {
-          Tables[c].Clear();
-        }
-
         return false;
       }
     }
 
+    public void Clear()
+    {
+      for (int c = 0; c < Tables.Length; c += 1)
+      {
+        Tables[c].Clear();
+      }
+    }
 
 
     // Similar function as LoadCollisionData in UTXOIndexUInt32Compressed
-    void LoadMapBlockToArchiveData(byte[] buffer)
+    public void LoadMapBlockToArchiveData(byte[] buffer)
     {
       int index = 0;
 
@@ -303,34 +244,75 @@ namespace BToken.Chaining
 
 
 
-    public void InsertBlockContainer(
-      BlockContainer blockContainer)
+    public void InsertBlockArchive(
+      BlockArchive blockArchive)
     {
-      blockContainer.StopwatchStaging.Start();
+      blockArchive.StopwatchStaging.Start();
 
       InsertUTXOsUInt32(
-        blockContainer.UTXOsUInt32,
-        blockContainer.Index);
+        blockArchive.UTXOsUInt32,
+        blockArchive.Index);
 
       InsertUTXOsULong64(
-        blockContainer.UTXOsULong64,
-        blockContainer.Index);
+        blockArchive.UTXOsULong64,
+        blockArchive.Index);
 
       InsertUTXOsUInt32Array(
-        blockContainer.UTXOsUInt32Array,
-        blockContainer.Index);
+        blockArchive.UTXOsUInt32Array,
+        blockArchive.Index);
 
-      InsertSpendUTXOs(blockContainer.Inputs);
+      InsertSpendUTXOs(blockArchive.Inputs);
 
-      blockContainer.StopwatchStaging.Stop();
+      blockArchive.StopwatchStaging.Stop();
 
-      Header = blockContainer.Header;
-      BlockHeight += blockContainer.BlockCount;
+      Header = blockArchive.HeaderTip;
+      BlockHeight += blockArchive.BlockCount;
 
-      LogInsertion(blockContainer);
+      LogInsertion(blockArchive);
+
+      if (blockArchive.Index % UTXOIMAGE_INTERVAL == 0)
+      {
+        ArchiveImage(blockArchive.Index);
+      }
     }
 
-    
+
+    public void ArchiveImage(int archiveIndex)
+    {
+      Directory.CreateDirectory(PathUTXOState);
+
+      byte[] archiveIndexBytes = new byte[4];
+      BitConverter.GetBytes(archiveIndex).CopyTo(archiveIndexBytes, 0);
+
+      using (FileStream stream = new FileStream(
+         Path.Combine(PathUTXOState, "UTXOState"),
+         FileMode.Create,
+         FileAccess.Write))
+      {
+        stream.Write(
+          archiveIndexBytes, 
+          0, 
+          archiveIndexBytes.Length);
+      }
+
+      using (FileStream stream = new FileStream(
+         Path.Combine(PathUTXOState, "MapBlockHeader"),
+         FileMode.Create,
+         FileAccess.Write))
+      {
+        foreach (KeyValuePair<byte[], int> keyValuePair
+          in MapBlockToArchiveIndex)
+        {
+          stream.Write(keyValuePair.Key, 0, keyValuePair.Key.Length);
+
+          byte[] valueBytes = BitConverter.GetBytes(keyValuePair.Value);
+          stream.Write(valueBytes, 0, valueBytes.Length);
+        }
+      }
+
+      Backup();
+    }
+
     public void Backup()
     {
       Parallel.ForEach(Tables, t =>
@@ -345,7 +327,7 @@ namespace BToken.Chaining
     }
 
 
-    void LogInsertion(BlockContainer container)
+    void LogInsertion(BlockArchive container)
     {
       if (UTCTimeStartMerger == 0)
       {

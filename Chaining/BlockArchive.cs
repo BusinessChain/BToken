@@ -9,7 +9,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    public class BlockContainer : DataContainer
+    public class BlockArchive : DataContainer
     {
       public List<TXInput> Inputs = new List<TXInput>();
 
@@ -20,49 +20,45 @@ namespace BToken.Chaining
       public KeyValuePair<byte[], ulong>[] UTXOsULong64;
       public KeyValuePair<byte[], uint[]>[] UTXOsUInt32Array;
 
-      public Header HeaderPrevious;
-      public Header Header;
-
-      public List<Header> Headers = new List<Header>();
-
-      public Dictionary<byte[], int[]> BufferStartIndexAndLengthBlocks
-        = new Dictionary<byte[], int[]>(new EqualityComparerByteArray());
+      public Header HeaderTip;
+      public Header HeaderRoot;
 
       public int BlockCount;
+      public int CountTX;
       SHA256 SHA256;
+
+      public byte[] Buffer;
+      public int IndexBuffer;
 
       public Stopwatch StopwatchStaging = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
 
 
 
-      public BlockContainer(byte[] buffer)
+      public BlockArchive()
+      { }
+
+      public BlockArchive(byte[] buffer)
         : base(buffer)
       { }
-     
 
-      public BlockContainer(
+      public BlockArchive(
         int archiveIndex)
         : base(archiveIndex)
-      {
-        Headerchain = headerchain;
-      }
+      { }
 
-      public BlockContainer(
-        Headerchain headerchain,
+      public BlockArchive(
         int archiveIndex,
         byte[] blockBytes)
         : base(
             archiveIndex,
             blockBytes)
-      {
-        Headerchain = headerchain;
-      }
+      { }
 
 
-      public BlockContainer(Header header)
+      public BlockArchive(Header header)
       {
-        Header = header;
+        HeaderTip = header;
       }
 
 
@@ -74,12 +70,8 @@ namespace BToken.Chaining
       const int BYTE_LENGTH_LOCK_TIME = 4;
       const int OFFSET_INDEX_MERKLE_ROOT = 36;
       const int TWICE_HASH_BYTE_SIZE = HASH_BYTE_SIZE << 1;
-
-      int BufferIndex;
-      byte[] HeaderHash;
-      int TXCount;
       
-      Headerchain Headerchain;
+      int TXCount;
 
       public override void Parse(SHA256 sHA256)
       {
@@ -87,85 +79,43 @@ namespace BToken.Chaining
 
         StopwatchParse.Start();
 
-        BufferIndex = 0;
+        IndexBuffer = 0;
+        
+        HeaderRoot = Header.ParseHeader(
+          Buffer,
+          ref IndexBuffer,
+          sHA256);
+        TXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
 
-        HeaderHash =
-          SHA256.ComputeHash(
-            SHA256.ComputeHash(
-              Buffer,
-              BufferIndex,
-              COUNT_HEADER_BYTES));
+        HeaderTip = HeaderRoot;
 
-        int[] startIndexAndLength = new int[2];
-        startIndexAndLength[0] = BufferIndex;
+        ParseBlock(OFFSET_INDEX_MERKLE_ROOT);      
 
-        BufferIndex += COUNT_HEADER_BYTES;
-        TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
-
-        if (Header == null)
+        while (IndexBuffer < Buffer.Length)
         {
-          if (!Headerchain.TryReadHeader(
-            HeaderHash,
-            SHA256,
-            out Header))
-          {
-            throw new ChainException(string.Format(
-              "Header hash {0} not in chain.",
-              HeaderHash.ToHexString()));
-          }
-        }
-        else
-        {
-          ValidateHeaderHash(
-            HeaderHash,
-            Header.Hash);
-        }
+          int merkleRootIndex = IndexBuffer + OFFSET_INDEX_MERKLE_ROOT;
 
-        Headers.Add(Header);
-        HeaderPrevious = Header.HeaderPrevious;
-
-        ParseBlock(OFFSET_INDEX_MERKLE_ROOT);
-        BlockCount += 1;
-        CountTX += TXCount;
-
-        startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
-
-        BufferStartIndexAndLengthBlocks.Add(
-          HeaderHash,
-          startIndexAndLength);
-
-        while (BufferIndex < Buffer.Length)
-        {
-          startIndexAndLength = new int[2];
-          startIndexAndLength[0] = BufferIndex;
+          var header = Header.ParseHeader(
+            Buffer,
+            ref IndexBuffer,
+            sHA256);
+          TXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
           
-          HeaderHash =
-            SHA256.ComputeHash(
-              SHA256.ComputeHash(
-                Buffer,
-                BufferIndex,
-                COUNT_HEADER_BYTES));
+          if (!header.HashPrevious.IsEqual(HeaderTip.Hash))
+          {
+            throw new ChainException(
+              string.Format(
+                "header {0} with header hash previous {1} " +
+                "not in consecutive order with current tip header {2}",
+                header.Hash.ToHexString(),
+                header.HashPrevious.ToHexString(),
+                HeaderTip.Hash.ToHexString()));
+          }
 
-          int merkleRootIndex = BufferIndex + OFFSET_INDEX_MERKLE_ROOT;
-          BufferIndex += COUNT_HEADER_BYTES;
-          TXCount = VarInt.GetInt32(Buffer, ref BufferIndex);
-
-          Header = Header.HeaderNext;
-
-          ValidateHeaderHash(
-            HeaderHash,
-            Header.Hash);
-
-          Headers.Add(Header);
+          header.HeaderPrevious = HeaderTip;
+          HeaderTip = header;
 
           ParseBlock(merkleRootIndex);
-          BlockCount += 1;
-          CountTX += TXCount;
-
-          startIndexAndLength[1] = BufferIndex - startIndexAndLength[0];
-          BufferStartIndexAndLengthBlocks.Add(
-            HeaderHash,
-            startIndexAndLength);
         }
 
         ConvertTablesToArrays();
@@ -175,11 +125,11 @@ namespace BToken.Chaining
 
       public void ValidateHeaderHash(byte[] hashValidator)
       {
-        if (!HeaderHash.IsEqual(hashValidator))
+        if (!HeaderTip.Hash.IsEqual(hashValidator))
         {
           throw new ChainException(
             string.Format("Unexpected header hash {0}, \nexpected {1}",
-            HeaderHash.ToHexString(),
+            HeaderTip.Hash.ToHexString(),
             hashValidator.ToHexString()));
         }
       }
@@ -219,6 +169,9 @@ namespace BToken.Chaining
           throw new ChainException("Payload hash unequal with merkle root.");
         }
 
+        BlockCount += 1;
+        CountTX += TXCount;
+
         return;
       }
 
@@ -226,40 +179,41 @@ namespace BToken.Chaining
       {
         try
         {
-          int tXStartIndex = BufferIndex;
+          int tXStartIndex = IndexBuffer;
 
-          BufferIndex += BYTE_LENGTH_VERSION;
+          IndexBuffer += BYTE_LENGTH_VERSION;
 
-          bool isWitnessFlagPresent = Buffer[BufferIndex] == 0x00;
+          bool isWitnessFlagPresent = Buffer[IndexBuffer] == 0x00;
           if (isWitnessFlagPresent)
           {
             throw new NotImplementedException("Parsing of segwit txs not implemented");
             //BufferIndex += 2;
           }
 
-          int countInputs = VarInt.GetInt32(Buffer, ref BufferIndex);
+          int countInputs = VarInt.GetInt32(
+            Buffer, ref IndexBuffer);
 
           if (isCoinbase)
           {
-            new TXInput(Buffer, ref BufferIndex);
+            new TXInput(Buffer, ref IndexBuffer);
           }
           else
           {
             for (int i = 0; i < countInputs; i += 1)
             {
-              TXInput input = new TXInput(Buffer, ref BufferIndex);
+              TXInput input = new TXInput(Buffer, ref IndexBuffer);
 
               AddInput(input);
             }
           }
 
-          int countTXOutputs = VarInt.GetInt32(Buffer, ref BufferIndex);
+          int countTXOutputs = VarInt.GetInt32(Buffer, ref IndexBuffer);
 
           for (int i = 0; i < countTXOutputs; i += 1)
           {
-            BufferIndex += BYTE_LENGTH_OUTPUT_VALUE;
-            int lengthLockingScript = VarInt.GetInt32(Buffer, ref BufferIndex);
-            BufferIndex += lengthLockingScript;
+            IndexBuffer += BYTE_LENGTH_OUTPUT_VALUE;
+            int lengthLockingScript = VarInt.GetInt32(Buffer, ref IndexBuffer);
+            IndexBuffer += lengthLockingScript;
           }
 
           //if (isWitnessFlagPresent)
@@ -271,9 +225,9 @@ namespace BToken.Chaining
           //}
           //}
 
-          BufferIndex += BYTE_LENGTH_LOCK_TIME;
+          IndexBuffer += BYTE_LENGTH_LOCK_TIME;
 
-          int tXLength = BufferIndex - tXStartIndex;
+          int tXLength = IndexBuffer - tXStartIndex;
 
           byte[] tXHash = SHA256.ComputeHash(
            SHA256.ComputeHash(
@@ -337,7 +291,7 @@ namespace BToken.Chaining
 
                     
 
-      public void ConvertTablesToArrays()
+      void ConvertTablesToArrays()
       {
         UTXOsUInt32 = TableUInt32.Table.ToArray();
         UTXOsULong64 = TableULong64.Table.ToArray();
@@ -346,7 +300,7 @@ namespace BToken.Chaining
 
 
 
-      public void AddInput(TXInput input)
+      void AddInput(TXInput input)
       {
         if (
           !TableUInt32.TrySpend(input) &&
@@ -359,7 +313,7 @@ namespace BToken.Chaining
 
 
 
-      public void AddOutput(
+      void AddOutput(
         byte[] tXHash,
         int countTXOutputs)
       {

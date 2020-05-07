@@ -11,11 +11,10 @@ namespace BToken.Chaining
     class BranchInserter
     {
       Blockchain Blockchain;
-
-      Header Header;
-
+      
       public Header HeaderAncestor;
 
+      public Header HeaderTip;
       public Header HeaderRoot;
       public double Difficulty;
       public int Height;
@@ -27,20 +26,21 @@ namespace BToken.Chaining
       public List<double> HeaderDifficulties = 
         new List<double>();
 
-      public DataArchiver Archive;
+      public BlockArchiver Archive;
 
 
       public BranchInserter(Blockchain blockchain)
       {
         Blockchain = blockchain;
+
+        Initialize();
       }
 
       public void Initialize()
       {
-        Header = null;
-
         HeaderAncestor = Blockchain.HeaderTip;
 
+        HeaderTip = null;
         HeaderRoot = null;
         Difficulty = Blockchain.Difficulty;
         Height = Blockchain.Height;
@@ -87,28 +87,17 @@ namespace BToken.Chaining
 
         HeightInserted += 1;
 
-        DifficultyInserted +=
+        DifficultyInserted += 
           HeaderDifficulties[HeightInserted];
       }
 
       
-      public void AddHeaders(Header headerRoot)
+      public void AddHeaders(Header header)
       {
-        if(Header != null)
-        {
-          if (!Header.Hash.IsEqual(headerRoot.HashPrevious))
-          {
-            throw new ChainException(
-              "Received header does not link to last header.");
-          }
-        }
-
-        Header = headerRoot;
-
         if (HeaderRoot == null) 
         {
           while (!HeaderAncestor.Hash.IsEqual(
-            Header.HashPrevious))
+            header.HashPrevious))
           {
             Difficulty -= TargetManager.GetDifficulty(
               HeaderAncestor.NBits);
@@ -120,7 +109,7 @@ namespace BToken.Chaining
 
           while (HeaderAncestor.HeaderNext != null && 
             HeaderAncestor.HeaderNext.Hash.IsEqual(
-              Header.Hash))
+              header.Hash))
           {
             HeaderAncestor = HeaderAncestor.HeaderNext;
 
@@ -129,60 +118,67 @@ namespace BToken.Chaining
 
             Height += 1;
 
-            if (Header.HeaderNext == null)
+            if (header.HeaderNext == null)
             {
               return;
             }
 
-            Header = Header.HeaderNext;
+            header = header.HeaderNext;
           }
 
-          Header.HeaderPrevious = HeaderAncestor;
-
-          HeaderRoot = Header;
+          HeaderRoot = header;
+          HeaderRoot.HeaderPrevious = HeaderAncestor;
         }
 
-        do
+        if (HeaderTip != null)
         {
-          // Irgendwo müssen die ungültigen Header abgeschnitten werden
-          // Oder vielleicht gar nicht nötig?
-          ValidateHeader();
+          if (!HeaderTip.Hash.IsEqual(header.HashPrevious))
+          {
+            throw new ChainException(
+              "Received header does not link to last header.");
+          }
+        }
 
-          double difficulty = TargetManager.GetDifficulty(
-            Header.NBits);
+        while (header != null)
+        {
+          ValidateHeader(header);
+
+          double difficulty = TargetManager.GetDifficulty(header.NBits);
           HeaderDifficulties.Add(difficulty);
-
           Difficulty += difficulty;
           Height = +1;
 
-          if (Header.HeaderNext == null)
-          {
-            break;
-          }
+          HeaderTip = header;
 
-          Header = Header.HeaderNext;
+          header = header.HeaderNext;
+        }
+      }
 
-        } while (true);
+      public void InsertHeaders(Header header)
+      {
+        AddHeaders(header);
+        Blockchain.InsertBranch();
       }
            
-      void ValidateHeader()
+      void ValidateHeader(Header header)
       {
         uint medianTimePast = GetMedianTimePast(
-        Header.HeaderPrevious);
+        header.HeaderPrevious);
 
-        if (Header.UnixTimeSeconds < medianTimePast)
+        if (header.UnixTimeSeconds < medianTimePast)
         {
           throw new ChainException(
             string.Format(
               "Header {0} with unix time {1} " +
               "is older than median time past {2}.",
-              Header.Hash.ToHexString(),
-              DateTimeOffset.FromUnixTimeSeconds(Header.UnixTimeSeconds),
+              header.Hash.ToHexString(),
+              DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
               DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
             ErrorCode.INVALID);
         }
 
-        int hightHighestCheckpoint = Checkpoints.Max(x => x.Height);
+        int hightHighestCheckpoint = Blockchain
+          .Checkpoints.Max(x => x.Height);
 
         if (
           hightHighestCheckpoint <= Height &&
@@ -192,38 +188,38 @@ namespace BToken.Chaining
             string.Format(
               "Attempt to insert header {0} at hight {1} " +
               "prior to checkpoint hight {2}",
-              Header.Hash.ToHexString(),
+              header.Hash.ToHexString(),
               Height,
               hightHighestCheckpoint),
             ErrorCode.INVALID);
         }
 
         HeaderLocation checkpoint =
-          Checkpoints.Find(c => c.Height == Height);
+          Blockchain.Checkpoints.Find(c => c.Height == Height);
         if (
           checkpoint != null &&
-          !checkpoint.Hash.IsEqual(Header.Hash))
+          !checkpoint.Hash.IsEqual(header.Hash))
         {
           throw new ChainException(
             string.Format(
               "Header {0} at hight {1} not equal to checkpoint hash {2}",
-              Header.Hash.ToHexString(),
+              header.Hash.ToHexString(),
               Height,
               checkpoint.Hash.ToHexString()),
             ErrorCode.INVALID);
         }
 
         uint targetBits = TargetManager.GetNextTargetBits(
-            Header.HeaderPrevious,
+            header.HeaderPrevious,
             (uint)Height);
 
-        if (Header.NBits != targetBits)
+        if (header.NBits != targetBits)
         {
           throw new ChainException(
             string.Format(
               "In header {0} nBits {1} not equal to target nBits {2}",
-              Header.Hash.ToHexString(),
-              Header.NBits,
+              header.Hash.ToHexString(),
+              header.NBits,
               targetBits),
             ErrorCode.INVALID);
         }
@@ -251,7 +247,6 @@ namespace BToken.Chaining
 
         return timestampsPast[timestampsPast.Count / 2];
       }
-      
     }
   }
 }

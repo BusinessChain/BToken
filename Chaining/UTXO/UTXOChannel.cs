@@ -37,13 +37,13 @@ namespace BToken.Chaining
 
           List<byte[]> hashesRequested = new List<byte[]>();
 
-          foreach (BlockContainer blockBatchContainer in
+          foreach (BlockArchive blockBatchContainer in
             uTXOBatch.DataContainers)
           {
             if (blockBatchContainer.Buffer == null)
             {
               hashesRequested.Add(
-                blockBatchContainer.Header.Hash);
+                blockBatchContainer.HeaderTip.Hash);
             }
           }
           
@@ -57,7 +57,7 @@ namespace BToken.Chaining
           var cancellationDownloadBlocks =
             new CancellationTokenSource(TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
 
-          foreach (BlockContainer blockBatchContainer in
+          foreach (BlockArchive blockBatchContainer in
             uTXOBatch.DataContainers)
           {
             if (blockBatchContainer.Buffer != null)
