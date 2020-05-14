@@ -210,8 +210,7 @@ namespace BToken.Chaining
 
           BlockContainers.Clear();
 
-          if (IndexBlockArchive % UTXOIMAGE_INTERVAL
-            == 0)
+          if (IndexBlockArchive % UTXOIMAGE_INTERVAL == 0)
           {
             UTXOTable.ArchiveImage(IndexBlockArchive);
           }
@@ -281,16 +280,7 @@ namespace BToken.Chaining
         }
       }
 
-
-      public byte[] ReadBlockArchive(int index)
-      {
-        return File.ReadAllBytes(
-          Path.Combine(
-            ArchiveDirectory.Name,
-            index.ToString()));
-      }
-
-      
+                 
       public void Restore()
       {
         // Copy back the files from the rollbackFolder to main archive

@@ -85,6 +85,7 @@ namespace BToken.Chaining
           Buffer,
           ref IndexBuffer,
           sHA256);
+
         TXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
 
         HeaderTip = HeaderRoot;
@@ -113,6 +114,7 @@ namespace BToken.Chaining
           }
 
           header.HeaderPrevious = HeaderTip;
+          HeaderTip.HeaderNext = header;
           HeaderTip = header;
 
           ParseBlock(merkleRootIndex);

@@ -11,7 +11,7 @@ namespace BToken.Chaining
 {
   public abstract class DataContainer
   {
-    public bool IsValid = true;
+    public bool IsValid;
     public int Index;
 
 

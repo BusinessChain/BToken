@@ -36,25 +36,13 @@ namespace BToken.Chaining
     { }
 
 
-    public override void Parse(SHA256 sHA256)
-    {
-      Parse(sHA256, ZERO_HASH);
-    }
-
-    public void Parse(SHA256 sHA256, byte[] stopHash)
+    public void Parse(SHA256 sHA256)
     {
       IndexBuffer = 0;
 
       int headersCount = VarInt.GetInt32(
         Buffer, ref IndexBuffer);
-
-      if (headersCount == 0)
-      {
-        HeaderRoot = null;
-        HeaderTip = null;
-        return;
-      }
-
+      
       HeaderRoot = Header.ParseHeader(
         Buffer,
         ref IndexBuffer,
@@ -62,13 +50,11 @@ namespace BToken.Chaining
 
       IndexBuffer += 1;
 
+      HeaderTip = HeaderRoot;
+      
       Count += 1;
 
-      HeaderTip = HeaderRoot;
-
-      while (
-        !stopHash.IsEqual(HeaderTip.Hash) && 
-        IndexBuffer < Buffer.Length)
+      while (IndexBuffer < Buffer.Length)
       {
         var header = Header.ParseHeader(
           Buffer,

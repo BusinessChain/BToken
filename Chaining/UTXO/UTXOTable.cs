@@ -190,29 +190,20 @@ namespace BToken.Chaining
 
     string PathUTXOState = "UTXOArchive";
 
-    public bool TryLoadImage()
+    public void LoadImage()
     {
-      try
+      LoadMapBlockToArchiveData(
+        File.ReadAllBytes(
+          Path.Combine(PathUTXOState, "MapBlockHeader")));
+
+      for (int c = 0; c < Tables.Length; c += 1)
       {
-        LoadMapBlockToArchiveData(
-          File.ReadAllBytes(
-            Path.Combine(PathUTXOState, "MapBlockHeader")));
-
-        for (int c = 0; c < Tables.Length; c += 1)
-        {
-          Tables[c].Load();
-        }
-
-        Console.WriteLine(
-          "Load UTXO Image from {0}",
-          PathUTXOState);
-
-        return true;
+        Tables[c].Load();
       }
-      catch
-      {
-        return false;
-      }
+
+      Console.WriteLine(
+        "Load UTXO Image from {0}",
+        PathUTXOState);
     }
 
     public void Clear()
