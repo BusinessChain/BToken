@@ -99,8 +99,7 @@ namespace BToken.Chaining
           while (!HeaderAncestor.Hash.IsEqual(
             header.HashPrevious))
           {
-            Difficulty -= TargetManager.GetDifficulty(
-              HeaderAncestor.NBits);
+            Difficulty -= HeaderAncestor.Difficulty;
 
             Height--;
 
@@ -113,8 +112,7 @@ namespace BToken.Chaining
           {
             HeaderAncestor = HeaderAncestor.HeaderNext;
 
-            Difficulty += TargetManager.GetDifficulty(
-              HeaderAncestor.NBits);
+            Difficulty += HeaderAncestor.Difficulty;
 
             Height += 1;
 
@@ -143,7 +141,7 @@ namespace BToken.Chaining
         {
           ValidateHeader(header);
 
-          double difficulty = TargetManager.GetDifficulty(header.NBits);
+          double difficulty = header.Difficulty;
           HeaderDifficulties.Add(difficulty);
           Difficulty += difficulty;
           Height = +1;

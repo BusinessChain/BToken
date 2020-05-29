@@ -21,6 +21,9 @@ namespace BToken
     public uint NBits;
     public uint Nonce;
 
+    const double MAX_TARGET = 2.695994666715064E67;
+    public double Difficulty;
+
 
     public Header(
       byte[] headerHash,
@@ -29,6 +32,7 @@ namespace BToken
       byte[] merkleRootHash,
       uint unixTimeSeconds,
       uint nBits,
+      double difficulty,
       uint nonce)
     {
       Hash = headerHash;
@@ -37,6 +41,7 @@ namespace BToken
       MerkleRoot = merkleRootHash;
       UnixTimeSeconds = unixTimeSeconds;
       NBits = nBits;
+      Difficulty = difficulty;
       Nonce = nonce;
     }
 
@@ -111,6 +116,9 @@ namespace BToken
             nBits));
       }
 
+      double difficulty =
+        MAX_TARGET / (double)UInt256.ParseFromCompact(nBits);
+
       uint nonce = BitConverter.ToUInt32(buffer, index);
       index += 4;
 
@@ -120,9 +128,11 @@ namespace BToken
         previousHeaderHash, 
         merkleRootHash, 
         unixTimeSeconds, 
-        nBits, 
+        nBits,
+        difficulty,
         nonce);
     }
-  }
+    
 
+  }
 }

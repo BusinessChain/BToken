@@ -12,8 +12,7 @@ namespace BToken.Chaining
 
       static readonly UInt256 DIFFICULTY_1_TARGET =
         new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000");
-
-      const double MAX_TARGET = 2.695994666715064E67;
+      
 
       public static uint GetNextTargetBits(Header header, uint height)
       {
@@ -59,14 +58,6 @@ namespace BToken.Chaining
         }
 
         return actualTimespan;
-      }
-
-      public static double GetDifficulty(UInt32 nBits)
-      {
-        double difficulty = 
-          MAX_TARGET / (double)UInt256.ParseFromCompact(nBits);
-
-        return difficulty;
       }
     }
   }
