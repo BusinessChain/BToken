@@ -214,7 +214,7 @@ namespace BToken.Chaining
 
     HeaderContainer HeaderContainer = new HeaderContainer();
 
-    public async Task<Header> GetHeaders(
+    public async Task<UTXOTable.BlockArchive> GetHeaders(
       List<byte[]> locator)
     {
       await NetworkPeer.SendMessage(
@@ -282,7 +282,7 @@ namespace BToken.Chaining
         } while (header != null);
       }
 
-      return HeaderContainer.HeaderRoot;
+      return HeaderContainer;
     }
 
     public async Task<UTXOTable.BlockArchive> DownloadBlock(
@@ -342,15 +342,26 @@ namespace BToken.Chaining
 
             if (networkMessage.Command == "block")
             {
-              var blockContainer = new UTXOTable.BlockArchive(
+              var archiveBlock = new UTXOTable.BlockArchive(
                 networkMessage.Payload);
 
-              blockContainer.Parse(SHA256);
+              archiveBlock.Parse(SHA256);
+              
+              if (archiveBlock.HeaderTip.Hash.IsEqual(headers[i].Hash))
+              {
+                archiveBlock.HeaderRoot = headers[i];
+                archiveBlock.HeaderTip = headers[i];
+              }
+              else
+              {
+                throw new ChainException(
+                  string.Format("Unexpected header hash {0}, \nexpected {1}",
+                  archiveBlock.HeaderTip.Hash.ToHexString(),
+                  headers[i].Hash.ToHexString()));
+              }
 
-              blockContainer.ValidateHeaderHash(headers[i].Hash);
-
-              uTXOBatch.DataContainers.Add(blockContainer);
-              uTXOBatch.CountItems += blockContainer.CountTX;
+              uTXOBatch.DataContainers.Add(archiveBlock);
+              uTXOBatch.CountItems += archiveBlock.CountTX;
               break;
             }
           }

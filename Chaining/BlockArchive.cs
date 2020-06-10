@@ -22,6 +22,8 @@ namespace BToken.Chaining
 
       public Header HeaderTip;
       public Header HeaderRoot;
+      public double Difficulty;
+      public int Height;
 
       public int BlockCount;
       public int CountTX;
@@ -123,17 +125,6 @@ namespace BToken.Chaining
         ConvertTablesToArrays();
 
         StopwatchParse.Stop();
-      }
-
-      public void ValidateHeaderHash(byte[] hashValidator)
-      {
-        if (!HeaderTip.Hash.IsEqual(hashValidator))
-        {
-          throw new ChainException(
-            string.Format("Unexpected header hash {0}, \nexpected {1}",
-            HeaderTip.Hash.ToHexString(),
-            hashValidator.ToHexString()));
-        }
       }
 
 

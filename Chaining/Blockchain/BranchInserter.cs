@@ -11,14 +11,14 @@ namespace BToken.Chaining
     class BranchInserter
     {
       Blockchain Blockchain;
-      
-      public Header HeaderAncestor;
 
       public Header HeaderTip;
-      public Header HeaderRoot;
       public double Difficulty;
       public int Height;
 
+      public Header HeaderRoot;
+      public int HeightAncestor;
+           
       public double DifficultyInserted;
       public int HeightInserted;
       public bool IsFork;
@@ -28,6 +28,11 @@ namespace BToken.Chaining
 
       public BlockArchiver Archive;
 
+
+
+
+      public BranchInserter()
+      { }
 
       public BranchInserter(Blockchain blockchain)
       {
@@ -43,7 +48,7 @@ namespace BToken.Chaining
         HeaderTip = null;
         HeaderRoot = null;
         Difficulty = Blockchain.Difficulty;
-        Height = Blockchain.Height;
+        Height = Blockchain.HeightStagedInserted;
 
         DifficultyInserted = Difficulty;
         HeightInserted = Height;
@@ -55,31 +60,6 @@ namespace BToken.Chaining
         Archive.Branch(Blockchain.Archive);
       }
 
-      public async Task LoadHeaders(
-        BlockchainPeer peer)
-      {
-        List<byte[]> locator = Blockchain.Locator.Locations
-          .Select(b => b.Hash)
-          .ToList();
-
-        try
-        {
-          Header header = await peer.GetHeaders(locator);
-
-          while (header != null)
-          {
-            AddHeaders(header);
-            header = await peer.GetHeaders(locator);
-          }
-        }
-        catch (Exception ex)
-        {
-          peer.Dispose(string.Format(
-            "Exception {0} when syncing: \n{1}",
-            ex.GetType(),
-            ex.Message));
-        }
-      }
 
       public void ReportBlockInsertion(Header header)
       {
@@ -152,12 +132,116 @@ namespace BToken.Chaining
         }
       }
 
-      public void InsertHeaders(Header header)
+
+      public async Task Stage(BlockchainPeer peer)
       {
-        AddHeaders(header);
-        Blockchain.InsertBranch();
+        HeaderTip = Blockchain.HeaderTip;
+        Height = Blockchain.Height;
+        Difficulty = Blockchain.Difficulty;
+               
+        List<byte[]> locator = Blockchain.Locator.Locations
+          .Select(b => b.Hash)
+          .ToList();
+
+        try
+        {
+          UTXOTable.BlockArchive archiveBlock =
+            await peer.GetHeaders(locator);
+
+          if (archiveBlock.Height == 0)
+          {
+            return;
+          }
+
+          IsFork = !archiveBlock.HeaderRoot.HashPrevious
+            .IsEqual(HeaderTip.Hash);
+
+          if (IsFork)
+          {
+            while (!archiveBlock.HeaderRoot.HashPrevious
+              .IsEqual(HeaderTip.Hash))
+            {
+              Difficulty -= HeaderTip.Difficulty;
+              Height -= 1;
+              HeaderTip = HeaderTip.HeaderPrevious;
+            }
+
+            while (ContinueSkipDuplicates(archiveBlock))
+            {
+              archiveBlock = await peer.GetHeaders(locator);
+            }
+
+            HeightAncestor = Height;
+          }
+
+          DifficultyInserted = Difficulty;
+          head
+
+          archiveBlock.HeaderRoot.HeaderPrevious = HeaderTip;
+
+          Blockchain.ValidateHeaders(archiveBlock);
+
+          HeaderRoot = archiveBlock.HeaderRoot;
+
+          InsertHeaders(archiveBlock);
+
+          while (true)
+          {
+            archiveBlock = await peer.GetHeaders(locator);
+
+            if (archiveBlock.Height == 0)
+            {
+              return;
+            }
+
+            archiveBlock.HeaderRoot.HeaderPrevious = HeaderTip;
+
+            Blockchain.ValidateHeaders(archiveBlock);
+
+            HeaderTip.HeaderNext = archiveBlock.HeaderRoot;
+
+            InsertHeaders(archiveBlock);
+          }
+        }
+        catch (Exception ex)
+        {
+          peer.Dispose(string.Format(
+            "Exception {0} when syncing: \n{1}",
+            ex.GetType(),
+            ex.Message));
+        }
       }
-           
+
+      public void InsertHeaders(UTXOTable.BlockArchive archiveBlock)
+      {
+        HeaderTip = archiveBlock.HeaderTip;
+        Difficulty += archiveBlock.Difficulty;
+        Height += archiveBlock.Height;
+      }
+
+      public bool ContinueSkipDuplicates(
+        UTXOTable.BlockArchive archiveBlock)
+      {
+        while (archiveBlock.HeaderRoot.Hash.IsEqual(
+            HeaderTip.HeaderNext.Hash))
+        {
+          HeaderTip = HeaderTip.HeaderNext;
+          Difficulty += HeaderTip.Difficulty;
+          Height += 1;
+
+          if (archiveBlock.HeaderRoot.HeaderNext == null)
+          {
+            return true;
+          }
+
+          archiveBlock.Difficulty -= archiveBlock.HeaderRoot.Difficulty;
+          archiveBlock.Height -= 1;
+          archiveBlock.HeaderRoot = archiveBlock.HeaderRoot.HeaderNext;
+        }
+
+        return false;
+      }
+
       void ValidateHeader(Header header)
       {
         uint medianTimePast = GetMedianTimePast(
@@ -245,6 +329,7 @@ namespace BToken.Chaining
 
         return timestampsPast[timestampsPast.Count / 2];
       }
+
     }
   }
 }
