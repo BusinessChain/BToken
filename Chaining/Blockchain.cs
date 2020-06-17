@@ -23,13 +23,10 @@ namespace BToken.Chaining
     int Height;
     
     Header HeaderTipStaged;
-    Header HeaderTipStagedInserted;
     double DifficultyStaged;
     int HeightStaged;
     int HeightStagedInserted;
-
-    HeaderLocator Locator;
-
+    
     List<HeaderLocation> Checkpoints;
     
     readonly object HeaderIndexLOCK = new object();
@@ -38,6 +35,7 @@ namespace BToken.Chaining
     BranchInserter Branch = new BranchInserter();
 
     UTXOTable UTXOTable;
+    const int UTXOIMAGE_INTERVAL = 10;
 
     Network Network;
     
@@ -48,8 +46,7 @@ namespace BToken.Chaining
     FileStream FileArchiveBlock;
     
     SHA256 SHA256 = SHA256.Create();
-
-    int IndexBlock;
+    
     int IndexImageHeader;
     const string PathIndexBlock = "IndexUTXO";
 
@@ -69,9 +66,7 @@ namespace BToken.Chaining
       Network = network;
 
       Branch = new BranchInserter(this);
-
-      Locator = new HeaderLocator();
-
+      
       HeaderIndex = new Dictionary<int, List<Header>>();
       UpdateHeaderIndex(headerGenesis);
       
@@ -85,16 +80,12 @@ namespace BToken.Chaining
       Difficulty = HeaderGenesis.Difficulty;
 
       Branch.Initialize();
-
-      Locator.Locations.Clear();
-
+      
       HeaderIndex.Clear();
       UpdateHeaderIndex(HeaderGenesis);
 
       UTXOTable.Clear();
-      IndexBlock = 0;
-
-      Archive.Initialize();
+      IndexBlockArchive = 0;
     }
     
 
@@ -105,12 +96,13 @@ namespace BToken.Chaining
     bool IsBlockchainLocked;
     readonly object LOCK_IndexBlockArchiveLoad = new object();
     int IndexBlockArchiveLoad;
+    int HeightStopLoad;
 
     public async Task Start()
     {
       LoadImage();
 
-      await LoadBlocks();
+      await LoadBlocks(0);
 
       StartPeerGenerator();
       StartPeerSynchronizer();
@@ -154,7 +146,7 @@ namespace BToken.Chaining
           InsertHeaders(blockArchive);
         }
 
-        IndexBlock = BitConverter.ToInt32(
+        IndexBlockArchive = BitConverter.ToInt32(
           File.ReadAllBytes(PathIndexBlock),
           0);
 
@@ -263,9 +255,10 @@ namespace BToken.Chaining
     const int COUNT_INDEXER_TASKS = 8;
     Task[] LoaderTasks = new Task[COUNT_INDEXER_TASKS];
 
-    async Task LoadBlocks()
+    async Task LoadBlocks(int heightStopLoad)
     {
-      IndexBlockArchiveLoad = IndexBlock + 1;
+      IndexBlockArchiveLoad = UTXOTable.IndexBlockArchive + 1;
+      HeightStopLoad = heightStopLoad;
 
       Parallel.For(
         0,
@@ -297,7 +290,7 @@ namespace BToken.Chaining
 
           lock (LOCK_QueueBlockArchives)
           {
-            if (blockArchive.Index == IndexBlock + 1)
+            if (blockArchive.Index == IndexBlockArchive + 1)
             {
               break;
             }
@@ -338,7 +331,7 @@ namespace BToken.Chaining
             ValidateHeaderchain(header);
 
             UTXOTable.InsertBlockArchive(blockArchive);
-            IndexBlock += 1;
+            IndexBlockArchive += 1;
 
             InsertHeaders(blockArchive);
 
@@ -408,7 +401,7 @@ namespace BToken.Chaining
       {
         blockArchive.Buffer = File.ReadAllBytes(
         Path.Combine(
-          ArchiveDirectory.Name,
+          ArchiveDirectoryBlocks.Name,
           blockArchive.Index.ToString()));
 
         blockArchive.Parse(sHA256);
@@ -556,12 +549,7 @@ namespace BToken.Chaining
     }
 
 
-
-    bool IsFork;
-    double DifficultyStagedInserted;
-    int HeightInserted;
-    Header HedaerTipInserted;
-
+    
     async Task SynchronizeWithPeer(BlockchainPeer peer)
     {
       await Branch.Stage(peer);
@@ -570,12 +558,16 @@ namespace BToken.Chaining
       {
         if (Branch.IsFork)
         {
-          if (HeightImage <= Branch.HeightAncestor)
-          {
-            LoadImage();
-          }
+          UTXOTable.TryLoadImage(Branch.HeightAncestor);
 
-          // Reindex until HeightRootStaged - 1 (or HeigthAncestor)
+          await LoadBlocks(Branch.HeightAncestor);
+
+          if(UTXOTable.HeightBlockchain != Branch.HeightAncestor)
+          {
+            // Should Reset Blockchain status 
+            // and jump to Branch.Stage(peer)
+            throw new NotImplementedException("Stuck in reorg due to missing blocks");
+          }
         }
 
         StartUTXOSyncSessions();
@@ -584,19 +576,18 @@ namespace BToken.Chaining
 
         if (Branch.DifficultyInserted > Difficulty)
         {
-          Branch.HeaderRoot.HeaderPrevious.HeaderNext =
-            Branch.HeaderRoot;
-          
-          HeaderTip = Branch.HeaderTipInserted;
-          Difficulty = Branch.DifficultyInserted;
-          Height = Branch.HeightInserted;
+          Branch.Commit();
         }
         else
         {
           if (Branch.IsFork)
           {
             UTXOTable.Restore();
-            Archive.Restore();
+
+            ArchiveDirectoryHeadersFork.EnumerateFiles().ToList()
+              .ForEach(f => f.Delete());
+            ArchiveDirectoryBlocksFork.EnumerateFiles().ToList()
+              .ForEach(f => f.Delete());
           }
 
           peer.Dispose();
@@ -751,57 +742,47 @@ namespace BToken.Chaining
 
         DataBatch uTXOBatch = peer.UTXOBatches.Pop();
 
-        foreach (UTXOTable.BlockArchive archiveBlock in
+        foreach (UTXOTable.BlockArchive blockArchive in
           uTXOBatch.DataContainers)
         {
-          archiveBlock.Index = IndexBlock;
+          blockArchive.Index = IndexBlockArchive;
 
           try
           {
-            UTXOTable.InsertBlockArchive(archiveBlock);
+            UTXOTable.InsertBlockArchive(blockArchive);
           }
           catch (ChainException ex)
           {
             Console.WriteLine(
               "Exception when inserting block {1}: \n{2}",
-              archiveBlock.HeaderTip.Hash.ToHexString(),
+              blockArchive.HeaderTip.Hash.ToHexString(),
               ex.Message);
             
             peer.Dispose();
             return;
           }
+                                  
+          Branch.InsertHeaders(blockArchive);
 
-          Branch.ReportBlockInsertion();
-
-
-          if (Branch != null)
-          {          
-            DifficultyStagedInserted += archiveBlock.Difficulty;
-            HeightStagedInserted += archiveBlock.Height;
-
-            if (DifficultyStagedInserted > Difficulty)
-            {
-              IsFork = false;
-
-              HeaderTip = archiveBlock.HeaderTip;
-              Height = HeightStagedInserted;
-              Difficulty = DifficultyStagedInserted;
-
-              // reorg archive, locator
-            }
-            else
-            {
-              // archive to fork
-            }
-          }
-          else
+          if (Branch.IsFork)
           {
-            Locator.AddLocation(
-              HeightStagedInserted, 
-              HeaderTip.Hash);
+            if (Branch.DifficultyInserted > Difficulty)
+            {
+              Branch.IsFork = false;
+              
+              ArchiveDirectoryHeadersFork.EnumerateFiles().ToList()
+              .ForEach(f => f.CopyTo(
+                ArchiveDirectoryHeaders.FullName + f.Name, 
+                true));
 
-            // Archive to main
+              ArchiveDirectoryBlocksFork.EnumerateFiles().ToList()
+              .ForEach(f => f.CopyTo(
+                ArchiveDirectoryBlocks.FullName + f.Name,
+                true));
+            }
           }
+
+          ArchiveBlock(blockArchive);
         }
 
         if (uTXOBatch.IsCancellationBatch)
@@ -814,39 +795,104 @@ namespace BToken.Chaining
       }
     }
 
-    void ArchiveContainer(
-      UTXOTable.BlockArchive archiveBlock)
+
+    List<Header> HeaderArchives = new List<Header>();
+    List<UTXOTable.BlockArchive> BlockArchives =
+      new List<UTXOTable.BlockArchive>();
+    int CountTXs;
+    DirectoryInfo ArchiveDirectoryBlocks =
+        Directory.CreateDirectory("J:\\BlockArchivePartitioned");
+    DirectoryInfo ArchiveDirectoryBlocksFork =
+        Directory.CreateDirectory("J:\\BlockArchivePartitioned\\fork");
+    DirectoryInfo ArchiveDirectoryHeaders =
+        Directory.CreateDirectory("headerchain");
+    DirectoryInfo ArchiveDirectoryHeadersFork =
+        Directory.CreateDirectory("headerchain\\fork");
+
+    void ArchiveBlock(UTXOTable.BlockArchive blockArchive)
     {
-      HeaderArchiveQueue.Add(archiveBlock.HeaderRoot);
+      HeaderArchives.Add(blockArchive.HeaderRoot);
 
-      if (HeaderArchiveQueue.Count >= SIZE_HEADER_ARCHIVE)
+      if (HeaderArchives.Count >= SIZE_HEADER_ARCHIVE)
       {
-        HeaderArchiveQueue.ForEach(
-          h => WriteToArchive(HeaderArchive, h.GetBytes()));
+        string directoryName = Branch.IsFork ?
+          ArchiveDirectoryHeadersFork.FullName :
+          ArchiveDirectoryHeaders.FullName;
 
-        HeaderArchiveQueue.Clear();
+        string pathFileArchive = Path.Combine(
+          directoryName,
+          IndexImageHeader.ToString());
 
-        CreateHeaderArchive();
+        var fileHeaderArchive = new FileStream(
+          pathFileArchive,
+          FileMode.Create,
+          FileAccess.Write,
+          FileShare.None,
+          bufferSize: 65536);
+
+        HeaderArchives.ForEach(
+          h => WriteToArchive(fileHeaderArchive, h.GetBytes()));
+
+        HeaderArchives.Clear();
       }
 
-      BlockContainers.Add(archiveBlock);
-      CountTXs += archiveBlock.CountTX;
+      BlockArchives.Add(blockArchive);
+      CountTXs += blockArchive.CountTX;
 
       if (CountTXs >= SIZE_BLOCK_ARCHIVE)
       {
-        BlockContainers.ForEach(
-          c => WriteToArchive(BlockArchive, c.Buffer));
+        string directoryName = Branch.IsFork ?
+          ArchiveDirectoryBlocksFork.FullName :
+          ArchiveDirectoryBlocks.FullName;
 
-        BlockContainers.Clear();
+        string pathFileArchive = Path.Combine(
+          directoryName,
+          IndexBlockArchive.ToString());
 
-        if (IndexBlockArchive % UTXOIMAGE_INTERVAL == 0)
+        var fileBlockArchive = new FileStream(
+          pathFileArchive,
+          FileMode.Create,
+          FileAccess.Write,
+          FileShare.None,
+          bufferSize: 65536);
+
+        BlockArchives.ForEach(
+          c => WriteToArchive(fileBlockArchive, c.Buffer));
+        
+        if (!Branch.IsFork &&
+          IndexBlockArchive % UTXOIMAGE_INTERVAL == 0)
         {
-          UTXOTable.ArchiveImage(IndexBlockArchive);
+          UTXOTable.ArchiveImage(
+            IndexBlockArchive,
+            Branch.HeightInserted);
         }
 
         IndexBlockArchive += 1;
 
-        CreateBlockArchive();
+        BlockArchives.Clear();
+        CountTXs = 0;
+      }
+    }
+
+    static void WriteToArchive(
+      FileStream file,
+      byte[] bytes)
+    {
+      while (true)
+      {
+        try
+        {
+          file.Write(bytes, 0, bytes.Length);
+          break;
+        }
+        catch (IOException ex)
+        {
+          Console.WriteLine(
+            ex.GetType().Name + ": " + ex.Message);
+
+          Thread.Sleep(2000);
+          continue;
+        }
       }
     }
 
@@ -972,10 +1018,15 @@ namespace BToken.Chaining
         // gemacht werden wie beim Indexieren
 
         Branch.ReportBlockInsertion(header);
+        
+        Branch.HeaderAncestor.HeaderNext =
+          Branch.HeaderRoot;
 
-        Locator.AddLocation(HeightStagedInserted, header.Hash);
+        HeaderTip = Branch.HeaderTipInserted;
+        Difficulty = Branch.DifficultyInserted;
+        HeightStagedInserted = Branch.HeightInserted;
 
-        CommitBranchInserted();
+        Archive.CommitBranch();
       }
       else
       {
@@ -993,26 +1044,9 @@ namespace BToken.Chaining
       IsBlockchainLocked = false;
     }
 
-    void CommitBranchInserted()
-    {
-      Branch.HeaderAncestor.HeaderNext =
-        Branch.HeaderRoot;
-
-      HeaderTip = Branch.HeaderTipInserted;
-      Difficulty = Branch.DifficultyInserted;
-      HeightStagedInserted = Branch.HeightInserted;
-
-      Archive.CommitBranch();
-    }
 
 
-
-    List<UTXOTable.BlockArchive> BlockContainers = 
-      new List<UTXOTable.BlockArchive>();
-    int CountTXs;
-    DirectoryInfo ArchiveDirectory;
-
-
+       
     bool ContainsHeader(byte[] headerHash)
     {
       return TryReadHeader(
@@ -1072,6 +1106,31 @@ namespace BToken.Chaining
 
         headers.Add(header);
       }
+    }
+
+
+    static List<byte[]> GetLocatorHashes(Header header)
+    {
+      var locator = new List<byte[]>();
+      int depth = 0;
+      int nextLocationDepth = 0;
+
+      while (header.HeaderPrevious != null)
+      {
+        if (depth == nextLocationDepth)
+        {
+          locator.Add(header.Hash);
+
+          nextLocationDepth = 2 * nextLocationDepth + 1;
+        }
+
+        depth++;
+        header = header.HeaderPrevious;
+      }
+
+      locator.Add(header.Hash);
+
+      return locator;
     }
 
     public List<Header> GetHeaders(

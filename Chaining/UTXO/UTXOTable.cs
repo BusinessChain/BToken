@@ -30,11 +30,9 @@ namespace BToken.Chaining
     UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
     UTXOIndexUInt32ArrayCompressed TableUInt32Array = new UTXOIndexUInt32ArrayCompressed();
 
-
-    const int UTXOIMAGE_INTERVAL = 10;
-
-    public int BlockHeight;
-    public Header Header;
+    
+    public int HeightBlockchain;
+    public int IndexBlockArchive;
 
     long UTCTimeStartMerger;
 
@@ -190,6 +188,14 @@ namespace BToken.Chaining
 
     string PathUTXOState = "UTXOArchive";
 
+    public bool TryLoadImage(int indexMax)
+    {
+      // zuerst utxoStatus vom neuen image laden 
+      // falls grösser als indexMax, dann status vom alten 
+      // image laden falls grösser dann reset und return false,
+      // andernfalls laden und return true
+    }
+
     public void LoadImage()
     {
       LoadMapBlockToArchiveData(
@@ -255,25 +261,23 @@ namespace BToken.Chaining
       InsertSpendUTXOs(blockArchive.Inputs);
 
       blockArchive.StopwatchStaging.Stop();
-
-      Header = blockArchive.HeaderTip;
-      BlockHeight += blockArchive.BlockCount;
+      
+      HeightBlockchain += blockArchive.BlockCount;
 
       LogInsertion(blockArchive);
-
-      if (blockArchive.Index % UTXOIMAGE_INTERVAL == 0)
-      {
-        ArchiveImage(blockArchive.Index);
-      }
     }
 
 
-    public void ArchiveImage(int archiveIndex)
+    public void ArchiveImage(int archiveIndex, int height)
     {
       Directory.CreateDirectory(PathUTXOState);
 
-      byte[] archiveIndexBytes = new byte[4];
-      BitConverter.GetBytes(archiveIndex).CopyTo(archiveIndexBytes, 0);
+      byte[] utxoStateBytes = new byte[8];
+
+      BitConverter.GetBytes(archiveIndex)
+        .CopyTo(utxoStateBytes, 0);
+      BitConverter.GetBytes(height)
+        .CopyTo(utxoStateBytes, 4);
 
       using (FileStream stream = new FileStream(
          Path.Combine(PathUTXOState, "UTXOState"),
@@ -281,9 +285,9 @@ namespace BToken.Chaining
          FileAccess.Write))
       {
         stream.Write(
-          archiveIndexBytes, 
-          0, 
-          archiveIndexBytes.Length);
+          utxoStateBytes, 
+          0,
+          utxoStateBytes.Length);
       }
 
       using (FileStream stream = new FileStream(
@@ -337,7 +341,7 @@ namespace BToken.Chaining
       string logCSV = string.Format(
         "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
         container.Index,
-        BlockHeight,
+        HeightBlockchain,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
         ratioMergeToParse,
         container.Buffer.Length,

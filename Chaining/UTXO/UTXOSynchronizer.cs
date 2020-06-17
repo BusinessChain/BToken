@@ -218,7 +218,7 @@ namespace BToken.Chaining
 
         byte[] uTXOState = new byte[40];
         BitConverter.GetBytes(archiveIndex).CopyTo(uTXOState, 0);
-        BitConverter.GetBytes(UTXOTable.BlockHeight).CopyTo(uTXOState, 4);
+        BitConverter.GetBytes(UTXOTable.Height).CopyTo(uTXOState, 4);
         UTXOTable.Header.Hash.CopyTo(uTXOState, 8);
 
         using (FileStream stream = new FileStream(

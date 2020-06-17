@@ -25,7 +25,7 @@ namespace BToken.Chaining
       public Header HeaderTipInserted;
       public List<double> HeaderDifficulties = 
         new List<double>();
-
+      
       public BlockArchiver Archive;
 
 
@@ -138,10 +138,8 @@ namespace BToken.Chaining
         HeaderTip = Blockchain.HeaderTip;
         Height = Blockchain.Height;
         Difficulty = Blockchain.Difficulty;
-               
-        List<byte[]> locator = Blockchain.Locator.Locations
-          .Select(b => b.Hash)
-          .ToList();
+
+        List<byte[]> locator = GetLocatorHashes(HeaderTip);
 
         try
         {
@@ -174,16 +172,19 @@ namespace BToken.Chaining
             HeightAncestor = Height;
           }
 
-          DifficultyInserted = Difficulty;
-          head
+          // Generate Branch Locator
 
           archiveBlock.HeaderRoot.HeaderPrevious = HeaderTip;
 
           Blockchain.ValidateHeaders(archiveBlock);
 
           HeaderRoot = archiveBlock.HeaderRoot;
+          
+          HeaderTipInserted = HeaderTip;
+          DifficultyInserted = Difficulty;
+          HeightInserted = Height;
 
-          InsertHeaders(archiveBlock);
+          StageHeaders(archiveBlock);
 
           while (true)
           {
@@ -200,7 +201,7 @@ namespace BToken.Chaining
 
             HeaderTip.HeaderNext = archiveBlock.HeaderRoot;
 
-            InsertHeaders(archiveBlock);
+            StageHeaders(archiveBlock);
           }
         }
         catch (Exception ex)
@@ -210,13 +211,6 @@ namespace BToken.Chaining
             ex.GetType(),
             ex.Message));
         }
-      }
-
-      public void InsertHeaders(UTXOTable.BlockArchive archiveBlock)
-      {
-        HeaderTip = archiveBlock.HeaderTip;
-        Difficulty += archiveBlock.Difficulty;
-        Height += archiveBlock.Height;
       }
 
       public bool ContinueSkipDuplicates(
@@ -240,6 +234,29 @@ namespace BToken.Chaining
         }
 
         return false;
+      }
+
+      void StageHeaders(UTXOTable.BlockArchive archiveBlock)
+      {
+        HeaderTip = archiveBlock.HeaderTip;
+        Difficulty += archiveBlock.Difficulty;
+        Height += archiveBlock.Height;
+      }
+
+      public void InsertHeaders(UTXOTable.BlockArchive archiveBlock)
+      {
+        HeaderTipInserted = archiveBlock.HeaderTip;
+        DifficultyInserted += archiveBlock.Difficulty;
+        HeightInserted += archiveBlock.Height;
+      }
+      
+      public void Commit()
+      {
+        HeaderRoot.HeaderPrevious.HeaderNext = HeaderRoot;
+
+        Blockchain.HeaderTip = HeaderTipInserted;
+        Blockchain.Difficulty = DifficultyInserted;
+        Blockchain.Height = HeightInserted;
       }
 
       void ValidateHeader(Header header)

@@ -23,17 +23,14 @@ namespace BToken.Chaining
       int IndexHeaderArchive;
       int CountHeaders;
 
-      FileStream BlockArchive;
+      FileStream FileBlockArchive;
       int IndexBlockArchiveLoad;
       int IndexBlockArchive;
       int CountTXs;
+      
 
-      UTXOTable UTXOTable;
-
-
-      public BlockArchiver(UTXOTable uTXOTable)
+      public BlockArchiver()
       {
-        UTXOTable = uTXOTable;
         Initialize();
       }
 
@@ -49,10 +46,10 @@ namespace BToken.Chaining
         CountHeaders = 0;
         CreateHeaderArchive();
 
-        if (BlockArchive != null)
+        if (FileBlockArchive != null)
         {
-          BlockArchive.Dispose();
-          BlockArchive = null;
+          FileBlockArchive.Dispose();
+          FileBlockArchive = null;
         }
 
         IndexBlockArchive = 0;
@@ -97,7 +94,7 @@ namespace BToken.Chaining
 
             headerContainer.Parse(sHA256, stopHash);
 
-            branch.InsertHeaders(headerContainer.HeaderRoot);
+            branch.StageHeaders(headerContainer.HeaderRoot);
           }
           catch
           {
@@ -185,10 +182,10 @@ namespace BToken.Chaining
         new List<UTXOTable.BlockArchive>();
       List<Header> HeaderArchiveQueue = new List<Header>();
 
-      public void ArchiveContainer(
-        UTXOTable.BlockArchive container)
+      public bool ArchiveBlock(
+        UTXOTable.BlockArchive blockArchive)
       {
-        HeaderArchiveQueue.Add(container.HeaderRoot);
+        HeaderArchiveQueue.Add(blockArchive.HeaderRoot);
 
         if (HeaderArchiveQueue.Count >= SIZE_HEADER_ARCHIVE)
         {
@@ -200,21 +197,15 @@ namespace BToken.Chaining
           CreateHeaderArchive();
         }
 
-        BlockContainers.Add(container);
-        CountTXs += container.CountTX;
+        BlockContainers.Add(blockArchive);
+        CountTXs += blockArchive.CountTX;
 
         if (CountTXs >= SIZE_BLOCK_ARCHIVE)
         {
           BlockContainers.ForEach(
-            c => WriteToArchive(BlockArchive, c.Buffer));
+            c => WriteToArchive(FileBlockArchive, c.Buffer));
 
           BlockContainers.Clear();
-
-          if (IndexBlockArchive % UTXOIMAGE_INTERVAL == 0)
-          {
-            UTXOTable.ArchiveImage(IndexBlockArchive);
-          }
-
           IndexBlockArchive += 1;
 
           CreateBlockArchive();
@@ -225,16 +216,16 @@ namespace BToken.Chaining
       {
         CountTXs = 0;
 
-        if (BlockArchive != null)
+        if (FileBlockArchive != null)
         {
-          BlockArchive.Dispose();
+          FileBlockArchive.Dispose();
         }
 
         string filePathBlockArchive = Path.Combine(
           ArchiveDirectory.FullName,
           IndexBlockArchive.ToString());
 
-        BlockArchive = new FileStream(
+        FileBlockArchive = new FileStream(
           filePathBlockArchive,
           FileMode.Create,
           FileAccess.Write,
@@ -248,7 +239,7 @@ namespace BToken.Chaining
           ArchiveDirectory.FullName,
           IndexBlockArchive.ToString());
 
-        BlockArchive = new FileStream(
+        FileBlockArchive = new FileStream(
           filePathBlockArchive,
           FileMode.Append,
           FileAccess.Write,
@@ -257,6 +248,20 @@ namespace BToken.Chaining
       }
 
 
+      public void Write(
+        List<UTXOTable.BlockArchive> blockArchives,
+        string pathBlockArchive)
+      {
+        var fileBlockArchive = new FileStream(
+          pathBlockArchive,
+          FileMode.Create,
+          FileAccess.Write,
+          FileShare.None,
+          bufferSize: 65536);
+
+        blockArchives.ForEach(
+          c => WriteToArchive(fileBlockArchive, c.Buffer));
+      }
 
       static void WriteToArchive(
         FileStream file,
@@ -299,7 +304,7 @@ namespace BToken.Chaining
         IndexHeaderArchive = archiver.IndexHeaderArchive;
         CountHeaders = archiver.IndexHeaderArchive;
 
-        BlockArchive = archiver.BlockArchive;
+        FileBlockArchive = archiver.FileBlockArchive;
         IndexBlockArchive = archiver.IndexBlockArchive;
         CountTXs = archiver.CountTXs;
       }
