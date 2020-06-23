@@ -261,16 +261,17 @@ namespace BToken.Chaining
         }
       }
 
-      public override void Load()
+      public override void Load(string path)
       {
         Parallel.For(0, COUNT_TABLE_PARTITIONS, i => {
           LoadPrimaryData(
-            File.ReadAllBytes(Path.Combine(DirectoryPath, "PrimaryTable" + i)),
+            File.ReadAllBytes(
+              Path.Combine(path, Label, "PrimaryTable" + i)),
             PrimaryTables[i]);
         });
 
         LoadCollisionData(File.ReadAllBytes(
-          Path.Combine(DirectoryPath, "CollisionTable")));
+          Path.Combine(path, Label, "CollisionTable")));
       }
       void LoadPrimaryData(byte[] buffer, Dictionary<int, uint> table)
       {

@@ -13,7 +13,6 @@ namespace BToken.Chaining
     byte[] GenesisBlockBytes;
 
     const int HASH_BYTE_SIZE = 32;
-
     const int COUNT_BATCHINDEX_BITS = 16;
     const int COUNT_COLLISION_BITS_PER_TABLE = 2;
     const int COUNT_COLLISIONS_MAX = 2 ^ COUNT_COLLISION_BITS_PER_TABLE - 1;
@@ -29,7 +28,6 @@ namespace BToken.Chaining
     UTXOIndexUInt32Compressed TableUInt32 = new UTXOIndexUInt32Compressed();
     UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
     UTXOIndexUInt32ArrayCompressed TableUInt32Array = new UTXOIndexUInt32ArrayCompressed();
-
     
     public int HeightBlockchain;
     public int IndexBlockArchive;
@@ -185,31 +183,19 @@ namespace BToken.Chaining
       }
     }
 
-
-    string PathUTXOState = "UTXOArchive";
-
-    public bool TryLoadImage(int indexMax)
+        
+    public void LoadImage(string pathImageRoot)
     {
-      // zuerst utxoStatus vom neuen image laden 
-      // falls grösser als indexMax, dann status vom alten 
-      // image laden falls grösser dann reset und return false,
-      // andernfalls laden und return true
-    }
-
-    public void LoadImage()
-    {
-      LoadMapBlockToArchiveData(
-        File.ReadAllBytes(
-          Path.Combine(PathUTXOState, "MapBlockHeader")));
+      string pathUTXOImage = Path.Combine(pathImageRoot, "UTXOImage");
 
       for (int c = 0; c < Tables.Length; c += 1)
       {
-        Tables[c].Load();
+        Tables[c].Load(pathUTXOImage);
       }
 
       Console.WriteLine(
         "Load UTXO Image from {0}",
-        PathUTXOState);
+        pathUTXOImage);
     }
 
     public void Clear()
@@ -219,26 +205,6 @@ namespace BToken.Chaining
         Tables[c].Clear();
       }
     }
-
-
-    // Similar function as LoadCollisionData in UTXOIndexUInt32Compressed
-    public void LoadMapBlockToArchiveData(byte[] buffer)
-    {
-      int index = 0;
-
-      while (index < buffer.Length)
-      {
-        byte[] key = new byte[HASH_BYTE_SIZE];
-        Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
-        index += HASH_BYTE_SIZE;
-
-        int value = BitConverter.ToInt32(buffer, index);
-        index += 4;
-
-        Synchronizer.MapBlockToArchiveIndex.Add(key, value);
-      }
-    }
-
 
 
     public void InsertBlockArchive(
@@ -268,51 +234,15 @@ namespace BToken.Chaining
     }
 
 
-    public void ArchiveImage(int archiveIndex, int height)
+    public void CreateImage(string path)
     {
-      Directory.CreateDirectory(PathUTXOState);
+      string pathUTXOImage = Path.Combine(path, "UTXOImage");
+      DirectoryInfo directoryUTXOImage = 
+        new DirectoryInfo(pathUTXOImage);
 
-      byte[] utxoStateBytes = new byte[8];
-
-      BitConverter.GetBytes(archiveIndex)
-        .CopyTo(utxoStateBytes, 0);
-      BitConverter.GetBytes(height)
-        .CopyTo(utxoStateBytes, 4);
-
-      using (FileStream stream = new FileStream(
-         Path.Combine(PathUTXOState, "UTXOState"),
-         FileMode.Create,
-         FileAccess.Write))
-      {
-        stream.Write(
-          utxoStateBytes, 
-          0,
-          utxoStateBytes.Length);
-      }
-
-      using (FileStream stream = new FileStream(
-         Path.Combine(PathUTXOState, "MapBlockHeader"),
-         FileMode.Create,
-         FileAccess.Write))
-      {
-        foreach (KeyValuePair<byte[], int> keyValuePair
-          in MapBlockToArchiveIndex)
-        {
-          stream.Write(keyValuePair.Key, 0, keyValuePair.Key.Length);
-
-          byte[] valueBytes = BitConverter.GetBytes(keyValuePair.Value);
-          stream.Write(valueBytes, 0, valueBytes.Length);
-        }
-      }
-
-      Backup();
-    }
-
-    public void Backup()
-    {
       Parallel.ForEach(Tables, t =>
       {
-        t.BackupImage(PathUTXOState);
+        t.BackupImage(directoryUTXOImage.FullName);
       });
     }
     

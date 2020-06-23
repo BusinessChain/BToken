@@ -272,13 +272,13 @@ namespace BToken.Chaining
           stream.Write(bytes, 0, bytes.Length);
         }
       }
-      public override void Load()
+      public override void Load(string path)
       {
         LoadPrimaryData(File.ReadAllBytes(
-          Path.Combine(DirectoryPath, "PrimaryTable")));
+          Path.Combine(path, Label, "PrimaryTable")));
 
         LoadCollisionData(File.ReadAllBytes(
-          Path.Combine(DirectoryPath, "CollisionTable")));
+          Path.Combine(path, Label, "CollisionTable")));
       }
       void LoadPrimaryData(byte[] buffer)
       {

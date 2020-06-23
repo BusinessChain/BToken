@@ -229,9 +229,11 @@ namespace BToken.Chaining
           }
         }
       }
-      public override void Load()
+      public override void Load(string path)
       {
-        byte[] buffer = File.ReadAllBytes(Path.Combine(DirectoryPath, "PrimaryTable"));
+        byte[] buffer = File.ReadAllBytes(
+          Path.Combine(path, Label, "PrimaryTable"));
+
         int index = 0;
 
         while (index < buffer.Length)
@@ -244,7 +246,9 @@ namespace BToken.Chaining
           PrimaryTable.Add(key, value);
         }
 
-        buffer = File.ReadAllBytes(Path.Combine(DirectoryPath, "CollisionTable"));
+        buffer = File.ReadAllBytes(
+          Path.Combine(path, Label, "CollisionTable"));
+
         index = 0;
 
         while (index < buffer.Length)

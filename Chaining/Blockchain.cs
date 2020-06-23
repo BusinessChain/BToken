@@ -14,6 +14,7 @@ namespace BToken.Chaining
 {
   public partial class Blockchain
   {
+    const int HASH_BYTE_SIZE = 32;
     public const int COUNT_PEERS_MAX = 4;
 
     Header HeaderGenesis;
@@ -48,7 +49,6 @@ namespace BToken.Chaining
     SHA256 SHA256 = SHA256.Create();
     
     int IndexImageHeader;
-    const string PathIndexBlock = "IndexUTXO";
 
 
 
@@ -100,61 +100,99 @@ namespace BToken.Chaining
 
     public async Task Start()
     {
-      LoadImage();
+      LoadImage(0);
 
       await LoadBlocks(0);
 
       StartPeerGenerator();
       StartPeerSynchronizer();
     }
+    
+    void LoadImage(int height)
+    {
+      string pathImage = DirectoryImage.Name;
 
-    void LoadImage()
+    LABEL_LoadImagePath:
+
+      if(!TryLoadImagePath(pathImage) || 
+        Height > height &&
+        height > 0)
+      {
+        Initialize();
+
+        if (pathImage == DirectoryImage.Name)
+        {
+          pathImage = DirectoryImageOld.Name;
+          goto LABEL_LoadImagePath;
+        }
+      }
+    }
+    bool TryLoadImagePath(string pathImage)
     {
       try
       {
         var blockArchive = new UTXOTable.BlockArchive();
 
-        while (true)
+        string pathHeaderchain = Path.Combine(
+          pathImage,
+          "ImageHeaderchain");
+
+        blockArchive.Buffer = File.ReadAllBytes(pathHeaderchain);
+
+        blockArchive.Parse(SHA256);
+
+        Header header = blockArchive.HeaderRoot;
+
+        if (!header.HashPrevious.IsEqual(HeaderGenesis.Hash))
         {
-          string path = Path.Combine(
-              "Headerchain",
-              IndexImageHeader.ToString());
-
-          IndexImageHeader += 1;
-
-          if (!File.Exists(path))
-          {
-            break;
-          }
-
-          blockArchive.Buffer = File.ReadAllBytes(path);
-
-          blockArchive.Parse(SHA256);
-
-          Header header = blockArchive.HeaderRoot;
-
-          if (!header.HashPrevious.IsEqual(HeaderTip.Hash))
-          {
-            throw new ChainException(
-              "Received header does not link to last header.");
-          }
-
-          header.HeaderPrevious = HeaderTip;
-
-          ValidateHeaderchain(header);
-
-          InsertHeaders(blockArchive);
+          throw new ChainException(
+            "Header image does not link to genesis header.");
         }
 
-        IndexBlockArchive = BitConverter.ToInt32(
-          File.ReadAllBytes(PathIndexBlock),
-          0);
+        header.HeaderPrevious = HeaderGenesis;
 
-        UTXOTable.LoadImage();
+        ValidateHeaderchain(header);
+
+        InsertHeaders(blockArchive);
+
+        byte[] utxoState = File.ReadAllBytes(
+          Path.Combine(pathImage, "UTXOState"));
+
+        IndexBlockArchive = BitConverter.ToInt32(
+          utxoState, 0);
+
+        Height = BitConverter.ToInt32(
+          utxoState, 4);
+
+        LoadMapBlockToArchiveData(
+          File.ReadAllBytes(
+            Path.Combine(pathImage, "MapBlockHeader")));
+
+        UTXOTable.LoadImage(pathImage);
+
+        return true;
       }
       catch
       {
-        Initialize();
+        return false;
+      }
+    }
+
+
+    void LoadMapBlockToArchiveData(byte[] buffer)
+    {
+      int index = 0;
+
+      while (index < buffer.Length)
+      {
+        byte[] key = new byte[HASH_BYTE_SIZE];
+        Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
+        index += HASH_BYTE_SIZE;
+
+        int value = BitConverter.ToInt32(buffer, index);
+        index += 4;
+
+        MapBlockToArchiveIndex.Add(key, value);
       }
     }
 
@@ -253,19 +291,20 @@ namespace BToken.Chaining
 
 
     const int COUNT_INDEXER_TASKS = 8;
-    Task[] LoaderTasks = new Task[COUNT_INDEXER_TASKS];
-
+        
     async Task LoadBlocks(int heightStopLoad)
     {
       IndexBlockArchiveLoad = UTXOTable.IndexBlockArchive + 1;
       HeightStopLoad = heightStopLoad;
 
+      var loaderTasks = new Task[COUNT_INDEXER_TASKS];
+
       Parallel.For(
         0,
         COUNT_INDEXER_TASKS,
-        i => LoaderTasks[i] = StartLoader());
+        i => loaderTasks[i] = StartLoader());
 
-      await Task.WhenAll(LoaderTasks);
+      await Task.WhenAll(loaderTasks);
     }
 
     async Task StartLoader()
@@ -334,6 +373,12 @@ namespace BToken.Chaining
             IndexBlockArchive += 1;
 
             InsertHeaders(blockArchive);
+
+            if (IndexBlockArchive % UTXOIMAGE_INTERVAL == 0)
+            {
+              CreateImage();
+            }
+
 
             lock (LOCK_QueueBlockArchives)
             {
@@ -552,21 +597,21 @@ namespace BToken.Chaining
     
     async Task SynchronizeWithPeer(BlockchainPeer peer)
     {
+
+    LABEL_StageBranch:
       await Branch.Stage(peer);
 
       if (Branch.Difficulty > Difficulty)
       {
         if (Branch.IsFork)
         {
-          UTXOTable.TryLoadImage(Branch.HeightAncestor);
-
+          LoadImage(Branch.HeightAncestor);
+                              
           await LoadBlocks(Branch.HeightAncestor);
 
-          if(UTXOTable.HeightBlockchain != Branch.HeightAncestor)
+          if (Height != Branch.HeightAncestor)
           {
-            // Should Reset Blockchain status 
-            // and jump to Branch.Stage(peer)
-            throw new NotImplementedException("Stuck in reorg due to missing blocks");
+            goto LABEL_StageBranch;
           }
         }
 
@@ -809,6 +854,11 @@ namespace BToken.Chaining
     DirectoryInfo ArchiveDirectoryHeadersFork =
         Directory.CreateDirectory("headerchain\\fork");
 
+    DirectoryInfo DirectoryImage =
+        Directory.CreateDirectory("image");
+    DirectoryInfo DirectoryImageOld =
+        Directory.CreateDirectory("image_old");
+
     void ArchiveBlock(UTXOTable.BlockArchive blockArchive)
     {
       HeaderArchives.Add(blockArchive.HeaderRoot);
@@ -831,7 +881,7 @@ namespace BToken.Chaining
           bufferSize: 65536);
 
         HeaderArchives.ForEach(
-          h => WriteToArchive(fileHeaderArchive, h.GetBytes()));
+          h => WriteToFile(fileHeaderArchive, h.GetBytes()));
 
         HeaderArchives.Clear();
       }
@@ -857,14 +907,12 @@ namespace BToken.Chaining
           bufferSize: 65536);
 
         BlockArchives.ForEach(
-          c => WriteToArchive(fileBlockArchive, c.Buffer));
+          c => WriteToFile(fileBlockArchive, c.Buffer));
         
         if (!Branch.IsFork &&
           IndexBlockArchive % UTXOIMAGE_INTERVAL == 0)
         {
-          UTXOTable.ArchiveImage(
-            IndexBlockArchive,
-            Branch.HeightInserted);
+          CreateImage();
         }
 
         IndexBlockArchive += 1;
@@ -874,7 +922,79 @@ namespace BToken.Chaining
       }
     }
 
-    static void WriteToArchive(
+    public Dictionary<byte[], int> MapBlockToArchiveIndex =
+      new Dictionary<byte[], int>(new EqualityComparerByteArray());
+
+    void CreateImage()
+    {
+      DirectoryImageOld.Delete(true);
+      DirectoryImage.MoveTo(DirectoryImageOld.Name);
+      DirectoryImage.Create();
+
+      string pathimageHeaderchain = Path.Combine(
+        DirectoryImage.Name,
+        "ImageHeaderchain");
+
+      using (var fileImageHeaderchain = new FileStream(
+        pathimageHeaderchain,
+        FileMode.Create,
+        FileAccess.Write,
+        FileShare.None,
+        bufferSize: 65536))
+      {
+        Header header = HeaderGenesis.HeaderNext;
+
+        while (header != null)
+        {
+          byte[] headerBytes = header.GetBytes();
+
+          fileImageHeaderchain.Write(
+            headerBytes, 0, headerBytes.Length);
+        }
+      }
+      
+      byte[] utxoStateBytes = new byte[8];
+
+      BitConverter.GetBytes(IndexBlockArchive)
+        .CopyTo(utxoStateBytes, 0);
+      BitConverter.GetBytes(Branch.HeightInserted)
+        .CopyTo(utxoStateBytes, 4);
+
+      using (FileStream fileUTXOState = new FileStream(
+         Path.Combine(DirectoryImage.Name, "UTXOState"),
+         FileMode.Create,
+         FileAccess.Write))
+      {
+        fileUTXOState.Write(
+          utxoStateBytes,
+          0,
+          utxoStateBytes.Length);
+      }
+
+      using (FileStream stream = new FileStream(
+         Path.Combine(DirectoryImage.Name, "MapBlockHeader"),
+         FileMode.Create,
+         FileAccess.Write))
+      {
+        foreach (KeyValuePair<byte[], int> keyValuePair
+          in MapBlockToArchiveIndex)
+        {
+          stream.Write(
+            keyValuePair.Key, 
+            0, 
+            keyValuePair.Key.Length);
+
+          byte[] valueBytes = BitConverter.GetBytes(
+            keyValuePair.Value);
+
+          stream.Write(valueBytes, 0, valueBytes.Length);
+        }
+      }
+
+      UTXOTable.CreateImage(DirectoryImage.Name);
+    }
+
+    static void WriteToFile(
       FileStream file,
       byte[] bytes)
     {

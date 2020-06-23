@@ -13,7 +13,6 @@ namespace BToken.Chaining
       public int Address;
       protected string Label;
 
-      protected string DirectoryPath;
 
       protected uint MaskCollisionBits =
         (3 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0) |
@@ -29,8 +28,6 @@ namespace BToken.Chaining
       {
         Address = address;
         Label = label;
-
-        DirectoryPath = Path.Combine(PathUTXOState, Label);
       }
 
       public abstract bool PrimaryTableContainsKey(int primaryKey);
@@ -97,7 +94,7 @@ namespace BToken.Chaining
       }
 
       public abstract void BackupImage(string path);
-      public abstract void Load();
+      public abstract void Load(string pathUTXOImage);
 
       public abstract void Clear();
 
