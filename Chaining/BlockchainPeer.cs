@@ -38,8 +38,8 @@ namespace BToken.Chaining
     Stopwatch StopwatchDownload = new Stopwatch();
     public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
-    public Stack<DataBatch> UTXOBatches =
-      new Stack<DataBatch>();
+    public Stack<UTXOTable.BlockArchive> BlockArchives =
+      new Stack<UTXOTable.BlockArchive>();
 
     readonly object LOCK_IsExpectingMessageResponse = new object();
     bool IsExpectingMessageResponse;
@@ -179,13 +179,13 @@ namespace BToken.Chaining
             //  break;
 
             case "headers":
-              var headerContainer =
-                new HeaderContainer(message.Payload);
+              var blockArchive =
+                new UTXOTable.BlockArchive(message.Payload);
 
-              headerContainer.Parse(SHA256);
+              blockArchive.Parse(SHA256);
               
-              await Blockchain.InsertHeader(
-                headerContainer.HeaderRoot, 
+              await Blockchain.InsertHeaders(
+                blockArchive, 
                 this);
               
               break;
@@ -304,8 +304,7 @@ namespace BToken.Chaining
     }
     
     public async Task<bool> TryDownloadBlocks(
-      DataBatch uTXOBatch,
-      List<Header> headers)
+      UTXOTable.BlockArchive blockArchive)
     {
       try
       {
@@ -345,6 +344,8 @@ namespace BToken.Chaining
               var archiveBlock = new UTXOTable.BlockArchive(
                 networkMessage.Payload);
 
+              blockArchive.Parse(SHA256, networkMessage.Payload);
+              
               archiveBlock.Parse(SHA256);
               
               if (archiveBlock.HeaderTip.Hash.IsEqual(headers[i].Hash))

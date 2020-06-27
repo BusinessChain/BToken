@@ -70,69 +70,7 @@ namespace BToken.Chaining
         DifficultyInserted += 
           HeaderDifficulties[HeightInserted];
       }
-
       
-      public void AddHeaders(Header header)
-      {
-        if (HeaderRoot == null) 
-        {
-          while (!HeaderAncestor.Hash.IsEqual(
-            header.HashPrevious))
-          {
-            Difficulty -= HeaderAncestor.Difficulty;
-
-            Height--;
-
-            HeaderAncestor = HeaderAncestor.HeaderPrevious;
-          }
-
-          while (HeaderAncestor.HeaderNext != null && 
-            HeaderAncestor.HeaderNext.Hash.IsEqual(
-              header.Hash))
-          {
-            HeaderAncestor = HeaderAncestor.HeaderNext;
-
-            Difficulty += HeaderAncestor.Difficulty;
-
-            Height += 1;
-
-            if (header.HeaderNext == null)
-            {
-              return;
-            }
-
-            header = header.HeaderNext;
-          }
-
-          HeaderRoot = header;
-          HeaderRoot.HeaderPrevious = HeaderAncestor;
-        }
-
-        if (HeaderTip != null)
-        {
-          if (!HeaderTip.Hash.IsEqual(header.HashPrevious))
-          {
-            throw new ChainException(
-              "Received header does not link to last header.");
-          }
-        }
-
-        while (header != null)
-        {
-          ValidateHeader(header);
-
-          double difficulty = header.Difficulty;
-          HeaderDifficulties.Add(difficulty);
-          Difficulty += difficulty;
-          Height = +1;
-
-          HeaderTip = header;
-
-          header = header.HeaderNext;
-        }
-      }
-
-
       public async Task Stage(BlockchainPeer peer)
       {
         HeaderTip = Blockchain.HeaderTip;
@@ -164,19 +102,29 @@ namespace BToken.Chaining
               HeaderTip = HeaderTip.HeaderPrevious;
             }
 
-            while (ContinueSkipDuplicates(archiveBlock))
+            while (archiveBlock.HeaderRoot.Hash.IsEqual(
+                HeaderTip.HeaderNext.Hash))
             {
-              archiveBlock = await peer.GetHeaders(locator);
+              HeaderTip = HeaderTip.HeaderNext;
+              Difficulty += HeaderTip.Difficulty;
+              Height += 1;
+
+              archiveBlock.Difficulty -= archiveBlock.HeaderRoot.Difficulty;
+              archiveBlock.Height -= 1;
+              archiveBlock.HeaderRoot = archiveBlock.HeaderRoot.HeaderNext;
+
+              if (archiveBlock.HeaderRoot == null)
+              {
+                archiveBlock = await peer.GetHeaders(locator);
+              }
             }
 
             HeightAncestor = Height;
           }
 
-          // Generate Branch Locator
-
           archiveBlock.HeaderRoot.HeaderPrevious = HeaderTip;
 
-          Blockchain.ValidateHeaders(archiveBlock);
+          Blockchain.ValidateHeaders(archiveBlock.HeaderRoot);
 
           HeaderRoot = archiveBlock.HeaderRoot;
           
@@ -197,7 +145,7 @@ namespace BToken.Chaining
 
             archiveBlock.HeaderRoot.HeaderPrevious = HeaderTip;
 
-            Blockchain.ValidateHeaders(archiveBlock);
+            Blockchain.ValidateHeaders(archiveBlock.HeaderRoot);
 
             HeaderTip.HeaderNext = archiveBlock.HeaderRoot;
 
@@ -223,14 +171,14 @@ namespace BToken.Chaining
           Difficulty += HeaderTip.Difficulty;
           Height += 1;
 
+          archiveBlock.Difficulty -= archiveBlock.HeaderRoot.Difficulty;
+          archiveBlock.Height -= 1;
+          archiveBlock.HeaderRoot = archiveBlock.HeaderRoot.HeaderNext;
+
           if (archiveBlock.HeaderRoot.HeaderNext == null)
           {
             return true;
           }
-
-          archiveBlock.Difficulty -= archiveBlock.HeaderRoot.Difficulty;
-          archiveBlock.Height -= 1;
-          archiveBlock.HeaderRoot = archiveBlock.HeaderRoot.HeaderNext;
         }
 
         return false;

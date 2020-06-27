@@ -32,6 +32,8 @@ namespace BToken.Chaining
       public byte[] Buffer;
       public int IndexBuffer;
 
+      public bool IsCancellationBatch;
+
       public Stopwatch StopwatchStaging = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
 

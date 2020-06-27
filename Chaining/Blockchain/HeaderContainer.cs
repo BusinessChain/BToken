@@ -36,7 +36,7 @@ namespace BToken.Chaining
     { }
 
 
-    public void Parse(SHA256 sHA256)
+    public override void Parse(SHA256 sHA256)
     {
       IndexBuffer = 0;
 
