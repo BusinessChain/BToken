@@ -139,7 +139,7 @@ namespace BToken.Chaining
 
         blockArchive.Buffer = File.ReadAllBytes(pathHeaderchain);
 
-        blockArchive.Parse(SHA256);
+        blockArchive.Parse();
 
         Header header = blockArchive.HeaderRoot;
 
@@ -323,7 +323,7 @@ namespace BToken.Chaining
             ArchiveDirectoryBlocks.Name,
             blockArchive.Index.ToString()));
 
-          blockArchive.Parse(sHA256);
+          blockArchive.Parse();
 
           blockArchive.IsValid = true;
         }

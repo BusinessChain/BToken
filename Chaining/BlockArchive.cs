@@ -9,7 +9,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    public class BlockArchive : DataContainer
+    public class BlockArchive
     {
       public List<TXInput> Inputs = new List<TXInput>();
 
@@ -27,37 +27,41 @@ namespace BToken.Chaining
 
       public int BlockCount;
       public int CountTX;
-      SHA256 SHA256;
+      SHA256 SHA256 = SHA256.Create();
 
-      public byte[] Buffer;
+      const int SIZE_MESSAGE_PAYLOAD_BUFFER = 0x2000000;
+      public byte[] Buffer = new byte[SIZE_MESSAGE_PAYLOAD_BUFFER];
       public int IndexBuffer;
+      public int StopIndexBuffer;
 
+      public bool IsValid;
       public bool IsCancellationBatch;
 
       public Stopwatch StopwatchStaging = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
 
-
+      public int Index;
 
       public BlockArchive()
       { }
 
       public BlockArchive(byte[] buffer)
-        : base(buffer)
-      { }
+      {
+        buffer.CopyTo(Buffer, 0);
+      }
 
-      public BlockArchive(
-        int archiveIndex)
-        : base(archiveIndex)
-      { }
+      public BlockArchive(int archiveIndex)
+      {
+        Index = archiveIndex;
+      }
 
       public BlockArchive(
         int archiveIndex,
-        byte[] blockBytes)
-        : base(
-            archiveIndex,
-            blockBytes)
-      { }
+        byte[] buffer)
+      {
+        buffer.CopyTo(Buffer, 0);
+        Index = archiveIndex;
+      }
 
 
       public BlockArchive(Header header)
@@ -77,51 +81,42 @@ namespace BToken.Chaining
       
       int TXCount;
 
-      public override void Parse(SHA256 sHA256)
+      public void Parse()
       {
-        SHA256 = sHA256;
-
         StopwatchParse.Start();
 
         IndexBuffer = 0;
-        
-        HeaderRoot = Header.ParseHeader(
+
+        Header header = Header.ParseHeader(
           Buffer,
           ref IndexBuffer,
-          sHA256);
+          SHA256);
 
-        TXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
+        ParseBlock(header.MerkleRoot);
 
-        HeaderTip = HeaderRoot;
-
-        ParseBlock(OFFSET_INDEX_MERKLE_ROOT);      
-
+        HeaderRoot = header;
+        HeaderTip = header;
+               
         while (IndexBuffer < Buffer.Length)
         {
-          int merkleRootIndex = IndexBuffer + OFFSET_INDEX_MERKLE_ROOT;
-
-          var header = Header.ParseHeader(
+          header = Header.ParseHeader(
             Buffer,
             ref IndexBuffer,
-            sHA256);
-          TXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
-          
+            SHA256);
+
           if (!header.HashPrevious.IsEqual(HeaderTip.Hash))
           {
             throw new ChainException(
               string.Format(
-                "header {0} with header hash previous {1} " +
-                "not in consecutive order with current tip header {2}",
-                header.Hash.ToHexString(),
-                header.HashPrevious.ToHexString(),
-                HeaderTip.Hash.ToHexString()));
+                "headerchain out of order in blockArchive {0}",
+                Index));
           }
 
           header.HeaderPrevious = HeaderTip;
           HeaderTip.HeaderNext = header;
           HeaderTip = header;
 
-          ParseBlock(merkleRootIndex);
+          ParseBlock(header.MerkleRoot);
         }
 
         ConvertTablesToArrays();
@@ -129,9 +124,25 @@ namespace BToken.Chaining
         StopwatchParse.Stop();
       }
 
-
-      void ParseBlock(int merkleRootIndex)
+      public void Parse(int startIndex, byte[] merkleRoot)
       {
+        IndexBuffer = 0;
+
+        Header.ParseHeader(
+          Buffer,
+          ref IndexBuffer,
+          SHA256);
+
+        ParseBlock(merkleRoot);
+
+        ConvertTablesToArrays();
+      }
+
+
+      void ParseBlock(byte[] merkleRoot)
+      {
+        TXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
+
         if (TXCount == 1)
         {
           byte[] tXHash = ParseTX(true);
@@ -159,7 +170,7 @@ namespace BToken.Chaining
           merkleList[TXCount] = merkleList[TXCount - 1];
         }
 
-        if (!GetRoot(merkleList).IsEqual(Buffer, merkleRootIndex))
+        if (!GetRoot(merkleList).IsEqual(merkleRoot))
         {
           throw new ChainException("Payload hash unequal with merkle root.");
         }

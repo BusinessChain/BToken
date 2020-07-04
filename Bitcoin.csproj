@@ -77,16 +77,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
-    <Compile Include="Chaining\BatchDataPipe\DataSynchroinizer.cs" />
-    <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
-    <Compile Include="Chaining\BatchDataPipe\DataContainer.cs" />
     <Compile Include="Chaining\Blockchain.cs" />
     <Compile Include="Chaining\BlockchainPeer.cs" />
     <Compile Include="Chaining\BlockArchive.cs" />
     <Compile Include="Chaining\Blockchain\BranchInserter.cs" />
-    <Compile Include="Chaining\UTXO\UTXOSynchronizer.cs" />
     <Compile Include="Chaining\Blockchain\HeaderContainer.cs" />
-    <Compile Include="Chaining\UTXO\UTXOChannel.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexULong64.cs" />
@@ -107,7 +102,6 @@
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
-    <Compile Include="Hashing\SHA256d.cs" />
     <Compile Include="Chaining\Blockchain\TargetManager.cs" />
     <Compile Include="Networking\NetworkAddress.cs" />
     <Compile Include="Networking\INetworkChannel.cs" />

@@ -226,7 +226,8 @@ namespace BToken.Networking
       async Task ProcessPingMessageAsync(NetworkMessage networkMessage)
       {
         PingMessage pingMessage = new PingMessage(networkMessage);
-        await NetworkMessageStreamer.WriteAsync(new PongMessage(pingMessage.Nonce)).ConfigureAwait(false);
+        await NetworkMessageStreamer.WriteAsync(
+          new PongMessage(pingMessage.Nonce)).ConfigureAwait(false);
       }
       void ProcessFeeFilterMessage(NetworkMessage networkMessage)
       {

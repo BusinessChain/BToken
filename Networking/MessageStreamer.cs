@@ -22,8 +22,6 @@ namespace BToken.Networking
       const int LengthSize = 4;
       const int ChecksumSize = 4;
 
-      const uint MagicValue = 0xF9BEB4D9;
-      const uint MagicValueByteSize = 4;
 
       Stream Stream;
 
@@ -35,6 +33,8 @@ namespace BToken.Networking
       const int HeaderSize = CommandSize + LengthSize + ChecksumSize;
       byte[] Header = new byte[HeaderSize];
 
+      const uint MagicValue = 0xF9BEB4D9;
+      const uint MagicValueByteSize = 4;
       byte[] MagicBytes = new byte[MagicValueByteSize];
 
 
