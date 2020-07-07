@@ -15,13 +15,13 @@ namespace BToken.Chaining
   public partial class Blockchain
   {
     const int HASH_BYTE_SIZE = 32;
-    public const int COUNT_PEERS_MAX = 4;
+    const int COUNT_PEERS_MAX = 4;
 
     Header HeaderGenesis;
 
     Header HeaderTip;
     double Difficulty;
-    int Height;
+    public int Height { get; private set; }
     
     Header HeaderTipStaged;
     double DifficultyStaged;
@@ -36,7 +36,8 @@ namespace BToken.Chaining
     BranchInserter Branch = new BranchInserter();
 
     UTXOTable UTXOTable;
-    const int UTXOIMAGE_INTERVAL = 10;
+    const int UTXOIMAGE_INTERVAL_SYNC = 500;
+    const int UTXOIMAGE_INTERVAL_LISTEN = 50;
 
     Network Network;
     
@@ -216,9 +217,7 @@ namespace BToken.Chaining
 
         if (flagCreatePeer)
         {
-          var peer = new BlockchainPeer(
-            this,
-            await Network.CreateNetworkPeer());
+          var peer = await BlockchainPeer.Create(this);
 
           peer.StartListener();
 
@@ -308,7 +307,6 @@ namespace BToken.Chaining
     async Task StartLoader()
     {
       UTXOTable.BlockArchive blockArchive = null;
-      SHA256 sHA256 = SHA256.Create();
       
     LABEL_LoadBlockArchive:
 
@@ -386,12 +384,11 @@ namespace BToken.Chaining
 
             InsertHeaders(blockArchive);
 
-            if (IndexBlockArchive % UTXOIMAGE_INTERVAL == 0)
+            if (IndexBlockArchive % UTXOIMAGE_INTERVAL_SYNC == 0)
             {
               CreateImage();
             }
-
-
+            
             lock (LOCK_QueueBlockArchives)
             {
               if (QueueBlockArchives.TryGetValue(
@@ -594,6 +591,7 @@ namespace BToken.Chaining
     {
 
     LABEL_StageBranch:
+
       await Branch.Stage(peer);
 
       if (Branch.Difficulty > Difficulty)
@@ -836,7 +834,7 @@ namespace BToken.Chaining
           }
         }
 
-        ArchiveBlock(blockArchive);
+        ArchiveBlock(blockArchive, UTXOIMAGE_INTERVAL_SYNC);
 
         if (blockArchive.IsCancellationBatch)
         {
@@ -867,7 +865,9 @@ namespace BToken.Chaining
     DirectoryInfo DirectoryImageOld =
         Directory.CreateDirectory("image_old");
 
-    void ArchiveBlock(UTXOTable.BlockArchive blockArchive)
+    void ArchiveBlock(
+      UTXOTable.BlockArchive blockArchive, 
+      int intervalImage)
     {
       HeaderArchives.Add(blockArchive.HeaderRoot);
 
@@ -918,7 +918,7 @@ namespace BToken.Chaining
           c => WriteToFile(fileBlockArchive, c.Buffer));
         
         if (!Branch.IsFork &&
-          IndexBlockArchive % UTXOIMAGE_INTERVAL == 0)
+          IndexBlockArchive % intervalImage == 0)
         {
           CreateImage();
         }
@@ -1027,17 +1027,31 @@ namespace BToken.Chaining
 
 
 
-    public async Task InsertHeaders(
-      UTXOTable.BlockArchive blockArchive,
+    public async Task InsertHeader(
+      byte[] headerBytes,
       BlockchainPeer peer)
     {
-      int countLockTriesRemaining = 10;
+      UTXOTable.BlockArchive blockArchive = null;
+      LoadBlockArchive(ref blockArchive);
+
+      blockArchive.IndexBuffer = 0;
+      blockArchive.Buffer = headerBytes;
+      
+      blockArchive.Parse();
+
+      int countLockTriesRemaining = 20;
       while (true)
       {
         lock (LOCK_IsBlockchainLocked)
         {
           if (IsBlockchainLocked)
           {
+            if (countLockTriesRemaining == 0)
+            {
+              Console.WriteLine("Server overloaded.");
+              return;
+            }
+
             countLockTriesRemaining -= 1;
           }
           else
@@ -1047,12 +1061,7 @@ namespace BToken.Chaining
           }
         }
 
-        if (countLockTriesRemaining == 0)
-        {
-          return;
-        }
-
-        await Task.Delay(500);
+        await Task.Delay(250);
       }
 
       Header header = blockArchive.HeaderRoot;
@@ -1106,32 +1115,18 @@ namespace BToken.Chaining
       }
       else if (header.HashPrevious.IsEqual(HeaderTip.Hash))
       {
-        LoadBlockArchive(ref blockArchive);
-
-        if(await peer.TryDownloadBlocks(blockArchive))
+        if(!await peer.TryDownloadBlocks(blockArchive))
         {
-
+          return;
         }
-
                 
-        blockArchive.Index = IndexBlock;
+        blockArchive.Index = IndexBlockArchive;
 
         UTXOTable.InsertBlockArchive(blockArchive);
 
-        ArchiveBlock(blockArchive);
-        // hier soll nicht mit derselben Kadenz ein Image 
-        // gemacht werden wie beim Indexieren
+        InsertHeaders(blockArchive);
 
-        Branch.ReportBlockInsertion(header);
-        
-        Branch.HeaderAncestor.HeaderNext =
-          Branch.HeaderRoot;
-
-        HeaderTip = Branch.HeaderTipInserted;
-        Difficulty = Branch.DifficultyInserted;
-        HeightStagedInserted = Branch.HeightInserted;
-
-        Archive.CommitBranch();
+        ArchiveBlock(blockArchive, UTXOIMAGE_INTERVAL_LISTEN);
       }
       else
       {

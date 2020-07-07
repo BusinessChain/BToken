@@ -1,8 +1,8 @@
 ﻿using System;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
-  partial class Network
+  partial class VersionMessage
   {
     [Flags]
     public enum RelayOptionFlags : byte

@@ -89,7 +89,6 @@
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexULong64Compressed.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexCompressed.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
-    <Compile Include="Chaining\Blockchain\HeaderchainSynchronizer.cs" />
     <Compile Include="Chaining\UTXO\UTXOTable.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Chaining\TXInput.cs" />
@@ -107,7 +106,6 @@
     <Compile Include="Networking\INetworkChannel.cs" />
     <Compile Include="Networking\Messages\AddressMessage.cs" />
     <Compile Include="Networking\Messages\FeeFilterMessage.cs" />
-    <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\Inventory.cs" />
     <Compile Include="DataTypes\Header.cs" />
     <Compile Include="DataTypes\VarString.cs" />

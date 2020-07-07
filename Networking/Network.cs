@@ -34,6 +34,7 @@ namespace BToken.Networking
 
 
 
+
     public Network()
     {
       AddressPool = new NetworkAddressPool();
@@ -60,7 +61,8 @@ namespace BToken.Networking
 
 
     
-    public async Task<INetworkChannel> CreateNetworkPeer()
+    public async Task<BlockchainPeer> CreateNetworkPeer(
+      Blockchain blockchain)
     {
       while (true)
       {

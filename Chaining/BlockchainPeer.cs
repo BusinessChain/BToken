@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.Security.Cryptography;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 
 using BToken.Networking;
 
@@ -66,6 +68,250 @@ namespace BToken.Chaining
       
       Status = StatusUTXOSyncSession.IDLE;
     }
+
+
+
+    enum ConnectionType { OUTBOUND, INBOUND };
+    ConnectionType Connection;
+    const UInt16 Port = 8333;
+    IPEndPoint IPEndPoint;
+    TcpClient TcpClient;
+    MessageStreamer NetworkMessageStreamer;
+
+    BlockchainPeer(
+      IPAddress iPAddress,
+      ConnectionType connection,
+      Blockchain blockchain)
+    {
+      IPEndPoint = new IPEndPoint(iPAddress, Port);
+
+      Connection = connection;
+      Blockchain = blockchain;
+    }
+
+    public static async Task<BlockchainPeer> Create(
+      Blockchain blockchain)
+    {
+      while (true)
+      {
+        IPAddress iPAddress;
+
+        try
+        {
+          iPAddress = await GetNodeAddress();
+        }
+        catch
+        {
+          Console.WriteLine("Cannot create peer: No node address available.");
+          Task.Delay(10000);
+          continue;
+        }
+
+        BlockchainPeer peer = new BlockchainPeer(
+          iPAddress,
+          ConnectionType.OUTBOUND,
+          blockchain);
+
+        try
+        {
+          await peer.Connect();
+        }
+        catch
+        {
+          peer.Dispose();
+
+          Task.Delay(10000);
+          continue;
+        }
+
+        peer.Run();
+
+        return peer;
+      }
+    }
+
+    public async Task Connect()
+    {
+      TcpClient = new TcpClient();
+
+      await TcpClient.ConnectAsync(
+        IPEndPoint.Address,
+        IPEndPoint.Port);
+
+      NetworkMessageStreamer = new MessageStreamer(
+        TcpClient.GetStream());
+
+      await HandshakeAsync();
+    }
+    const string UserAgent = "/BToken:0.0.0/";
+    const Byte RelayOption = 0x00;
+    static ulong Nonce = CreateNonce();
+
+    static ulong CreateNonce()
+    {
+      Random rnd = new Random();
+
+      ulong number = (ulong)rnd.Next();
+      number = number << 32;
+      return number |= (uint)rnd.Next();
+    }
+
+    async Task HandshakeAsync()
+    {
+      var versionMessage = new VersionMessage()
+      {
+        UnixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+        IPAddressRemote = IPAddress.Loopback.MapToIPv6(),
+        PortRemote = Port,
+        IPAddressLocal = IPAddress.Loopback.MapToIPv6(),
+        PortLocal = Port,
+        Nonce = Nonce,
+        UserAgent = UserAgent,
+        BlockchainHeight = Blockchain.Height,
+        RelayOption = RelayOption
+      };
+
+      await NetworkMessageStreamer.Write(new VersionMessage());
+
+      CancellationToken cancellationToken = 
+        new CancellationTokenSource(TimeSpan.FromSeconds(3)).Token;
+
+      bool verAckReceived = false;
+      bool versionReceived = false;
+
+      while (!verAckReceived || !versionReceived)
+      {
+        NetworkMessage messageRemote =
+          await NetworkMessageStreamer.ReadAsync(cancellationToken);
+
+        switch (messageRemote.Command)
+        {
+          case "verack":
+            verAckReceived = true;
+            break;
+
+          case "version":
+            var versionMessageRemote = new VersionMessage(messageRemote.Payload);
+
+            versionReceived = true;
+            string rejectionReason = "";
+
+            if (versionMessageRemote.ProtocolVersion < ProtocolVersion)
+            {
+              rejectionReason = string.Format("Outdated version '{0}', minimum expected version is '{1}'.",
+                versionMessageRemote.ProtocolVersion, ProtocolVersion);
+            }
+
+            if (!((ServiceFlags)versionMessageRemote.NetworkServicesLocal).HasFlag(NetworkServicesRemoteRequired))
+            {
+              rejectionReason = string.Format("Network services '{0}' do not meet requirement '{1}'.",
+                versionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
+            }
+
+            if (versionMessageRemote.UnixTimeSeconds -
+              DateTimeOffset.UtcNow.ToUnixTimeSeconds() > 2 * 60 * 60)
+            {
+              rejectionReason = string.Format("Unix time '{0}' more than 2 hours in the future compared to local time '{1}'.",
+                versionMessageRemote.NetworkServicesLocal, NetworkServicesRemoteRequired);
+            }
+
+            if (versionMessageRemote.Nonce == Nonce)
+            {
+              rejectionReason = string.Format("Duplicate Nonce '{0}'.", Nonce);
+            }
+
+            if (rejectionReason != "")
+            {
+              await SendMessage(
+                new RejectMessage(
+                  "version",
+                  RejectMessage.RejectCode.OBSOLETE,
+                  rejectionReason)).ConfigureAwait(false);
+
+              throw new NetworkException("Remote peer rejected: " + rejectionReason);
+            }
+
+            await SendMessage(new VerAckMessage());
+            break;
+
+          case "reject":
+            RejectMessage rejectMessage = new RejectMessage(messageRemote.Payload);
+            throw new NetworkException(string.Format("Peer rejected handshake: '{0}'", rejectMessage.RejectionReason));
+
+          default:
+            throw new NetworkException(string.Format("Handshake aborted: Received improper message '{0}' during handshake session.", messageRemote.Command));
+        }
+      }
+    }
+
+
+
+    static readonly object LOCK_IsAddressPoolLocked = new object();
+    static bool IsAddressPoolLocked;
+    static List<IPAddress> SeedNodeIPAddresses = new List<IPAddress>();
+    static DateTimeOffset TimeOfLastUpdate = DateTimeOffset.UtcNow;
+    static Random RandomGenerator = new Random();
+
+    static async Task<IPAddress> GetNodeAddress()
+    {
+      while (true)
+      {
+        lock (LOCK_IsAddressPoolLocked)
+        {
+          if (!IsAddressPoolLocked)
+          {
+            IsAddressPoolLocked = true;
+            break;
+          }
+        }
+
+        await Task.Delay(1000);
+      }
+      
+      if (SeedNodeIPAddresses.Count == 0)
+      {
+        DownloadIPAddressesFromSeeds();
+      }
+
+      int randomIndex = RandomGenerator
+        .Next(SeedNodeIPAddresses.Count);
+
+      IPAddress iPAddress = SeedNodeIPAddresses[randomIndex];
+      SeedNodeIPAddresses.Remove(iPAddress);
+
+      lock (LOCK_IsAddressPoolLocked)
+      {
+        IsAddressPoolLocked = false;
+      }
+
+      return iPAddress;
+    }
+
+    static void DownloadIPAddressesFromSeeds()
+    {
+      string[] dnsSeeds = File.ReadAllLines(@"..\..\DNSSeeds");
+
+      foreach (string dnsSeed in dnsSeeds)
+      {
+        if (dnsSeed.Substring(0, 2) == "//")
+        {
+          continue;
+        }
+
+        IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
+
+        SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList
+          .Where(a => a.AddressFamily == AddressFamily.InterNetwork));
+      }
+
+      if (SeedNodeIPAddresses.Count == 0)
+      {
+        throw new NetworkException("No seed addresses downloaded.");
+      }
+    }
+
+
+
 
 
     public async Task StartListener()
@@ -201,13 +447,9 @@ namespace BToken.Chaining
             //  break;
 
             case "headers":
-              var blockArchive =
-                new UTXOTable.BlockArchive(message.Payload);
-
-              blockArchive.Parse();
               
-              await Blockchain.InsertHeaders(
-                blockArchive, 
+              await Blockchain.InsertHeader(
+                message.Payload, 
                 this);
               
               break;
@@ -448,6 +690,8 @@ namespace BToken.Chaining
         await NetworkPeer.SendMessage(
           new GetDataMessage(Inventories));
 
+        StopwatchDownload.Restart();
+
         lock (LOCK_IsExpectingMessageResponse)
         {
           IsExpectingMessageResponse = true;
@@ -486,6 +730,8 @@ namespace BToken.Chaining
         {
           IsExpectingMessageResponse = false;
         }
+
+        StopwatchDownload.Stop();
       }
       catch (Exception ex)
       {

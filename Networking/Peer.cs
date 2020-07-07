@@ -20,7 +20,7 @@ namespace BToken.Networking
       Network Network;
       Blockchain Blockchain;
 
-      public IPEndPoint IPEndPoint;
+      IPEndPoint IPEndPoint;
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
 
@@ -30,7 +30,7 @@ namespace BToken.Networking
 
       ulong FeeFilterValue;
 
-      public ConnectionType ConnectionType;
+      ConnectionType ConnectionType;
       
 
 
@@ -77,7 +77,7 @@ namespace BToken.Networking
 
       async Task HandshakeAsync()
       {
-        await NetworkMessageStreamer.WriteAsync(new VersionMessage());
+        await NetworkMessageStreamer.Write(new VersionMessage());
 
         CancellationToken cancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(3))
           .Token;
@@ -257,8 +257,7 @@ namespace BToken.Networking
         await NetworkMessageStreamer
           .WriteAsync(new PingMessage(Nonce));
       }
-
-
+      
 
       
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 5000;

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
   public class NetworkMessage
   {

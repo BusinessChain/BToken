@@ -43,8 +43,6 @@ namespace BToken.Chaining
 
       public void Initialize()
       {
-        HeaderAncestor = Blockchain.HeaderTip;
-
         HeaderTip = null;
         HeaderRoot = null;
         Difficulty = Blockchain.Difficulty;
@@ -56,8 +54,6 @@ namespace BToken.Chaining
         IsFork = false;
 
         HeaderDifficulties.Clear();
-
-        Archive.Branch(Blockchain.Archive);
       }
 
 
