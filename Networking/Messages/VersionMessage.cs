@@ -5,37 +5,20 @@ using System.Net;
 
 namespace BToken.Chaining
 {
-  partial class VersionMessage : NetworkMessage
+  class VersionMessage : NetworkMessage
   {
-    public const UInt32 ProtocolVersion = 70015;
-    public const UInt64 NetworkServicesRemote = 
-      (long)ServiceFlags.NODE_NETWORK;
-    public const UInt64 NetworkServicesLocal =
-      (long)ServiceFlags.NODE_NETWORK;
-    public static readonly IPAddress IPAddressRemote = 
-      IPAddress.Loopback.MapToIPv6();
-    public static 
-      readonly IPAddress IPAddressLocal =
-      IPAddress.Loopback.MapToIPv6();
-    public const UInt16 PortRemote = 8333;
-    public const UInt16 PortLocal = PortRemote;
-    public const String UserAgent = "/BToken:0.0.0/";
-    public static readonly UInt64 Nonce = CreateNonce();
-    static ulong CreateNonce()
-    {
-      Random rnd = new Random();
-
-      ulong number = (ulong)rnd.Next();
-      number = number << 32;
-      return number |= (uint)rnd.Next();
-    }
-
+    public UInt32 ProtocolVersion;
+    public UInt64 NetworkServicesLocal;
     public Int64 UnixTimeSeconds;
+    public UInt64 NetworkServicesRemote;
+    public IPAddress IPAddressRemote;
+    public UInt16 PortRemote;
+    public IPAddress IPAddressLocal;
+    public UInt16 PortLocal;
+    public UInt64 Nonce;
+    public String UserAgent;
     public Int32 BlockchainHeight;
     public Byte RelayOption;
-
-
-
 
 
 
@@ -80,7 +63,7 @@ namespace BToken.Chaining
 
       UserAgent = VarString.GetString(Payload, ref startIndex);
 
-      BlockchainHeight = BitConverter.ToUInt32(Payload, startIndex);
+      BlockchainHeight = BitConverter.ToInt32(Payload, startIndex);
       startIndex += 4;
 
       if (startIndex == Payload.Length)
@@ -96,22 +79,8 @@ namespace BToken.Chaining
 
     public VersionMessage() : base("version")
     {
-      ProtocolVersion = Network.ProtocolVersion;
-      NetworkServicesLocal = (long)NetworkServicesLocalProvided;
-      UnixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-      NetworkServicesRemote = (long)NetworkServicesRemoteRequired;
-      IPAddressRemote = IPAddress.Loopback.MapToIPv6();
-      PortRemote = Port;
-      IPAddressLocal = IPAddress.Loopback.MapToIPv6();
-      PortLocal = Port;
-      Nonce = Network.Nonce;
-      UserAgent = Network.UserAgent;
-      BlockchainHeight = 0; // We do not have that information at this point. I think this can be ignored.
-      RelayOption = Network.RelayOption;
-
-      SerializePayload();
     }
-    void SerializePayload()
+    public void SerializePayload()
     {
       List<byte> versionPayload = new List<byte>();
 

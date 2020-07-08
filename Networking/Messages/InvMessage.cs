@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
   class InvMessage : NetworkMessage
   {

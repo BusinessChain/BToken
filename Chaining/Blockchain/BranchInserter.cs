@@ -26,8 +26,6 @@ namespace BToken.Chaining
       public List<double> HeaderDifficulties = 
         new List<double>();
       
-      public BlockArchiver Archive;
-
 
 
 
@@ -39,7 +37,7 @@ namespace BToken.Chaining
         Blockchain = blockchain;
 
         Initialize();
-      }
+      } 
 
       public void Initialize()
       {
@@ -67,7 +65,7 @@ namespace BToken.Chaining
           HeaderDifficulties[HeightInserted];
       }
       
-      public async Task Stage(BlockchainPeer peer)
+      public async Task Stage(Peer peer)
       {
         HeaderTip = Blockchain.HeaderTip;
         Height = Blockchain.Height;

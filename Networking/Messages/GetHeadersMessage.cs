@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
   class GetHeadersMessage : NetworkMessage
   {
@@ -16,7 +16,8 @@ namespace BToken.Networking
 
 
     public GetHeadersMessage(
-      IEnumerable<byte[]> headerLocator)
+      IEnumerable<byte[]> headerLocator,
+      uint versionProtocol)
       : base("getheaders")
     {
       HeaderLocator = headerLocator;
@@ -24,13 +25,9 @@ namespace BToken.Networking
         ("00000000000000000000000000000000" +
         "00000000000000000000000000000000").ToBinary();
 
-      SerializePayload();
-    }
-    void SerializePayload()
-    {
       List<byte> payload = new List<byte>();
 
-      payload.AddRange(BitConverter.GetBytes(ProtocolVersionLocal));
+      payload.AddRange(BitConverter.GetBytes(versionProtocol));
       payload.AddRange(VarInt.GetBytes(HeaderLocator.Count()));
 
       for (int i = 0; i < HeaderLocator.Count(); i++)

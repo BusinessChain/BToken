@@ -6,13 +6,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.Security.Cryptography;
+using System.Net;
+using System.Net.Sockets;
 
-using BToken.Networking;
 
 
 namespace BToken.Chaining
 {
-  public partial class Blockchain
+  partial class Blockchain
   {
     const int HASH_BYTE_SIZE = 32;
     const int COUNT_PEERS_MAX = 4;
@@ -39,32 +40,32 @@ namespace BToken.Chaining
     const int UTXOIMAGE_INTERVAL_SYNC = 500;
     const int UTXOIMAGE_INTERVAL_LISTEN = 50;
 
-    Network Network;
-    
+    TcpListener TcpListener;
+
     int SIZE_HEADER_ARCHIVE = 2000;
     
     int SIZE_BLOCK_ARCHIVE = 50000;
     int IndexBlockArchive;
-    FileStream FileArchiveBlock;
     
     SHA256 SHA256 = SHA256.Create();
     
     int IndexImageHeader;
+
+    const UInt16 Port = 8333;
 
 
 
     public Blockchain(
       Header headerGenesis,
       byte[] genesisBlockBytes,
-      List<HeaderLocation> checkpoints,
-      Network network)
+      List<HeaderLocation> checkpoints)
     {
       HeaderTip = headerGenesis;
       HeaderGenesis = headerGenesis;
 
       Checkpoints = checkpoints;
 
-      Network = network;
+      TcpListener = new TcpListener(IPAddress.Any, Port);
 
       Branch = new BranchInserter(this);
       
@@ -92,7 +93,7 @@ namespace BToken.Chaining
 
 
     object LOCK_Peers = new object();
-    List<BlockchainPeer> Peers = new List<BlockchainPeer>();
+    List<Peer> Peers = new List<Peer>();
     readonly object LOCK_IsBlockchainLocked = new object();
     bool IsBlockchainLocked;
     readonly object LOCK_IndexBlockArchiveLoad = new object();
@@ -107,6 +108,8 @@ namespace BToken.Chaining
 
       StartPeerGenerator();
       StartPeerSynchronizer();
+
+      StartPeerInboundListener();
     }
     
     void LoadImage(int height)
@@ -217,10 +220,8 @@ namespace BToken.Chaining
 
         if (flagCreatePeer)
         {
-          var peer = await BlockchainPeer.Create(this);
-
-          peer.StartListener();
-
+          var peer = await CreatePeer();
+          
           lock (LOCK_Peers)
           {
             Peers.Add(peer);
@@ -232,7 +233,110 @@ namespace BToken.Chaining
         await Task.Delay(2000);
       }
     }
-    
+
+    async Task<Peer> CreatePeer()
+    {
+      while (true)
+      {
+        IPAddress iPAddress;
+
+        try
+        {
+          iPAddress = await GetNodeAddress();
+        }
+        catch
+        {
+          Console.WriteLine(
+            "Cannot create peer: No node address available.");
+          Task.Delay(10000);
+          continue;
+        }
+
+        var peer = new Peer(this);
+
+        try
+        {
+          await peer.Connect(iPAddress, Port);
+        }
+        catch
+        {
+          peer.Dispose();
+
+          Task.Delay(10000);
+          continue;
+        }
+
+        peer.Run();
+
+        return peer;
+      }
+    }
+
+    static async Task<IPAddress> GetNodeAddress()
+    {
+      while (true)
+      {
+        lock (LOCK_IsAddressPoolLocked)
+        {
+          if (!IsAddressPoolLocked)
+          {
+            IsAddressPoolLocked = true;
+            break;
+          }
+        }
+
+        await Task.Delay(1000);
+      }
+
+      if (SeedNodeIPAddresses.Count == 0)
+      {
+        DownloadIPAddressesFromSeeds();
+      }
+
+      int randomIndex = RandomGenerator
+        .Next(SeedNodeIPAddresses.Count);
+
+      IPAddress iPAddress = SeedNodeIPAddresses[randomIndex];
+      SeedNodeIPAddresses.Remove(iPAddress);
+
+      lock (LOCK_IsAddressPoolLocked)
+      {
+        IsAddressPoolLocked = false;
+      }
+
+      return iPAddress;
+    }
+
+    static readonly object LOCK_IsAddressPoolLocked = new object();
+    static bool IsAddressPoolLocked;
+    static List<IPAddress> SeedNodeIPAddresses = new List<IPAddress>();
+    static Random RandomGenerator = new Random();
+
+
+    static void DownloadIPAddressesFromSeeds()
+    {
+      string[] dnsSeeds = File.ReadAllLines(@"..\..\DNSSeeds");
+
+      foreach (string dnsSeed in dnsSeeds)
+      {
+        if (dnsSeed.Substring(0, 2) == "//")
+        {
+          continue;
+        }
+
+        IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
+
+        SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList
+          .Where(a => a.AddressFamily == AddressFamily.InterNetwork));
+      }
+
+      if (SeedNodeIPAddresses.Count == 0)
+      {
+        throw new ChainException("No seed addresses downloaded.");
+      }
+    }
+
+
     void ValidateHeaders(Header header)
     {
       // wird das nicht schon im getHeaders anhand Locator geprüft?
@@ -548,7 +652,7 @@ namespace BToken.Chaining
 
     async Task StartPeerSynchronizer()
     {
-      BlockchainPeer peer;
+      Peer peer;
 
       while (true)
       {
@@ -587,9 +691,8 @@ namespace BToken.Chaining
 
 
     
-    async Task SynchronizeWithPeer(BlockchainPeer peer)
+    async Task SynchronizeWithPeer(Peer peer)
     {
-
     LABEL_StageBranch:
 
       await Branch.Stage(peer);
@@ -651,7 +754,7 @@ namespace BToken.Chaining
 
       while (true)
       {
-        var peersIdle = new List<BlockchainPeer>();
+        var peersIdle = new List<Peer>();
 
         lock (LOCK_Peers)
         {
@@ -675,13 +778,12 @@ namespace BToken.Chaining
       }
     }
 
-
-    int IndexLoad;
+    
     readonly object LOCK_HeaderLoad = new object();
     readonly object LOCK_BatchIndex = new object();
     int BatchIndex;
 
-    async Task RunUTXOSyncSession(BlockchainPeer peer)
+    async Task RunUTXOSyncSession(Peer peer)
     {
       if (peer.BlockArchives.Count == 0)
       {
@@ -783,14 +885,14 @@ namespace BToken.Chaining
 
     Header HeaderLoad;
     bool FlagAllHeadersLoaded;
-    BufferBlock<BlockchainPeer> QueuePeersUTXOInserter =
-      new BufferBlock<BlockchainPeer>();
+    BufferBlock<Peer> QueuePeersUTXOInserter =
+      new BufferBlock<Peer>();
 
     async Task RunUTXOInserter()
     {
       while (true)
       {
-        BlockchainPeer peer = await QueuePeersUTXOInserter
+        Peer peer = await QueuePeersUTXOInserter
           .ReceiveAsync()
           .ConfigureAwait(false);
 
@@ -890,6 +992,8 @@ namespace BToken.Chaining
 
         HeaderArchives.ForEach(
           h => WriteToFile(fileHeaderArchive, h.GetBytes()));
+
+        IndexImageHeader += 1;
 
         HeaderArchives.Clear();
       }
@@ -1024,12 +1128,9 @@ namespace BToken.Chaining
       }
     }
 
+    
 
-
-
-    public async Task InsertHeader(
-      byte[] headerBytes,
-      BlockchainPeer peer)
+    async Task InsertHeader(byte[] headerBytes, Peer peer)
     {
       UTXOTable.BlockArchive blockArchive = null;
       LoadBlockArchive(ref blockArchive);
@@ -1144,9 +1245,8 @@ namespace BToken.Chaining
       IsBlockchainLocked = false;
     }
 
-
-
        
+    
     bool ContainsHeader(byte[] headerHash)
     {
       return TryReadHeader(
@@ -1261,6 +1361,31 @@ namespace BToken.Chaining
 
       throw new ChainException(string.Format(
         "Locator does not root in headerchain."));
+    }
+
+
+    const int PEERS_COUNT_INBOUND = 8;
+    async Task StartPeerInboundListener()
+    {
+      TcpListener.Start(PEERS_COUNT_INBOUND);
+
+      while (true)
+      {
+        TcpClient tcpClient = await TcpListener.AcceptTcpClientAsync().
+          ConfigureAwait(false);
+
+        Console.WriteLine("Received inbound request from {0}",
+          tcpClient.Client.RemoteEndPoint.ToString());
+
+        var peer = new Peer(tcpClient, this);
+
+        peer.Run();
+
+        lock (LOCK_Peers)
+        {
+          Peers.Add(peer);
+        }
+      }
     }
   }
 }

@@ -29,6 +29,8 @@ namespace BToken.Chaining
     const uint MagicValueByteSize = 4;
     byte[] MagicBytes = new byte[MagicValueByteSize];
 
+    SHA256 SHA256 = SHA256.Create();
+
 
 
     public MessageStreamer(Stream stream)
@@ -44,31 +46,32 @@ namespace BToken.Chaining
       }
     }
 
-    public async Task Write(NetworkMessage networkMessage)
+    public async Task Write(NetworkMessage message)
     {
       Stream.Write(MagicBytes, 0, MagicBytes.Length);
 
       byte[] command = Encoding.ASCII.GetBytes(
-        networkMessage.Command.PadRight(CommandSize, '\0'));
+        message.Command.PadRight(CommandSize, '\0'));
 
       Stream.Write(command, 0, command.Length);
 
-      byte[] payloadLength = BitConverter.GetBytes(networkMessage.Payload.Length);
+      byte[] payloadLength = BitConverter.GetBytes(message.Payload.Length);
       Stream.Write(payloadLength, 0, payloadLength.Length);
 
-      byte[] checksum = CreateChecksum(networkMessage.Payload);
+      byte[] checksum = CreateChecksum(message.Payload);
       Stream.Write(checksum, 0, checksum.Length);
 
       await Stream.WriteAsync(
-        networkMessage.Payload,
+        message.Payload,
         0,
-        networkMessage.Payload.Length)
+        message.Payload.Length)
         .ConfigureAwait(false);
     }
 
     byte[] CreateChecksum(byte[] payload)
     {
-      return SHA256d.Compute(payload).Take(ChecksumSize).ToArray();
+      byte[] hash = SHA256.ComputeHash(SHA256.ComputeHash(payload));
+      return hash.Take(ChecksumSize).ToArray();
     }
 
     public async Task<NetworkMessage> ReadAsync(CancellationToken cancellationToken)
@@ -84,7 +87,7 @@ namespace BToken.Chaining
 
       if (PayloadLength > 0x02000000)
       {
-        throw new NetworkException("Message payload too big (over 32MB)");
+        throw new ChainException("Message payload too big (over 32MB)");
       }
 
       Payload = new byte[(int)PayloadLength];
@@ -95,7 +98,7 @@ namespace BToken.Chaining
 
       if (checksumMessage != checksumCalculated)
       {
-        throw new NetworkException("Invalid Message checksum.");
+        throw new ChainException("Invalid Message checksum.");
       }
 
       return new NetworkMessage(Command, Payload);
@@ -127,7 +130,7 @@ namespace BToken.Chaining
 
         if (chunkSize == 0)
         {
-          throw new NetworkException("Stream returns 0 bytes signifying end of stream.");
+          throw new ChainException("Stream returns 0 bytes signifying end of stream.");
         }
 
         offset += chunkSize;

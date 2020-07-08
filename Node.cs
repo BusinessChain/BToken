@@ -5,15 +5,12 @@ using System.Threading.Tasks;
 using System.Linq;
 
 using BToken.Chaining;
-using BToken.Networking;
 
-// Test
 
 namespace BToken
 {
   partial class Node
   {
-    Network Network;
     Blockchain Blockchain;
 
     Wallet Wallet;
@@ -29,21 +26,16 @@ namespace BToken
 
     public Node()
     {
-      Network = new Network();
-
       Blockchain = new Blockchain(
         GenesisBlock.Header,
         GenesisBlock.BlockBytes,
-        Checkpoints,
-        Network);
+        Checkpoints);
 
       Wallet = new Wallet();
     }
 
     public void Start()
     {
-      Network.Start();
-
       Blockchain.Start();
 
       Wallet.GeneratePublicKey();

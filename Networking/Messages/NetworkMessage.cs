@@ -4,9 +4,6 @@ namespace BToken.Chaining
 {
   public class NetworkMessage
   {
-
-    protected const UInt32 ProtocolVersionLocal = Network.ProtocolVersion;
-
     public string Command;
     public byte[] Payload;
 

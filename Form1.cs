@@ -10,7 +10,6 @@ using System.Windows.Forms;
 using System.Threading.Tasks;
 using System.Net;
 
-using BToken.Networking;
 
 namespace BToken
 {

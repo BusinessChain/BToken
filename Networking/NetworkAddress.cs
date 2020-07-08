@@ -4,7 +4,7 @@ using System.Net;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
   class NetworkAddress
   {

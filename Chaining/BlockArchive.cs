@@ -147,7 +147,7 @@ namespace BToken.Chaining
         {
           byte[] tXHash = ParseTX(true);
 
-          if (!tXHash.IsEqual(Buffer, merkleRootIndex))
+          if (!tXHash.IsEqual(merkleRoot))
           {
             throw new ChainException("Payload merkle root corrupted");
           }

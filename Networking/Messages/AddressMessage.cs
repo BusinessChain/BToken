@@ -4,28 +4,25 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
-  partial class Network
+  class AddressMessage : NetworkMessage
   {
-    class AddressMessage : NetworkMessage
+    public List<NetworkAddress> NetworkAddresses { get; private set; } = new List<NetworkAddress>();
+
+
+    public AddressMessage(NetworkMessage networkMessage) : base("addr", networkMessage.Payload)
     {
-      public List<NetworkAddress> NetworkAddresses { get; private set; } = new List<NetworkAddress>();
+      DeserializePayload();
+    }
+    void DeserializePayload()
+    {
+      int startIndex = 0;
 
-
-      public AddressMessage(NetworkMessage networkMessage) : base("addr", networkMessage.Payload)
+      int addressesCount = VarInt.GetInt32(Payload, ref startIndex);
+      for (int i = 0; i < addressesCount; i++)
       {
-        DeserializePayload();
-      }
-      void DeserializePayload()
-      {
-        int startIndex = 0;
-
-        int addressesCount = VarInt.GetInt32(Payload, ref startIndex);
-        for (int i = 0; i < addressesCount; i++)
-        {
-          NetworkAddresses.Add(NetworkAddress.ParseAddress(Payload, ref startIndex));
-        }
+        NetworkAddresses.Add(NetworkAddress.ParseAddress(Payload, ref startIndex));
       }
     }
   }

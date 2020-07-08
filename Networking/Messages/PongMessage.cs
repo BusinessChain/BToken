@@ -4,20 +4,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
-  partial class Network
+  class PongMessage : NetworkMessage
   {
-    class PongMessage : NetworkMessage
+    public UInt64 Nonce { get; private set; }
+
+
+    public PongMessage(UInt64 nonce) : base("pong")
     {
-      public UInt64 Nonce { get; private set; }
-
-
-      public PongMessage(UInt64 nonce) : base("pong")
-      {
-        Nonce = nonce;
-        Payload = BitConverter.GetBytes(nonce);
-      }
+      Nonce = nonce;
+      Payload = BitConverter.GetBytes(nonce);
     }
   }
 }

@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
   class GetDataMessage : NetworkMessage
   {

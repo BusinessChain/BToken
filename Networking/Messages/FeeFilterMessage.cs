@@ -4,17 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
-  partial class Network
+  class FeeFilterMessage : NetworkMessage
   {
-    class FeeFilterMessage : NetworkMessage
-    {
-      public ulong FeeFilterValue { get; private set; }
+    public ulong FeeFilterValue { get; private set; }
 
-      public FeeFilterMessage(NetworkMessage message) : base("feefilter", message.Payload)
-      {
-      }
+    public FeeFilterMessage(NetworkMessage message) : base("feefilter", message.Payload)
+    {
     }
   }
 }
