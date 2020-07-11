@@ -29,9 +29,6 @@ namespace BToken.Chaining
     UTXOIndexULong64Compressed TableULong64 = new UTXOIndexULong64Compressed();
     UTXOIndexUInt32ArrayCompressed TableUInt32Array = new UTXOIndexUInt32ArrayCompressed();
     
-    public int HeightBlockchain;
-    public int IndexBlockArchive;
-
     long UTCTimeStartMerger;
 
 
@@ -73,7 +70,7 @@ namespace BToken.Chaining
 
     void InsertUTXOsUInt32(
       KeyValuePair<byte[], uint>[] uTXOsUInt32,
-      int archiveIndex)
+      int indexArchive)
     {
       int i = 0;
 
@@ -81,7 +78,7 @@ namespace BToken.Chaining
       {
         TableUInt32.UTXO =
           uTXOsUInt32[i].Value |
-          ((uint)archiveIndex & UTXOIndexUInt32.MaskBatchIndex);
+          ((uint)indexArchive & UTXOIndexUInt32.MaskBatchIndex);
 
         InsertUTXO(
           uTXOsUInt32[i].Key,
@@ -93,7 +90,7 @@ namespace BToken.Chaining
 
     void InsertUTXOsULong64(
       KeyValuePair<byte[], ulong>[] uTXOsULong64,
-      int archiveIndex)
+      int indexArchive)
     {
       int i = 0;
 
@@ -101,7 +98,7 @@ namespace BToken.Chaining
       {
         TableULong64.UTXO =
           uTXOsULong64[i].Value |
-          ((ulong)archiveIndex & UTXOIndexULong64.MaskBatchIndex);
+          ((ulong)indexArchive & UTXOIndexULong64.MaskBatchIndex);
 
         InsertUTXO(
           uTXOsULong64[i].Key,
@@ -113,7 +110,7 @@ namespace BToken.Chaining
 
     void InsertUTXOsUInt32Array(
       KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array,
-      int archiveIndex)
+      int indexArchive)
     {
       int i = 0;
 
@@ -121,7 +118,7 @@ namespace BToken.Chaining
       {
         TableUInt32Array.UTXO = uTXOsUInt32Array[i].Value;
         TableUInt32Array.UTXO[0] |=
-          (uint)archiveIndex & UTXOIndexUInt32Array.MaskBatchIndex;
+          (uint)indexArchive & UTXOIndexUInt32Array.MaskBatchIndex;
 
         InsertUTXO(
           uTXOsUInt32Array[i].Key,
@@ -217,7 +214,7 @@ namespace BToken.Chaining
         blockArchive.Index);
 
       InsertUTXOsULong64(
-        blockArchive.UTXOsULong64,
+        blockArchive.UTXOsULong64, 
         blockArchive.Index);
 
       InsertUTXOsUInt32Array(
@@ -227,8 +224,6 @@ namespace BToken.Chaining
       InsertSpendUTXOs(blockArchive.Inputs);
 
       blockArchive.StopwatchStaging.Stop();
-      
-      HeightBlockchain += blockArchive.BlockCount;
 
       LogInsertion(blockArchive);
     }
@@ -244,11 +239,6 @@ namespace BToken.Chaining
       {
         t.BackupImage(directoryUTXOImage.FullName);
       });
-    }
-    
-    public void Restore()
-    {
-      throw new NotImplementedException();
     }
 
 
@@ -269,9 +259,8 @@ namespace BToken.Chaining
         container.UTXOsUInt32Array.Length;
 
       string logCSV = string.Format(
-        "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}",
+        "{0},{1},{2},{3},{4},{5},{6},{7},{8}",
         container.Index,
-        HeightBlockchain,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
         ratioMergeToParse,
         container.Buffer.Length,

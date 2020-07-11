@@ -143,6 +143,11 @@ namespace BToken.Chaining
       {
         TXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
 
+        if(TXCount == 0)
+        {
+          return;
+        }
+
         if (TXCount == 1)
         {
           byte[] tXHash = ParseTX(true);
