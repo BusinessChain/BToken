@@ -32,7 +32,6 @@ namespace BToken.Chaining
       const int SIZE_MESSAGE_PAYLOAD_BUFFER = 0x2000000;
       public byte[] Buffer = new byte[SIZE_MESSAGE_PAYLOAD_BUFFER];
       public int IndexBuffer;
-      public int StopIndexBuffer;
 
       public bool IsInvalid;
       public bool IsCancellationBatch;
@@ -78,10 +77,15 @@ namespace BToken.Chaining
       const int BYTE_LENGTH_LOCK_TIME = 4;
       const int OFFSET_INDEX_MERKLE_ROOT = 36;
       const int TWICE_HASH_BYTE_SIZE = HASH_BYTE_SIZE << 1;
+      readonly byte[] HASH_ZERO = new byte[32];
       
       int TXCount;
 
       public void Parse()
+      {
+        Parse(HASH_ZERO);
+      }
+      public void Parse(byte[] hashStopLoading)
       {
         StopwatchParse.Start();
 
@@ -97,7 +101,9 @@ namespace BToken.Chaining
         HeaderRoot = header;
         HeaderTip = header;
                
-        while (IndexBuffer < Buffer.Length)
+        while (
+          HeaderTip.Hash.IsEqual(hashStopLoading) && 
+          IndexBuffer < Buffer.Length)
         {
           header = Header.ParseHeader(
             Buffer,

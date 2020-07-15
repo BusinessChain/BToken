@@ -34,7 +34,6 @@ namespace BToken.Chaining
     bool IsBlockchainLocked;
     readonly object LOCK_IndexBlockArchiveLoad = new object();
     int IndexBlockArchiveLoad;
-    int HeightStopLoad;
 
     DirectoryInfo ArchiveDirectoryBlocks =
         Directory.CreateDirectory("J:\\BlockArchivePartitioned");
@@ -75,14 +74,18 @@ namespace BToken.Chaining
     {
       LoadImage(0);
 
-      await LoadBlocks(0);
+      await LoadBlocks();
 
       StartPeerGenerator();
       StartPeerSynchronizer();
 
       StartPeerInboundListener();
     }
-    
+
+    void LoadImage()
+    {
+      LoadImage(0);
+    }
     void LoadImage(int stopHeight)
     {
       string pathImage = DirectoryImage.Name;
@@ -203,13 +206,17 @@ namespace BToken.Chaining
     }
 
 
-
+    byte[] HashStopLoading;
     const int COUNT_INDEXER_TASKS = 8;
 
-    async Task LoadBlocks(int heightStopLoad)
+    async Task LoadBlocks()
+    {
+      await LoadBlocks(new byte[32]);
+    }
+    async Task LoadBlocks(byte[] stopHashLoading)
     {
       IndexBlockArchiveLoad = IndexBlockArchive + 1;
-      HeightStopLoad = heightStopLoad;
+      byte[] HashStopLoading = stopHashLoading;
 
       var loaderTasks = new Task[COUNT_INDEXER_TASKS];
 
@@ -238,7 +245,7 @@ namespace BToken.Chaining
             ArchiveDirectoryBlocks.Name,
             blockArchive.Index.ToString()));
 
-          blockArchive.Parse();
+          blockArchive.Parse(HashStopLoading);
         }
         catch
         {
@@ -298,15 +305,23 @@ namespace BToken.Chaining
 
             InsertHeaders(blockArchive);
 
+            if(HeaderTip.Hash.IsEqual(HashStopLoading))
+            {
+              IsBlockLoadingCompleted = true;
+              return;
+            }
+
             if (blockArchive.Index % UTXOIMAGE_INTERVAL_SYNC == 0)
             {
               CreateImage();
             }
-            
+
+            IndexBlockArchive += 1;
+
             lock (LOCK_QueueBlockArchives)
             {
               if (QueueBlockArchives.TryGetValue(
-                blockArchive.Index + 1, 
+                IndexBlockArchive, 
                 out UTXOTable.BlockArchive blockArchiveNext))
               {
                 QueueBlockArchives.Remove(blockArchiveNext.Index);
@@ -497,7 +512,7 @@ namespace BToken.Chaining
         {
           LoadImage(Branch.HeightAncestor);
                               
-          await LoadBlocks(Branch.HeightAncestor);
+          await LoadBlocks(Branch.HeaderRoot.HashPrevious);
 
           if (Height != Branch.HeightAncestor)
           {
@@ -517,12 +532,14 @@ namespace BToken.Chaining
         {
           if (Branch.IsFork)
           {
-            LoadImage(0);
+            LoadImage();
 
             ArchiveDirectoryHeadersFork.EnumerateFiles().ToList()
               .ForEach(f => f.Delete());
             ArchiveDirectoryBlocksFork.EnumerateFiles().ToList()
               .ForEach(f => f.Delete());
+
+            await LoadBlocks();
           }
 
           peer.Dispose();
@@ -743,7 +760,7 @@ namespace BToken.Chaining
     }
 
 
-    int IndexBlockArchive = 1;
+    int IndexBlockArchive;
     List<UTXOTable.BlockArchive> BlockArchives =
       new List<UTXOTable.BlockArchive>();
     int CountTXs;
@@ -873,8 +890,9 @@ namespace BToken.Chaining
 
     
 
-    async Task InsertHeader(byte[] headerBytes, Peer peer)
+    async Task ReceiveHeader(byte[] headerBytes, Peer peer)
     {
+      // Code im peer ausführen
       UTXOTable.BlockArchive blockArchive = null;
       LoadBlockArchive(ref blockArchive);
 

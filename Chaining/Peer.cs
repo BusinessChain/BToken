@@ -403,7 +403,7 @@ namespace BToken.Chaining
 
               case "headers":
 
-                await Blockchain.InsertHeader(
+                await Blockchain.ReceiveHeader(
                   message.Payload,
                   this);
 
