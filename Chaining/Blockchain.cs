@@ -15,42 +15,40 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    const int HASH_BYTE_SIZE = 32;
-    const int COUNT_PEERS_MAX = 4;
-
     Header HeaderGenesis;
-
+    List<HeaderLocation> Checkpoints;
     Header HeaderTip;
     double Difficulty;
     int Height;
-    
-    Header HeaderTipStaged;
-    double DifficultyStaged;
-    int HeightStaged;
-    int HeightStagedInserted;
-    
-    List<HeaderLocation> Checkpoints;
-    
+
     readonly object HeaderIndexLOCK = new object();
     Dictionary<int, List<Header>> HeaderIndex;
-
-    BranchInserter Branch = new BranchInserter();
-
+    
     UTXOTable UTXOTable;
     const int UTXOIMAGE_INTERVAL_SYNC = 500;
     const int UTXOIMAGE_INTERVAL_LISTEN = 50;
-
-    TcpListener TcpListener;
-
-    int SIZE_HEADER_ARCHIVE = 2000;
     
-    int SIZE_BLOCK_ARCHIVE = 50000;
-    
-    SHA256 SHA256 = SHA256.Create();
-    
-    int IndexImageHeader;
+    BranchInserter Branch;
 
-    const UInt16 Port = 8333;
+    readonly object LOCK_IsBlockchainLocked = new object();
+    bool IsBlockchainLocked;
+    readonly object LOCK_IndexBlockArchiveLoad = new object();
+    int IndexBlockArchiveLoad;
+    int HeightStopLoad;
+
+    DirectoryInfo ArchiveDirectoryBlocks =
+        Directory.CreateDirectory("J:\\BlockArchivePartitioned");
+    DirectoryInfo ArchiveDirectoryBlocksFork =
+        Directory.CreateDirectory("J:\\BlockArchivePartitioned\\fork");
+    DirectoryInfo ArchiveDirectoryHeaders =
+        Directory.CreateDirectory("headerchain");
+    DirectoryInfo ArchiveDirectoryHeadersFork =
+        Directory.CreateDirectory("headerchain\\fork");
+
+    DirectoryInfo DirectoryImage =
+        Directory.CreateDirectory("image");
+    DirectoryInfo DirectoryImageOld =
+        Directory.CreateDirectory("image_old");
 
 
 
@@ -64,8 +62,6 @@ namespace BToken.Chaining
 
       Checkpoints = checkpoints;
 
-      TcpListener = new TcpListener(IPAddress.Any, Port);
-
       Branch = new BranchInserter(this);
       
       HeaderIndex = new Dictionary<int, List<Header>>();
@@ -73,30 +69,7 @@ namespace BToken.Chaining
       
       UTXOTable = new UTXOTable(genesisBlockBytes);
     }
-
-    void Initialize()
-    {
-      HeaderTip = HeaderGenesis;
-      HeightStagedInserted = 0;
-      Difficulty = HeaderGenesis.Difficulty;
-
-      Branch.Initialize();
-      
-      HeaderIndex.Clear();
-      UpdateHeaderIndex(HeaderGenesis);
-
-      UTXOTable.Clear();
-    }
-    
-
-
-    object LOCK_Peers = new object();
-    List<Peer> Peers = new List<Peer>();
-    readonly object LOCK_IsBlockchainLocked = new object();
-    bool IsBlockchainLocked;
-    readonly object LOCK_IndexBlockArchiveLoad = new object();
-    int IndexBlockArchiveLoad;
-    int HeightStopLoad;
+        
 
     public async Task Start()
     {
@@ -129,6 +102,20 @@ namespace BToken.Chaining
       }
     }
 
+    void Initialize()
+    {
+      HeaderTip = HeaderGenesis;
+      Height = 0;
+      Difficulty = HeaderGenesis.Difficulty;
+
+      Branch.Initialize();
+
+      HeaderIndex.Clear();
+      UpdateHeaderIndex(HeaderGenesis);
+
+      UTXOTable.Clear();
+    }
+
     bool TryLoadImagePath(string pathImage)
     {
       try
@@ -153,7 +140,7 @@ namespace BToken.Chaining
 
         header.HeaderPrevious = HeaderGenesis;
 
-        ValidateHeaderchain(header);
+        ValidateHeaders(header, 1);
 
         InsertHeaders(blockArchive);
 
@@ -184,9 +171,9 @@ namespace BToken.Chaining
 
       while (index < buffer.Length)
       {
-        byte[] key = new byte[HASH_BYTE_SIZE];
-        Array.Copy(buffer, index, key, 0, HASH_BYTE_SIZE);
-        index += HASH_BYTE_SIZE;
+        byte[] key = new byte[32];
+        Array.Copy(buffer, index, key, 0, 32);
+        index += 32;
 
         int value = BitConverter.ToInt32(buffer, index);
         index += 4;
@@ -195,188 +182,18 @@ namespace BToken.Chaining
       }
     }
 
-    async Task StartPeerGenerator()
+    void ValidateHeaders(Header header, int height)
     {
-      bool flagCreatePeer;
-
-      while (true)
-      {
-        flagCreatePeer = false;
-
-        lock (LOCK_Peers)
-        {
-          Peers.RemoveAll(p => p.IsStatusDisposed());
-
-          if (Peers.Count < COUNT_PEERS_MAX)
-          {
-            flagCreatePeer = true;
-          }
-        }
-
-        if (flagCreatePeer)
-        {
-          var peer = await CreatePeer();
-          
-          lock (LOCK_Peers)
-          {
-            Peers.Add(peer);
-          }
-
-          continue;
-        }
-
-        await Task.Delay(2000);
-      }
-    }
-
-    async Task<Peer> CreatePeer()
-    {
-      while (true)
-      {
-        IPAddress iPAddress;
-
-        try
-        {
-          iPAddress = await GetNodeAddress();
-        }
-        catch
-        {
-          Console.WriteLine(
-            "Cannot create peer: No node address available.");
-          Task.Delay(10000);
-          continue;
-        }
-
-        var peer = new Peer(this);
-
-        try
-        {
-          await peer.Connect(iPAddress, Port);
-        }
-        catch
-        {
-          peer.Dispose();
-
-          Task.Delay(10000);
-          continue;
-        }
-
-        peer.Run();
-
-        return peer;
-      }
-    }
-
-    static async Task<IPAddress> GetNodeAddress()
-    {
-      while (true)
-      {
-        lock (LOCK_IsAddressPoolLocked)
-        {
-          if (!IsAddressPoolLocked)
-          {
-            IsAddressPoolLocked = true;
-            break;
-          }
-        }
-
-        await Task.Delay(1000);
-      }
-
-      if (SeedNodeIPAddresses.Count == 0)
-      {
-        DownloadIPAddressesFromSeeds();
-      }
-
-      int randomIndex = RandomGenerator
-        .Next(SeedNodeIPAddresses.Count);
-
-      IPAddress iPAddress = SeedNodeIPAddresses[randomIndex];
-      SeedNodeIPAddresses.Remove(iPAddress);
-
-      lock (LOCK_IsAddressPoolLocked)
-      {
-        IsAddressPoolLocked = false;
-      }
-
-      return iPAddress;
-    }
-
-    static readonly object LOCK_IsAddressPoolLocked = new object();
-    static bool IsAddressPoolLocked;
-    static List<IPAddress> SeedNodeIPAddresses = new List<IPAddress>();
-    static Random RandomGenerator = new Random();
-
-
-    static void DownloadIPAddressesFromSeeds()
-    {
-      string[] dnsSeeds = File.ReadAllLines(@"..\..\DNSSeeds");
-
-      foreach (string dnsSeed in dnsSeeds)
-      {
-        if (dnsSeed.Substring(0, 2) == "//")
-        {
-          continue;
-        }
-
-        IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
-
-        SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList
-          .Where(a => a.AddressFamily == AddressFamily.InterNetwork));
-      }
-
-      if (SeedNodeIPAddresses.Count == 0)
-      {
-        throw new ChainException("No seed addresses downloaded.");
-      }
-    }
-
-
-    void ValidateHeaders(Header header)
-    {
-      // wird das nicht schon im getHeaders anhand Locator geprüft?
-
-      //if (!header.HashPrevious.IsEqual(Branch.HeaderTip.Hash))
-      //{
-      //  throw new ChainException(
-      //    "Received header does not link to last header.");
-      //}
-      
       do
       {
-        ValidateHeader(header);
+        ValidateHeader(header, height);
         header = header.HeaderNext;
+        height += 1;
       } while (header != null);
     }
-
-    void ValidateHeaderchain(Header header)
-    {
-      // wird das nicht schon im getHeaders anhand Locator geprüft?
-
-      //if (!header.HashPrevious.IsEqual(Branch.HeaderTip.Hash))
-      //{
-      //  throw new ChainException(
-      //    "Received header does not link to last header.");
-      //}
-
-      while (true)
-      {
-        ValidateHeader(header);
-
-        DifficultyStaged += header.Difficulty;
-        HeightStaged += 1;
-
-        if (header.HeaderNext == null)
-        {
-          HeaderTipStaged = header;
-          return;
-        }
-
-        header = header.HeaderNext;
-      }
-    }
-
-    void InsertHeaders(UTXOTable.BlockArchive archiveBlock)
+    
+    void InsertHeaders(
+      UTXOTable.BlockArchive archiveBlock)
     {
       HeaderTip.HeaderNext = archiveBlock.HeaderRoot;
 
@@ -386,8 +203,9 @@ namespace BToken.Chaining
     }
 
 
+
     const int COUNT_INDEXER_TASKS = 8;
-        
+
     async Task LoadBlocks(int heightStopLoad)
     {
       IndexBlockArchiveLoad = IndexBlockArchive + 1;
@@ -421,12 +239,10 @@ namespace BToken.Chaining
             blockArchive.Index.ToString()));
 
           blockArchive.Parse();
-
-          blockArchive.IsValid = true;
         }
         catch
         {
-          blockArchive.IsValid = false;
+          blockArchive.IsInvalid = true;
         }
 
         while (true)
@@ -449,13 +265,13 @@ namespace BToken.Chaining
                 blockArchive.Index,
                 blockArchive);
 
-              if(blockArchive.IsValid)
+              if(blockArchive.IsInvalid)
               {
-                blockArchive = null;
-                goto LABEL_LoadBlockArchive;
+                return;
               }
 
-              return;
+              blockArchive = null;
+              goto LABEL_LoadBlockArchive;
             }
           }
 
@@ -464,7 +280,7 @@ namespace BToken.Chaining
         
         try
         {
-          while (blockArchive.IsValid)
+          while (!blockArchive.IsInvalid)
           {
             Header header = blockArchive.HeaderRoot;
 
@@ -476,7 +292,7 @@ namespace BToken.Chaining
 
             header.HeaderPrevious = HeaderTip;
 
-            ValidateHeaderchain(header);
+            ValidateHeaders(header, Height + 1);
 
             UTXOTable.InsertBlockArchive(blockArchive);
 
@@ -547,6 +363,8 @@ namespace BToken.Chaining
         blockArchive.Index = IndexBlockArchiveLoad;
         IndexBlockArchiveLoad += 1;
       }
+
+      blockArchive.IndexBuffer = 0;
     }
 
 
@@ -556,8 +374,23 @@ namespace BToken.Chaining
     Dictionary<int, UTXOTable.BlockArchive> QueueBlockArchives =
       new Dictionary<int, UTXOTable.BlockArchive>();
     
-    void ValidateHeader(Header header)
+    void ValidateHeader(Header header, int height)
     {
+      HeaderLocation checkpoint =
+        Checkpoints.Find(c => c.Height == height);
+      if (
+        checkpoint != null &&
+        !checkpoint.Hash.IsEqual(header.Hash))
+      {
+        throw new ChainException(
+          string.Format(
+            "Header {0} at hight {1} not equal to checkpoint hash {2}",
+            header.Hash.ToHexString(),
+            height,
+            checkpoint.Hash.ToHexString()),
+          ErrorCode.INVALID);
+      }
+
       uint medianTimePast = GetMedianTimePast(
       header.HeaderPrevious);
 
@@ -573,40 +406,9 @@ namespace BToken.Chaining
           ErrorCode.INVALID);
       }
 
-      int hightHighestCheckpoint = Checkpoints.Max(x => x.Height);
-
-      if (
-        hightHighestCheckpoint <= HeightStagedInserted &&
-        HeightStagedInserted <= hightHighestCheckpoint)
-      {
-        throw new ChainException(
-          string.Format(
-            "Attempt to insert header {0} at hight {1} " +
-            "prior to checkpoint hight {2}",
-            header.Hash.ToHexString(),
-            HeightStagedInserted,
-            hightHighestCheckpoint),
-          ErrorCode.INVALID);
-      }
-
-      HeaderLocation checkpoint =
-        Checkpoints.Find(c => c.Height == HeightStagedInserted);
-      if (
-        checkpoint != null &&
-        !checkpoint.Hash.IsEqual(header.Hash))
-      {
-        throw new ChainException(
-          string.Format(
-            "Header {0} at hight {1} not equal to checkpoint hash {2}",
-            header.Hash.ToHexString(),
-            HeightStagedInserted,
-            checkpoint.Hash.ToHexString()),
-          ErrorCode.INVALID);
-      }
-
       uint targetBits = TargetManager.GetNextTargetBits(
           header.HeaderPrevious,
-          (uint)HeightStagedInserted);
+          (uint)height);
 
       if (header.NBits != targetBits)
       {
@@ -683,8 +485,6 @@ namespace BToken.Chaining
       }
     }
 
-
-    
     async Task SynchronizeWithPeer(Peer peer)
     {
     LABEL_StageBranch:
@@ -705,7 +505,7 @@ namespace BToken.Chaining
           }
         }
 
-        StartUTXOSyncSessions();
+        StartUTXOSyncSessions(Branch.HeaderRoot);
 
         await RunUTXOInserter();
 
@@ -742,9 +542,9 @@ namespace BToken.Chaining
       }
     }
 
-    async Task StartUTXOSyncSessions()
+    async Task StartUTXOSyncSessions(Header headerRoot)
     {
-      HeaderLoad = Branch.HeaderRoot;
+      HeaderLoad = headerRoot;
 
       while (true)
       {
@@ -947,19 +747,7 @@ namespace BToken.Chaining
     List<UTXOTable.BlockArchive> BlockArchives =
       new List<UTXOTable.BlockArchive>();
     int CountTXs;
-    DirectoryInfo ArchiveDirectoryBlocks =
-        Directory.CreateDirectory("J:\\BlockArchivePartitioned");
-    DirectoryInfo ArchiveDirectoryBlocksFork =
-        Directory.CreateDirectory("J:\\BlockArchivePartitioned\\fork");
-    DirectoryInfo ArchiveDirectoryHeaders =
-        Directory.CreateDirectory("headerchain");
-    DirectoryInfo ArchiveDirectoryHeadersFork =
-        Directory.CreateDirectory("headerchain\\fork");
-
-    DirectoryInfo DirectoryImage =
-        Directory.CreateDirectory("image");
-    DirectoryInfo DirectoryImageOld =
-        Directory.CreateDirectory("image_old");
+    int SIZE_BLOCK_ARCHIVE = 50000;
 
     void ArchiveBlock(
       UTXOTable.BlockArchive blockArchive, 
@@ -1090,7 +878,6 @@ namespace BToken.Chaining
       UTXOTable.BlockArchive blockArchive = null;
       LoadBlockArchive(ref blockArchive);
 
-      blockArchive.IndexBuffer = 0;
       blockArchive.Buffer = headerBytes;
       
       blockArchive.Parse();
@@ -1319,7 +1106,152 @@ namespace BToken.Chaining
     }
 
 
+    const int COUNT_PEERS_MAX = 4;
+    TcpListener TcpListener = new TcpListener(IPAddress.Any, Port);
+    const UInt16 Port = 8333;
+    object LOCK_Peers = new object();
+    List<Peer> Peers = new List<Peer>();
+
+    async Task StartPeerGenerator()
+    {
+      bool flagCreatePeer;
+
+      while (true)
+      {
+        flagCreatePeer = false;
+
+        lock (LOCK_Peers)
+        {
+          Peers.RemoveAll(p => p.IsStatusDisposed());
+
+          if (Peers.Count < COUNT_PEERS_MAX)
+          {
+            flagCreatePeer = true;
+          }
+        }
+
+        if (flagCreatePeer)
+        {
+          var peer = await CreatePeer();
+
+          lock (LOCK_Peers)
+          {
+            Peers.Add(peer);
+          }
+
+          continue;
+        }
+
+        await Task.Delay(2000);
+      }
+    }
+
+    async Task<Peer> CreatePeer()
+    {
+      while (true)
+      {
+        IPAddress iPAddress;
+
+        try
+        {
+          iPAddress = await GetNodeAddress();
+        }
+        catch
+        {
+          Console.WriteLine(
+            "Cannot create peer: No node address available.");
+          Task.Delay(10000);
+          continue;
+        }
+
+        var peer = new Peer(this);
+
+        try
+        {
+          await peer.Connect(iPAddress, Port);
+        }
+        catch
+        {
+          peer.Dispose();
+
+          Task.Delay(10000);
+          continue;
+        }
+
+        peer.Run();
+
+        return peer;
+      }
+    }
+
+    static async Task<IPAddress> GetNodeAddress()
+    {
+      while (true)
+      {
+        lock (LOCK_IsAddressPoolLocked)
+        {
+          if (!IsAddressPoolLocked)
+          {
+            IsAddressPoolLocked = true;
+            break;
+          }
+        }
+
+        await Task.Delay(1000);
+      }
+
+      if (SeedNodeIPAddresses.Count == 0)
+      {
+        DownloadIPAddressesFromSeeds();
+      }
+
+      int randomIndex = RandomGenerator
+        .Next(SeedNodeIPAddresses.Count);
+
+      IPAddress iPAddress = SeedNodeIPAddresses[randomIndex];
+      SeedNodeIPAddresses.Remove(iPAddress);
+
+      lock (LOCK_IsAddressPoolLocked)
+      {
+        IsAddressPoolLocked = false;
+      }
+
+      return iPAddress;
+    }
+
+    static readonly object LOCK_IsAddressPoolLocked = new object();
+    static bool IsAddressPoolLocked;
+    static List<IPAddress> SeedNodeIPAddresses = new List<IPAddress>();
+    static Random RandomGenerator = new Random();
+
+
+    static void DownloadIPAddressesFromSeeds()
+    {
+      string[] dnsSeeds = File.ReadAllLines(@"..\..\DNSSeeds");
+
+      foreach (string dnsSeed in dnsSeeds)
+      {
+        if (dnsSeed.Substring(0, 2) == "//")
+        {
+          continue;
+        }
+
+        IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
+
+        SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList
+          .Where(a => a.AddressFamily == AddressFamily.InterNetwork));
+      }
+
+      if (SeedNodeIPAddresses.Count == 0)
+      {
+        throw new ChainException("No seed addresses downloaded.");
+      }
+    }
+
+
+
     const int PEERS_COUNT_INBOUND = 8;
+
     async Task StartPeerInboundListener()
     {
       TcpListener.Start(PEERS_COUNT_INBOUND);

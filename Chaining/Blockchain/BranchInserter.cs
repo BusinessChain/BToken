@@ -28,10 +28,7 @@ namespace BToken.Chaining
       
 
 
-
-      public BranchInserter()
-      { }
-
+      
       public BranchInserter(Blockchain blockchain)
       {
         Blockchain = blockchain;
@@ -44,7 +41,7 @@ namespace BToken.Chaining
         HeaderTip = null;
         HeaderRoot = null;
         Difficulty = Blockchain.Difficulty;
-        Height = Blockchain.HeightStagedInserted;
+        Height = Blockchain.Height;
 
         DifficultyInserted = Difficulty;
         HeightInserted = Height;
@@ -52,17 +49,6 @@ namespace BToken.Chaining
         IsFork = false;
 
         HeaderDifficulties.Clear();
-      }
-
-
-      public void ReportBlockInsertion(Header header)
-      {
-        HeaderTipInserted = header;
-
-        HeightInserted += 1;
-
-        DifficultyInserted += 
-          HeaderDifficulties[HeightInserted];
       }
       
       public async Task Stage(Peer peer)
@@ -114,11 +100,28 @@ namespace BToken.Chaining
             }
 
             HeightAncestor = Height;
+
+            int hightHighestCheckpoint = 
+              Blockchain.Checkpoints.Max(x => x.Height);
+
+            if (Height < hightHighestCheckpoint)
+            {
+              throw new ChainException(
+                string.Format(
+                  "Attempt to insert header {0} at hight {1} " +
+                  "prior to checkpoint hight {2}",
+                  archiveBlock.HeaderRoot.Hash.ToHexString(),
+                  Height + 1,
+                  hightHighestCheckpoint),
+                ErrorCode.INVALID);
+            }
           }
 
           archiveBlock.HeaderRoot.HeaderPrevious = HeaderTip;
 
-          Blockchain.ValidateHeaders(archiveBlock.HeaderRoot);
+          Blockchain.ValidateHeaders(
+            archiveBlock.HeaderRoot, 
+            Height + 1);
 
           HeaderRoot = archiveBlock.HeaderRoot;
           
@@ -139,7 +142,9 @@ namespace BToken.Chaining
 
             archiveBlock.HeaderRoot.HeaderPrevious = HeaderTip;
 
-            Blockchain.ValidateHeaders(archiveBlock.HeaderRoot);
+            Blockchain.ValidateHeaders(
+              archiveBlock.HeaderRoot,
+              Height + 1);
 
             HeaderTip.HeaderNext = archiveBlock.HeaderRoot;
 

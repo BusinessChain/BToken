@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Security.Cryptography;
 
 
@@ -25,6 +24,7 @@ namespace BToken
     public double Difficulty;
 
 
+
     public Header(
       byte[] headerHash,
       uint version,
@@ -32,7 +32,6 @@ namespace BToken
       byte[] merkleRootHash,
       uint unixTimeSeconds,
       uint nBits,
-      double difficulty,
       uint nonce)
     {
       Hash = headerHash;
@@ -41,8 +40,10 @@ namespace BToken
       MerkleRoot = merkleRootHash;
       UnixTimeSeconds = unixTimeSeconds;
       NBits = nBits;
-      Difficulty = difficulty;
       Nonce = nonce;
+
+      Difficulty = MAX_TARGET /
+        (double)UInt256.ParseFromCompact(nBits);
     }
 
     public byte[] GetBytes()
@@ -115,10 +116,7 @@ namespace BToken
             hash.ToHexString(),
             nBits));
       }
-
-      double difficulty =
-        MAX_TARGET / (double)UInt256.ParseFromCompact(nBits);
-
+      
       uint nonce = BitConverter.ToUInt32(buffer, index);
       index += 4;
 
@@ -129,7 +127,6 @@ namespace BToken
         merkleRootHash, 
         unixTimeSeconds, 
         nBits,
-        difficulty,
         nonce);
     }
     

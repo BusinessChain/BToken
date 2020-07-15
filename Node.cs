@@ -16,6 +16,8 @@ namespace BToken
     Wallet Wallet;
 
     BitcoinGenesisBlock GenesisBlock = new BitcoinGenesisBlock();
+
+    // Convert to dictionary
     List<HeaderLocation> Checkpoints = new List<HeaderLocation>()
       {
         new HeaderLocation(height : 11111, hash : "0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d"),

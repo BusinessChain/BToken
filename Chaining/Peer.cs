@@ -1,13 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using System.Security.Cryptography;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
 
@@ -62,7 +59,6 @@ namespace BToken.Chaining
 
       public enum ConnectionType { OUTBOUND, INBOUND };
       ConnectionType Connection;
-      const UInt16 Port = 8333;
       const UInt32 ProtocolVersion = 70015;
       TcpClient TcpClient;
       MessageStreamer NetworkMessageStreamer;
@@ -562,7 +558,10 @@ namespace BToken.Chaining
                 return false;
 
               case "block":
-                blockArchive.Parse(startIndex, header.MerkleRoot);
+                blockArchive.Parse(
+                  startIndex, 
+                  header.MerkleRoot);
+
                 startIndex = IndexMessageBuffer;
                 header = header.HeaderNext;
                 break;

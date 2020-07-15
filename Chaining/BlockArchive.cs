@@ -34,7 +34,7 @@ namespace BToken.Chaining
       public int IndexBuffer;
       public int StopIndexBuffer;
 
-      public bool IsValid;
+      public bool IsInvalid;
       public bool IsCancellationBatch;
 
       public Stopwatch StopwatchStaging = new Stopwatch();
