@@ -355,6 +355,14 @@ namespace BToken.Chaining
             tXHash);
         }
       }
+
+
+      public void IncrementHeaderRoot()
+      {
+        Difficulty -= HeaderRoot.Difficulty;
+        Height -= 1;
+        HeaderRoot = HeaderRoot.HeaderNext;
+      }
     }
   }
 }

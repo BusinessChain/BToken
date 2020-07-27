@@ -12,19 +12,19 @@ namespace BToken.Chaining
     {
       Blockchain Blockchain;
 
+      public Header HeaderAncestor;
+      public int HeightAncestor;
+
+      public Header HeaderRoot;
       public Header HeaderTip;
       public double Difficulty;
       public int Height;
 
-      public Header HeaderRoot;
-      public int HeightAncestor;
-           
+      public Header HeaderTipInserted;
       public double DifficultyInserted;
       public int HeightInserted;
+
       public bool IsFork;
-      public Header HeaderTipInserted;
-      public List<double> HeaderDifficulties = 
-        new List<double>();
       
 
 
@@ -32,162 +32,65 @@ namespace BToken.Chaining
       public BranchInserter(Blockchain blockchain)
       {
         Blockchain = blockchain;
-
-        Initialize();
       } 
+      
 
-      public void Initialize()
+
+      public void GoToHeader(Header headerRoot)
       {
-        HeaderTip = null;
-        HeaderRoot = null;
-        Difficulty = Blockchain.Difficulty;
-        Height = Blockchain.Height;
 
+        do
+        {
+          Difficulty -= HeaderTip.Difficulty;
+          Height -= 1;
+          HeaderTip = HeaderTip.HeaderPrevious;
+
+        } while (!headerRoot.HashPrevious
+        .IsEqual(HeaderTip.Hash));
+      }
+
+      public void IncrementHeaderTip()
+      {
+        HeaderTip = HeaderTip.HeaderNext;
+        Difficulty += HeaderTip.Difficulty;
+        Height += 1;
+      }
+
+      public void Initialize(
+        Header headerAncestor)
+      {
+        HeaderAncestor = Blockchain.HeaderTip;
+        HeightAncestor = Blockchain.Height;
+        Difficulty = Blockchain.Difficulty;
+
+        while (headerAncestor != HeaderAncestor)
+        {
+          Difficulty -= HeaderAncestor.Difficulty;
+          HeightAncestor -= 1;
+          HeaderAncestor = HeaderAncestor.HeaderPrevious;
+        }
+
+        IsFork = HeightAncestor < Blockchain.Height;
+
+        Height = HeightAncestor;
+
+        HeaderTipInserted = HeaderAncestor;
         DifficultyInserted = Difficulty;
         HeightInserted = Height;
-
-        IsFork = false;
-
-        HeaderDifficulties.Clear();
-      }
-      
-      public async Task Stage(Peer peer)
-      {
-        HeaderTip = Blockchain.HeaderTip;
-        Height = Blockchain.Height;
-        Difficulty = Blockchain.Difficulty;
-
-        List<byte[]> locator = GetLocatorHashes(HeaderTip);
-
-        try
-        {
-          UTXOTable.BlockArchive archiveBlock =
-            await peer.GetHeaders(locator);
-
-          if (archiveBlock.Height == 0)
-          {
-            return;
-          }
-
-          IsFork = !archiveBlock.HeaderRoot.HashPrevious
-            .IsEqual(HeaderTip.Hash);
-
-          if (IsFork)
-          {
-            while (!archiveBlock.HeaderRoot.HashPrevious
-              .IsEqual(HeaderTip.Hash))
-            {
-              Difficulty -= HeaderTip.Difficulty;
-              Height -= 1;
-              HeaderTip = HeaderTip.HeaderPrevious;
-            }
-
-            while (archiveBlock.HeaderRoot.Hash.IsEqual(
-                HeaderTip.HeaderNext.Hash))
-            {
-              HeaderTip = HeaderTip.HeaderNext;
-              Difficulty += HeaderTip.Difficulty;
-              Height += 1;
-
-              archiveBlock.Difficulty -= archiveBlock.HeaderRoot.Difficulty;
-              archiveBlock.Height -= 1;
-              archiveBlock.HeaderRoot = archiveBlock.HeaderRoot.HeaderNext;
-
-              if (archiveBlock.HeaderRoot == null)
-              {
-                archiveBlock = await peer.GetHeaders(locator);
-              }
-            }
-
-            HeightAncestor = Height;
-
-            int hightHighestCheckpoint = 
-              Blockchain.Checkpoints.Max(x => x.Height);
-
-            if (Height < hightHighestCheckpoint)
-            {
-              throw new ChainException(
-                string.Format(
-                  "Attempt to insert header {0} at hight {1} " +
-                  "prior to checkpoint hight {2}",
-                  archiveBlock.HeaderRoot.Hash.ToHexString(),
-                  Height + 1,
-                  hightHighestCheckpoint),
-                ErrorCode.INVALID);
-            }
-          }
-
-          archiveBlock.HeaderRoot.HeaderPrevious = HeaderTip;
-
-          Blockchain.ValidateHeaders(
-            archiveBlock.HeaderRoot, 
-            Height + 1);
-
-          HeaderRoot = archiveBlock.HeaderRoot;
-          
-          HeaderTipInserted = HeaderTip;
-          DifficultyInserted = Difficulty;
-          HeightInserted = Height;
-
-          StageHeaders(archiveBlock);
-
-          while (true)
-          {
-            archiveBlock = await peer.GetHeaders(locator);
-
-            if (archiveBlock.Height == 0)
-            {
-              return;
-            }
-
-            archiveBlock.HeaderRoot.HeaderPrevious = HeaderTip;
-
-            Blockchain.ValidateHeaders(
-              archiveBlock.HeaderRoot,
-              Height + 1);
-
-            HeaderTip.HeaderNext = archiveBlock.HeaderRoot;
-
-            StageHeaders(archiveBlock);
-          }
-        }
-        catch (Exception ex)
-        {
-          peer.Dispose(string.Format(
-            "Exception {0} when syncing: \n{1}",
-            ex.GetType(),
-            ex.Message));
-        }
       }
 
-      public bool ContinueSkipDuplicates(
-        UTXOTable.BlockArchive archiveBlock)
+      public void StageHeaders(Header header)
       {
-        while (archiveBlock.HeaderRoot.Hash.IsEqual(
-            HeaderTip.HeaderNext.Hash))
+        do
         {
-          HeaderTip = HeaderTip.HeaderNext;
-          Difficulty += HeaderTip.Difficulty;
+          Blockchain.ValidateHeader(header, Height + 1);
+
+          HeaderTip = header;
+          Difficulty += header.Difficulty;
           Height += 1;
 
-          archiveBlock.Difficulty -= archiveBlock.HeaderRoot.Difficulty;
-          archiveBlock.Height -= 1;
-          archiveBlock.HeaderRoot = archiveBlock.HeaderRoot.HeaderNext;
-
-          if (archiveBlock.HeaderRoot.HeaderNext == null)
-          {
-            return true;
-          }
-        }
-
-        return false;
-      }
-
-      void StageHeaders(UTXOTable.BlockArchive archiveBlock)
-      {
-        HeaderTip = archiveBlock.HeaderTip;
-        Difficulty += archiveBlock.Difficulty;
-        Height += archiveBlock.Height;
+          header = header.HeaderNext;
+        } while (header != null);
       }
 
       public void InsertHeaders(UTXOTable.BlockArchive archiveBlock)
@@ -205,95 +108,6 @@ namespace BToken.Chaining
         Blockchain.Difficulty = DifficultyInserted;
         Blockchain.Height = HeightInserted;
       }
-
-      void ValidateHeader(Header header)
-      {
-        uint medianTimePast = GetMedianTimePast(
-        header.HeaderPrevious);
-
-        if (header.UnixTimeSeconds < medianTimePast)
-        {
-          throw new ChainException(
-            string.Format(
-              "Header {0} with unix time {1} " +
-              "is older than median time past {2}.",
-              header.Hash.ToHexString(),
-              DateTimeOffset.FromUnixTimeSeconds(header.UnixTimeSeconds),
-              DateTimeOffset.FromUnixTimeSeconds(medianTimePast)),
-            ErrorCode.INVALID);
-        }
-
-        int hightHighestCheckpoint = Blockchain
-          .Checkpoints.Max(x => x.Height);
-
-        if (
-          hightHighestCheckpoint <= Height &&
-          Height <= hightHighestCheckpoint)
-        {
-          throw new ChainException(
-            string.Format(
-              "Attempt to insert header {0} at hight {1} " +
-              "prior to checkpoint hight {2}",
-              header.Hash.ToHexString(),
-              Height,
-              hightHighestCheckpoint),
-            ErrorCode.INVALID);
-        }
-
-        HeaderLocation checkpoint =
-          Blockchain.Checkpoints.Find(c => c.Height == Height);
-        if (
-          checkpoint != null &&
-          !checkpoint.Hash.IsEqual(header.Hash))
-        {
-          throw new ChainException(
-            string.Format(
-              "Header {0} at hight {1} not equal to checkpoint hash {2}",
-              header.Hash.ToHexString(),
-              Height,
-              checkpoint.Hash.ToHexString()),
-            ErrorCode.INVALID);
-        }
-
-        uint targetBits = TargetManager.GetNextTargetBits(
-            header.HeaderPrevious,
-            (uint)Height);
-
-        if (header.NBits != targetBits)
-        {
-          throw new ChainException(
-            string.Format(
-              "In header {0} nBits {1} not equal to target nBits {2}",
-              header.Hash.ToHexString(),
-              header.NBits,
-              targetBits),
-            ErrorCode.INVALID);
-        }
-      }
-
-      static uint GetMedianTimePast(Header header)
-      {
-        const int MEDIAN_TIME_PAST = 11;
-
-        List<uint> timestampsPast = new List<uint>();
-
-        int depth = 0;
-        while (depth < MEDIAN_TIME_PAST)
-        {
-          timestampsPast.Add(header.UnixTimeSeconds);
-
-          if (header.HeaderPrevious == null)
-          { break; }
-
-          header = header.HeaderPrevious;
-          depth++;
-        }
-
-        timestampsPast.Sort();
-
-        return timestampsPast[timestampsPast.Count / 2];
-      }
-
     }
   }
 }

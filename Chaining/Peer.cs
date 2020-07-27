@@ -433,12 +433,13 @@ namespace BToken.Chaining
           new HeadersMessage(headers));
       }
 
-      
-      public async Task<UTXOTable.BlockArchive> GetHeaders(
-        List<byte[]> locator)
-      {
-        var blockArchive = new UTXOTable.BlockArchive();
 
+
+      UTXOTable.BlockArchive BlockArchive = new UTXOTable.BlockArchive();
+
+      public async Task<Header> GetHeaders(
+        List<Header> locator)
+      {
         await NetworkMessageStreamer.Write(
           new GetHeadersMessage(locator, ProtocolVersion));
 
@@ -454,12 +455,11 @@ namespace BToken.Chaining
         while (true)
         {
           NetworkMessage networkMessage = await MessageResponseBuffer
-            .ReceiveAsync(cancellation.Token)
-            .ConfigureAwait(false);
+            .ReceiveAsync(cancellation.Token);
 
           if (networkMessage.Command == "headers")
           {
-            blockArchive.Buffer = networkMessage.Payload;
+            BlockArchive.Buffer = networkMessage.Payload;
             break;
           }
         }
@@ -469,42 +469,20 @@ namespace BToken.Chaining
           IsExpectingMessageResponse = false;
         }
 
-        blockArchive.Parse();
+        BlockArchive.Parse();
 
-        locator = locator.ToList();
-
-        int indexLocatorAncestor = locator.FindIndex(
-          h => h.IsEqual(
-            blockArchive.HeaderRoot.HashPrevious));
-
-        if (indexLocatorAncestor == -1)
+        Header headerLocatorAncestor = locator.Find(h =>
+       h.Hash.IsEqual(BlockArchive.HeaderRoot.HashPrevious));
+        
+        if (headerLocatorAncestor == null)
         {
           throw new ChainException(
-            "In getHeaders message received headers do not root in locator.");
+            "GetHeaders does not connect to locator.");
         }
 
-        locator = locator
-          .Skip(indexLocatorAncestor)
-          .Take(2)
-          .ToList();
+        BlockArchive.HeaderRoot.HeaderPrevious = headerLocatorAncestor;
 
-        if (locator.Count > 1)
-        {
-          Header header = blockArchive.HeaderRoot;
-
-          do
-          {
-            if (header.Hash.IsEqual(locator[1]))
-            {
-              throw new ChainException(
-                "Received headers do root in locator more than once.");
-            }
-
-            header = header.HeaderNext;
-          } while (header != null);
-        }
-
-        return blockArchive;
+        return BlockArchive.HeaderRoot;
       }
 
 
@@ -621,25 +599,6 @@ namespace BToken.Chaining
 
 
       public List<byte[]> HeaderDuplicates = new List<byte[]>();
-
-      public void ReportDuplicateHeader(byte[] headerHash)
-      {
-        if (HeaderDuplicates.Any(h => h.IsEqual(headerHash)))
-        {
-          throw new ChainException(
-            string.Format(
-              "Received duplicate header {0} more than once.",
-              headerHash.ToHexString()));
-        }
-
-        HeaderDuplicates.Add(headerHash);
-        if (HeaderDuplicates.Count > 3)
-        {
-          HeaderDuplicates = HeaderDuplicates.Skip(1)
-            .ToList();
-        }
-
-      }
 
       public bool IsInbound()
       {

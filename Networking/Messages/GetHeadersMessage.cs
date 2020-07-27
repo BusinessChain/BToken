@@ -8,15 +8,15 @@ namespace BToken.Chaining
 {
   class GetHeadersMessage : NetworkMessage
   {
-    public IEnumerable<byte[]> HeaderLocator = 
-      new List<byte[]>();
+    public IEnumerable<Header> HeaderLocator = 
+      new List<Header>();
 
     public byte[] StopHash = new byte[32];
 
 
 
     public GetHeadersMessage(
-      IEnumerable<byte[]> headerLocator,
+      IEnumerable<Header> headerLocator,
       uint versionProtocol)
       : base("getheaders")
     {
@@ -32,7 +32,8 @@ namespace BToken.Chaining
 
       for (int i = 0; i < HeaderLocator.Count(); i++)
       {
-        payload.AddRange(HeaderLocator.ElementAt(i));
+        payload.AddRange(
+          HeaderLocator.ElementAt(i).GetBytes());
       }
 
       payload.AddRange(StopHash);
