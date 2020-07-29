@@ -94,7 +94,7 @@ namespace BToken.Chaining
 
     LABEL_LoadImagePath:
 
-      if(!TryLoadImagePath(pathImage) || 
+      if(!TryLoadImage(pathImage) || 
         (Height > heightMax && heightMax > 0))
       {
         Initialize();
@@ -119,7 +119,7 @@ namespace BToken.Chaining
       UTXOTable.Clear();
     }
 
-    bool TryLoadImagePath(string pathImage)
+    bool TryLoadImage(string pathImage)
     {
       try
       {
@@ -508,22 +508,22 @@ namespace BToken.Chaining
 
       try
       {
-        Header headerRoot = await peer.GetHeaders(locator);
+        Header header = await peer.GetHeaders(locator);
                
-        if (headerRoot == null)
+        if (header == null)
         {
           return;
         }
-
-        Header headerAncestor = headerRoot.HeaderPrevious;
-
-        if (headerAncestor != HeaderTip)
+        
+        if (header.HeaderPrevious != HeaderTip)
         {
+          Header headerAncestor = header.HeaderPrevious;
+
           Header stopHeader = locator[
             locator.IndexOf(headerAncestor) + 1];
 
           while (headerAncestor.HeaderNext.Hash
-            .IsEqual(headerRoot.Hash))
+            .IsEqual(header.Hash))
           {
             headerAncestor = headerAncestor.HeaderNext;
 
@@ -533,16 +533,16 @@ namespace BToken.Chaining
                 "Received headers do root in locator more than once.");
             }
 
-            headerRoot = headerRoot.HeaderNext;
+            header = header.HeaderNext;
 
-            if (headerRoot == null)
+            if (header == null)
             {
               locator.Clear();
               locator.Add(headerAncestor);
 
-              headerRoot = await peer.GetHeaders(locator);
+              header = await peer.GetHeaders(locator);
 
-              if (headerRoot.HeaderPrevious != headerAncestor)
+              if (header.HeaderPrevious != headerAncestor)
               {
                 throw new ChainException(
                   "Received headers out of order.");
@@ -551,23 +551,23 @@ namespace BToken.Chaining
           }
         }
 
-        Branch.Initialize(headerRoot.HeaderPrevious);
-        
-        Branch.StageHeaders(headerRoot);
+        Branch.Initialize(header);
+                
+        Branch.StageHeaders(ref header);
         
         while (true)
         {
           locator.Clear();
-          locator.Add(Branch.HeaderTip);
+          locator.Add(header);
 
-          headerRoot = await peer.GetHeaders(locator);
+          header = await peer.GetHeaders(locator);
 
-          if (headerRoot == null)
+          if (header == null)
           {
             break;
           }
           
-          Branch.StageHeaders(headerRoot);
+          Branch.StageHeaders(ref header);
         }
       }
       catch (Exception ex)
@@ -592,25 +592,18 @@ namespace BToken.Chaining
           }
         }
 
-        Synchronize(Branch.HeaderRoot);
-        
-        if (Branch.DifficultyInserted > Difficulty)
-        {
-          Branch.Commit();
-        }
-        else
-        {
-          if(Branch.IsFork)
-          {
-            LoadImage();
+        await Synchronize(Branch.HeaderRoot);
 
-            ArchiveDirectoryHeadersFork.EnumerateFiles().ToList()
-              .ForEach(f => f.Delete());
-            ArchiveDirectoryBlocksFork.EnumerateFiles().ToList()
-              .ForEach(f => f.Delete());
+        if (Branch.IsFork)
+        {
+          LoadImage();
 
-            await LoadBlocks();
-          }
+          ArchiveDirectoryHeadersFork.EnumerateFiles().ToList()
+            .ForEach(f => f.Delete());
+          ArchiveDirectoryBlocksFork.EnumerateFiles().ToList()
+            .ForEach(f => f.Delete());
+
+          await LoadBlocks();
 
           peer.Dispose();
         }
@@ -628,7 +621,7 @@ namespace BToken.Chaining
         }
       }
     }
-
+    
     List<Header> GetLocator()
     {
       Header header = HeaderTip;
@@ -636,7 +629,7 @@ namespace BToken.Chaining
       int height = Height;
       int heightCheckpoint = Checkpoints.Last().Height;
       int depth = 0;
-      int nextLocationDepth = 1;
+      int nextLocationDepth = 0;
 
       while (height > heightCheckpoint)
       {
@@ -702,6 +695,8 @@ namespace BToken.Chaining
           {
             Branch.IsFork = false;
 
+            Branch.Commit();
+
             ArchiveDirectoryHeadersFork.EnumerateFiles().ToList()
             .ForEach(f => f.CopyTo(
               ArchiveDirectoryHeaders.FullName + f.Name,
@@ -727,7 +722,7 @@ namespace BToken.Chaining
 
       await taskUTXOSyncSessions;
     }
-
+    
     async Task StartUTXOSyncSessions(Header headerRoot)
     {      
       HeaderLoad = headerRoot;

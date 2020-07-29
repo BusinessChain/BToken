@@ -12,11 +12,9 @@ namespace BToken.Chaining
     {
       Blockchain Blockchain;
 
-      public Header HeaderAncestor;
       public int HeightAncestor;
 
       public Header HeaderRoot;
-      public Header HeaderTip;
       public double Difficulty;
       public int Height;
 
@@ -34,63 +32,48 @@ namespace BToken.Chaining
         Blockchain = blockchain;
       } 
       
-
-
-      public void GoToHeader(Header headerRoot)
-      {
-
-        do
-        {
-          Difficulty -= HeaderTip.Difficulty;
-          Height -= 1;
-          HeaderTip = HeaderTip.HeaderPrevious;
-
-        } while (!headerRoot.HashPrevious
-        .IsEqual(HeaderTip.Hash));
-      }
-
-      public void IncrementHeaderTip()
-      {
-        HeaderTip = HeaderTip.HeaderNext;
-        Difficulty += HeaderTip.Difficulty;
-        Height += 1;
-      }
-
+      
       public void Initialize(
-        Header headerAncestor)
+        Header headerRoot)
       {
-        HeaderAncestor = Blockchain.HeaderTip;
+        HeaderRoot = headerRoot;
         HeightAncestor = Blockchain.Height;
         Difficulty = Blockchain.Difficulty;
 
-        while (headerAncestor != HeaderAncestor)
+        Header headerAncestor = Blockchain.HeaderTip;
+
+        while (headerRoot.HeaderPrevious != headerAncestor)
         {
-          Difficulty -= HeaderAncestor.Difficulty;
+          Difficulty -= headerAncestor.Difficulty;
           HeightAncestor -= 1;
-          HeaderAncestor = HeaderAncestor.HeaderPrevious;
+          headerAncestor = headerAncestor.HeaderPrevious;
         }
 
         IsFork = HeightAncestor < Blockchain.Height;
 
         Height = HeightAncestor;
 
-        HeaderTipInserted = HeaderAncestor;
+        HeaderTipInserted = headerAncestor;
         DifficultyInserted = Difficulty;
-        HeightInserted = Height;
+        HeightInserted = HeightAncestor;
       }
 
-      public void StageHeaders(Header header)
+      public void StageHeaders(ref Header header)
       {
-        do
+        while (true)
         {
           Blockchain.ValidateHeader(header, Height + 1);
-
-          HeaderTip = header;
+          
           Difficulty += header.Difficulty;
           Height += 1;
 
+          if(header.HeaderNext == null)
+          {
+            return;
+          }
+
           header = header.HeaderNext;
-        } while (header != null);
+        }
       }
 
       public void InsertHeaders(UTXOTable.BlockArchive archiveBlock)
