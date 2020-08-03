@@ -17,12 +17,6 @@ namespace BToken.Chaining
       public Header HeaderRoot;
       public double Difficulty;
       public int Height;
-
-      public Header HeaderTipInserted;
-      public double DifficultyInserted;
-      public int HeightInserted;
-
-      public bool IsFork;
       
 
 
@@ -33,29 +27,22 @@ namespace BToken.Chaining
       } 
       
       
-      public void Initialize(
-        Header headerRoot)
+      public void Initialize(Header headerRoot)
       {
         HeaderRoot = headerRoot;
         HeightAncestor = Blockchain.Height;
         Difficulty = Blockchain.Difficulty;
 
-        Header headerAncestor = Blockchain.HeaderTip;
+        Header header = Blockchain.HeaderTip;
 
-        while (headerRoot.HeaderPrevious != headerAncestor)
+        while (headerRoot.HeaderPrevious != header)
         {
-          Difficulty -= headerAncestor.Difficulty;
+          Difficulty -= header.Difficulty;
           HeightAncestor -= 1;
-          headerAncestor = headerAncestor.HeaderPrevious;
+          header = header.HeaderPrevious;
         }
 
-        IsFork = HeightAncestor < Blockchain.Height;
-
         Height = HeightAncestor;
-
-        HeaderTipInserted = headerAncestor;
-        DifficultyInserted = Difficulty;
-        HeightInserted = HeightAncestor;
       }
 
       public void StageHeaders(ref Header header)
@@ -74,22 +61,6 @@ namespace BToken.Chaining
 
           header = header.HeaderNext;
         }
-      }
-
-      public void InsertHeaders(UTXOTable.BlockArchive archiveBlock)
-      {
-        HeaderTipInserted = archiveBlock.HeaderTip;
-        DifficultyInserted += archiveBlock.Difficulty;
-        HeightInserted += archiveBlock.Height;
-      }
-      
-      public void Commit()
-      {
-        HeaderRoot.HeaderPrevious.HeaderNext = HeaderRoot;
-
-        Blockchain.HeaderTip = HeaderTipInserted;
-        Blockchain.Difficulty = DifficultyInserted;
-        Blockchain.Height = HeightInserted;
       }
     }
   }

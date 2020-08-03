@@ -423,8 +423,7 @@ namespace BToken.Chaining
             ex.Message));
         }
       }
-
-           
+                 
 
 
       public async Task SendHeaders(List<Header> headers)
@@ -436,9 +435,13 @@ namespace BToken.Chaining
 
 
       UTXOTable.BlockArchive BlockArchive = new UTXOTable.BlockArchive();
-
+      public async Task<Header> GetHeaders(Header locator)
+      {
+        return await GetHeaders(
+          new List<Header>() { locator });
+      }
       public async Task<Header> GetHeaders(
-        List<Header> locator)
+      List<Header> locator)
       {
         await NetworkMessageStreamer.Write(
           new GetHeadersMessage(locator, ProtocolVersion));
@@ -473,7 +476,7 @@ namespace BToken.Chaining
 
         Header headerLocatorAncestor = locator.Find(h =>
        h.Hash.IsEqual(BlockArchive.HeaderRoot.HashPrevious));
-        
+
         if (headerLocatorAncestor == null)
         {
           throw new ChainException(
@@ -483,6 +486,43 @@ namespace BToken.Chaining
         BlockArchive.HeaderRoot.HeaderPrevious = headerLocatorAncestor;
 
         return BlockArchive.HeaderRoot;
+      }
+
+      public async Task<Header> SkipDuplicates(Header header, List<Header> locator)
+      {
+        Header headerAncestor = header.HeaderPrevious;
+
+        Header stopHeader = locator[
+          locator.IndexOf(headerAncestor) + 1];
+
+        while (headerAncestor.HeaderNext.Hash
+          .IsEqual(header.Hash))
+        {
+          headerAncestor = headerAncestor.HeaderNext;
+
+          if (headerAncestor == stopHeader)
+          {
+            throw new ChainException(
+              "Received headers do root in locator more than once.");
+          }
+
+          if (header.HeaderNext != null)
+          {
+            header = header.HeaderNext;
+          }
+          else
+          {
+            header = await GetHeaders(header);
+
+            if (header.HeaderPrevious != headerAncestor)
+            {
+              throw new ChainException(
+                "Received headers out of order.");
+            }
+          }
+        }
+
+        return header;
       }
 
 

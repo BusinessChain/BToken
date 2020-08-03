@@ -124,12 +124,11 @@ namespace BToken.Chaining
       try
       {
         var blockArchive = new UTXOTable.BlockArchive();
-
-        string pathHeaderchain = Path.Combine(
-          pathImage,
-          "ImageHeaderchain");
-
-        blockArchive.Buffer = File.ReadAllBytes(pathHeaderchain);
+        
+        blockArchive.Buffer = File.ReadAllBytes(
+          Path.Combine(
+            pathImage,
+            "ImageHeaderchain"));
 
         blockArchive.Parse();
 
@@ -500,6 +499,51 @@ namespace BToken.Chaining
       }
     }
 
+    void ValidateHeaderchain(Header headerRoot, int heightRoot)
+    {
+      while (true)
+      {
+        ValidateHeader(headerRoot, heightRoot);
+
+        if (headerRoot.HeaderNext == null)
+        {
+          break;
+        }
+
+        headerRoot = headerRoot.HeaderNext;
+      }
+    }
+
+    async Task BuildHeaderchain(Header header, Peer peer)
+    {
+      int height = Height + 1;
+
+      while (true)
+      {
+        ValidateHeader(header, height);
+
+        if (header.HeaderNext != null)
+        {
+          header = header.HeaderNext;
+        }
+        else
+        {
+          Header headerRoot = await peer.GetHeaders(header);
+
+          if (headerRoot == null)
+          {
+            return;
+          }
+
+          header.HeaderNext = headerRoot;
+          headerRoot.HeaderPrevious = header;
+          header = headerRoot;
+        }
+
+        height += 1;
+      }
+    }
+
     async Task SynchronizeWithPeer(Peer peer)
     {
     LABEL_StageBranch:
@@ -515,58 +559,28 @@ namespace BToken.Chaining
           return;
         }
         
-        if (header.HeaderPrevious != HeaderTip)
+        if(header.HeaderPrevious == HeaderTip)
         {
-          Header headerAncestor = header.HeaderPrevious;
-
-          Header stopHeader = locator[
-            locator.IndexOf(headerAncestor) + 1];
-
-          while (headerAncestor.HeaderNext.Hash
-            .IsEqual(header.Hash))
-          {
-            headerAncestor = headerAncestor.HeaderNext;
-
-            if (headerAncestor == stopHeader)
-            {
-              throw new ChainException(
-                "Received headers do root in locator more than once.");
-            }
-
-            header = header.HeaderNext;
-
-            if (header == null)
-            {
-              locator.Clear();
-              locator.Add(headerAncestor);
-
-              header = await peer.GetHeaders(locator);
-
-              if (header.HeaderPrevious != headerAncestor)
-              {
-                throw new ChainException(
-                  "Received headers out of order.");
-              }
-            }
-          }
+          await BuildHeaderchain(header, peer);
+          await Synchronize(header);
+          return;
         }
 
+        header = await peer.SkipDuplicates(header, locator);
+
         Branch.Initialize(header);
-                
+
         Branch.StageHeaders(ref header);
-        
+
         while (true)
         {
-          locator.Clear();
-          locator.Add(header);
-
-          header = await peer.GetHeaders(locator);
+          header = await peer.GetHeaders(header);
 
           if (header == null)
           {
             break;
           }
-          
+
           Branch.StageHeaders(ref header);
         }
       }
@@ -580,32 +594,24 @@ namespace BToken.Chaining
 
       if (Branch.Difficulty > Difficulty)
       {
-        if(Branch.IsFork)
+        double difficultyOld = Difficulty;
+
+        LoadImage(Branch.HeightAncestor);
+
+        await LoadBlocks(Branch.HeaderRoot.HashPrevious);
+
+        if (Height != Branch.HeightAncestor)
         {
-          LoadImage(Branch.HeightAncestor);
-
-          await LoadBlocks(Branch.HeaderRoot.HashPrevious);
-
-          if (Height != Branch.HeightAncestor)
-          {
-            goto LABEL_StageBranch;
-          }
+          goto LABEL_StageBranch;
         }
 
         await Synchronize(Branch.HeaderRoot);
 
-        if (Branch.IsFork)
+        if (!(Difficulty > difficultyOld))
         {
-          LoadImage();
+          LoadImage(Branch.HeightAncestor);
 
-          ArchiveDirectoryHeadersFork.EnumerateFiles().ToList()
-            .ForEach(f => f.Delete());
-          ArchiveDirectoryBlocksFork.EnumerateFiles().ToList()
-            .ForEach(f => f.Delete());
-
-          await LoadBlocks();
-
-          peer.Dispose();
+          await LoadBlocks(Branch.HeaderRoot.HashPrevious);
         }
       }
       else if (Branch.Difficulty < Difficulty)
@@ -687,28 +693,8 @@ namespace BToken.Chaining
           break;
         }
 
-        Branch.InsertHeaders(blockArchive);
-
-        if (Branch.IsFork)
-        {
-          if (Branch.DifficultyInserted > Difficulty)
-          {
-            Branch.IsFork = false;
-
-            Branch.Commit();
-
-            ArchiveDirectoryHeadersFork.EnumerateFiles().ToList()
-            .ForEach(f => f.CopyTo(
-              ArchiveDirectoryHeaders.FullName + f.Name,
-              true));
-
-            ArchiveDirectoryBlocksFork.EnumerateFiles().ToList()
-            .ForEach(f => f.CopyTo(
-              ArchiveDirectoryBlocks.FullName + f.Name,
-              true));
-          }
-        }
-
+        InsertHeaders(blockArchive);
+        
         ArchiveBlock(blockArchive, UTXOIMAGE_INTERVAL_SYNC);
 
         if (blockArchive.IsCancellationBatch)
@@ -874,12 +860,8 @@ namespace BToken.Chaining
 
       if (CountTXs >= SIZE_BLOCK_ARCHIVE)
       {
-        string directoryName = Branch.IsFork ?
-          ArchiveDirectoryBlocksFork.FullName :
-          ArchiveDirectoryBlocks.FullName;
-
         string pathFileArchive = Path.Combine(
-          directoryName,
+          ArchiveDirectoryBlocks.FullName,
           IndexBlockArchive.ToString());
 
         var fileBlockArchive = new FileStream(
@@ -892,8 +874,7 @@ namespace BToken.Chaining
         BlockArchives.ForEach(
           c => WriteToFile(fileBlockArchive, c.Buffer));
         
-        if (!Branch.IsFork &&
-          IndexBlockArchive % intervalImage == 0)
+        if (IndexBlockArchive % intervalImage == 0)
         {
           CreateImage();
         }

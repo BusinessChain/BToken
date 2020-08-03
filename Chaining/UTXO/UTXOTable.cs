@@ -10,8 +10,6 @@ namespace BToken.Chaining
 {
   public partial class UTXOTable
   {
-    byte[] GenesisBlockBytes;
-
     const int HASH_BYTE_SIZE = 32;
     const int COUNT_BATCHINDEX_BITS = 16;
     const int COUNT_COLLISION_BITS_PER_TABLE = 2;
@@ -21,7 +19,7 @@ namespace BToken.Chaining
     const int LENGTH_BITS_ULONG = 64;
 
     const int COUNT_NON_OUTPUT_BITS =
-      COUNT_BATCHINDEX_BITS +
+      COUNT_BATCHINDEX_BITS + 
       COUNT_COLLISION_BITS_PER_TABLE * 3;
 
     UTXOIndexCompressed[] Tables;
@@ -39,8 +37,6 @@ namespace BToken.Chaining
         TableUInt32,
         TableULong64,
         TableUInt32Array };
-
-      GenesisBlockBytes = genesisBlockBytes;
     }
 
 
