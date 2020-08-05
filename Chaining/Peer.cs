@@ -513,12 +513,6 @@ namespace BToken.Chaining
           else
           {
             header = await GetHeaders(header);
-
-            if (header.HeaderPrevious != headerAncestor)
-            {
-              throw new ChainException(
-                "Received headers out of order.");
-            }
           }
         }
 

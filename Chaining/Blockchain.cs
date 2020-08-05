@@ -29,7 +29,6 @@ namespace BToken.Chaining
     const int UTXOIMAGE_INTERVAL_SYNC = 500;
     const int UTXOIMAGE_INTERVAL_LISTEN = 50;
     
-    BranchInserter Branch;
 
     readonly object LOCK_IsBlockchainLocked = new object();
     bool IsBlockchainLocked;
@@ -61,9 +60,7 @@ namespace BToken.Chaining
       HeaderTip = headerGenesis;
 
       Checkpoints = checkpoints;
-
-      Branch = new BranchInserter(this);
-      
+            
       HeaderIndex = new Dictionary<int, List<Header>>();
       UpdateHeaderIndex(headerGenesis);
       
@@ -215,7 +212,7 @@ namespace BToken.Chaining
     async Task LoadBlocks(byte[] stopHashLoading)
     {
       IndexBlockArchiveLoad = IndexBlockArchive + 1;
-      byte[] HashStopLoading = stopHashLoading;
+      HashStopLoading = stopHashLoading;
 
       var loaderTasks = new Task[COUNT_INDEXER_TASKS];
 
@@ -499,28 +496,19 @@ namespace BToken.Chaining
       }
     }
 
-    void ValidateHeaderchain(Header headerRoot, int heightRoot)
+    async Task<double> BuildHeaderchain(
+      Header header, 
+      int height, 
+      Peer peer)
     {
-      while (true)
-      {
-        ValidateHeader(headerRoot, heightRoot);
-
-        if (headerRoot.HeaderNext == null)
-        {
-          break;
-        }
-
-        headerRoot = headerRoot.HeaderNext;
-      }
-    }
-
-    async Task BuildHeaderchain(Header header, Peer peer)
-    {
-      int height = Height + 1;
+      double difficulty = 0.0;
 
       while (true)
       {
         ValidateHeader(header, height);
+
+        difficulty += header.Difficulty;
+        height += 1;
 
         if (header.HeaderNext != null)
         {
@@ -528,19 +516,16 @@ namespace BToken.Chaining
         }
         else
         {
-          Header headerRoot = await peer.GetHeaders(header);
+          Header headerNext = await peer.GetHeaders(header);
 
-          if (headerRoot == null)
+          if (headerNext == null)
           {
-            return;
+            return difficulty;
           }
 
-          header.HeaderNext = headerRoot;
-          headerRoot.HeaderPrevious = header;
-          header = headerRoot;
+          header.HeaderNext = headerNext;
+          header = headerNext;
         }
-
-        height += 1;
       }
     }
 
@@ -552,36 +537,77 @@ namespace BToken.Chaining
 
       try
       {
-        Header header = await peer.GetHeaders(locator);
+        Header headerRoot = await peer.GetHeaders(locator);
                
-        if (header == null)
+        if (headerRoot == null)
         {
           return;
         }
         
-        if(header.HeaderPrevious == HeaderTip)
+        if(headerRoot.HeaderPrevious == HeaderTip)
         {
-          await BuildHeaderchain(header, peer);
-          await Synchronize(header);
+          await BuildHeaderchain(
+            headerRoot,
+            Height + 1,
+            peer);
+
+          await Synchronize(headerRoot);
           return;
         }
 
-        header = await peer.SkipDuplicates(header, locator);
+        headerRoot = await peer.SkipDuplicates(headerRoot, locator);
 
-        Branch.Initialize(header);
+        int heightAncestor = Height - 1;
+        double difficultyAncestor = Difficulty - HeaderTip.Difficulty;
 
-        Branch.StageHeaders(ref header);
+        Header header = HeaderTip.HeaderPrevious;
 
-        while (true)
+        while (header != headerRoot.HeaderPrevious)
         {
-          header = await peer.GetHeaders(header);
+          difficultyAncestor -= header.Difficulty;
+          heightAncestor -= 1;
+          header = header.HeaderPrevious;
+        }
 
-          if (header == null)
+        double difficultyFork = difficultyAncestor + 
+          await BuildHeaderchain(
+            headerRoot,
+            heightAncestor + 1,
+            peer);
+
+        if (difficultyFork > Difficulty)
+        {
+          double difficultyOld = Difficulty;
+
+          LoadImage(heightAncestor);
+
+          await LoadBlocks(headerRoot.HashPrevious);
+
+          if (Height != heightAncestor)
           {
-            break;
+            goto LABEL_StageBranch;
           }
 
-          Branch.StageHeaders(ref header);
+          await Synchronize(headerRoot);
+
+          if (!(Difficulty > difficultyOld))
+          {
+            LoadImage(heightAncestor);
+
+            await LoadBlocks(headerRoot.HashPrevious);
+          }
+        }
+        else if (difficultyFork < Difficulty)
+        {
+          if (peer.IsInbound())
+          {
+            peer.Dispose();
+          }
+          else
+          {
+            peer.SendHeaders(
+              new List<Header>() { HeaderTip });
+          }
         }
       }
       catch (Exception ex)
@@ -590,41 +616,6 @@ namespace BToken.Chaining
           "Exception {0} when syncing: \n{1}",
           ex.GetType(),
           ex.Message));
-      }
-
-      if (Branch.Difficulty > Difficulty)
-      {
-        double difficultyOld = Difficulty;
-
-        LoadImage(Branch.HeightAncestor);
-
-        await LoadBlocks(Branch.HeaderRoot.HashPrevious);
-
-        if (Height != Branch.HeightAncestor)
-        {
-          goto LABEL_StageBranch;
-        }
-
-        await Synchronize(Branch.HeaderRoot);
-
-        if (!(Difficulty > difficultyOld))
-        {
-          LoadImage(Branch.HeightAncestor);
-
-          await LoadBlocks(Branch.HeaderRoot.HashPrevious);
-        }
-      }
-      else if (Branch.Difficulty < Difficulty)
-      {
-        if (peer.IsInbound())
-        {
-          peer.Dispose();
-        }
-        else
-        {
-          peer.SendHeaders(
-            new List<Header>() { HeaderTip });
-        }
       }
     }
     

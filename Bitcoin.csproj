@@ -79,7 +79,6 @@
     <Compile Include="Chaining\Blockchain.cs" />
     <Compile Include="Chaining\Peer.cs" />
     <Compile Include="Chaining\BlockArchive.cs" />
-    <Compile Include="Chaining\Blockchain\BranchInserter.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexULong64.cs" />
