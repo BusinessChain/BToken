@@ -82,7 +82,7 @@ namespace BToken.Chaining
       }
       public override bool TryGetValueInPrimaryTable(int primaryKey)
       {
-        PrimaryKey = primaryKey; // cache
+        PrimaryKey = primaryKey;
         return PrimaryTable.TryGetValue(primaryKey, out UTXOPrimary);
       }
       public override bool HasCollision(int cacheAddress)

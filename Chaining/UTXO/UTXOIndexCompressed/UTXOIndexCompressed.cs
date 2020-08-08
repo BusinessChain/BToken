@@ -59,6 +59,8 @@ namespace BToken.Chaining
           {
             RemoveCollision(input.TXIDOutput);
 
+            backupTable.Add();
+
             if (tablePrimary.AreCollisionBitsFull())
             {
               if (HasCountCollisions(

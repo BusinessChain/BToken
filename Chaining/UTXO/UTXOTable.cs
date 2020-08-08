@@ -38,8 +38,79 @@ namespace BToken.Chaining
         TableULong64,
         TableUInt32Array };
     }
+             
+
+    public void LoadImage(string pathImageRoot)
+    {
+      string pathUTXOImage = Path.Combine(pathImageRoot, "UTXOImage");
+
+      for (int c = 0; c < Tables.Length; c += 1)
+      {
+        Tables[c].Load(pathUTXOImage);
+      }
+
+      Console.WriteLine(
+        "Load UTXO Image from {0}",
+        pathUTXOImage);
+    }
+
+    public void Clear()
+    {
+      for (int c = 0; c < Tables.Length; c += 1)
+      {
+        Tables[c].Clear();
+      }
+    }
 
 
+    public void InsertBlockArchive(BlockArchive blockArchive)
+    {
+      blockArchive.StopwatchStaging.Restart();
+
+      try
+      {
+        InsertUTXOsUInt32(
+          blockArchive.UTXOsUInt32,
+          blockArchive.Index);
+
+        InsertUTXOsULong64(
+          blockArchive.UTXOsULong64,
+          blockArchive.Index);
+
+        InsertUTXOsUInt32Array(
+          blockArchive.UTXOsUInt32Array,
+          blockArchive.Index);
+
+        InsertSpendUTXOs(blockArchive.Inputs);
+      }
+      catch
+      {
+        if (!TrySpendUTXOsUInt32(
+          blockArchive.UTXOsUInt32,
+          blockArchive.Index))
+        {
+          return;
+        }
+
+        if (!TrySpendUTXOsULong64(
+          blockArchive.UTXOsULong64,
+          blockArchive.Index))
+        {
+          return;
+        }
+
+        if (!TrySpendUTXOsUInt32Array(
+          blockArchive.UTXOsUInt32Array,
+          blockArchive.Index))
+        {
+          return;
+        }
+      }
+
+      blockArchive.StopwatchStaging.Stop();
+
+      LogInsertion(blockArchive);
+    }
 
     void InsertUTXO(
       byte[] uTXOKey,
@@ -126,104 +197,96 @@ namespace BToken.Chaining
 
     void InsertSpendUTXOs(List<TXInput> inputs)
     {
-      int i = 0;
-    LoopSpendUTXOs:
-      while (i < inputs.Count)
+      try
       {
-        for (int c = 0; c < Tables.Length; c += 1)
+        int i = 0;
+
+      LoopSpendUTXOs:
+
+        while (i < inputs.Count)
         {
-          UTXOIndexCompressed tablePrimary = Tables[c];
-
-          if (tablePrimary.TryGetValueInPrimaryTable(inputs[i].PrimaryKeyTXIDOutput))
+          for (int c = 0; c < Tables.Length; c += 1)
           {
-            UTXOIndexCompressed tableCollision = null;
-            for (int cc = 0; cc < Tables.Length; cc += 1)
-            {
-              if (tablePrimary.HasCollision(cc))
-              {
-                tableCollision = Tables[cc];
+            UTXOIndexCompressed tablePrimary = Tables[c];
 
-                if (tableCollision.TrySpendCollision(inputs[i], tablePrimary))
+            if (tablePrimary.TryGetValueInPrimaryTable(
+              inputs[i].PrimaryKeyTXIDOutput))
+            {
+              UTXOIndexCompressed tableCollision = null;
+              for (int cc = 0; cc < Tables.Length; cc += 1)
+              {
+                if (tablePrimary.HasCollision(cc))
                 {
-                  i += 1;
-                  goto LoopSpendUTXOs;
+                  tableCollision = Tables[cc];
+
+                  if (tableCollision.TrySpendCollision(inputs[i], tablePrimary))
+                  {
+                    i += 1;
+                    goto LoopSpendUTXOs;
+                  }
                 }
               }
-            }
 
-            tablePrimary.SpendPrimaryUTXO(inputs[i], out bool allOutputsSpent);
+              tablePrimary.SpendPrimaryUTXO(
+                inputs[i], 
+                out bool allOutputsSpent);
 
-            if (allOutputsSpent)
-            {
-              tablePrimary.RemovePrimary();
-
-              if (tableCollision != null)
+              if (allOutputsSpent)
               {
-                tableCollision.ResolveCollision(tablePrimary);
-              }
-            }
+                tablePrimary.RemovePrimary();
 
-            i += 1;
-            goto LoopSpendUTXOs;
+                backupTable.Add();
+
+                if (tableCollision != null)
+                {
+                  tableCollision.ResolveCollision(tablePrimary);
+                }
+              }
+
+              i += 1;
+              goto LoopSpendUTXOs;
+            }
           }
+
+          throw new ChainException(
+            string.Format(
+              "Referenced TX {0} not found in UTXO table.",
+              inputs[i].TXIDOutput.ToHexString()),
+            ErrorCode.INVALID);
+        }
+      }
+      catch (Exception ex)
+      {
+        if(/*utxo in backup table*/)
+        {
+          ReInsertUTXOsUInt32()
+        }
+        else
+        {
+          // reset spent bit in utxo
         }
 
-        throw new ChainException(
-          string.Format(
-            "Referenced TX {0} not found in UTXO table.",
-            inputs[i].TXIDOutput.ToHexString()),
-          ErrorCode.INVALID);
+        throw ex;
       }
     }
 
-        
-    public void LoadImage(string pathImageRoot)
+    bool TrySpendUTXOsUInt32(
+      KeyValuePair<byte[], uint>[] uTXOsUInt32,
+      int indexArchive)
     {
-      string pathUTXOImage = Path.Combine(pathImageRoot, "UTXOImage");
+      int i = 0;
 
-      for (int c = 0; c < Tables.Length; c += 1)
+      while (i < uTXOsUInt32.Length)
       {
-        Tables[c].Load(pathUTXOImage);
-      }
+        TableUInt32.RemovePrimary();
 
-      Console.WriteLine(
-        "Load UTXO Image from {0}",
-        pathUTXOImage);
-    }
+        InsertUTXO(
+          uTXOsUInt32[i].Key,
+          TableUInt32);
 
-    public void Clear()
-    {
-      for (int c = 0; c < Tables.Length; c += 1)
-      {
-        Tables[c].Clear();
+        i += 1;
       }
     }
-
-
-    public void InsertBlockArchive(
-      BlockArchive blockArchive)
-    {
-      blockArchive.StopwatchStaging.Start();
-
-      InsertUTXOsUInt32(
-        blockArchive.UTXOsUInt32,
-        blockArchive.Index);
-
-      InsertUTXOsULong64(
-        blockArchive.UTXOsULong64, 
-        blockArchive.Index);
-
-      InsertUTXOsUInt32Array(
-        blockArchive.UTXOsUInt32Array,
-        blockArchive.Index);
-
-      InsertSpendUTXOs(blockArchive.Inputs);
-
-      blockArchive.StopwatchStaging.Stop();
-
-      LogInsertion(blockArchive);
-    }
-
 
     public void CreateImage(string path)
     {

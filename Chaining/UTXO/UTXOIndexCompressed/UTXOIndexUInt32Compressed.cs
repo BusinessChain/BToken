@@ -109,14 +109,16 @@ namespace BToken.Chaining
       }
       public override bool AreCollisionBitsFull()
       {
-        return (MasksCollisionBitsFull[Address] & UTXOPrimary) == MasksCollisionBitsFull[Address];
+        return (MasksCollisionBitsFull[Address] & UTXOPrimary) == 
+          MasksCollisionBitsFull[Address];
       }
       public override void ResolveCollision(UTXOIndexCompressed tablePrimary)
       {
         byte indexTablePartition = (byte)tablePrimary.PrimaryKey;
 
         KeyValuePair<byte[], uint> collisionItem =
-          CollisionTables[indexTablePartition].First(k => BitConverter.ToInt32(k.Key, 0) == tablePrimary.PrimaryKey);
+          CollisionTables[indexTablePartition]
+          .First(k => BitConverter.ToInt32(k.Key, 0) == tablePrimary.PrimaryKey);
 
         CollisionTables[indexTablePartition].Remove(collisionItem.Key);
 
