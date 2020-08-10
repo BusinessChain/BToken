@@ -233,7 +233,14 @@ namespace BToken.Chaining
           byteList.AddRange(VarInt.GetBytes(byteLength));
 
           byte[] byteArray = new byte[byteLength];
-          Buffer.BlockCopy(keyValuePair.Value, 0, byteArray, 0, byteArray.Length);
+
+          Buffer.BlockCopy(
+            keyValuePair.Value, 
+            0, 
+            byteArray, 
+            0, 
+            byteArray.Length);
+
           byteList.AddRange(byteArray);
         }
 

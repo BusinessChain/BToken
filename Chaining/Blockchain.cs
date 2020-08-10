@@ -338,6 +338,11 @@ namespace BToken.Chaining
         }
         catch (ChainException)
         {
+          File.Delete(
+            Path.Combine(
+              ArchiveDirectoryBlocks.Name,
+              blockArchive.Index.ToString()));
+
           IsBlockLoadingCompleted = true;
           return;
         }
@@ -490,6 +495,8 @@ namespace BToken.Chaining
 
         await SynchronizeWithPeer(peer);
 
+        await SynchronizeWithPeer(peer);
+
         peer.IsSynchronized = true;
 
         IsBlockchainLocked = false;
@@ -538,20 +545,36 @@ namespace BToken.Chaining
       try
       {
         Header headerRoot = await peer.GetHeaders(locator);
-               
+
         if (headerRoot == null)
         {
           return;
         }
-        
-        if(headerRoot.HeaderPrevious == HeaderTip)
+
+        if (headerRoot.HeaderPrevious == HeaderTip)
         {
           await BuildHeaderchain(
             headerRoot,
             Height + 1,
             peer);
 
-          await Synchronize(headerRoot);
+          try
+          {
+            await Synchronize(headerRoot);
+          }
+          catch(Exception ex)
+          {
+            peer.Dispose(string.Format(
+              "Exception {0} when syncing with peer {1}: \n{2}",
+              ex.GetType(),
+              peer.GetIdentification(),
+              ex.Message));
+
+            LoadImage();
+
+            await LoadBlocks();
+          }
+
           return;
         }
 
@@ -569,7 +592,7 @@ namespace BToken.Chaining
           header = header.HeaderPrevious;
         }
 
-        double difficultyFork = difficultyAncestor + 
+        double difficultyFork = difficultyAncestor +
           await BuildHeaderchain(
             headerRoot,
             heightAncestor + 1,
@@ -588,7 +611,24 @@ namespace BToken.Chaining
             goto LABEL_StageBranch;
           }
 
-          await Synchronize(headerRoot);
+          try
+          {
+            await Synchronize(headerRoot);
+          }
+          catch(Exception ex)
+          {
+            peer.Dispose(string.Format(
+              "Exception {0} when syncing with peer {1}: \n{2}",
+              ex.GetType(),
+              peer.GetIdentification(),
+              ex.Message));
+
+            LoadImage(heightAncestor);
+
+            await LoadBlocks(headerRoot.HashPrevious);
+
+            return;
+          }
 
           if (!(Difficulty > difficultyOld))
           {
@@ -613,8 +653,9 @@ namespace BToken.Chaining
       catch (Exception ex)
       {
         peer.Dispose(string.Format(
-          "Exception {0} when syncing: \n{1}",
+          "Exception {0} when syncing with peer {1}: \n{2}",
           ex.GetType(),
+          peer.GetIdentification(),
           ex.Message));
       }
     }
@@ -655,6 +696,9 @@ namespace BToken.Chaining
 
     async Task Synchronize(Header headerRoot)
     {
+      // Throws an exception if something with peer fails.
+      // If archiving throws exception, log and go into limbo
+
       Task taskUTXOSyncSessions = 
         StartUTXOSyncSessions(headerRoot);
 
@@ -669,20 +713,7 @@ namespace BToken.Chaining
 
         blockArchive.Index = IndexBlockArchive;
 
-        try
-        {
-          UTXOTable.InsertBlockArchive(blockArchive);
-        }
-        catch (ChainException ex)
-        {
-          Console.WriteLine(
-            "Exception when inserting block {1}: \n{2}",
-            blockArchive.HeaderTip.Hash.ToHexString(),
-            ex.Message);
-
-          peer.Dispose();
-          break;
-        }
+        UTXOTable.InsertBlockArchive(blockArchive);
 
         InsertHeaders(blockArchive);
         
