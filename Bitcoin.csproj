@@ -93,7 +93,6 @@
     <Compile Include="Chaining\TXWitness.cs" />
     <Compile Include="Chaining\GenesisBlock.cs" />
     <Compile Include="Chaining\Wallet\Wallet.cs" />
-    <Compile Include="Chaining\Blockchain\HeaderLocation.cs" />
     <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />

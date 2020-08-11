@@ -17,13 +17,11 @@ namespace BToken
 
     BitcoinGenesisBlock GenesisBlock = new BitcoinGenesisBlock();
 
-    // Convert to dictionary
-    List<HeaderLocation> Checkpoints = new List<HeaderLocation>()
+    Dictionary<int, byte[]> Checkpoints = new Dictionary<int, byte[]>()
       {
-        new HeaderLocation(height : 11111, hash : "0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d"),
-        new HeaderLocation(height : 250000, hash : "000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214"),
+        { 11111, "0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d".ToBinary() },
+        { 250000, "000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214".ToBinary() }
       };
-
 
 
     public Node()

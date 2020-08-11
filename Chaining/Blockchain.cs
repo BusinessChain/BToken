@@ -15,7 +15,7 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    List<HeaderLocation> Checkpoints;
+    Dictionary<int, byte[]> Checkpoints;
 
     Header HeaderGenesis;
     Header HeaderTip;
@@ -54,7 +54,7 @@ namespace BToken.Chaining
     public Blockchain(
       Header headerGenesis,
       byte[] genesisBlockBytes,
-      List<HeaderLocation> checkpoints)
+      Dictionary<int, byte[]> checkpoints)
     {
       HeaderGenesis = headerGenesis;
       HeaderTip = headerGenesis;
@@ -68,12 +68,11 @@ namespace BToken.Chaining
     }
         
 
+
     public async Task Start()
     {
-      LoadImage();
-
-      await LoadBlocks();
-
+      await LoadImage();
+      
       StartPeerGenerator();
 
       StartPeerSynchronizer();
@@ -81,11 +80,14 @@ namespace BToken.Chaining
       StartPeerInboundListener();
     }
 
-    void LoadImage()
+
+
+    async Task LoadImage()
     {
-      LoadImage(0);
+      await LoadImage(0, new byte[32]);
     }
-    void LoadImage(int heightMax)
+
+    async Task LoadImage(int heightMax, byte[] stopHashLoading)
     {
       string pathImage = DirectoryImage.Name;
 
@@ -102,6 +104,8 @@ namespace BToken.Chaining
           goto LABEL_LoadImagePath;
         }
       }
+       
+      await LoadBlocks(stopHashLoading);
     }
 
     void Initialize()
@@ -164,6 +168,25 @@ namespace BToken.Chaining
     }
 
 
+
+    byte[] HashStopLoading;
+    const int COUNT_INDEXER_TASKS = 8;
+    
+    async Task LoadBlocks(byte[] stopHashLoading)
+    {
+      IndexBlockArchiveLoad = IndexBlockArchive + 1;
+      HashStopLoading = stopHashLoading;
+
+      var loaderTasks = new Task[COUNT_INDEXER_TASKS];
+
+      Parallel.For(
+        0,
+        COUNT_INDEXER_TASKS,
+        i => loaderTasks[i] = StartLoader());
+
+      await Task.WhenAll(loaderTasks);
+    }
+
     void LoadMapBlockToArchiveData(byte[] buffer)
     {
       int index = 0;
@@ -201,28 +224,6 @@ namespace BToken.Chaining
       Height += archiveBlock.Height;
     }
 
-
-    byte[] HashStopLoading;
-    const int COUNT_INDEXER_TASKS = 8;
-
-    async Task LoadBlocks()
-    {
-      await LoadBlocks(new byte[32]);
-    }
-    async Task LoadBlocks(byte[] stopHashLoading)
-    {
-      IndexBlockArchiveLoad = IndexBlockArchive + 1;
-      HashStopLoading = stopHashLoading;
-
-      var loaderTasks = new Task[COUNT_INDEXER_TASKS];
-
-      Parallel.For(
-        0,
-        COUNT_INDEXER_TASKS,
-        i => loaderTasks[i] = StartLoader());
-
-      await Task.WhenAll(loaderTasks);
-    }
 
     async Task StartLoader()
     {
@@ -392,18 +393,16 @@ namespace BToken.Chaining
     
     void ValidateHeader(Header header, int height)
     {
-      HeaderLocation checkpoint =
-        Checkpoints.Find(c => c.Height == height);
       if (
-        checkpoint != null &&
-        !checkpoint.Hash.IsEqual(header.Hash))
+        Checkpoints.TryGetValue(height, out byte[] hashCheckpoint) &&
+        !hashCheckpoint.IsEqual(header.Hash))
       {
         throw new ChainException(
           string.Format(
             "Header {0} at hight {1} not equal to checkpoint hash {2}",
             header.Hash.ToHexString(),
             height,
-            checkpoint.Hash.ToHexString()),
+            hashCheckpoint.ToHexString()),
           ErrorCode.INVALID);
       }
 
@@ -495,8 +494,6 @@ namespace BToken.Chaining
 
         await SynchronizeWithPeer(peer);
 
-        await SynchronizeWithPeer(peer);
-
         peer.IsSynchronized = true;
 
         IsBlockchainLocked = false;
@@ -570,9 +567,7 @@ namespace BToken.Chaining
               peer.GetIdentification(),
               ex.Message));
 
-            LoadImage();
-
-            await LoadBlocks();
+            await LoadImage();
           }
 
           return;
@@ -602,9 +597,9 @@ namespace BToken.Chaining
         {
           double difficultyOld = Difficulty;
 
-          LoadImage(heightAncestor);
-
-          await LoadBlocks(headerRoot.HashPrevious);
+          await LoadImage(
+            heightAncestor, 
+            headerRoot.HashPrevious);
 
           if (Height != heightAncestor)
           {
@@ -623,18 +618,18 @@ namespace BToken.Chaining
               peer.GetIdentification(),
               ex.Message));
 
-            LoadImage(heightAncestor);
-
-            await LoadBlocks(headerRoot.HashPrevious);
+            await LoadImage(
+              heightAncestor,
+              headerRoot.HashPrevious);
 
             return;
           }
 
           if (!(Difficulty > difficultyOld))
           {
-            LoadImage(heightAncestor);
-
-            await LoadBlocks(headerRoot.HashPrevious);
+            await LoadImage(
+              heightAncestor,
+              headerRoot.HashPrevious);
           }
         }
         else if (difficultyFork < Difficulty)
@@ -665,7 +660,7 @@ namespace BToken.Chaining
       Header header = HeaderTip;
       var locator = new List<Header>();
       int height = Height;
-      int heightCheckpoint = Checkpoints.Last().Height;
+      int heightCheckpoint = Checkpoints.Keys.Max();
       int depth = 0;
       int nextLocationDepth = 0;
 
@@ -696,9 +691,6 @@ namespace BToken.Chaining
 
     async Task Synchronize(Header headerRoot)
     {
-      // Throws an exception if something with peer fails.
-      // If archiving throws exception, log and go into limbo
-
       Task taskUTXOSyncSessions = 
         StartUTXOSyncSessions(headerRoot);
 
