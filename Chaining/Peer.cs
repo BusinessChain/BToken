@@ -43,10 +43,7 @@ namespace BToken.Chaining
 
       readonly object LOCK_IsExpectingMessageResponse = new object();
       bool IsExpectingMessageResponse;
-
-      byte[] MessageBuffer;
-      int IndexMessageBuffer;
-      
+            
       BufferBlock<NetworkMessage> MessageResponseBuffer =
         new BufferBlock<NetworkMessage>();
       BufferBlock<NetworkMessage> MessageInboundBuffer =
@@ -434,14 +431,16 @@ namespace BToken.Chaining
 
 
 
-      UTXOTable.BlockArchive BlockArchive = new UTXOTable.BlockArchive();
+      UTXOTable.BlockArchive BlockArchive = 
+        new UTXOTable.BlockArchive();
+
       public async Task<Header> GetHeaders(Header locator)
       {
         return await GetHeaders(
           new List<Header>() { locator });
       }
-      public async Task<Header> GetHeaders(
-      List<Header> locator)
+
+      public async Task<Header> GetHeaders(List<Header> locator)
       {
         await NetworkMessageStreamer.Write(
           new GetHeadersMessage(locator, ProtocolVersion));
@@ -474,16 +473,19 @@ namespace BToken.Chaining
 
         BlockArchive.Parse();
 
-        Header headerLocatorAncestor = locator.Find(h =>
-       h.Hash.IsEqual(BlockArchive.HeaderRoot.HashPrevious));
-
-        if (headerLocatorAncestor == null)
+        if(BlockArchive.HeaderRoot != null)
         {
-          throw new ChainException(
-            "GetHeaders does not connect to locator.");
-        }
+          Header headerLocatorAncestor = locator.Find(h =>
+         h.Hash.IsEqual(BlockArchive.HeaderRoot.HashPrevious));
 
-        BlockArchive.HeaderRoot.HeaderPrevious = headerLocatorAncestor;
+          if (headerLocatorAncestor == null)
+          {
+            throw new ChainException(
+              "GetHeaders does not connect to locator.");
+          }
+
+          BlockArchive.HeaderRoot.HeaderPrevious = headerLocatorAncestor;
+        }
 
         return BlockArchive.HeaderRoot;
       }
@@ -529,6 +531,7 @@ namespace BToken.Chaining
         {
           Inventories.Clear();
           Header header = blockArchive.HeaderRoot;
+
           do
           {
             Inventories.Add(new Inventory(
@@ -536,14 +539,23 @@ namespace BToken.Chaining
               header.Hash));
 
             header = header.HeaderNext;
-          } while (header != null);
+          } while (
+            Inventories.Count < CountBlocksLoad &&
+            header.HeaderNext != null);
 
 
           var cancellation = new CancellationTokenSource(
               TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-
+                   
           await NetworkMessageStreamer.Write(
             new GetDataMessage(Inventories));
+
+          Console.WriteLine(
+            "Sent {0} inventories to peer {1} \n {2} -> {3}",
+            Inventories.Count,
+            GetIdentification(),
+            Inventories.First().Hash.ToHexString(),
+            Inventories.Last().Hash.ToHexString());
 
           StopwatchDownload.Restart();
 
@@ -552,12 +564,10 @@ namespace BToken.Chaining
             IsExpectingMessageResponse = true;
           }
 
-          MessageBuffer = blockArchive.Buffer;
-          int startIndex = 0;
-
+          int countBlocksLoad = 0;
           header = blockArchive.HeaderRoot;
 
-          while (header != null)
+          while (countBlocksLoad < CountBlocksLoad)
           {
             NetworkMessage networkMessage = await MessageResponseBuffer
               .ReceiveAsync(cancellation.Token)
@@ -570,16 +580,17 @@ namespace BToken.Chaining
                 return false;
 
               case "block":
-                blockArchive.Parse(
-                  startIndex, 
-                  header.MerkleRoot);
+                blockArchive.Buffer = networkMessage.Payload;
+                
+                blockArchive.Parse(0, header.MerkleRoot);
 
-                startIndex = IndexMessageBuffer;
+                countBlocksLoad += 1;
+
+                Console.WriteLine(
+                  "Received block {0}", 
+                  header.Hash.ToHexString());
+                
                 header = header.HeaderNext;
-                break;
-
-              default:
-                IndexMessageBuffer = startIndex;
                 break;
             }
           }
@@ -680,13 +691,10 @@ namespace BToken.Chaining
 
 
       public void Dispose()
-      {
-        // Der peer soll grundsätzlich nicht
-        // häufig reconnecten, daher führt einfach jedes Disposen
-        // zu Blame.
-        // Blame();
-        
+      {        
         TcpClient.Dispose();
+
+        Console.WriteLine("Dispose peer {0}", GetIdentification());
 
         lock (LOCK_Status)
         {

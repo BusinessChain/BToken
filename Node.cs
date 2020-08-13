@@ -38,7 +38,7 @@ namespace BToken
     {
       Blockchain.Start();
 
-      Wallet.GeneratePublicKey();
+      // Wallet.GeneratePublicKey();
     }
   }
 }

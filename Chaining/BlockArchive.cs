@@ -25,7 +25,7 @@ namespace BToken.Chaining
       public double Difficulty;
       public int Height;
 
-      public int BlockCount;
+      public int CountBlock;
       public int CountTX;
       SHA256 SHA256 = SHA256.Create();
 
@@ -91,6 +91,14 @@ namespace BToken.Chaining
 
         IndexBuffer = 0;
 
+        int countHeaders = VarInt.GetInt32(Buffer, ref IndexBuffer);
+
+        if(countHeaders == 0)
+        {
+          HeaderRoot = null;
+          return;
+        }
+
         Header header = Header.ParseHeader(
           Buffer,
           ref IndexBuffer,
@@ -102,7 +110,7 @@ namespace BToken.Chaining
         HeaderTip = header;
                
         while (
-          HeaderTip.Hash.IsEqual(hashStopLoading) && 
+          !HeaderTip.Hash.IsEqual(hashStopLoading) && 
           IndexBuffer < Buffer.Length)
         {
           header = Header.ParseHeader(
@@ -186,7 +194,7 @@ namespace BToken.Chaining
           throw new ChainException("Payload hash unequal with merkle root.");
         }
 
-        BlockCount += 1;
+        CountBlock += 1;
         CountTX += TXCount;
 
         return;

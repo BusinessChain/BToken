@@ -33,7 +33,7 @@ namespace BToken.Chaining
       for (int i = 0; i < HeaderLocator.Count(); i++)
       {
         payload.AddRange(
-          HeaderLocator.ElementAt(i).GetBytes());
+          HeaderLocator.ElementAt(i).Hash);
       }
 
       payload.AddRange(StopHash);

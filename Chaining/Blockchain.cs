@@ -37,12 +37,6 @@ namespace BToken.Chaining
 
     DirectoryInfo ArchiveDirectoryBlocks =
         Directory.CreateDirectory("J:\\BlockArchivePartitioned");
-    DirectoryInfo ArchiveDirectoryBlocksFork =
-        Directory.CreateDirectory("J:\\BlockArchivePartitioned\\fork");
-    DirectoryInfo ArchiveDirectoryHeaders =
-        Directory.CreateDirectory("headerchain");
-    DirectoryInfo ArchiveDirectoryHeadersFork =
-        Directory.CreateDirectory("headerchain\\fork");
 
     DirectoryInfo DirectoryImage =
         Directory.CreateDirectory("image");
@@ -77,7 +71,7 @@ namespace BToken.Chaining
 
       StartPeerSynchronizer();
 
-      StartPeerInboundListener();
+      // StartPeerInboundListener();
     }
 
 
@@ -492,6 +486,10 @@ namespace BToken.Chaining
           IsBlockchainLocked = true;
         }
 
+        Console.WriteLine(
+          "Synchronize with peer {0}", 
+          peer.GetIdentification());
+
         await SynchronizeWithPeer(peer);
 
         peer.IsSynchronized = true;
@@ -521,11 +519,18 @@ namespace BToken.Chaining
         else
         {
           Header headerNext = await peer.GetHeaders(header);
-
-          if (headerNext == null)
+          
+          if (headerNext == null || height > 4000)
           {
             return difficulty;
           }
+
+          Console.WriteLine(
+            "Height of validated header chain {0}\n" +
+            "Next headerRoot {1} from peer {2}",
+            height - 1,
+            headerNext.Hash.ToHexString(),
+            peer.GetIdentification());
 
           header.HeaderNext = headerNext;
           header = headerNext;
@@ -760,6 +765,10 @@ namespace BToken.Chaining
 
     async Task RunUTXOSyncSession(Peer peer)
     {
+      Console.WriteLine(
+        "Start sync session with peer {0}",
+        peer.GetIdentification());
+
       if (peer.BlockArchives.Count == 0)
       {
         UTXOTable.BlockArchive blockArchive = null;
@@ -778,7 +787,7 @@ namespace BToken.Chaining
 
           do
           {
-            blockArchive.BlockCount += 1;
+            blockArchive.CountBlock += 1;
             blockArchive.Height += 1;
             blockArchive.Difficulty += HeaderLoad.Difficulty;
             blockArchive.HeaderTip = HeaderLoad;
@@ -786,7 +795,7 @@ namespace BToken.Chaining
             HeaderLoad = HeaderLoad.HeaderNext;
           } while (
              HeaderLoad != null &&
-             blockArchive.BlockCount < peer.CountBlocksLoad);
+             blockArchive.CountBlock < peer.CountBlocksLoad);
         }
         
         while (!await peer.TryDownloadBlocks(blockArchive))
@@ -1198,7 +1207,7 @@ namespace BToken.Chaining
     }
 
 
-    const int COUNT_PEERS_MAX = 4;
+    const int COUNT_PEERS_MAX = 1;
     TcpListener TcpListener = new TcpListener(IPAddress.Any, Port);
     const UInt16 Port = 8333;
     object LOCK_Peers = new object();
@@ -1215,7 +1224,7 @@ namespace BToken.Chaining
         lock (LOCK_Peers)
         {
           Peers.RemoveAll(p => p.IsStatusDisposed());
-
+          
           if (Peers.Count < COUNT_PEERS_MAX)
           {
             flagCreatePeer = true;
@@ -1225,6 +1234,9 @@ namespace BToken.Chaining
         if (flagCreatePeer)
         {
           var peer = await CreatePeer();
+
+          Console.WriteLine("created peer {0}", 
+            peer.GetIdentification());
 
           lock (LOCK_Peers)
           {
@@ -1248,10 +1260,12 @@ namespace BToken.Chaining
         {
           iPAddress = await GetNodeAddress();
         }
-        catch
+        catch(Exception ex)
         {
           Console.WriteLine(
-            "Cannot create peer: No node address available.");
+            "Cannot get peer address from dns server: {0}",
+            ex.Message);
+
           Task.Delay(10000);
           continue;
         }
@@ -1319,25 +1333,34 @@ namespace BToken.Chaining
 
     static void DownloadIPAddressesFromSeeds()
     {
-      string[] dnsSeeds = File.ReadAllLines(@"..\..\DNSSeeds");
-
-      foreach (string dnsSeed in dnsSeeds)
+      try
       {
-        if (dnsSeed.Substring(0, 2) == "//")
+        string[] dnsSeeds = File.ReadAllLines(@"..\..\DNSSeeds");
+
+        foreach (string dnsSeed in dnsSeeds)
         {
-          continue;
+          if (dnsSeed.Substring(0, 2) == "//")
+          {
+            continue;
+          }
+
+          IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
+
+          SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList);
+
+          Console.WriteLine("Downloaded {0} dnsSeesd from {1}",
+            iPHostEntry.AddressList.Count(),
+            iPHostEntry.HostName);
         }
-
-        IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
-
-        SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList
-          .Where(a => a.AddressFamily == AddressFamily.InterNetwork));
       }
-
-      if (SeedNodeIPAddresses.Count == 0)
+      catch
       {
-        throw new ChainException("No seed addresses downloaded.");
+        if (SeedNodeIPAddresses.Count == 0)
+        {
+          throw new ChainException("No seed addresses downloaded.");
+        }
       }
+      
     }
 
 
