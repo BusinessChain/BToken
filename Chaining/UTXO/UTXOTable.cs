@@ -65,23 +65,23 @@ namespace BToken.Chaining
 
     public void InsertBlockArchive(BlockArchive blockArchive)
     {
-      blockArchive.StopwatchStaging.Restart();
+      blockArchive.StopwatchInsertion.Restart();
 
       InsertUTXOsUInt32(
-        blockArchive.UTXOsUInt32,
+        blockArchive.TableUInt32,
         blockArchive.Index);
 
       InsertUTXOsULong64(
-        blockArchive.UTXOsULong64,
+        blockArchive.TableULong64,
         blockArchive.Index);
 
       InsertUTXOsUInt32Array(
-        blockArchive.UTXOsUInt32Array,
+        blockArchive.TableUInt32Array,
         blockArchive.Index);
 
       InsertSpendUTXOs(blockArchive.Inputs);
 
-      blockArchive.StopwatchStaging.Stop();
+      blockArchive.StopwatchInsertion.Stop();
 
       LogInsertion(blockArchive);
     }
@@ -110,9 +110,12 @@ namespace BToken.Chaining
     }
 
     void InsertUTXOsUInt32(
-      KeyValuePair<byte[], uint>[] uTXOsUInt32,
+      UTXOIndexUInt32 tableUInt32,
       int indexArchive)
     {
+      KeyValuePair<byte[], uint>[] uTXOsUInt32 = 
+        tableUInt32.Table.ToArray();
+
       int i = 0;
 
       while (i < uTXOsUInt32.Length)
@@ -130,9 +133,12 @@ namespace BToken.Chaining
     }
 
     void InsertUTXOsULong64(
-      KeyValuePair<byte[], ulong>[] uTXOsULong64,
+      UTXOIndexULong64 tableULong64,
       int indexArchive)
     {
+      KeyValuePair<byte[], ulong>[] uTXOsULong64 =
+        tableULong64.Table.ToArray();
+
       int i = 0;
 
       while (i < uTXOsULong64.Length)
@@ -150,9 +156,12 @@ namespace BToken.Chaining
     }
 
     void InsertUTXOsUInt32Array(
-      KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array,
+      UTXOIndexUInt32Array tableUInt32Array,
       int indexArchive)
     {
+      KeyValuePair<byte[], uint[]>[] uTXOsUInt32Array =
+        tableUInt32Array.Table.ToArray();
+
       int i = 0;
 
       while (i < uTXOsUInt32Array.Length)
@@ -240,7 +249,7 @@ namespace BToken.Chaining
     }
 
 
-    void LogInsertion(BlockArchive container)
+    void LogInsertion(BlockArchive blockArchive)
     {
       if (UTCTimeStartMerger == 0)
       {
@@ -248,22 +257,16 @@ namespace BToken.Chaining
       }
 
       int ratioMergeToParse =
-        (int)((float)container.StopwatchStaging.ElapsedTicks * 100
-        / container.StopwatchParse.ElapsedTicks);
+        (int)((float)blockArchive.StopwatchInsertion.ElapsedTicks * 100
+        / blockArchive.StopwatchParse.ElapsedTicks);
 
-      int countOutputs =
-        container.UTXOsUInt32.Length +
-        container.UTXOsULong64.Length +
-        container.UTXOsUInt32Array.Length;
 
       string logCSV = string.Format(
-        "{0},{1},{2},{3},{4},{5},{6},{7},{8}",
-        container.Index,
+        "{0},{1},{2},{3},{4},{5},{6}",
+        blockArchive.Index,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
         ratioMergeToParse,
-        container.Buffer.Length,
-        container.Inputs.Count,
-        countOutputs,
+        blockArchive.Inputs.Count,
         Tables[0].GetMetricsCSV(),
         Tables[1].GetMetricsCSV(),
         Tables[2].GetMetricsCSV());

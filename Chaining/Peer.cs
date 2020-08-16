@@ -38,7 +38,7 @@ namespace BToken.Chaining
       Stopwatch StopwatchDownload = new Stopwatch();
       public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
-      public Stack<UTXOTable.BlockArchive> BlockArchives =
+      public Stack<UTXOTable.BlockArchive> BlockArchivesDownloaded =
         new Stack<UTXOTable.BlockArchive>();
 
       readonly object LOCK_IsExpectingMessageResponse = new object();
@@ -58,7 +58,7 @@ namespace BToken.Chaining
       ConnectionType Connection;
       const UInt32 ProtocolVersion = 70015;
       TcpClient TcpClient;
-      MessageStreamer NetworkMessageStreamer;
+      MessageStream MessageStream;
 
       public Peer(
         TcpClient tcpClient,
@@ -66,7 +66,7 @@ namespace BToken.Chaining
       {
         TcpClient = tcpClient;
 
-        NetworkMessageStreamer = new MessageStreamer(
+        MessageStream = new MessageStream(
           tcpClient.GetStream());
 
         Connection = ConnectionType.INBOUND;
@@ -82,7 +82,7 @@ namespace BToken.Chaining
       {
         PingMessage pingMessage = new PingMessage(networkMessage);
 
-        await NetworkMessageStreamer.Write(
+        await MessageStream.Write(
           new PongMessage(pingMessage.Nonce));
       }
       void ProcessFeeFilterMessage(NetworkMessage networkMessage)
@@ -95,7 +95,7 @@ namespace BToken.Chaining
         AddressMessage addressMessage = new AddressMessage(networkMessage);
       }
       async Task ProcessSendHeadersMessageAsync(NetworkMessage networkMessage)
-        => await NetworkMessageStreamer.Write(new SendHeadersMessage());
+        => await MessageStream.Write(new SendHeadersMessage());
 
 
       public async Task Connect(IPAddress iPAddress, int port)
@@ -106,7 +106,7 @@ namespace BToken.Chaining
           iPAddress,
           port);
 
-        NetworkMessageStreamer = new MessageStreamer(
+        MessageStream = new MessageStream(
           TcpClient.GetStream());
 
         await HandshakeAsync();
@@ -146,7 +146,7 @@ namespace BToken.Chaining
 
         versionMessage.SerializePayload();
 
-        await NetworkMessageStreamer.Write(versionMessage);
+        await MessageStream.Write(versionMessage);
 
         CancellationToken cancellationToken =
           new CancellationTokenSource(TimeSpan.FromSeconds(3))
@@ -157,8 +157,8 @@ namespace BToken.Chaining
 
         while (!verAckReceived || !versionReceived)
         {
-          NetworkMessage messageRemote = await NetworkMessageStreamer
-            .ReadAsync(cancellationToken);
+          NetworkMessage messageRemote = await MessageStream
+            .Read(cancellationToken);
 
           switch (messageRemote.Command)
           {
@@ -208,7 +208,7 @@ namespace BToken.Chaining
 
               if (rejectionReason != "")
               {
-                await NetworkMessageStreamer.Write(
+                await MessageStream.Write(
                   new RejectMessage(
                     "version",
                     RejectMessage.RejectCode.OBSOLETE,
@@ -218,7 +218,7 @@ namespace BToken.Chaining
                   "Remote peer rejected: " + rejectionReason);
               }
 
-              await NetworkMessageStreamer.Write(
+              await MessageStream.Write(
                 new VerAckMessage());
               break;
 
@@ -248,8 +248,8 @@ namespace BToken.Chaining
         {
           while (true)
           {
-            NetworkMessage message = await NetworkMessageStreamer
-              .ReadAsync(default)
+            NetworkMessage message = await MessageStream
+              .Read(default)
               .ConfigureAwait(false);
 
             switch (message.Command)
@@ -425,13 +425,13 @@ namespace BToken.Chaining
 
       public async Task SendHeaders(List<Header> headers)
       {
-        await NetworkMessageStreamer.Write(
+        await MessageStream.Write(
           new HeadersMessage(headers));
       }
 
 
 
-      UTXOTable.BlockArchive BlockArchive = 
+      public UTXOTable.BlockArchive BlockArchive = 
         new UTXOTable.BlockArchive();
 
       public async Task<Header> GetHeaders(Header locator)
@@ -442,7 +442,7 @@ namespace BToken.Chaining
 
       public async Task<Header> GetHeaders(List<Header> locator)
       {
-        await NetworkMessageStreamer.Write(
+        await MessageStream.Write(
           new GetHeadersMessage(locator, ProtocolVersion));
 
         int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
@@ -454,14 +454,15 @@ namespace BToken.Chaining
           IsExpectingMessageResponse = true;
         }
 
+        NetworkMessage networkMessage;
+
         while (true)
         {
-          NetworkMessage networkMessage = await MessageResponseBuffer
+          networkMessage = await MessageResponseBuffer
             .ReceiveAsync(cancellation.Token);
 
           if (networkMessage.Command == "headers")
           {
-            BlockArchive.Buffer = networkMessage.Payload;
             break;
           }
         }
@@ -471,7 +472,7 @@ namespace BToken.Chaining
           IsExpectingMessageResponse = false;
         }
 
-        BlockArchive.Parse();
+        BlockArchive.Parse(networkMessage.Payload);
 
         if(BlockArchive.HeaderRoot != null)
         {
@@ -524,30 +525,30 @@ namespace BToken.Chaining
 
       List<Inventory> Inventories = new List<Inventory>();
 
-      public async Task<bool> TryDownloadBlocks(
-        UTXOTable.BlockArchive blockArchive)
+      public void CreateInventories(ref Header headerLoad)
+      {
+        Inventories.Clear();
+
+        do
+        {
+          Inventories.Add(new Inventory(
+            InventoryType.MSG_BLOCK,
+            headerLoad.Hash));
+
+          headerLoad = headerLoad.HeaderNext;
+        } while (
+           headerLoad != null &&
+           Inventories.Count < CountBlocksLoad);
+      }
+
+      public async Task<bool> TryDownloadBlocks()
       {
         try
         {
-          Inventories.Clear();
-          Header header = blockArchive.HeaderRoot;
-
-          do
-          {
-            Inventories.Add(new Inventory(
-              InventoryType.MSG_BLOCK,
-              header.Hash));
-
-            header = header.HeaderNext;
-          } while (
-            Inventories.Count < CountBlocksLoad &&
-            header.HeaderNext != null);
-
-
           var cancellation = new CancellationTokenSource(
               TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
                    
-          await NetworkMessageStreamer.Write(
+          await MessageStream.Write(
             new GetDataMessage(Inventories));
 
           Console.WriteLine(
@@ -563,11 +564,8 @@ namespace BToken.Chaining
           {
             IsExpectingMessageResponse = true;
           }
-
-          int countBlocksLoad = 0;
-          header = blockArchive.HeaderRoot;
-
-          while (countBlocksLoad < CountBlocksLoad)
+          
+          foreach(Inventory inventory in Inventories)
           {
             NetworkMessage networkMessage = await MessageResponseBuffer
               .ReceiveAsync(cancellation.Token)
@@ -579,19 +577,30 @@ namespace BToken.Chaining
                 SetStatusCompleted();
                 return false;
 
-              case "block":
-                blockArchive.Buffer = networkMessage.Payload;
+              case "block":                
+                BlockArchive.Parse(networkMessage.Payload);
+
+                if(BlockArchive.HeaderRoot == null ||
+                  !inventory.Hash.IsEqual(BlockArchive.HeaderRoot.Hash))
+                {
+                  throw new ChainException(string.Format(
+                    "Requested block {0} but received {1}",
+                    inventory.Hash.ToHexString(),
+                    BlockArchive.HeaderRoot == null ? 
+                    "none" : BlockArchive.HeaderRoot.Hash.ToHexString()));
+                }
                 
-                blockArchive.Parse(0, header.MerkleRoot);
-
-                countBlocksLoad += 1;
-
                 Console.WriteLine(
-                  "Received block {0}", 
-                  header.Hash.ToHexString());
-                
-                header = header.HeaderNext;
+                  "Received block {0}",
+                  inventory.Hash.ToHexString());
                 break;
+
+              default:
+                throw new ChainException(string.Format(
+                  "Requested block {0} but received message {1}",
+                  inventory.Hash.ToHexString(),
+                  networkMessage.Command));
+
             }
           }
 
@@ -605,15 +614,19 @@ namespace BToken.Chaining
         catch (Exception ex)
         {
           Console.WriteLine(
-            "Exception {0} in download of uTXOBatch {1}: \n{2}",
+            "Exception {0} in download of blockArchive {1}: \n{2}",
             ex.GetType().Name,
-            blockArchive.Index,
+            BlockArchive.Index,
             ex.Message);
 
           Dispose();
 
           return false;
         }
+        
+        BlockArchivesDownloaded.Push(BlockArchive);
+
+        CalculateNewCountBlocks();
 
         return true;
       }

@@ -118,18 +118,19 @@ namespace BToken.Chaining
     {
       try
       {
-        var blockArchive = new UTXOTable.BlockArchive();
         
-        blockArchive.Buffer = File.ReadAllBytes(
-          Path.Combine(
-            pathImage,
-            "ImageHeaderchain"));
+        string pathFile = Path.Combine(
+          pathImage,
+          "ImageHeaderchain");
 
-        blockArchive.Parse();
+        var blockArchive = new UTXOTable.BlockArchive();
+
+        blockArchive.Parse(File.ReadAllBytes(pathFile));
 
         Header header = blockArchive.HeaderRoot;
 
-        if (!header.HashPrevious.IsEqual(HeaderGenesis.Hash))
+        if (!header.HashPrevious.IsEqual(
+          HeaderGenesis.Hash))
         {
           throw new ChainException(
             "Header image does not link to genesis header.");
@@ -231,12 +232,13 @@ namespace BToken.Chaining
 
         try
         {
-          blockArchive.Buffer = File.ReadAllBytes(
-          Path.Combine(
-            ArchiveDirectoryBlocks.Name,
-            blockArchive.Index.ToString()));
+          string pathFile = Path.Combine(
+                ArchiveDirectoryBlocks.Name,
+                blockArchive.Index.ToString());
 
-          blockArchive.Parse(HashStopLoading);
+          blockArchive.Parse(
+            File.ReadAllBytes(pathFile),
+            HashStopLoading);
         }
         catch
         {
@@ -689,8 +691,6 @@ namespace BToken.Chaining
 
 
 
-    Header HeaderLoad;
-    bool FlagAllHeadersLoaded;
     BufferBlock<Peer> QueueSynchronizer =
       new BufferBlock<Peer>();
 
@@ -706,7 +706,7 @@ namespace BToken.Chaining
           .ConfigureAwait(false);
 
         UTXOTable.BlockArchive blockArchive =
-          peer.BlockArchives.Pop();
+          peer.BlockArchivesDownloaded.Pop();
 
         blockArchive.Index = IndexBlockArchive;
 
@@ -727,7 +727,12 @@ namespace BToken.Chaining
 
       await taskUTXOSyncSessions;
     }
-    
+
+
+
+    Header HeaderLoad;
+    bool FlagAllHeadersLoaded;
+
     async Task StartUTXOSyncSessions(Header headerRoot)
     {      
       HeaderLoad = headerRoot;
@@ -753,8 +758,7 @@ namespace BToken.Chaining
         peersIdle.Select(p => RunUTXOSyncSession(p))
           .ToList();
 
-        await Task.Delay(1000)
-          .ConfigureAwait(false);
+        await Task.Delay(1000).ConfigureAwait(false);
       }
     }
 
@@ -769,11 +773,14 @@ namespace BToken.Chaining
         "Start sync session with peer {0}",
         peer.GetIdentification());
 
-      if (peer.BlockArchives.Count == 0)
+      if (peer.BlockArchivesDownloaded.Count == 0)
       {
-        UTXOTable.BlockArchive blockArchive = null;
-        LoadBlockArchive(ref blockArchive);
-
+        lock (LOCK_IndexBlockArchiveLoad)
+        {
+          peer.BlockArchive.Index = IndexBlockArchiveLoad;
+          IndexBlockArchiveLoad += 1;
+        }
+        
         lock (LOCK_HeaderLoad)
         {
           if (HeaderLoad == null)
@@ -783,22 +790,10 @@ namespace BToken.Chaining
             return;
           }
 
-          blockArchive.HeaderRoot = HeaderLoad;
-
-          do
-          {
-            blockArchive.CountBlock += 1;
-            blockArchive.Height += 1;
-            blockArchive.Difficulty += HeaderLoad.Difficulty;
-            blockArchive.HeaderTip = HeaderLoad;
-
-            HeaderLoad = HeaderLoad.HeaderNext;
-          } while (
-             HeaderLoad != null &&
-             blockArchive.CountBlock < peer.CountBlocksLoad);
+          peer.CreateInventories(ref HeaderLoad);
         }
         
-        while (!await peer.TryDownloadBlocks(blockArchive))
+        while (!await peer.TryDownloadBlocks())
         {
           while (true)
           {
@@ -813,7 +808,8 @@ namespace BToken.Chaining
                 Peers.Find(p => p.IsStatusIdle()) ??
                 Peers.Find(p =>
                   p.IsStatusAwaitingInsertion() &&
-                  p.BlockArchives.Peek().Index > blockArchive.Index);
+                  p.BlockArchivesDownloaded.Peek().Index > 
+                  peer.BlockArchive.Index);
 
               if (peer != null)
               {
@@ -826,15 +822,11 @@ namespace BToken.Chaining
               .ConfigureAwait(false);
           }
         }
-
-        peer.BlockArchives.Push(blockArchive);
-
-        peer.CalculateNewCountBlocks();
       }
 
       lock (LOCK_BatchIndex)
       {
-        if (peer.BlockArchives.Peek().Index != BatchIndex)
+        if (peer.BlockArchivesDownloaded.Peek().Index != BatchIndex)
         {
           peer.SetStatusAwaitingInsertion();
           return;
@@ -854,7 +846,7 @@ namespace BToken.Chaining
         {
           peer = Peers.Find(p =>
           p.IsStatusAwaitingInsertion() &&
-          p.BlockArchives.Peek().Index == BatchIndex);
+          p.BlockArchivesDownloaded.Peek().Index == BatchIndex);
         }
 
         if (peer == null)
@@ -895,7 +887,7 @@ namespace BToken.Chaining
           bufferSize: 65536);
 
         BlockArchives.ForEach(
-          c => WriteToFile(fileBlockArchive, c.Buffer));
+          b => WriteToFile(fileBlockArchive, b.Buffer));
         
         if (IndexBlockArchive % intervalImage == 0)
         {
@@ -997,10 +989,8 @@ namespace BToken.Chaining
     {
       UTXOTable.BlockArchive blockArchive = null;
       LoadBlockArchive(ref blockArchive);
-
-      blockArchive.Buffer = headerBytes;
-      
-      blockArchive.Parse();
+            
+      blockArchive.Parse(headerBytes);
 
       int countLockTriesRemaining = 20;
       while (true)
@@ -1080,7 +1070,7 @@ namespace BToken.Chaining
       {
         ValidateHeader(header, Height + 1);
 
-        if (!await peer.TryDownloadBlocks(blockArchive))
+        if (!await peer.TryDownloadBlocks())
         {
           return;
         }
