@@ -9,10 +9,8 @@ namespace BToken.Chaining
 
 
 
-    public NetworkMessage(string command) 
-      : this(
-          command, 
-          new byte[0])
+    public NetworkMessage(string command)
+      : this(command, new byte[0])
     { }
 
     public NetworkMessage(

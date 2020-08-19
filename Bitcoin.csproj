@@ -111,7 +111,6 @@
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
-    <Compile Include="Networking\MessageStream.cs" />
     <Compile Include="Networking\Messages\GetHeadersMessage.cs" />
     <Compile Include="Networking\Messages\HeadersMessage.cs" />
     <Compile Include="Networking\Messages\NetworkMessage.cs" />

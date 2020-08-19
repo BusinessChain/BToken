@@ -10,8 +10,8 @@ namespace BToken.Chaining
   {
     public ulong FeeFilterValue { get; private set; }
 
-    public FeeFilterMessage(NetworkMessage message) : base("feefilter", message.Payload)
-    {
-    }
+    public FeeFilterMessage(byte[] messagePayload) 
+      : base("feefilter", messagePayload)
+    { }
   }
 }

@@ -716,7 +716,7 @@ namespace BToken.Chaining
         
         ArchiveBlock(blockArchive, UTXOIMAGE_INTERVAL_SYNC);
 
-        if (blockArchive.IsCancellationBatch)
+        if (blockArchive.IsLastArchive)
         {
           peer.SetStatusCompleted();
           break;
@@ -1022,7 +1022,8 @@ namespace BToken.Chaining
       if (ContainsHeader(header.Hash))
       {
         Header headerContained = HeaderTip;
-
+             
+        var headerDuplicates = new List<byte[]>();
         int depthDuplicateAcceptedMax = 3;
         int depthDuplicate = 0;
 
@@ -1030,7 +1031,7 @@ namespace BToken.Chaining
         {
           if (headerContained.Hash.IsEqual(header.Hash))
           {
-            if (peer.HeaderDuplicates.Any(h => h.IsEqual(header.Hash)))
+            if (headerDuplicates.Any(h => h.IsEqual(header.Hash)))
             {
               throw new ChainException(
                 string.Format(
@@ -1038,10 +1039,10 @@ namespace BToken.Chaining
                   header.Hash.ToHexString()));
             }
 
-            peer.HeaderDuplicates.Add(header.Hash);
-            if (peer.HeaderDuplicates.Count > depthDuplicateAcceptedMax)
+            headerDuplicates.Add(header.Hash);
+            if (headerDuplicates.Count > depthDuplicateAcceptedMax)
             {
-              peer.HeaderDuplicates = peer.HeaderDuplicates.Skip(1)
+              headerDuplicates = headerDuplicates.Skip(1)
                 .ToList();
             }
 
@@ -1274,7 +1275,7 @@ namespace BToken.Chaining
           continue;
         }
 
-        peer.Run();
+        peer.StartMessageListener();
 
         return peer;
       }
@@ -1371,7 +1372,7 @@ namespace BToken.Chaining
 
         var peer = new Peer(tcpClient, this);
 
-        peer.Run();
+        peer.StartMessageListener();
 
         lock (LOCK_Peers)
         {
