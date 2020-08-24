@@ -235,7 +235,7 @@ namespace BToken.Chaining
           string pathFile = Path.Combine(
                 ArchiveDirectoryBlocks.Name,
                 blockArchive.Index.ToString());
-
+          
           blockArchive.Parse(
             File.ReadAllBytes(pathFile),
             HashStopLoading);
@@ -390,7 +390,9 @@ namespace BToken.Chaining
     void ValidateHeader(Header header, int height)
     {
       if (
-        Checkpoints.TryGetValue(height, out byte[] hashCheckpoint) &&
+        Checkpoints.TryGetValue(
+          height, 
+          out byte[] hashCheckpoint) &&
         !hashCheckpoint.IsEqual(header.Hash))
       {
         throw new ChainException(
@@ -425,7 +427,7 @@ namespace BToken.Chaining
       {
         throw new ChainException(
           string.Format(
-            "In header {0} nBits {1} not equal to target nBits {2}",
+            "In header {0}\n nBits {1} not equal to target nBits {2}",
             header.Hash.ToHexString(),
             header.NBits,
             targetBits),
@@ -500,46 +502,6 @@ namespace BToken.Chaining
       }
     }
 
-    async Task<double> BuildHeaderchain(
-      Header header, 
-      int height, 
-      Peer peer)
-    {
-      double difficulty = 0.0;
-
-      while (true)
-      {
-        ValidateHeader(header, height);
-
-        difficulty += header.Difficulty;
-        height += 1;
-
-        if (header.HeaderNext != null)
-        {
-          header = header.HeaderNext;
-        }
-        else
-        {
-          Header headerNext = await peer.GetHeaders(header);
-          
-          if (headerNext == null || height > 4000)
-          {
-            return difficulty;
-          }
-
-          Console.WriteLine(
-            "Height of validated header chain {0}\n" +
-            "Next headerRoot {1} from peer {2}",
-            height - 1,
-            headerNext.Hash.ToHexString(),
-            peer.GetIdentification());
-
-          header.HeaderNext = headerNext;
-          header = headerNext;
-        }
-      }
-    }
-
     async Task SynchronizeWithPeer(Peer peer)
     {
     LABEL_StageBranch:
@@ -549,18 +511,31 @@ namespace BToken.Chaining
       try
       {
         Header headerRoot = await peer.GetHeaders(locator);
-
+        
         if (headerRoot == null)
         {
           return;
         }
 
-        if (headerRoot.HeaderPrevious == HeaderTip)
+        Header headerLocatorAncestor = locator
+          .Find(h => h.Hash.IsEqual(headerRoot.HashPrevious));
+
+        if (headerLocatorAncestor == null)
+        {
+          throw new ChainException(
+            "GetHeaders does not connect to locator.");
+        }
+
+        headerRoot.HeaderPrevious = headerLocatorAncestor;
+
+        if (headerLocatorAncestor == HeaderTip)
         {
           await BuildHeaderchain(
             headerRoot,
             Height + 1,
             peer);
+
+          RunUTXOSyncSession(peer);
 
           try
           {
@@ -580,7 +555,9 @@ namespace BToken.Chaining
           return;
         }
 
-        headerRoot = await peer.SkipDuplicates(headerRoot, locator);
+        headerRoot = await peer.SkipDuplicates(
+          headerRoot, 
+          locator);
 
         int heightAncestor = Height - 1;
         double difficultyAncestor = Difficulty - HeaderTip.Difficulty;
@@ -612,6 +589,8 @@ namespace BToken.Chaining
           {
             goto LABEL_StageBranch;
           }
+
+          RunUTXOSyncSession(peer);
 
           try
           {
@@ -661,7 +640,47 @@ namespace BToken.Chaining
           ex.Message));
       }
     }
-    
+
+    async Task<double> BuildHeaderchain(
+      Header header,
+      int height,
+      Peer peer)
+    {
+      double difficulty = 0.0;
+
+      while (true)
+      {
+        ValidateHeader(header, height);
+
+        difficulty += header.Difficulty;
+        height += 1;
+
+        if (header.HeaderNext != null)
+        {
+          header = header.HeaderNext;
+        }
+        else
+        {
+          Header headerNext = await peer.GetHeaders(header);
+
+          if (headerNext == null || height > 4000)
+          {
+            return difficulty;
+          }
+
+          Console.WriteLine(
+            "Height of validated header chain {0}\n" +
+            "Next headerRoot {1} from peer {2}",
+            height - 1,
+            headerNext.Hash.ToHexString(),
+            peer.GetIdentification());
+
+          header.HeaderNext = headerNext;
+          header = headerNext;
+        }
+      }
+    }
+
     List<Header> GetLocator()
     {
       Header header = HeaderTip;
@@ -779,18 +798,18 @@ namespace BToken.Chaining
         {
           peer.BlockArchive.Index = IndexBlockArchiveLoad;
           IndexBlockArchiveLoad += 1;
-        }
-        
-        lock (LOCK_HeaderLoad)
-        {
-          if (HeaderLoad == null)
-          {
-            FlagAllHeadersLoaded = true;
-            peer.SetStatusIdle();
-            return;
-          }
 
-          peer.CreateInventories(ref HeaderLoad);
+          lock (LOCK_HeaderLoad)
+          {
+            if (HeaderLoad == null)
+            {
+              FlagAllHeadersLoaded = true;
+              peer.SetStatusIdle();
+              return;
+            }
+
+            peer.CreateInventories(ref HeaderLoad);
+          }
         }
         
         while (!await peer.TryDownloadBlocks())
@@ -804,12 +823,11 @@ namespace BToken.Chaining
                 return;
               }
 
-              peer =
-                Peers.Find(p => p.IsStatusIdle()) ??
+              peer = 
                 Peers.Find(p =>
-                  p.IsStatusAwaitingInsertion() &&
-                  p.BlockArchivesDownloaded.Peek().Index > 
-                  peer.BlockArchive.Index);
+                p.IsStatusAwaitingInsertion() &&
+                p.BlockArchivesDownloaded.Peek().Index > 
+                peer.BlockArchive.Index);
 
               if (peer != null)
               {
@@ -826,7 +844,8 @@ namespace BToken.Chaining
 
       lock (LOCK_BatchIndex)
       {
-        if (peer.BlockArchivesDownloaded.Peek().Index != BatchIndex)
+        if (peer.BlockArchivesDownloaded.Peek().Index != 
+          BatchIndex)
         {
           peer.SetStatusAwaitingInsertion();
           return;
@@ -990,7 +1009,7 @@ namespace BToken.Chaining
       UTXOTable.BlockArchive blockArchive = null;
       LoadBlockArchive(ref blockArchive);
             
-      blockArchive.Parse(headerBytes);
+      blockArchive.Parse(headerBytes, headerBytes.Length);
 
       int countLockTriesRemaining = 20;
       while (true)
@@ -1257,21 +1276,21 @@ namespace BToken.Chaining
             "Cannot get peer address from dns server: {0}",
             ex.Message);
 
-          Task.Delay(10000);
+          Task.Delay(5000);
           continue;
         }
 
-        var peer = new Peer(this);
-
+        var peer = new Peer(this, iPAddress);
+        
         try
         {
-          await peer.Connect(iPAddress, Port);
+          await peer.Connect();
         }
-        catch
+        catch(Exception ex)
         {
-          peer.Dispose();
+          peer.Dispose(ex.Message);
 
-          Task.Delay(10000);
+          Task.Delay(5000);
           continue;
         }
 

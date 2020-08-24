@@ -43,9 +43,7 @@ namespace BToken.Chaining
 
       public Stack<UTXOTable.BlockArchive> BlockArchivesDownloaded =
         new Stack<UTXOTable.BlockArchive>();
-
-      NetworkMessage NetworkMessage;
-
+      
       readonly object LOCK_IsExpectingMessageResponse = new object();
       bool IsExpectingMessageResponse;
             
@@ -73,6 +71,7 @@ namespace BToken.Chaining
       public enum ConnectionType { OUTBOUND, INBOUND };
       ConnectionType Connection;
       const UInt32 ProtocolVersion = 70015;
+      IPAddress IPAddress;
       TcpClient TcpClient;
       Stream Stream;
 
@@ -105,20 +104,22 @@ namespace BToken.Chaining
         Connection = ConnectionType.INBOUND;
       }
 
-      public Peer(Blockchain blockchain)
+      public Peer(Blockchain blockchain,
+        IPAddress iPAddress)
       {
         Connection = ConnectionType.OUTBOUND;
         Blockchain = blockchain;
+        IPAddress = iPAddress;
       }
 
 
-      public async Task Connect(IPAddress iPAddress, int port)
+      public async Task Connect()
       {
         TcpClient = new TcpClient();
 
         await TcpClient.ConnectAsync(
-          iPAddress,
-          port);
+          IPAddress,
+          Port);
 
         Stream = TcpClient.GetStream();
 
@@ -145,7 +146,7 @@ namespace BToken.Chaining
 
         versionMessage.SerializePayload();
 
-        await Write(versionMessage);
+        await SendMessage(versionMessage);
 
         CancellationToken cancellationToken =
           new CancellationTokenSource(TimeSpan.FromSeconds(3))
@@ -206,7 +207,7 @@ namespace BToken.Chaining
 
               if (rejectionReason != "")
               {
-                await Write(
+                await SendMessage(
                   new RejectMessage(
                     "version",
                     RejectMessage.RejectCode.OBSOLETE,
@@ -216,7 +217,7 @@ namespace BToken.Chaining
                   "Remote peer rejected: " + rejectionReason);
               }
 
-              await Write(new VerAckMessage());
+              await SendMessage(new VerAckMessage());
               break;
 
             case "reject":
@@ -234,7 +235,7 @@ namespace BToken.Chaining
         }
       }
            
-      async Task Write(NetworkMessage message)
+      async Task SendMessage(NetworkMessage message)
       {
         Stream.Write(MagicBytes, 0, MagicBytes.Length);
 
@@ -246,7 +247,9 @@ namespace BToken.Chaining
         byte[] payloadLength = BitConverter.GetBytes(message.Payload.Length);
         Stream.Write(payloadLength, 0, payloadLength.Length);
 
-        byte[] checksum = CreateChecksum(message.Payload);
+        byte[] checksum = CreateChecksum(
+          message.Payload, 
+          message.Payload.Length);
         Stream.Write(checksum, 0, checksum.Length);
 
         await Stream.WriteAsync(
@@ -256,10 +259,10 @@ namespace BToken.Chaining
           .ConfigureAwait(false);
       }
 
-      byte[] CreateChecksum(byte[] payload)
+      byte[] CreateChecksum(byte[] payload, int count)
       {
         byte[] hash = SHA256.ComputeHash(
-          SHA256.ComputeHash(payload));
+          SHA256.ComputeHash(payload, 0, count));
 
         return hash.Take(ChecksumSize).ToArray();
       }
@@ -306,7 +309,10 @@ namespace BToken.Chaining
           MeassageHeader, CommandSize + LengthSize);
 
         uint checksumCalculated = BitConverter.ToUInt32(
-          CreateChecksum(Payload), 0);
+          CreateChecksum(
+            Payload,
+            PayloadLength), 
+          0);
 
         if (checksumMessage != checksumCalculated)
         {
@@ -354,7 +360,7 @@ namespace BToken.Chaining
             switch (Command)
             {
               case "ping":
-                await Write(new PongMessage(
+                await SendMessage(new PongMessage(
                   BitConverter.ToUInt64(Payload, 0)));
                 break;
 
@@ -364,7 +370,7 @@ namespace BToken.Chaining
                 break;
 
               case "sendheaders":
-                await Write(new SendHeadersMessage());
+                await SendMessage(new SendHeadersMessage());
                 break;
 
               case "feefilter":
@@ -501,9 +507,9 @@ namespace BToken.Chaining
           Dispose();
         }
       }
-                 
 
-               
+
+
       public UTXOTable.BlockArchive BlockArchive = 
         new UTXOTable.BlockArchive();
 
@@ -515,7 +521,7 @@ namespace BToken.Chaining
 
       public async Task<Header> GetHeaders(List<Header> locator)
       {
-        await Write(new GetHeadersMessage(
+        await SendMessage(new GetHeadersMessage(
           locator, 
           ProtocolVersion));
 
@@ -535,7 +541,7 @@ namespace BToken.Chaining
           StartMessageListener();
         }
 
-        BlockArchive.Parse(Payload);
+        BlockArchive.Parse(Payload, PayloadLength);
 
         lock (LOCK_IsExpectingMessageResponse)
         {
@@ -543,25 +549,12 @@ namespace BToken.Chaining
         }
 
         StartMessageListener();
-
-        if (BlockArchive.Height > 0)
-        {
-          Header headerLocatorAncestor = locator.Find(h =>
-         h.Hash.IsEqual(BlockArchive.HeaderRoot.HashPrevious));
-
-          if (headerLocatorAncestor == null)
-          {
-            throw new ChainException(
-              "GetHeaders does not connect to locator.");
-          }
-
-          BlockArchive.HeaderRoot.HeaderPrevious = headerLocatorAncestor;
-        }
-
-        return BlockArchive;
+        
+        return BlockArchive.HeaderRoot;
       }
 
-      public async Task<Header> SkipDuplicates(Header header, List<Header> locator)
+      public async Task<Header> SkipDuplicates(
+        Header header, List<Header> locator)
       {
         Header headerAncestor = header.HeaderPrevious;
 
@@ -621,7 +614,7 @@ namespace BToken.Chaining
           var cancellation = new CancellationTokenSource(
               TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
                    
-          await Write(new GetDataMessage(Inventories));
+          await SendMessage(new GetDataMessage(Inventories));
 
           lock (LOCK_IsExpectingMessageResponse)
           {
@@ -637,6 +630,8 @@ namespace BToken.Chaining
 
           StopwatchDownload.Restart();
 
+          BlockArchive.Reset();
+
           int i = 0;
           while (true)
           {
@@ -649,19 +644,9 @@ namespace BToken.Chaining
 
             BlockArchive.ParseBlock(Payload);
 
-            if (BlockArchive.HeaderRoot == null ||
-              !Inventories[i].Hash.IsEqual(BlockArchive.HeaderRoot.Hash))
-            {
-              throw new ChainException(string.Format(
-                "Requested block {0} but received {1}",
-                Inventories[i].Hash.ToHexString(),
-                BlockArchive.HeaderRoot == null ?
-                "none" : BlockArchive.HeaderRoot.Hash.ToHexString()));
-            }
-
             Console.WriteLine(
               "Received block {0}",
-              Inventories[i].Hash.ToHexString());
+              BlockArchive.HeaderTip.Hash.ToHexString());
 
             i += 1;
 
@@ -675,6 +660,15 @@ namespace BToken.Chaining
               lock (LOCK_IsExpectingMessageResponse)
               {
                 IsExpectingMessageResponse = false;
+              }
+              
+              if (!Inventories[i].Hash.IsEqual(
+                  BlockArchive.HeaderTip.Hash))
+              {
+                throw new ChainException(string.Format(
+                  "Requested block {0} but received {1}",
+                  Inventories[i].Hash.ToHexString(),
+                  BlockArchive.HeaderTip.Hash.ToHexString()));
               }
 
               StartMessageListener();
@@ -731,7 +725,7 @@ namespace BToken.Chaining
 
       public async Task SendHeaders(List<Header> headers)
       {
-        await Write(new HeadersMessage(headers));
+        await SendMessage(new HeadersMessage(headers));
       }
       
 
@@ -749,9 +743,8 @@ namespace BToken.Chaining
           Connection == ConnectionType.INBOUND ? " <- " : " -> ";
 
         return
-          TcpClient.Client.LocalEndPoint.ToString() +
           signConnectionType +
-          TcpClient.Client.RemoteEndPoint.ToString();
+          IPAddress.ToString();
       }
 
 

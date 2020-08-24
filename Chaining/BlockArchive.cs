@@ -37,27 +37,40 @@ namespace BToken.Chaining
       public Stopwatch StopwatchParse = new Stopwatch();
 
 
-      readonly byte[] HASH_ZERO = new byte[32];
+      public void Reset()
+      {
+        HeaderTip = null;
+        Height = 0;
+        Difficulty = 0.0;
+        CountTX = 0;
+      }
+
+           
 
       public void Parse(byte[] buffer)
       {
-        Parse(buffer, HASH_ZERO);
+        Parse(buffer, buffer.Length);
+      }
+      public void Parse(byte[] buffer, byte[] hashStopLoading)
+      {
+        Parse(buffer, buffer.Length, hashStopLoading);
       }
 
-      // called by header image (chain of headers)
-      // called by getHeaders / receiveHeaders (chain of headers)
-      // called by loader (chain of blocks)
+      readonly byte[] HASH_ZERO = new byte[32];
+      public void Parse(byte[] buffer, int countBytes)
+      {
+        Parse(buffer, countBytes, HASH_ZERO);
+      }
+
       public void Parse(
         byte[] buffer, 
+        int countBytes,
         byte[] hashStopLoading)
       {
         Buffer = buffer;
         IndexBuffer = 0;
 
-        Height = VarInt.GetInt32(
-          Buffer, ref IndexBuffer);
-
-        if(Height == 0)
+        if (VarInt.GetInt32(Buffer, ref IndexBuffer) == 0)
         {
           return;
         }
@@ -69,15 +82,13 @@ namespace BToken.Chaining
           ParseBlock();
         } while (
           !hashStopLoading.IsEqual(HeaderTip.Hash) &&
-          IndexBuffer < Buffer.Length);
+          IndexBuffer < countBytes);
         
         StopwatchParse.Stop();
       }
 
 
-
-      // called by TryDownloadBlocks (single block)
-      // Here we need to concatenate the blocks in the archive
+      
       public void ParseBlock(byte[] buffer)
       {
         Buffer = buffer;
@@ -93,21 +104,33 @@ namespace BToken.Chaining
           ref IndexBuffer,
           SHA256);
 
-        if (!header.HashPrevious.IsEqual(HeaderTip.Hash))
+        if(HeaderTip == null)
+        {
+          HeaderTip = header;
+          HeaderRoot = header;
+        }
+        else if (!HeaderTip.Hash.IsEqual(
+          header.HashPrevious))
         {
           throw new ChainException(
             string.Format(
               "headerchain out of order in blockArchive {0}",
               Index));
         }
+        else
+        {
+          header.HeaderPrevious = HeaderTip;
+          HeaderTip.HeaderNext = header;
+          HeaderTip = header;
+        }
 
-        header.HeaderPrevious = HeaderTip;
-        HeaderTip.HeaderNext = header;
-        HeaderTip = header;
+        Difficulty += header.Difficulty;
+        Height += 1;
 
         int tXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
+        CountTX += tXCount;
 
-        if(tXCount == 0)
+        if (tXCount == 0)
         {
           return;
         }
@@ -146,8 +169,6 @@ namespace BToken.Chaining
             "Payload hash unequal with merkle root.");
         }
         
-        CountTX += tXCount;
-
         return;
       }
 

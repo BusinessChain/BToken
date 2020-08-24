@@ -93,7 +93,8 @@ namespace BToken
       Array.Copy(buffer, index, merkleRootHash, 0, 32);
       index += 32;
 
-      uint unixTimeSeconds = BitConverter.ToUInt32(buffer, index);
+      uint unixTimeSeconds = BitConverter.ToUInt32(
+        buffer, index);
       index += 4;
       
       const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
