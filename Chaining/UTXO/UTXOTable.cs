@@ -123,7 +123,7 @@ namespace BToken.Chaining
         TableUInt32.UTXO =
           uTXOsUInt32[i].Value |
           ((uint)indexArchive & UTXOIndexUInt32.MaskBatchIndex);
-
+        
         InsertUTXO(
           uTXOsUInt32[i].Key,
           TableUInt32);

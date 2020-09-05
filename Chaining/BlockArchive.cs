@@ -13,6 +13,9 @@ namespace BToken.Chaining
     {
       public byte[] Buffer;
       public int IndexBuffer;
+      
+      public List<byte[]> BlockBuffers = new List<byte[]>();
+      public List<int> LengthBlockBuffers = new List<int>();
 
       public int Index;
       public bool IsInvalid;
@@ -43,20 +46,24 @@ namespace BToken.Chaining
         Height = 0;
         Difficulty = 0.0;
         CountTX = 0;
+
+        BlockBuffers.Clear();
+        LengthBlockBuffers.Clear();
+
+        Inputs.Clear();
+        TableUInt32.Table.Clear();
+        TableULong64.Table.Clear();
+        TableUInt32Array.Table.Clear();
       }
 
-           
-
-      public void Parse(byte[] buffer)
-      {
-        Parse(buffer, buffer.Length);
-      }
-      public void Parse(byte[] buffer, byte[] hashStopLoading)
-      {
-        Parse(buffer, buffer.Length, hashStopLoading);
-      }
+      
 
       readonly byte[] HASH_ZERO = new byte[32];
+      public void Parse(byte[] buffer)
+      {
+        Parse(buffer, buffer.Length, HASH_ZERO);
+      }
+
       public void Parse(byte[] buffer, int countBytes)
       {
         Parse(buffer, countBytes, HASH_ZERO);
@@ -64,9 +71,21 @@ namespace BToken.Chaining
 
       public void Parse(
         byte[] buffer, 
+        byte[] hashStopLoading)
+      {
+        Parse(
+          buffer, 
+          buffer.Length, 
+          hashStopLoading);
+      }
+
+      void Parse(
+        byte[] buffer, 
         int countBytes,
         byte[] hashStopLoading)
       {
+        StopwatchParse.Reset();
+
         Buffer = buffer;
         IndexBuffer = 0;
 
@@ -74,9 +93,7 @@ namespace BToken.Chaining
         {
           return;
         }
-
-        StopwatchParse.Start();
-
+        
         do
         {
           ParseBlock();
@@ -87,18 +104,21 @@ namespace BToken.Chaining
         StopwatchParse.Stop();
       }
 
-
-      
-      public void ParseBlock(byte[] buffer)
+      public void ParseBlock(byte[] buffer, int bufferLength)
       {
         Buffer = buffer;
         IndexBuffer = 0;
 
         ParseBlock();
+
+        BlockBuffers.Add(buffer);
+        LengthBlockBuffers.Add(bufferLength);
       }
 
       void ParseBlock()
       {
+        StopwatchParse.Start();
+
         Header header = Header.ParseHeader(
           Buffer,
           ref IndexBuffer,
@@ -128,18 +148,26 @@ namespace BToken.Chaining
         Height += 1;
 
         int tXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
+
         CountTX += tXCount;
 
-        if (tXCount == 0)
+        if (tXCount > 0)
         {
-          return;
+          ParseTXs(tXCount, header.MerkleRoot);
         }
 
+        StopwatchParse.Stop();
+      }
+
+      void ParseTXs(
+        int tXCount, 
+        byte[] merkleRootHeader)
+      {
         if (tXCount == 1)
         {
           byte[] tXHash = ParseTX(true);
 
-          if (!tXHash.IsEqual(header.MerkleRoot))
+          if (!tXHash.IsEqual(merkleRootHeader))
           {
             throw new ChainException(
               "Payload merkle root corrupted");
@@ -163,13 +191,11 @@ namespace BToken.Chaining
           merkleList[tXCount] = merkleList[tXCount - 1];
         }
 
-        if (!GetRoot(merkleList).IsEqual(header.MerkleRoot))
+        if (!GetRoot(merkleList).IsEqual(merkleRootHeader))
         {
           throw new ChainException(
             "Payload hash unequal with merkle root.");
         }
-        
-        return;
       }
 
       byte[] ParseTX(bool isCoinbase)
@@ -265,8 +291,7 @@ namespace BToken.Chaining
         }
       }
 
-      byte[] GetRoot(
-        byte[][] merkleList)
+      byte[] GetRoot(byte[][] merkleList)
       {
         int merkleIndex = merkleList.Length;
 

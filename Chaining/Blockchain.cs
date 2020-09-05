@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using System.Security.Cryptography;
@@ -29,7 +28,6 @@ namespace BToken.Chaining
     const int UTXOIMAGE_INTERVAL_SYNC = 500;
     const int UTXOIMAGE_INTERVAL_LISTEN = 50;
     
-
     readonly object LOCK_IsBlockchainLocked = new object();
     bool IsBlockchainLocked;
     readonly object LOCK_IndexBlockArchiveLoad = new object();
@@ -81,7 +79,9 @@ namespace BToken.Chaining
       await LoadImage(0, new byte[32]);
     }
 
-    async Task LoadImage(int heightMax, byte[] stopHashLoading)
+    async Task LoadImage(
+      int heightMax, 
+      byte[] stopHashLoading)
     {
       string pathImage = DirectoryImage.Name;
 
@@ -100,6 +100,17 @@ namespace BToken.Chaining
       }
        
       await LoadBlocks(stopHashLoading);
+      
+      string pathFileArchive = Path.Combine(
+        ArchiveDirectoryBlocks.FullName,
+        IndexBlockArchive.ToString());
+
+      FileBlockArchive = new FileStream(
+       pathFileArchive,
+       FileMode.Create,
+       FileAccess.Write,
+       FileShare.None,
+       bufferSize: 65536);
     }
 
     void Initialize()
@@ -118,35 +129,14 @@ namespace BToken.Chaining
     {
       try
       {
-        
-        string pathFile = Path.Combine(
-          pathImage,
-          "ImageHeaderchain");
-
-        var blockArchive = new UTXOTable.BlockArchive();
-
-        blockArchive.Parse(File.ReadAllBytes(pathFile));
-
-        Header header = blockArchive.HeaderRoot;
-
-        if (!header.HashPrevious.IsEqual(
-          HeaderGenesis.Hash))
-        {
-          throw new ChainException(
-            "Header image does not link to genesis header.");
-        }
-
-        header.HeaderPrevious = HeaderGenesis;
-
-        ValidateHeaders(header, 1);
-
-        InsertHeaders(blockArchive);
-
-        byte[] indexBlockArchiveBytes = File.ReadAllBytes(
-          Path.Combine(pathImage, nameof(IndexBlockArchive)));
+        LoadImageHeaderchain(pathImage);
 
         IndexBlockArchive = BitConverter.ToInt32(
-          indexBlockArchiveBytes, 0);
+          File.ReadAllBytes(
+            Path.Combine(
+              pathImage, 
+              nameof(IndexBlockArchive))), 
+          0);
 
         UTXOTable.LoadImage(pathImage);
 
@@ -162,21 +152,47 @@ namespace BToken.Chaining
       }
     }
 
+    void LoadImageHeaderchain(string pathImage)
+    {
+      string pathFile = Path.Combine(
+        pathImage,
+        "ImageHeaderchain");
+
+      var blockArchive = new UTXOTable.BlockArchive();
+
+      blockArchive.Parse(File.ReadAllBytes(pathFile));
+
+      Header header = blockArchive.HeaderRoot;
+
+      if (!header.HashPrevious.IsEqual(
+        HeaderGenesis.Hash))
+      {
+        throw new ChainException(
+          "Header image does not link to genesis header.");
+      }
+
+      header.HeaderPrevious = HeaderGenesis;
+
+      ValidateHeaders(header, 1);
+
+      InsertHeaders(blockArchive);
+    }
+
 
 
     byte[] HashStopLoading;
-    const int COUNT_INDEXER_TASKS = 8;
+    const int COUNT_LOADER_TASKS = 1;
     
     async Task LoadBlocks(byte[] stopHashLoading)
     {
-      IndexBlockArchiveLoad = IndexBlockArchive + 1;
+      IndexBlockArchiveLoad = IndexBlockArchive;
       HashStopLoading = stopHashLoading;
 
-      var loaderTasks = new Task[COUNT_INDEXER_TASKS];
+      var loaderTasks = new Task[COUNT_LOADER_TASKS];
 
       Parallel.For(
         0,
-        COUNT_INDEXER_TASKS,
+        COUNT_LOADER_TASKS,
         i => loaderTasks[i] = StartLoader());
 
       await Task.WhenAll(loaderTasks);
@@ -233,8 +249,8 @@ namespace BToken.Chaining
         try
         {
           string pathFile = Path.Combine(
-                ArchiveDirectoryBlocks.Name,
-                blockArchive.Index.ToString());
+            ArchiveDirectoryBlocks.Name,
+            blockArchive.Index.ToString());
           
           blockArchive.Parse(
             File.ReadAllBytes(pathFile),
@@ -254,7 +270,7 @@ namespace BToken.Chaining
 
           lock (LOCK_QueueBlockArchives)
           {
-            if (blockArchive.Index == IndexBlockArchive + 1)
+            if (blockArchive.Index == IndexBlockArchive)
             {
               break;
             }
@@ -270,7 +286,6 @@ namespace BToken.Chaining
                 return;
               }
 
-              blockArchive = null;
               goto LABEL_LoadBlockArchive;
             }
           }
@@ -298,7 +313,9 @@ namespace BToken.Chaining
 
             InsertHeaders(blockArchive);
 
-            if(HeaderTip.Hash.IsEqual(HashStopLoading))
+            IndexBlockArchive += 1;
+
+            if (HeaderTip.Hash.IsEqual(HashStopLoading))
             {
               IsBlockLoadingCompleted = true;
               return;
@@ -308,9 +325,7 @@ namespace BToken.Chaining
             {
               CreateImage();
             }
-
-            IndexBlockArchive += 1;
-
+            
             lock (LOCK_QueueBlockArchives)
             {
               if (QueueBlockArchives.TryGetValue(
@@ -328,7 +343,7 @@ namespace BToken.Chaining
               }
               else
               {
-                break;
+                goto LABEL_LoadBlockArchive;
               }
             }
           }
@@ -339,10 +354,10 @@ namespace BToken.Chaining
             Path.Combine(
               ArchiveDirectoryBlocks.Name,
               blockArchive.Index.ToString()));
-
-          IsBlockLoadingCompleted = true;
-          return;
         }
+
+        IsBlockLoadingCompleted = true;
+        return;
       }
     }
 
@@ -494,6 +509,8 @@ namespace BToken.Chaining
           "Synchronize with peer {0}", 
           peer.GetIdentification());
 
+        peer.SetStatusBusy();
+
         await SynchronizeWithPeer(peer);
 
         peer.IsSynchronized = true;
@@ -517,29 +534,15 @@ namespace BToken.Chaining
           return;
         }
 
-        Header headerLocatorAncestor = locator
-          .Find(h => h.Hash.IsEqual(headerRoot.HashPrevious));
-
-        if (headerLocatorAncestor == null)
+        if (headerRoot.HeaderPrevious == HeaderTip)
         {
-          throw new ChainException(
-            "GetHeaders does not connect to locator.");
-        }
-
-        headerRoot.HeaderPrevious = headerLocatorAncestor;
-
-        if (headerLocatorAncestor == HeaderTip)
-        {
-          await BuildHeaderchain(
+          await peer.BuildHeaderchain(
             headerRoot,
-            Height + 1,
-            peer);
-
-          RunUTXOSyncSession(peer);
+            Height + 1);
 
           try
           {
-            await Synchronize(headerRoot);
+            await Synchronize(headerRoot, peer);
           }
           catch(Exception ex)
           {
@@ -572,10 +575,9 @@ namespace BToken.Chaining
         }
 
         double difficultyFork = difficultyAncestor +
-          await BuildHeaderchain(
+          await peer.BuildHeaderchain(
             headerRoot,
-            heightAncestor + 1,
-            peer);
+            heightAncestor + 1);
 
         if (difficultyFork > Difficulty)
         {
@@ -590,11 +592,9 @@ namespace BToken.Chaining
             goto LABEL_StageBranch;
           }
 
-          RunUTXOSyncSession(peer);
-
           try
           {
-            await Synchronize(headerRoot);
+            await Synchronize(headerRoot, peer);
           }
           catch(Exception ex)
           {
@@ -640,47 +640,7 @@ namespace BToken.Chaining
           ex.Message));
       }
     }
-
-    async Task<double> BuildHeaderchain(
-      Header header,
-      int height,
-      Peer peer)
-    {
-      double difficulty = 0.0;
-
-      while (true)
-      {
-        ValidateHeader(header, height);
-
-        difficulty += header.Difficulty;
-        height += 1;
-
-        if (header.HeaderNext != null)
-        {
-          header = header.HeaderNext;
-        }
-        else
-        {
-          Header headerNext = await peer.GetHeaders(header);
-
-          if (headerNext == null || height > 4000)
-          {
-            return difficulty;
-          }
-
-          Console.WriteLine(
-            "Height of validated header chain {0}\n" +
-            "Next headerRoot {1} from peer {2}",
-            height - 1,
-            headerNext.Hash.ToHexString(),
-            peer.GetIdentification());
-
-          header.HeaderNext = headerNext;
-          header = headerNext;
-        }
-      }
-    }
-
+    
     List<Header> GetLocator()
     {
       Header header = HeaderTip;
@@ -707,16 +667,20 @@ namespace BToken.Chaining
 
       return locator;
     }
-
-
-
+       
+    Header HeaderLoad;
     BufferBlock<Peer> QueueSynchronizer =
       new BufferBlock<Peer>();
 
-    async Task Synchronize(Header headerRoot)
+    async Task Synchronize(
+      Header headerRoot, 
+      Peer peerSynchronizing)
     {
+      HeaderLoad = headerRoot;
+
       Task taskUTXOSyncSessions = 
-        StartUTXOSyncSessions(headerRoot);
+        StartUTXOSyncSessions(peerSynchronizing);
+      
 
       while (true)
       {
@@ -732,7 +696,7 @@ namespace BToken.Chaining
         UTXOTable.InsertBlockArchive(blockArchive);
 
         InsertHeaders(blockArchive);
-        
+
         ArchiveBlock(blockArchive, UTXOIMAGE_INTERVAL_SYNC);
 
         if (blockArchive.IsLastArchive)
@@ -749,13 +713,13 @@ namespace BToken.Chaining
 
 
 
-    Header HeaderLoad;
     bool FlagAllHeadersLoaded;
 
-    async Task StartUTXOSyncSessions(Header headerRoot)
-    {      
-      HeaderLoad = headerRoot;
-      
+    async Task StartUTXOSyncSessions(
+      Peer peerSynchronizing)
+    {
+      RunUTXOSyncSession(peerSynchronizing);
+
       while (true)
       {
         var peersIdle = new List<Peer>();
@@ -773,7 +737,7 @@ namespace BToken.Chaining
             peersIdle.ForEach(p => p.SetStatusBusy());
           }
         }
-
+        
         peersIdle.Select(p => RunUTXOSyncSession(p))
           .ToList();
 
@@ -783,33 +747,27 @@ namespace BToken.Chaining
 
     
     readonly object LOCK_HeaderLoad = new object();
-    readonly object LOCK_BatchIndex = new object();
-    int BatchIndex;
+    readonly object LOCK_IndexBlockArchiveQueue = new object();
+    int IndexBlockArchiveDownload;
+    int IndexBlockArchiveQueue;
 
     async Task RunUTXOSyncSession(Peer peer)
     {
-      Console.WriteLine(
-        "Start sync session with peer {0}",
-        peer.GetIdentification());
-
       if (peer.BlockArchivesDownloaded.Count == 0)
       {
-        lock (LOCK_IndexBlockArchiveLoad)
+        lock (LOCK_HeaderLoad)
         {
-          peer.BlockArchive.Index = IndexBlockArchiveLoad;
-          IndexBlockArchiveLoad += 1;
+          peer.BlockArchive.Index = IndexBlockArchiveDownload;
+          IndexBlockArchiveDownload += 1;
 
-          lock (LOCK_HeaderLoad)
+          if (HeaderLoad == null)
           {
-            if (HeaderLoad == null)
-            {
-              FlagAllHeadersLoaded = true;
-              peer.SetStatusIdle();
-              return;
-            }
-
-            peer.CreateInventories(ref HeaderLoad);
+            FlagAllHeadersLoaded = true;
+            peer.SetStatusIdle();
+            return;
           }
+
+          peer.CreateInventories(ref HeaderLoad);
         }
         
         while (!await peer.TryDownloadBlocks())
@@ -842,10 +800,10 @@ namespace BToken.Chaining
         }
       }
 
-      lock (LOCK_BatchIndex)
+      lock (LOCK_IndexBlockArchiveQueue)
       {
         if (peer.BlockArchivesDownloaded.Peek().Index != 
-          BatchIndex)
+          IndexBlockArchiveQueue)
         {
           peer.SetStatusAwaitingInsertion();
           return;
@@ -856,24 +814,26 @@ namespace BToken.Chaining
       {
         QueueSynchronizer.Post(peer);
 
-        lock (LOCK_BatchIndex)
+        lock (LOCK_IndexBlockArchiveQueue)
         {
-          BatchIndex += 1;
+          IndexBlockArchiveQueue += 1;
         }
 
         lock (LOCK_Peers)
         {
           peer = Peers.Find(p =>
           p.IsStatusAwaitingInsertion() &&
-          p.BlockArchivesDownloaded.Peek().Index == BatchIndex);
+          p.BlockArchivesDownloaded.Peek().Index == IndexBlockArchiveQueue);
         }
 
-        if (peer == null)
+        if (peer != null)
+        {
+          peer.SetStatusBusy();
+        }
+        else
         {
           return;
         }
-
-        peer.SetStatusBusy();
       }
     }
 
@@ -882,41 +842,46 @@ namespace BToken.Chaining
     int IndexBlockArchive;
     List<UTXOTable.BlockArchive> BlockArchives =
       new List<UTXOTable.BlockArchive>();
-    int CountTXs;
+    int CountTXsArchive;
     int SIZE_BLOCK_ARCHIVE = 50000;
+    FileStream FileBlockArchive;
 
     void ArchiveBlock(
       UTXOTable.BlockArchive blockArchive, 
       int intervalImage)
     {
-      BlockArchives.Add(blockArchive);
-      CountTXs += blockArchive.CountTX;
-
-      if (CountTXs >= SIZE_BLOCK_ARCHIVE)
+      for(int i = 0; i < blockArchive.BlockBuffers.Count; i++)
       {
+        FileBlockArchive.Write(
+          blockArchive.BlockBuffers[i], 
+          0,
+          blockArchive.LengthBlockBuffers[i]);
+      }
+
+      CountTXsArchive += blockArchive.CountTX;
+
+      if (CountTXsArchive > SIZE_BLOCK_ARCHIVE)
+      {
+        FileBlockArchive.Dispose();
+        CountTXsArchive = 0;
+
+        IndexBlockArchive += 1;
+
         string pathFileArchive = Path.Combine(
           ArchiveDirectoryBlocks.FullName,
           IndexBlockArchive.ToString());
 
-        var fileBlockArchive = new FileStream(
+         FileBlockArchive = new FileStream(
           pathFileArchive,
           FileMode.Create,
           FileAccess.Write,
           FileShare.None,
           bufferSize: 65536);
-
-        BlockArchives.ForEach(
-          b => WriteToFile(fileBlockArchive, b.Buffer));
         
         if (IndexBlockArchive % intervalImage == 0)
         {
           CreateImage();
         }
-
-        IndexBlockArchive += 1;
-
-        BlockArchives.Clear();
-        CountTXs = 0;
       }
     }
 
@@ -954,7 +919,9 @@ namespace BToken.Chaining
       }
 
       File.WriteAllBytes(
-        Path.Combine(DirectoryImage.Name, nameof(IndexBlockArchive)), 
+        Path.Combine(
+          DirectoryImage.Name, 
+          nameof(IndexBlockArchive)),
         BitConverter.GetBytes(IndexBlockArchive));
 
       using (FileStream stream = new FileStream(
@@ -979,29 +946,7 @@ namespace BToken.Chaining
 
       UTXOTable.CreateImage(DirectoryImage.Name);
     }
-
-    static void WriteToFile(
-      FileStream file,
-      byte[] bytes)
-    {
-      while (true)
-      {
-        try
-        {
-          file.Write(bytes, 0, bytes.Length);
-          break;
-        }
-        catch (IOException ex)
-        {
-          Console.WriteLine(
-            ex.GetType().Name + ": " + ex.Message);
-
-          Thread.Sleep(2000);
-          continue;
-        }
-      }
-    }
-
+    
     
 
     async Task ReceiveHeader(byte[] headerBytes, Peer peer)
@@ -1217,7 +1162,7 @@ namespace BToken.Chaining
     }
 
 
-    const int COUNT_PEERS_MAX = 1;
+    const int COUNT_PEERS_MAX = 3;
     TcpListener TcpListener = new TcpListener(IPAddress.Any, Port);
     const UInt16 Port = 8333;
     object LOCK_Peers = new object();
@@ -1357,10 +1302,6 @@ namespace BToken.Chaining
           IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
 
           SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList);
-
-          Console.WriteLine("Downloaded {0} dnsSeesd from {1}",
-            iPHostEntry.AddressList.Count(),
-            iPHostEntry.HostName);
         }
       }
       catch

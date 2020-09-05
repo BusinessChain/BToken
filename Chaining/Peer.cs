@@ -53,8 +53,7 @@ namespace BToken.Chaining
         new BufferBlock<NetworkMessage>();
       
       ulong FeeFilterValue;
-
-
+      
       const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NETWORK;
       const ServiceFlags NetworkServicesLocal = ServiceFlags.NODE_NETWORK;
       const string UserAgent = "/BToken:0.0.0/";
@@ -541,7 +540,22 @@ namespace BToken.Chaining
           StartMessageListener();
         }
 
+        BlockArchive.Reset();
+
         BlockArchive.Parse(Payload, PayloadLength);
+
+        Header headerLocatorAncestor = locator
+          .Find(h => h.Hash.IsEqual(
+            BlockArchive.HeaderRoot.HashPrevious));
+
+        if (headerLocatorAncestor == null)
+        {
+          throw new ChainException(
+            "GetHeaders does not connect to locator.");
+        }
+
+        BlockArchive.HeaderRoot.HeaderPrevious = 
+          headerLocatorAncestor;
 
         lock (LOCK_IsExpectingMessageResponse)
         {
@@ -552,6 +566,48 @@ namespace BToken.Chaining
         
         return BlockArchive.HeaderRoot;
       }
+      
+
+      public async Task<double> BuildHeaderchain(
+        Header header,
+        int height)
+      {
+        double difficulty = 0.0;
+
+        while (true)
+        {
+          Blockchain.ValidateHeader(header, height);
+
+          difficulty += header.Difficulty;
+          height += 1;
+
+          if (header.HeaderNext != null)
+          {
+            header = header.HeaderNext;
+          }
+          else
+          {
+            Header headerNext = await GetHeaders(header);
+
+            if (headerNext == null || height > 150000)
+            {
+              return difficulty;
+            }
+
+            Console.WriteLine(
+              "Height of validated header chain {0}\n" +
+              "Next headerRoot {1} from peer {2}",
+              height - 1,
+              headerNext.Hash.ToHexString(),
+              GetIdentification());
+
+            header.HeaderNext = headerNext;
+            header = headerNext;
+          }
+        }
+      }
+
+
 
       public async Task<Header> SkipDuplicates(
         Header header, List<Header> locator)
@@ -604,11 +660,13 @@ namespace BToken.Chaining
            headerLoad != null &&
            Inventories.Count < CountBlocksLoad);
       }
-
+      
 
 
       public async Task<bool> TryDownloadBlocks()
       {
+        StopwatchDownload.Restart();
+
         try
         {
           var cancellation = new CancellationTokenSource(
@@ -620,33 +678,23 @@ namespace BToken.Chaining
           {
             IsExpectingMessageResponse = true;
           }
-
-          Console.WriteLine(
-            "Sent {0} inventories to peer {1} \n {2} -> {3}",
-            Inventories.Count,
-            GetIdentification(),
-            Inventories.First().Hash.ToHexString(),
-            Inventories.Last().Hash.ToHexString());
-
-          StopwatchDownload.Restart();
-
+          
           BlockArchive.Reset();
 
           int i = 0;
+
           while (true)
           {
-            while(await MessageResponseReady
-              .ReceiveAsync(cancellation.Token) &&
-              Command != "block")
+            await MessageResponseReady
+               .ReceiveAsync(cancellation.Token);
+
+            if(Command != "block")
             {
               StartMessageListener();
+              continue;
             }
 
-            BlockArchive.ParseBlock(Payload);
-
-            Console.WriteLine(
-              "Received block {0}",
-              BlockArchive.HeaderTip.Hash.ToHexString());
+            BlockArchive.ParseBlock(Payload, PayloadLength);
 
             i += 1;
 
@@ -662,12 +710,12 @@ namespace BToken.Chaining
                 IsExpectingMessageResponse = false;
               }
               
-              if (!Inventories[i].Hash.IsEqual(
+              if (!Inventories.Last().Hash.IsEqual(
                   BlockArchive.HeaderTip.Hash))
               {
                 throw new ChainException(string.Format(
-                  "Requested block {0} but received {1}",
-                  Inventories[i].Hash.ToHexString(),
+                  "Requested block {0} \nbut received {1}",
+                  Inventories.Last().Hash.ToHexString(),
                   BlockArchive.HeaderTip.Hash.ToHexString()));
               }
 
@@ -675,8 +723,6 @@ namespace BToken.Chaining
               break;
             }
           }
-
-          StopwatchDownload.Stop();
         }
         catch (Exception ex)
         {
@@ -695,6 +741,8 @@ namespace BToken.Chaining
 
         CalculateNewCountBlocks();
 
+        StopwatchDownload.Stop();
+        
         return true;
       }
 

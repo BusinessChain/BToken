@@ -25,6 +25,7 @@ namespace BToken.Chaining
         ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0),
         ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1),
         ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2)};
+
       uint[] MasksCollisionBitsOne = {
         1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0,
         1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1,
@@ -52,14 +53,17 @@ namespace BToken.Chaining
       {
         return PrimaryTables.Sum(t => t.Count);
       }
+
       protected override int GetCountCollisionTableItems()
       {
         return CollisionTables.Sum(t => t.Count);
       }
+
       public override bool PrimaryTableContainsKey(int primaryKey)
       {
         return PrimaryTables[(byte)primaryKey].ContainsKey(primaryKey);
       }
+
       public override void IncrementCollisionBits(int primaryKey, int collisionAddress)
       {
         byte indexTablePartition = (byte)primaryKey;
@@ -90,29 +94,36 @@ namespace BToken.Chaining
         SpendUTXO(ref UTXOPrimary, input.OutputIndex, out areAllOutputpsSpent);
         PrimaryTables[(byte)PrimaryKey][PrimaryKey] = UTXOPrimary;
       }
+
       public override bool TryGetValueInPrimaryTable(int primaryKey)
       {
         PrimaryKey = primaryKey;
         return PrimaryTables[(byte)PrimaryKey].TryGetValue(primaryKey, out UTXOPrimary);
       }
+
       public override bool HasCollision(int cacheAddress)
       {
         return (MasksCollisionBitsFull[cacheAddress] & UTXOPrimary) != 0;
       }
+
       public override void RemovePrimary()
       {
         PrimaryTables[(byte)PrimaryKey].Remove(PrimaryKey);
       }
+
       public override uint GetCollisionBits()
       {
         return MaskCollisionBits & UTXOPrimary;
       }
+
       public override bool AreCollisionBitsFull()
       {
         return (MasksCollisionBitsFull[Address] & UTXOPrimary) == 
           MasksCollisionBitsFull[Address];
       }
-      public override void ResolveCollision(UTXOIndexCompressed tablePrimary)
+
+      public override void ResolveCollision(
+        UTXOIndexCompressed tablePrimary)
       {
         byte indexTablePartition = (byte)tablePrimary.PrimaryKey;
 
