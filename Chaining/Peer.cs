@@ -37,9 +37,9 @@ namespace BToken.Chaining
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
       const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
 
-      const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 2;
+      const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 77;
       Stopwatch StopwatchDownload = new Stopwatch();
-      public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+       int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
       public Stack<UTXOTable.BlockArchive> BlockArchivesDownloaded =
         new Stack<UTXOTable.BlockArchive>();
@@ -80,7 +80,7 @@ namespace BToken.Chaining
 
       string Command;
 
-      const int SIZE_MESSAGE_PAYLOAD_BUFFER = 0x2000000;
+      const int SIZE_MESSAGE_PAYLOAD_BUFFER = 0x1000000;
       byte[] Payload = new byte[SIZE_MESSAGE_PAYLOAD_BUFFER];
       int PayloadLength;
 
@@ -542,20 +542,26 @@ namespace BToken.Chaining
 
         BlockArchive.Reset();
 
-        BlockArchive.Parse(Payload, PayloadLength);
+        int indexPayload = 0;
+        int countHeaders = VarInt.GetInt32(Payload, ref indexPayload);
 
-        Header headerLocatorAncestor = locator
-          .Find(h => h.Hash.IsEqual(
-            BlockArchive.HeaderRoot.HashPrevious));
-
-        if (headerLocatorAncestor == null)
+        if (countHeaders > 0)
         {
-          throw new ChainException(
-            "GetHeaders does not connect to locator.");
-        }
+          BlockArchive.Parse(Payload, indexPayload, PayloadLength);
 
-        BlockArchive.HeaderRoot.HeaderPrevious = 
-          headerLocatorAncestor;
+          Header headerLocatorAncestor = locator
+            .Find(h => h.Hash.IsEqual(
+              BlockArchive.HeaderRoot.HashPrevious));
+
+          if (headerLocatorAncestor == null)
+          {
+            throw new ChainException(
+              "GetHeaders does not connect to locator.");
+          }
+
+          BlockArchive.HeaderRoot.HeaderPrevious =
+            headerLocatorAncestor;
+        }
 
         lock (LOCK_IsExpectingMessageResponse)
         {
@@ -589,7 +595,7 @@ namespace BToken.Chaining
           {
             Header headerNext = await GetHeaders(header);
 
-            if (headerNext == null || height > 150000)
+            if (headerNext == null || height > 10000)
             {
               return difficulty;
             }
@@ -644,7 +650,6 @@ namespace BToken.Chaining
 
 
       List<Inventory> Inventories = new List<Inventory>();
-
       public void CreateInventories(ref Header headerLoad)
       {
         Inventories.Clear();
@@ -681,12 +686,10 @@ namespace BToken.Chaining
           
           BlockArchive.Reset();
 
-          int i = 0;
-
           while (true)
           {
-            await MessageResponseReady
-               .ReceiveAsync(cancellation.Token);
+            await MessageResponseReady.ReceiveAsync(
+              cancellation.Token);
 
             if(Command != "block")
             {
@@ -694,11 +697,11 @@ namespace BToken.Chaining
               continue;
             }
 
-            BlockArchive.ParseBlock(Payload, PayloadLength);
+            BlockArchive.ParseBlockSingle(
+              Payload, 
+              PayloadLength);
 
-            i += 1;
-
-            if(i < Inventories.Count)
+            if(BlockArchive.Height < Inventories.Count)
             {
               StartMessageListener();
               continue;
@@ -739,7 +742,7 @@ namespace BToken.Chaining
         
         BlockArchivesDownloaded.Push(BlockArchive);
 
-        CalculateNewCountBlocks();
+        //CalculateNewCountBlocks();
 
         StopwatchDownload.Stop();
         

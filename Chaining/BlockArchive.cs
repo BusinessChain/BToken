@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using System.Security.Cryptography;
 
 namespace BToken.Chaining
@@ -11,11 +10,11 @@ namespace BToken.Chaining
   {
     public class BlockArchive
     {
+      const int SIZE_MESSAGE_ARCHIVE_BUFFER = 0x1000000;
+      public byte[] ArchiveBuffer = new byte[SIZE_MESSAGE_ARCHIVE_BUFFER];
+      public int IndexArchiveBuffer;
       public byte[] Buffer;
       public int IndexBuffer;
-      
-      public List<byte[]> BlockBuffers = new List<byte[]>();
-      public List<int> LengthBlockBuffers = new List<int>();
 
       public int Index;
       public bool IsInvalid;
@@ -43,12 +42,13 @@ namespace BToken.Chaining
       public void Reset()
       {
         HeaderTip = null;
+        HeaderRoot = null;
         Height = 0;
         Difficulty = 0.0;
         CountTX = 0;
 
-        BlockBuffers.Clear();
-        LengthBlockBuffers.Clear();
+        IndexBuffer = 0;
+        IndexArchiveBuffer = 0;
 
         Inputs.Clear();
         TableUInt32.Table.Clear();
@@ -61,63 +61,64 @@ namespace BToken.Chaining
       readonly byte[] HASH_ZERO = new byte[32];
       public void Parse(byte[] buffer)
       {
-        Parse(buffer, buffer.Length, HASH_ZERO);
+        Parse(buffer, 0, buffer.Length, HASH_ZERO);
       }
 
-      public void Parse(byte[] buffer, int countBytes)
+      public void Parse(byte[] buffer, int offset, int countBytes)
       {
-        Parse(buffer, countBytes, HASH_ZERO);
+        Parse(buffer, offset, countBytes, HASH_ZERO);
       }
 
       public void Parse(
         byte[] buffer, 
         byte[] hashStopLoading)
       {
-        Parse(
-          buffer, 
-          buffer.Length, 
-          hashStopLoading);
+        Parse(buffer, 0, buffer.Length, hashStopLoading);
       }
 
       void Parse(
         byte[] buffer, 
+        int offset, 
         int countBytes,
         byte[] hashStopLoading)
       {
         StopwatchParse.Reset();
 
         Buffer = buffer;
-        IndexBuffer = 0;
-
-        if (VarInt.GetInt32(Buffer, ref IndexBuffer) == 0)
-        {
-          return;
-        }
+        IndexBuffer = offset;
         
         do
         {
           ParseBlock();
+
         } while (
           !hashStopLoading.IsEqual(HeaderTip.Hash) &&
           IndexBuffer < countBytes);
-        
+
         StopwatchParse.Stop();
       }
 
-      public void ParseBlock(byte[] buffer, int bufferLength)
+      public void ParseBlockSingle(byte[] buffer, int bufferLength)
       {
-        Buffer = buffer;
-        IndexBuffer = 0;
+        Array.Copy(
+          buffer, 
+          0, 
+          ArchiveBuffer, 
+          IndexArchiveBuffer, 
+          bufferLength);
+
+        Buffer = ArchiveBuffer;
+        IndexBuffer = IndexArchiveBuffer;
+
+        IndexArchiveBuffer += bufferLength;
 
         ParseBlock();
-
-        BlockBuffers.Add(buffer);
-        LengthBlockBuffers.Add(bufferLength);
       }
 
       void ParseBlock()
       {
         StopwatchParse.Start();
+
 
         Header header = Header.ParseHeader(
           Buffer,
@@ -145,16 +146,16 @@ namespace BToken.Chaining
         }
 
         Difficulty += header.Difficulty;
-        Height += 1;
 
         int tXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
-
-        CountTX += tXCount;
-
+        
         if (tXCount > 0)
         {
           ParseTXs(tXCount, header.MerkleRoot);
         }
+
+        CountTX += tXCount;
+        Height += 1;
 
         StopwatchParse.Stop();
       }
