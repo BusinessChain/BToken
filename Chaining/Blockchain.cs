@@ -102,8 +102,6 @@ namespace BToken.Chaining
       }
        
       await LoadBlocks(stopHashLoading);
-
-      CreateBlockArchive();
     }
 
     void Initialize()
@@ -229,6 +227,9 @@ namespace BToken.Chaining
     }
 
 
+    readonly object LOCK_QueueBlockArchives = new object();
+    readonly object LOCK_IndexBlockArchive = new object();
+
     async Task StartLoader()
     {
       UTXOTable.BlockArchive blockArchive = null;
@@ -249,7 +250,7 @@ namespace BToken.Chaining
           File.ReadAllBytes(pathFile),
           HashStopLoading);
       }
-      catch (Exception ex)
+      catch
       {
         blockArchive.IsInvalid = true;
       }
@@ -261,13 +262,16 @@ namespace BToken.Chaining
           return;
         }
 
-        lock (LOCK_QueueBlockArchives)
+        lock (LOCK_IndexBlockArchive)
         {
           if (blockArchive.Index == IndexBlockArchive)
           {
             break;
           }
+        }
 
+        lock (LOCK_QueueBlockArchives)
+        {
           if (QueueBlockArchives.Count < 10)
           {
             QueueBlockArchives.Add(
@@ -307,19 +311,30 @@ namespace BToken.Chaining
           UTXOTable.InsertBlockArchive(blockArchive);
 
           InsertHeaders(blockArchive);
+          
+          if (blockArchive.CountTX < SIZE_BLOCK_ARCHIVE)
+          {
+            CountTXsArchive = blockArchive.CountTX;
+            OpenBlockArchive(IndexBlockArchive);
 
-          IndexBlockArchive += 1;
+            IsBlockLoadingCompleted = true;
+            return;
+          }
 
           if (HeaderTip.Hash.IsEqual(HashStopLoading))
           {
-            IsBlockLoadingCompleted = true;
-            return;
+            break;
           }
 
           if ((blockArchive.Index + 1) %
             UTXOIMAGE_INTERVAL_SYNC == 0)
           {
             CreateImage();
+          }
+          
+          lock (LOCK_IndexBlockArchive)
+          {
+            IndexBlockArchive += 1;
           }
 
           lock (LOCK_QueueBlockArchives)
@@ -351,6 +366,9 @@ namespace BToken.Chaining
             ArchiveDirectoryBlocks.Name,
             blockArchive.Index.ToString()));
       }
+
+      CountTXsArchive = 0;
+      CreateBlockArchive(IndexBlockArchive + 1);
 
       IsBlockLoadingCompleted = true;
     }
@@ -392,7 +410,6 @@ namespace BToken.Chaining
 
 
     bool IsBlockLoadingCompleted;
-    readonly object LOCK_QueueBlockArchives = new object();
     Dictionary<int, UTXOTable.BlockArchive> QueueBlockArchives =
       new Dictionary<int, UTXOTable.BlockArchive>();
     
@@ -536,7 +553,7 @@ namespace BToken.Chaining
 
           try
           {
-            await Synchronize(headerRoot, peer);
+            await SynchronizeUTXO(headerRoot, peer);
           }
           catch(Exception ex)
           {
@@ -588,7 +605,7 @@ namespace BToken.Chaining
 
           try
           {
-            await Synchronize(headerRoot, peer);
+            await SynchronizeUTXO(headerRoot, peer);
           }
           catch(Exception ex)
           {
@@ -666,8 +683,8 @@ namespace BToken.Chaining
     BufferBlock<Peer> QueueSynchronizer =
       new BufferBlock<Peer>();
 
-    async Task Synchronize(
-      Header headerRoot, 
+    async Task SynchronizeUTXO(
+      Header headerRoot,
       Peer peerSynchronizing)
     {
       HeaderLoad = headerRoot;
@@ -677,8 +694,7 @@ namespace BToken.Chaining
       
       while (true)
       {
-        Peer peer = await QueueSynchronizer
-          .ReceiveAsync()
+        Peer peer = await QueueSynchronizer.ReceiveAsync()
           .ConfigureAwait(false);
 
         UTXOTable.BlockArchive blockArchive =
@@ -694,45 +710,36 @@ namespace BToken.Chaining
 
         if (blockArchive.IsLastArchive)
         {
-          peer.SetStatusCompleted();
-          break;
+          peer.SetUTXOSyncComplete();
+          await taskUTXOSyncSessions;
+          return;
         }
 
         RunUTXOSyncSession(peer);
       }
-
-      await taskUTXOSyncSessions;
     }
 
 
-
-    bool FlagAllHeadersLoaded;
-
-    async Task StartUTXOSyncSessions(
-      Peer peerSynchronizing)
+    
+    async Task StartUTXOSyncSessions(Peer peerSynchronizing)
     {
       RunUTXOSyncSession(peerSynchronizing);
 
       while (true)
       {
-        var peersIdle = new List<Peer>();
-
-        lock (LOCK_Peers)
+        lock (LOCK_HeaderLoad)
         {
-          if (Peers.All(p => p.IsStatusCompleted()))
+          if (Peers.All(p => p.IsUTXOSyncComplete()))
           {
             return;
           }
-
-          if (!FlagAllHeadersLoaded)
-          {
-            peersIdle = Peers.FindAll(p => p.IsStatusIdle());
-            peersIdle.ForEach(p => p.SetStatusBusy());
-          }
         }
-        
-        peersIdle.Select(p => RunUTXOSyncSession(p))
-          .ToList();
+
+        var peersIdle = new List<Peer>();
+
+        peersIdle = Peers.FindAll(p => p.IsStatusIdle());
+        peersIdle.ForEach(p => p.SetStatusBusy());
+        peersIdle.Select(p => RunUTXOSyncSession(p)).ToList();
 
         await Task.Delay(1000).ConfigureAwait(false);
       }
@@ -755,7 +762,6 @@ namespace BToken.Chaining
 
           if (HeaderLoad == null)
           {
-            FlagAllHeadersLoaded = true;
             peer.SetStatusIdle();
             return;
           }
@@ -769,7 +775,7 @@ namespace BToken.Chaining
           {
             lock (LOCK_Peers)
             {
-              if (Peers.All(p => p.IsStatusCompleted()))
+              if (Peers.All(p => p.IsUTXOSyncComplete()))
               {
                 return;
               }
@@ -817,15 +823,13 @@ namespace BToken.Chaining
           peer = Peers.Find(p =>
           p.IsStatusAwaitingInsertion() &&
           p.BlockArchivesDownloaded.Peek().Index == IndexBlockArchiveQueue);
-        }
 
-        if (peer != null)
-        {
+          if (peer == null)
+          {
+            return;
+          }
+
           peer.SetStatusBusy();
-        }
-        else
-        {
-          return;
         }
       }
     }
@@ -851,7 +855,7 @@ namespace BToken.Chaining
 
       CountTXsArchive += blockArchive.CountTX;
 
-      if (CountTXsArchive > SIZE_BLOCK_ARCHIVE)
+      if (CountTXsArchive >= SIZE_BLOCK_ARCHIVE)
       {
         FileBlockArchive.Dispose();
 
@@ -864,17 +868,31 @@ namespace BToken.Chaining
           CreateImage();
         }
 
-        CreateBlockArchive();
+        CreateBlockArchive(IndexBlockArchive);
 
         return;
       }
     }
 
-    void CreateBlockArchive()
+    void OpenBlockArchive(int indexArchive)
     {
       string pathFileArchive = Path.Combine(
         ArchiveDirectoryBlocks.FullName,
-        IndexBlockArchive.ToString());
+        indexArchive.ToString());
+
+      FileBlockArchive = new FileStream(
+       pathFileArchive,
+       FileMode.Append,
+       FileAccess.Write,
+       FileShare.None,
+       bufferSize: 65536);
+    }
+
+    void CreateBlockArchive(int indexArchive)
+    {
+      string pathFileArchive = Path.Combine(
+        ArchiveDirectoryBlocks.FullName,
+        indexArchive.ToString());
 
       FileBlockArchive = new FileStream(
        pathFileArchive,

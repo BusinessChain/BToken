@@ -39,7 +39,7 @@ namespace BToken.Chaining
 
       const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 77;
       Stopwatch StopwatchDownload = new Stopwatch();
-       int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+      int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
       public Stack<UTXOTable.BlockArchive> BlockArchivesDownloaded =
         new Stack<UTXOTable.BlockArchive>();
@@ -595,7 +595,7 @@ namespace BToken.Chaining
           {
             Header headerNext = await GetHeaders(header);
 
-            if (headerNext == null || height > 10000)
+            if (headerNext == null || height > 8000)
             {
               return difficulty;
             }
@@ -691,6 +691,15 @@ namespace BToken.Chaining
             await MessageResponseReady.ReceiveAsync(
               cancellation.Token);
 
+            if(Command == "notfound")
+            {
+              SetUTXOSyncComplete();
+
+              CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+
+              return false;
+            }
+
             if(Command != "block")
             {
               StartMessageListener();
@@ -742,7 +751,7 @@ namespace BToken.Chaining
         
         BlockArchivesDownloaded.Push(BlockArchive);
 
-        //CalculateNewCountBlocks();
+        CalculateNewCountBlocks();
 
         StopwatchDownload.Stop();
         
@@ -799,7 +808,7 @@ namespace BToken.Chaining
       }
 
 
-      public void SetStatusCompleted()
+      public void SetUTXOSyncComplete()
       {
         lock (LOCK_Status)
         {
@@ -807,7 +816,7 @@ namespace BToken.Chaining
             .COMPLETED;
         }
       }
-      public bool IsStatusCompleted()
+      public bool IsUTXOSyncComplete()
       {
         lock (LOCK_Status)
         {
