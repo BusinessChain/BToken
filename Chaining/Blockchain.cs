@@ -169,26 +169,6 @@ namespace BToken.Chaining
       InsertHeaders(blockArchive);
     }
 
-
-
-    byte[] HashStopLoading;
-    const int COUNT_LOADER_TASKS = 1;
-    
-    async Task LoadBlocks(byte[] stopHashLoading)
-    {
-      IndexBlockArchiveLoad = IndexBlockArchive;
-      HashStopLoading = stopHashLoading;
-
-      var loaderTasks = new Task[COUNT_LOADER_TASKS];
-
-      Parallel.For(
-        0,
-        COUNT_LOADER_TASKS,
-        i => loaderTasks[i] = StartLoader());
-
-      await Task.WhenAll(loaderTasks);
-    }
-
     void LoadMapBlockToArchiveData(byte[] buffer)
     {
       int index = 0;
@@ -227,8 +207,99 @@ namespace BToken.Chaining
     }
 
 
+
+    byte[] HashStopLoading;
+    const int COUNT_LOADER_TASKS = 1;
+    BufferBlock<UTXOTable.BlockArchive> QueueLoader =
+      new BufferBlock<UTXOTable.BlockArchive>();
+
+    async Task LoadBlocks(byte[] hashStopLoading)
+    {
+      IndexBlockArchiveLoad = IndexBlockArchive;
+      IndexBlockArchiveQueue = IndexBlockArchive;
+      HashStopLoading = hashStopLoading;
+
+      RunLoaderInserter();
+
+      var loaderTasks = new Task[COUNT_LOADER_TASKS];
+
+      Parallel.For(
+        0,
+        COUNT_LOADER_TASKS,
+        i => loaderTasks[i] = StartLoader());
+      
+      await Task.WhenAll(loaderTasks);
+    }
+
+    async Task RunLoaderInserter()
+    {
+      while (true)
+      {
+        UTXOTable.BlockArchive blockArchive =
+          await QueueLoader.ReceiveAsync()
+          .ConfigureAwait(false);
+
+        if (
+          blockArchive.IsInvalid ||
+          !blockArchive.HeaderRoot.HashPrevious.IsEqual(
+            HeaderTip.Hash))
+        {
+          CountTXsArchive = 0;
+          CreateBlockArchive(IndexBlockArchive);
+
+          break;
+        }
+
+        try
+        {
+          blockArchive.HeaderRoot.HeaderPrevious = HeaderTip;
+
+          ValidateHeaders(blockArchive.HeaderRoot, Height + 1);
+
+          UTXOTable.InsertBlockArchive(blockArchive);
+
+          InsertHeaders(blockArchive);
+
+          if (blockArchive.CountTX < SIZE_BLOCK_ARCHIVE)
+          {
+            CountTXsArchive = blockArchive.CountTX;
+            OpenBlockArchive(IndexBlockArchive);
+
+            break;
+          }
+
+          IndexBlockArchive += 1;
+
+          if (HeaderTip.Hash.IsEqual(HashStopLoading))
+          {
+            CountTXsArchive = 0;
+            CreateBlockArchive(IndexBlockArchive);
+
+            break;
+          }
+
+          if (IndexBlockArchive % UTXOIMAGE_INTERVAL_SYNC == 0)
+          {
+            CreateImage();
+          }
+        }
+        catch (ChainException)
+        {
+          File.Delete(
+            Path.Combine(
+              ArchiveDirectoryBlocks.Name,
+              blockArchive.Index.ToString()));
+
+          CountTXsArchive = 0;
+          CreateBlockArchive(IndexBlockArchive);
+        }
+      }
+
+      IsBlockLoadingCompleted = true;
+    }
+
+
     readonly object LOCK_QueueBlockArchives = new object();
-    readonly object LOCK_IndexBlockArchive = new object();
 
     async Task StartLoader()
     {
@@ -262,17 +333,14 @@ namespace BToken.Chaining
           return;
         }
 
-        lock (LOCK_IndexBlockArchive)
+        lock (LOCK_QueueBlockArchives)
         {
-          if (blockArchive.Index == IndexBlockArchive)
+          if (blockArchive.Index == IndexBlockArchiveQueue)
           {
             break;
           }
-        }
 
-        lock (LOCK_QueueBlockArchives)
-        {
-          if (QueueBlockArchives.Count < 10)
+          if (QueueBlockArchives.Count <= COUNT_LOADER_TASKS)
           {
             QueueBlockArchives.Add(
               blockArchive.Index,
@@ -292,85 +360,33 @@ namespace BToken.Chaining
         await Task.Delay(2000).ConfigureAwait(false);
       }
 
-      try
+      while(true)
       {
-        while (!blockArchive.IsInvalid)
+        QueueLoader.Post(blockArchive);
+
+        if (blockArchive.IsInvalid)
         {
-          Header header = blockArchive.HeaderRoot;
+          return;
+        }
 
-          if (!header.HashPrevious.IsEqual(HeaderTip.Hash))
+        blockArchive = null;
+
+        lock (LOCK_QueueBlockArchives)
+        {
+          IndexBlockArchiveQueue += 1;
+
+          if (QueueBlockArchives.TryGetValue(
+            IndexBlockArchiveLoad,
+            out blockArchive))
           {
-            throw new ChainException(
-              "Received header does not link to last header.");
+            QueueBlockArchives.Remove(blockArchive.Index);
           }
-
-          header.HeaderPrevious = HeaderTip;
-
-          ValidateHeaders(header, Height + 1);
-
-          UTXOTable.InsertBlockArchive(blockArchive);
-
-          InsertHeaders(blockArchive);
-          
-          if (blockArchive.CountTX < SIZE_BLOCK_ARCHIVE)
+          else
           {
-            CountTXsArchive = blockArchive.CountTX;
-            OpenBlockArchive(IndexBlockArchive);
-
-            IsBlockLoadingCompleted = true;
-            return;
-          }
-
-          if (HeaderTip.Hash.IsEqual(HashStopLoading))
-          {
-            break;
-          }
-
-          if ((blockArchive.Index + 1) %
-            UTXOIMAGE_INTERVAL_SYNC == 0)
-          {
-            CreateImage();
-          }
-          
-          lock (LOCK_IndexBlockArchive)
-          {
-            IndexBlockArchive += 1;
-          }
-
-          lock (LOCK_QueueBlockArchives)
-          {
-            if (QueueBlockArchives.TryGetValue(
-              IndexBlockArchive,
-              out UTXOTable.BlockArchive blockArchiveNext))
-            {
-              QueueBlockArchives.Remove(blockArchiveNext.Index);
-
-              lock (LOCK_BlockArchivesIdle)
-              {
-                BlockArchivesIdle.Add(blockArchive);
-              }
-
-              blockArchive = blockArchiveNext;
-            }
-            else
-            {
-              goto LABEL_LoadBlockArchive;
-            }
+            goto LABEL_LoadBlockArchive;
           }
         }
       }
-      catch (ChainException)
-      {
-        File.Delete(
-          Path.Combine(
-            ArchiveDirectoryBlocks.Name,
-            blockArchive.Index.ToString()));
-      }
-
-      CountTXsArchive = 0;
-      CreateBlockArchive(IndexBlockArchive + 1);
-
-      IsBlockLoadingCompleted = true;
     }
 
 
