@@ -248,9 +248,12 @@ namespace BToken.Chaining
       });
     }
 
+    int HeightInserter;
 
     void LogInsertion(BlockArchive blockArchive)
     {
+      HeightInserter += blockArchive.Height;
+
       if (UTCTimeStartMerger == 0)
       {
         UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -262,8 +265,9 @@ namespace BToken.Chaining
 
 
       string logCSV = string.Format(
-        "{0},{1},{2},{3},{4},{5},{6}",
+        "{0},{1},{2},{3},{4},{5},{6},{7}",
         blockArchive.Index,
+        HeightInserter,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
         ratioMergeToParse,
         blockArchive.Inputs.Count,

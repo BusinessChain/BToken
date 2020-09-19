@@ -595,7 +595,7 @@ namespace BToken.Chaining
           {
             Header headerNext = await GetHeaders(header);
 
-            if (headerNext == null || height > 8000)
+            if (headerNext == null || height > 250000)
             {
               return difficulty;
             }

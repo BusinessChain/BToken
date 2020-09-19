@@ -28,7 +28,7 @@ namespace BToken.Chaining
     UTXOTable UTXOTable;
     const int UTXOIMAGE_INTERVAL_SYNC = 500;
     const int UTXOIMAGE_INTERVAL_LISTEN = 50;
-    int SIZE_BLOCK_ARCHIVE = 2500;
+    int SIZE_BLOCK_ARCHIVE = 50000;
 
     readonly object LOCK_IsBlockchainLocked = new object();
     bool IsBlockchainLocked;
@@ -209,7 +209,7 @@ namespace BToken.Chaining
 
 
     byte[] HashStopLoading;
-    const int COUNT_LOADER_TASKS = 1;
+    const int COUNT_LOADER_TASKS = 6;
     BufferBlock<UTXOTable.BlockArchive> QueueLoader =
       new BufferBlock<UTXOTable.BlockArchive>();
 
@@ -376,7 +376,7 @@ namespace BToken.Chaining
           IndexBlockArchiveQueue += 1;
 
           if (QueueBlockArchives.TryGetValue(
-            IndexBlockArchiveLoad,
+            IndexBlockArchiveQueue,
             out blockArchive))
           {
             QueueBlockArchives.Remove(blockArchive.Index);
@@ -704,6 +704,8 @@ namespace BToken.Chaining
       Peer peerSynchronizing)
     {
       HeaderLoad = headerRoot;
+      IndexBlockArchiveDownload = IndexBlockArchive;
+      IndexBlockArchiveQueue = IndexBlockArchive;
 
       Task taskUTXOSyncSessions = 
         StartUTXOSyncSessions(peerSynchronizing);
