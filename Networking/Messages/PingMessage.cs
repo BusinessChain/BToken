@@ -4,24 +4,22 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
-  partial class Network
+  class PingMessage : NetworkMessage
   {
-    class PingMessage : NetworkMessage
+    public UInt64 Nonce { get; private set; }
+
+
+    public PingMessage(NetworkMessage networkMessage) 
+      : base("ping", networkMessage.Payload)
     {
-      public UInt64 Nonce { get; private set; }
-
-
-      public PingMessage(NetworkMessage networkMessage) : base("ping", networkMessage.Payload)
-      {
-        Nonce = BitConverter.ToUInt64(Payload, 0);
-      }
-      public PingMessage(UInt64 nonce) : base("ping")
-      {
-        Nonce = nonce;
-        Payload = BitConverter.GetBytes(nonce);
-      }
+      Nonce = BitConverter.ToUInt64(Payload, 0);
+    }
+    public PingMessage(UInt64 nonce) : base("ping")
+    {
+      Nonce = nonce;
+      Payload = BitConverter.GetBytes(nonce);
     }
   }
 }

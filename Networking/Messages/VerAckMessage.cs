@@ -4,17 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
-  partial class Network
+  class VerAckMessage : NetworkMessage
   {
-    class VerAckMessage : NetworkMessage
+
+
+    public VerAckMessage() : base("verack")
     {
-
-
-      public VerAckMessage() : base("verack")
-      {
-      }
     }
   }
 }

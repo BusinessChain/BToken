@@ -82,7 +82,7 @@ namespace BToken.Chaining
       }
       public override bool TryGetValueInPrimaryTable(int primaryKey)
       {
-        PrimaryKey = primaryKey; // cache
+        PrimaryKey = primaryKey;
         return PrimaryTable.TryGetValue(primaryKey, out UTXOPrimary);
       }
       public override bool HasCollision(int cacheAddress)
@@ -192,8 +192,11 @@ namespace BToken.Chaining
         uint mask = (uint)1 << bitIndex;
         if ((uTXO[uintIndex] & mask) != 0x00)
         {
-          throw new UTXOException(string.Format(
-            "Output index {0} already spent.", outputIndex));
+          throw new ChainException(
+            string.Format(
+              "Output index {0} already spent.",
+              outputIndex),
+            ErrorCode.INVALID);
         }
         uTXO[uintIndex] |= mask;
 
@@ -216,7 +219,7 @@ namespace BToken.Chaining
         return true;
       }
 
-      public override void BackupToDisk(string path)
+      public override void BackupImage(string path)
       {
         string directoryPath = Path.Combine(path, Label);
         Directory.CreateDirectory(directoryPath);
@@ -230,7 +233,14 @@ namespace BToken.Chaining
           byteList.AddRange(VarInt.GetBytes(byteLength));
 
           byte[] byteArray = new byte[byteLength];
-          Buffer.BlockCopy(keyValuePair.Value, 0, byteArray, 0, byteArray.Length);
+
+          Buffer.BlockCopy(
+            keyValuePair.Value, 
+            0, 
+            byteArray, 
+            0, 
+            byteArray.Length);
+
           byteList.AddRange(byteArray);
         }
 
@@ -269,13 +279,13 @@ namespace BToken.Chaining
           stream.Write(bytes, 0, bytes.Length);
         }
       }
-      public override void Load()
+      public override void Load(string path)
       {
         LoadPrimaryData(File.ReadAllBytes(
-          Path.Combine(DirectoryPath, "PrimaryTable")));
+          Path.Combine(path, Label, "PrimaryTable")));
 
         LoadCollisionData(File.ReadAllBytes(
-          Path.Combine(DirectoryPath, "CollisionTable")));
+          Path.Combine(path, Label, "CollisionTable")));
       }
       void LoadPrimaryData(byte[] buffer)
       {

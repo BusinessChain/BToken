@@ -187,15 +187,18 @@ namespace BToken.Chaining
         ulong mask = (ulong)1 << (COUNT_NON_OUTPUT_BITS + outputIndex);
         if ((uTXO & mask) != 0x00)
         {
-          throw new UTXOException(string.Format(
-            "Output index {0} already spent.", outputIndex));
+          throw new ChainException(
+            string.Format(
+              "Output index {0} already spent.",
+              outputIndex),
+            ErrorCode.INVALID);
         }
         uTXO |= mask;
 
         areAllOutputpsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
       }
 
-      public override void BackupToDisk(string path)
+      public override void BackupImage(string path)
       {
         string directoryPath = Path.Combine(path, Label);
         Directory.CreateDirectory(directoryPath);
@@ -226,9 +229,11 @@ namespace BToken.Chaining
           }
         }
       }
-      public override void Load()
+      public override void Load(string path)
       {
-        byte[] buffer = File.ReadAllBytes(Path.Combine(DirectoryPath, "PrimaryTable"));
+        byte[] buffer = File.ReadAllBytes(
+          Path.Combine(path, Label, "PrimaryTable"));
+
         int index = 0;
 
         while (index < buffer.Length)
@@ -241,7 +246,9 @@ namespace BToken.Chaining
           PrimaryTable.Add(key, value);
         }
 
-        buffer = File.ReadAllBytes(Path.Combine(DirectoryPath, "CollisionTable"));
+        buffer = File.ReadAllBytes(
+          Path.Combine(path, Label, "CollisionTable"));
+
         index = 0;
 
         while (index < buffer.Length)

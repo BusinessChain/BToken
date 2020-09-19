@@ -42,6 +42,7 @@
     <WarningLevel>4</WarningLevel>
     <LangVersion>latest</LangVersion>
     <NoWarn>CS4014</NoWarn>
+    <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -76,13 +77,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Chaining\BatchDataPipe\DataSynchroinizer.cs" />
-    <Compile Include="Chaining\BatchDataPipe\DataBatch.cs" />
-    <Compile Include="Chaining\BatchDataPipe\DataContainer.cs" />
-    <Compile Include="Chaining\BlockContainer.cs" />
-    <Compile Include="Chaining\UTXO\UTXOSynchronizer.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderContainer.cs" />
-    <Compile Include="Chaining\UTXO\UTXOChannel.cs" />
+    <Compile Include="Chaining\Blockchain.cs" />
+    <Compile Include="Chaining\Peer.cs" />
+    <Compile Include="Chaining\BlockArchive.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexULong64.cs" />
@@ -90,31 +87,21 @@
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexULong64Compressed.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexCompressed.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderchainSynchronizer.cs" />
     <Compile Include="Chaining\UTXO\UTXOTable.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Chaining\TXInput.cs" />
     <Compile Include="Chaining\TXOutput.cs" />
     <Compile Include="Chaining\TXWitness.cs" />
     <Compile Include="Chaining\GenesisBlock.cs" />
-    <Compile Include="Chaining\UTXO\UTXOException.cs" />
     <Compile Include="Chaining\Wallet\Wallet.cs" />
-    <Compile Include="Chaining\Headerchain\ChainInserter.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderLocator.cs" />
-    <Compile Include="Chaining\Headerchain\HeaderLocation.cs" />
-    <Compile Include="Chaining\Headerchain\ChainProbe.cs" />
     <Compile Include="Chaining\ChainException.cs" />
-    <Compile Include="Chaining\Headerchain\Chain.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
-    <Compile Include="Hashing\SHA256d.cs" />
-    <Compile Include="Chaining\Headerchain\TargetManager.cs" />
+    <Compile Include="Chaining\Blockchain\TargetManager.cs" />
     <Compile Include="Networking\NetworkAddress.cs" />
-    <Compile Include="Networking\INetworkChannel.cs" />
     <Compile Include="Networking\Messages\AddressMessage.cs" />
     <Compile Include="Networking\Messages\FeeFilterMessage.cs" />
-    <Compile Include="Networking\NetworkAddressPool.cs" />
     <Compile Include="Networking\Inventory.cs" />
     <Compile Include="DataTypes\Header.cs" />
     <Compile Include="DataTypes\VarString.cs" />
@@ -125,22 +112,17 @@
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
-    <Compile Include="Chaining\Headerchain\Headerchain.cs" />
-    <Compile Include="Networking\MessageStreamer.cs" />
     <Compile Include="Networking\Messages\GetHeadersMessage.cs" />
     <Compile Include="Networking\Messages\HeadersMessage.cs" />
     <Compile Include="Networking\Messages\NetworkMessage.cs" />
     <Compile Include="Networking\Messages\PingMessage.cs" />
     <Compile Include="Networking\Messages\PongMessage.cs" />
     <Compile Include="Networking\Messages\SendHeadersMessage.cs" />
-    <Compile Include="Networking\Network.cs" />
     <Compile Include="Networking\Messages\GetDataMessage.cs" />
     <Compile Include="Networking\Messages\InvMessage.cs" />
     <Compile Include="Networking\Messages\RejectMessage.cs" />
     <Compile Include="Networking\Messages\VerAckMessage.cs" />
     <Compile Include="Networking\Messages\VersionMessage.cs" />
-    <Compile Include="Networking\NetworkException.cs" />
-    <Compile Include="Networking\Peer.cs" />
     <Compile Include="Networking\ProtocolVersion.cs" />
     <Compile Include="Node.cs" />
     <Compile Include="Networking\ServiceFlags.cs" />

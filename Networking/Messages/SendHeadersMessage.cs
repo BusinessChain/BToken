@@ -4,13 +4,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
-  partial class Network
+  class SendHeadersMessage : NetworkMessage
   {
-    class SendHeadersMessage : NetworkMessage
-    {
-      public SendHeadersMessage() : base("sendheaders") { }
-    }
+    public SendHeadersMessage() : base("sendheaders") { }
   }
 }

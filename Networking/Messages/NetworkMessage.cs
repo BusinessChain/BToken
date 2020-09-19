@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
   public class NetworkMessage
   {
@@ -9,10 +9,8 @@ namespace BToken.Networking
 
 
 
-    public NetworkMessage(string command) 
-      : this(
-          command, 
-          new byte[0])
+    public NetworkMessage(string command)
+      : this(command, new byte[0])
     { }
 
     public NetworkMessage(

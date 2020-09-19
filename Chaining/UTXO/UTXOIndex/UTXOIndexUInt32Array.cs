@@ -32,7 +32,7 @@ namespace BToken.Chaining
         {
           uTXOIndex[uTXOIndex.Length - 1] |= (uint.MaxValue << countUTXORemainderBits);
         }
-       
+
         Table.Add(tXHash, uTXOIndex);
       }
 
@@ -47,8 +47,11 @@ namespace BToken.Chaining
           uint mask = (uint)1 << bitIndex;
           if ((UTXOItem[uintIndex] & mask) != 0x00)
           {
-            throw new UTXOException(string.Format(
-              "Output index {0} already spent.", input.OutputIndex));
+            throw new ChainException(
+              string.Format(
+                "Output index {0} already spent.",
+                input.OutputIndex),
+              ErrorCode.INVALID);
           }
           UTXOItem[uintIndex] |= mask;
 

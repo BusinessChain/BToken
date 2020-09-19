@@ -25,6 +25,7 @@ namespace BToken.Chaining
         ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0),
         ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1),
         ~(uint)(COUNT_COLLISIONS_MAX << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 2)};
+
       uint[] MasksCollisionBitsOne = {
         1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 0,
         1 << COUNT_BATCHINDEX_BITS + COUNT_COLLISION_BITS_PER_TABLE * 1,
@@ -52,14 +53,17 @@ namespace BToken.Chaining
       {
         return PrimaryTables.Sum(t => t.Count);
       }
+
       protected override int GetCountCollisionTableItems()
       {
         return CollisionTables.Sum(t => t.Count);
       }
+
       public override bool PrimaryTableContainsKey(int primaryKey)
       {
         return PrimaryTables[(byte)primaryKey].ContainsKey(primaryKey);
       }
+
       public override void IncrementCollisionBits(int primaryKey, int collisionAddress)
       {
         byte indexTablePartition = (byte)primaryKey;
@@ -90,33 +94,42 @@ namespace BToken.Chaining
         SpendUTXO(ref UTXOPrimary, input.OutputIndex, out areAllOutputpsSpent);
         PrimaryTables[(byte)PrimaryKey][PrimaryKey] = UTXOPrimary;
       }
+
       public override bool TryGetValueInPrimaryTable(int primaryKey)
       {
         PrimaryKey = primaryKey;
         return PrimaryTables[(byte)PrimaryKey].TryGetValue(primaryKey, out UTXOPrimary);
       }
+
       public override bool HasCollision(int cacheAddress)
       {
         return (MasksCollisionBitsFull[cacheAddress] & UTXOPrimary) != 0;
       }
+
       public override void RemovePrimary()
       {
         PrimaryTables[(byte)PrimaryKey].Remove(PrimaryKey);
       }
+
       public override uint GetCollisionBits()
       {
         return MaskCollisionBits & UTXOPrimary;
       }
+
       public override bool AreCollisionBitsFull()
       {
-        return (MasksCollisionBitsFull[Address] & UTXOPrimary) == MasksCollisionBitsFull[Address];
+        return (MasksCollisionBitsFull[Address] & UTXOPrimary) == 
+          MasksCollisionBitsFull[Address];
       }
-      public override void ResolveCollision(UTXOIndexCompressed tablePrimary)
+
+      public override void ResolveCollision(
+        UTXOIndexCompressed tablePrimary)
       {
         byte indexTablePartition = (byte)tablePrimary.PrimaryKey;
 
         KeyValuePair<byte[], uint> collisionItem =
-          CollisionTables[indexTablePartition].First(k => BitConverter.ToInt32(k.Key, 0) == tablePrimary.PrimaryKey);
+          CollisionTables[indexTablePartition]
+          .First(k => BitConverter.ToInt32(k.Key, 0) == tablePrimary.PrimaryKey);
 
         CollisionTables[indexTablePartition].Remove(collisionItem.Key);
 
@@ -197,20 +210,26 @@ namespace BToken.Chaining
         PrimaryTables[(byte)PrimaryKey][PrimaryKey] = UTXOPrimary;
       }
 
-      static void SpendUTXO(ref uint uTXO, int outputIndex, out bool areAllOutputpsSpent)
+      static void SpendUTXO(
+        ref uint uTXO,
+        int outputIndex,
+        out bool areAllOutputpsSpent)
       {
         uint mask = (uint)1 << (COUNT_NON_OUTPUT_BITS + outputIndex);
         if ((uTXO & mask) != 0x00)
         {
-          throw new UTXOException(string.Format(
-            "Output index {0} already spent.", outputIndex));
+          throw new ChainException(
+            string.Format(
+              "Output index {0} already spent.",
+              outputIndex),
+            ErrorCode.INVALID);
         }
         uTXO |= mask;
 
         areAllOutputpsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
       }
 
-      public override void BackupToDisk(string path)
+      public override void BackupImage(string path)
       {
         string directoryPath = Path.Combine(path, Label);
         Directory.CreateDirectory(directoryPath);
@@ -255,16 +274,17 @@ namespace BToken.Chaining
         }
       }
 
-      public override void Load()
+      public override void Load(string path)
       {
         Parallel.For(0, COUNT_TABLE_PARTITIONS, i => {
           LoadPrimaryData(
-            File.ReadAllBytes(Path.Combine(DirectoryPath, "PrimaryTable" + i)),
+            File.ReadAllBytes(
+              Path.Combine(path, Label, "PrimaryTable" + i)),
             PrimaryTables[i]);
         });
 
         LoadCollisionData(File.ReadAllBytes(
-          Path.Combine(DirectoryPath, "CollisionTable")));
+          Path.Combine(path, Label, "CollisionTable")));
       }
       void LoadPrimaryData(byte[] buffer, Dictionary<int, uint> table)
       {

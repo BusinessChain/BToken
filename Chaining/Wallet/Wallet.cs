@@ -7,7 +7,6 @@ using System.Numerics;
 using System.Globalization;
 
 using BToken.Hashing;
-using BToken.Chaining;
 
 namespace BToken
 {

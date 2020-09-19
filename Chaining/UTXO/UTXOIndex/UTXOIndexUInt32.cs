@@ -53,8 +53,11 @@ namespace BToken.Chaining
           uint mask = (uint)1 << (COUNT_NON_OUTPUT_BITS + input.OutputIndex);
           if ((UTXOItem & mask) != 0x00)
           {
-            throw new UTXOException(string.Format(
-              "Output index {0} already spent.", input.OutputIndex));
+            throw new ChainException(
+              string.Format(
+                "Output index {0} already spent.",
+                input.OutputIndex),
+              ErrorCode.INVALID);
           }
 
           UTXOItem |= mask;

@@ -2,40 +2,38 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 
-namespace BToken.Networking
+namespace BToken.Chaining
 {
   class GetHeadersMessage : NetworkMessage
   {
-    public uint ProtocolVersion;
-    public IEnumerable<byte[]> HeaderLocator = new List<byte[]>();
+    public IEnumerable<Header> HeaderLocator = 
+      new List<Header>();
+
     public byte[] StopHash = new byte[32];
 
 
 
     public GetHeadersMessage(
-      IEnumerable<byte[]> headerLocator,
-      uint protocolVersion)
+      IEnumerable<Header> headerLocator,
+      uint versionProtocol)
       : base("getheaders")
     {
-      ProtocolVersion = protocolVersion;
       HeaderLocator = headerLocator;
-      StopHash = "0000000000000000000000000000000000000000000000000000000000000000".ToBinary();
+      StopHash = 
+        ("00000000000000000000000000000000" +
+        "00000000000000000000000000000000").ToBinary();
 
-      SerializePayload();
-    }
-    void SerializePayload()
-    {
       List<byte> payload = new List<byte>();
 
-      payload.AddRange(BitConverter.GetBytes(ProtocolVersion));
+      payload.AddRange(BitConverter.GetBytes(versionProtocol));
       payload.AddRange(VarInt.GetBytes(HeaderLocator.Count()));
 
       for (int i = 0; i < HeaderLocator.Count(); i++)
       {
-        payload.AddRange(HeaderLocator.ElementAt(i));
+        payload.AddRange(
+          HeaderLocator.ElementAt(i).Hash);
       }
 
       payload.AddRange(StopHash);
@@ -49,7 +47,7 @@ namespace BToken.Networking
     {
       int startIndex = 0;
 
-      ProtocolVersion = BitConverter.ToUInt32(Payload, startIndex);
+      var protocolVersionRemote = BitConverter.ToUInt32(Payload, startIndex);
       startIndex += 4;
 
       int headersCount = VarInt.GetInt32(Payload, ref startIndex);

@@ -8,6 +8,11 @@ namespace BToken
 {
   public static class VarInt
   {
+    public const byte PREFIX_UINT16 = 0XFD;
+    public const byte PREFIX_UINT32 = 0XFE;
+    public const byte PREFIX_UINT64 = 0XFF;
+
+
     public static List<byte> GetBytes(int value)
     {
       return GetBytes((ulong)value);
@@ -29,26 +34,29 @@ namespace BToken
 
       return serializedValue;
     }
-    static void AssignPrefixAndLength(ulong value, out byte prefix, out int length)
+    static void AssignPrefixAndLength(
+      ulong value, 
+      out byte prefix, 
+      out int length)
     {
-      if (value <= 252)
+      if (value < PREFIX_UINT16)
       {
         prefix = (byte)value;
         length = 1;
       }
-      else if (value <= 0xffff)
+      else if (value <= 0xFFFF)
       {
-        prefix = 0xfd;
+        prefix = PREFIX_UINT16;
         length = 3;
       }
-      else if (value <= 0xffffffff)
+      else if (value <= 0xFFFFFFFF)
       {
-        prefix = 0xfe;
+        prefix = PREFIX_UINT32;
         length = 5;
       }
       else
       {
-        prefix = 0xff;
+        prefix = PREFIX_UINT64;
         length = 9;
       }
     }
@@ -57,17 +65,17 @@ namespace BToken
       byte[] value = new byte[4];
       int prefix = buffer[index++];
 
-      if (prefix == 0xfd)
+      if (prefix == PREFIX_UINT16)
       {
         Array.Copy(buffer, index, value, 0, 2);
         index += 2;
       }
-      else if (prefix == 0xfe)
+      else if (prefix == PREFIX_UINT32)
       {
         Array.Copy(buffer, index, value, 0, 4);
         index += 4;
       }
-      else if (prefix == 0xff)
+      else if (prefix == PREFIX_UINT64)
       {
         throw new ArgumentException(string.Format(
           "The VarInt in buffer at index {0} is not Int32 because it has prefix 0xFF which is Int64", index));
@@ -84,17 +92,17 @@ namespace BToken
       byte[] value = new byte[8];
       int prefix = stream.ReadByte();
 
-      if (prefix == 0xfd)
+      if (prefix == PREFIX_UINT16)
       {
         stream.Read(value, 0, 2);
         lengthVarInt = 3;
       }
-      else if (prefix == 0xfe)
+      else if (prefix == PREFIX_UINT32)
       {
         stream.Read(value, 0, 4);
         lengthVarInt = 5;
       }
-      else if (prefix == 0xff)
+      else if (prefix == PREFIX_UINT64)
       {
         stream.Read(value, 0, 8);
         lengthVarInt = 9;
@@ -113,12 +121,12 @@ namespace BToken
       int prefix = buffer[startIndex];
       startIndex++;
 
-      if (prefix == 0xfd)
+      if (prefix == PREFIX_UINT16)
       {
         prefix = BitConverter.ToUInt16(buffer, startIndex);
         startIndex += 2;
       }
-      else if (prefix == 0xfe)
+      else if (prefix == PREFIX_UINT32)
       {
         prefix = BitConverter.ToInt32(buffer, startIndex);
         startIndex += 4;
@@ -137,7 +145,7 @@ namespace BToken
     {
       try
       {
-        if (prefix == 0xff)
+        if (prefix == PREFIX_UINT64)
         {
           prefix = BitConverter.ToUInt64(buffer, startIndex);
           startIndex += 8;
