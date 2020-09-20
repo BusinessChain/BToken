@@ -45,6 +45,7 @@ namespace BToken.Chaining
 
 
 
+
     public Blockchain(
       Header headerGenesis,
       byte[] genesisBlockBytes,
@@ -59,6 +60,8 @@ namespace BToken.Chaining
       UpdateHeaderIndex(headerGenesis);
       
       UTXOTable = new UTXOTable(genesisBlockBytes);
+
+      Directory.Delete("logPeers", true);
     }
         
 
@@ -532,10 +535,6 @@ namespace BToken.Chaining
           IsBlockchainLocked = true;
         }
 
-        Console.WriteLine(
-          "Synchronize with peer {0}", 
-          peer.GetIdentification());
-
         peer.SetStatusBusy();
 
         await SynchronizeWithPeer(peer);
@@ -548,6 +547,10 @@ namespace BToken.Chaining
 
     async Task SynchronizeWithPeer(Peer peer)
     {
+      Console.WriteLine(
+        "Synchronize with peer {0}",
+        peer.GetIdentification());
+
     LABEL_StageBranch:
 
       List<Header> locator = GetLocator();
@@ -729,7 +732,11 @@ namespace BToken.Chaining
         if (blockArchive.IsLastArchive)
         {
           peer.SetUTXOSyncComplete();
+
           await taskUTXOSyncSessions;
+
+          Peers.ForEach(p => p.SetStatusIdle());
+
           return;
         }
 
@@ -780,7 +787,7 @@ namespace BToken.Chaining
 
           if (HeaderLoad == null)
           {
-            peer.SetStatusIdle();
+            peer.SetUTXOSyncComplete();
             return;
           }
 
@@ -1197,7 +1204,7 @@ namespace BToken.Chaining
     }
 
 
-    const int COUNT_PEERS_MAX = 1;
+    const int COUNT_PEERS_MAX = 6;
     TcpListener TcpListener = 
       new TcpListener(IPAddress.Any, Port);
     const UInt16 Port = 8333;
@@ -1225,9 +1232,6 @@ namespace BToken.Chaining
         if (flagCreatePeer)
         {
           var peer = await CreatePeer();
-
-          Console.WriteLine("created peer {0}", 
-            peer.GetIdentification());
 
           lock (LOCK_Peers)
           {

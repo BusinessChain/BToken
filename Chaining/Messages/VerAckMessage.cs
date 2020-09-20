@@ -4,17 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-
 namespace BToken.Chaining
 {
-  partial class UTXOTable
+  class VerAckMessage : NetworkMessage
   {
-    class TXWitness
+
+
+    public VerAckMessage() : base("verack")
     {
-      public static TXWitness Parse(byte[] byteStream, ref int startIndex)
-      {
-        return new TXWitness();
-      }
     }
   }
 }

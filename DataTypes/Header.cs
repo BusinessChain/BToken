@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 
 
 
-namespace BToken
+namespace BToken.Chaining
 {
   public class Header
   {

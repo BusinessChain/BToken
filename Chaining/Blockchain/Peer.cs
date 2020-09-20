@@ -37,7 +37,7 @@ namespace BToken.Chaining
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 20000;
       const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
 
-      const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 77;
+      const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
       Stopwatch StopwatchDownload = new Stopwatch();
       int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
@@ -54,7 +54,7 @@ namespace BToken.Chaining
       
       ulong FeeFilterValue;
       
-      const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NETWORK;
+      const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NONE;
       const ServiceFlags NetworkServicesLocal = ServiceFlags.NODE_NETWORK;
       const string UserAgent = "/BToken:0.0.0/";
       const Byte RelayOption = 0x00;
@@ -90,6 +90,11 @@ namespace BToken.Chaining
 
       SHA256 SHA256 = SHA256.Create();
 
+      DirectoryInfo DirectoryLogPeers;
+      DirectoryInfo DirectoryLogPeersDisposed;
+      StreamWriter LogFile;
+      string PathLogFile;
+
 
 
       public Peer(
@@ -101,19 +106,48 @@ namespace BToken.Chaining
         Stream = tcpClient.GetStream();
 
         Connection = ConnectionType.INBOUND;
+
+        CreateLogFile();
       }
 
-      public Peer(Blockchain blockchain,
-        IPAddress iPAddress)
+      public Peer(Blockchain blockchain, IPAddress iPAddress)
       {
         Connection = ConnectionType.OUTBOUND;
         Blockchain = blockchain;
         IPAddress = iPAddress;
+
+        CreateLogFile();
+      }
+
+
+      void CreateLogFile()
+      {
+        DirectoryLogPeers = Directory.CreateDirectory(
+          "logPeers");
+
+        PathLogFile = Path.Combine(
+          DirectoryLogPeers.Name,
+          GetIdentification());
+
+        LogFile = new StreamWriter(PathLogFile, true);
+      }
+
+      void Log(string message)
+      {
+        string dateTime = DateTime.Now.ToString("MM/dd/yyyy hh:mm:ss.fff");
+
+        string logString = dateTime + " --- " + message;
+
+        LogFile.WriteLine(logString);
+
+        LogFile.Flush();
       }
 
 
       public async Task Connect()
       {
+        Log(string.Format("Connect peer {0}", GetIdentification()));
+
         TcpClient = new TcpClient();
 
         await TcpClient.ConnectAsync(
@@ -123,6 +157,10 @@ namespace BToken.Chaining
         Stream = TcpClient.GetStream();
 
         await HandshakeAsync();
+
+        Log(string.Format(
+          "Network protocol handshake {0}", 
+          GetIdentification()));
       }
       
       async Task HandshakeAsync()
@@ -370,6 +408,7 @@ namespace BToken.Chaining
 
               case "sendheaders":
                 await SendMessage(new SendHeadersMessage());
+
                 break;
 
               case "feefilter":
@@ -487,6 +526,10 @@ namespace BToken.Chaining
 
                   case "headers":
 
+                    Log(string.Format(
+                      "{0}: Recived headers message",
+                      Command));
+
                     await Blockchain.ReceiveHeader(
                       Payload,
                       this);
@@ -501,9 +544,9 @@ namespace BToken.Chaining
             }
           }
         }
-        catch
+        catch(Exception ex)
         {
-          Dispose();
+          Dispose(ex.Message);
         }
       }
 
@@ -520,6 +563,10 @@ namespace BToken.Chaining
 
       public async Task<Header> GetHeaders(List<Header> locator)
       {
+        Log(string.Format(
+          "{0}: Send GetHeaders message",
+          GetIdentification()));
+
         await SendMessage(new GetHeadersMessage(
           locator, 
           ProtocolVersion));
@@ -537,6 +584,11 @@ namespace BToken.Chaining
             .ReceiveAsync(cancellation.Token) && 
             Command != "headers")
         {
+          Log(string.Format(
+            "{0}: Received unexpected response message {1}",
+            GetIdentification(),
+            Command));
+
           StartMessageListener();
         }
 
@@ -562,6 +614,11 @@ namespace BToken.Chaining
           BlockArchive.HeaderRoot.HeaderPrevious =
             headerLocatorAncestor;
         }
+        
+        Log(string.Format(
+          "{0}: Received headers message, count = {1}",
+          GetIdentification(),
+          countHeaders));
 
         lock (LOCK_IsExpectingMessageResponse)
         {
@@ -578,6 +635,12 @@ namespace BToken.Chaining
         Header header,
         int height)
       {
+        Log(string.Format(
+          "{0}: Build headerchain, headerRoot: {1}, height: {2}",
+          GetIdentification(),
+          header.Hash.ToHexString(),
+          height));
+
         double difficulty = 0.0;
 
         while (true)
@@ -595,7 +658,7 @@ namespace BToken.Chaining
           {
             Header headerNext = await GetHeaders(header);
 
-            if (headerNext == null || height > 250000)
+            if (headerNext == null || height > 150000)
             {
               return difficulty;
             }
@@ -676,7 +739,11 @@ namespace BToken.Chaining
         {
           var cancellation = new CancellationTokenSource(
               TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-                   
+
+          Log(string.Format(
+            "{0}: Send GetDataMessage message",
+            GetIdentification()));
+
           await SendMessage(new GetDataMessage(Inventories));
 
           lock (LOCK_IsExpectingMessageResponse)
@@ -693,6 +760,10 @@ namespace BToken.Chaining
 
             if(Command == "notfound")
             {
+              Log(string.Format(
+                "{0}: Receved message notfound",
+                GetIdentification()));
+
               SetUTXOSyncComplete();
 
               CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
@@ -702,6 +773,11 @@ namespace BToken.Chaining
 
             if(Command != "block")
             {
+              Log(string.Format(
+                "{0}: Received unexpected response message {1}",
+                GetIdentification(),
+                Command));
+
               StartMessageListener();
               continue;
             }
@@ -717,6 +793,8 @@ namespace BToken.Chaining
             }
             else
             {
+              StopwatchDownload.Stop();
+
               lock (LOCK_IsExpectingMessageResponse)
               {
                 IsExpectingMessageResponse = false;
@@ -744,7 +822,7 @@ namespace BToken.Chaining
             BlockArchive.Index,
             ex.Message);
 
-          Dispose();
+          Dispose(ex.Message);
 
           return false;
         }
@@ -753,8 +831,12 @@ namespace BToken.Chaining
 
         CalculateNewCountBlocks();
 
-        StopwatchDownload.Stop();
-        
+        Log(string.Format(
+          "{0}: Downloaded {1} blocks in {2}",
+          GetIdentification(),
+          BlockArchive.Height,
+          StopwatchDownload.Elapsed));
+
         return true;
       }
 
@@ -763,8 +845,9 @@ namespace BToken.Chaining
         const float safetyFactorTimeout = 10;
         const float marginFactorResetCountBlocksDownload = 5;
 
-        float ratioTimeoutToDownloadTime = TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS
-          / (1 + StopwatchDownload.ElapsedMilliseconds);
+        float ratioTimeoutToDownloadTime = 
+          TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS / 
+          (1 + StopwatchDownload.ElapsedMilliseconds);
 
         if (ratioTimeoutToDownloadTime > safetyFactorTimeout)
         {
@@ -773,7 +856,10 @@ namespace BToken.Chaining
         else if (ratioTimeoutToDownloadTime <
           marginFactorResetCountBlocksDownload)
         {
-          CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
+          if(CountBlocksLoad > 1)
+          {
+            CountBlocksLoad >>= 1;
+          }
         }
         else if (CountBlocksLoad > 1)
         {
@@ -799,17 +885,19 @@ namespace BToken.Chaining
 
       public string GetIdentification()
       {
-        string signConnectionType =
-          Connection == ConnectionType.INBOUND ? " <- " : " -> ";
-
         return
-          signConnectionType +
-          IPAddress.ToString();
+          IPAddress.ToString() +
+          "-" +
+          Connection.ToString();
       }
 
 
       public void SetUTXOSyncComplete()
       {
+        Log(string.Format(
+          "{0}: set status UTXOSyncComplete",
+          GetIdentification()));
+
         lock (LOCK_Status)
         {
           Status = StatusUTXOSyncSession
@@ -826,6 +914,10 @@ namespace BToken.Chaining
       }
       public void SetStatusBusy()
       {
+        Log(string.Format(
+          "{0}: set status Busy",
+          GetIdentification()));
+
         lock (LOCK_Status)
         {
           Status = StatusUTXOSyncSession
@@ -842,6 +934,10 @@ namespace BToken.Chaining
       }
       public void SetStatusAwaitingInsertion()
       {
+        Log(string.Format(
+          "{0}: set status AwaitingInsertion",
+          GetIdentification()));
+
         lock (LOCK_Status)
         {
           Status = StatusUTXOSyncSession
@@ -858,6 +954,10 @@ namespace BToken.Chaining
       }
       public void SetStatusIdle()
       {
+        Log(string.Format(
+          "{0}: set status Idle",
+          GetIdentification()));
+
         lock (LOCK_Status)
         {
           Status = StatusUTXOSyncSession
@@ -874,6 +974,11 @@ namespace BToken.Chaining
       }
       public void Dispose(string message)
       {
+        Log(string.Format(
+          "Dispose peer {0}: \n{1}",
+          GetIdentification(),
+          message));
+
         Console.WriteLine(string.Format(
           "Dispose peer {0}: \n{1}",
           GetIdentification(),
@@ -885,13 +990,25 @@ namespace BToken.Chaining
       {
         TcpClient.Dispose();
 
-        Console.WriteLine("Dispose peer {0}", GetIdentification());
-
         lock (LOCK_Status)
         {
           Status = StatusUTXOSyncSession
             .DISPOSED;
         }
+
+        LogFile.Dispose();
+
+        DirectoryLogPeersDisposed = Directory.CreateDirectory(
+          Path.Combine(
+            DirectoryLogPeers.FullName,
+            "disposed"));
+
+        File.Move(Path.Combine(
+          DirectoryLogPeers.FullName,
+          GetIdentification()), 
+          Path.Combine(
+          DirectoryLogPeersDisposed.FullName,
+          GetIdentification()));
       }
       public bool IsStatusDisposed()
       {
