@@ -119,7 +119,6 @@ namespace BToken.Chaining
       {
         StopwatchParse.Start();
 
-
         Header header = Header.ParseHeader(
           Buffer,
           ref IndexBuffer,

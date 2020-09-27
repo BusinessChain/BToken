@@ -77,8 +77,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
     <Compile Include="Chaining\Blockchain\Peer.cs" />
+    <Compile Include="Chaining\Blockchain\BlockchainSynchronizer.cs" />
     <Compile Include="Chaining\UTXO\BlockArchive.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
