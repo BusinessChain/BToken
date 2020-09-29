@@ -13,9 +13,11 @@ namespace BToken.Chaining
     {
       Blockchain Blockchain;
 
+      public int IndexBlockArchive;
+
       byte[] HashStopLoading;
-      const int COUNT_LOADER_TASKS = 6;
-      int SIZE_BLOCK_ARCHIVE = 50000;
+      const int COUNT_LOADER_TASKS = 1;
+      int SIZE_BLOCK_ARCHIVE = 20000;
       const int UTXOIMAGE_INTERVAL_LOADER = 500;
 
       readonly object LOCK_IndexBlockArchiveQueue = new object();
@@ -24,23 +26,30 @@ namespace BToken.Chaining
       DirectoryInfo ArchiveDirectoryBlocks =
           Directory.CreateDirectory("J:\\BlockArchivePartitioned");
 
+      StreamWriter LogFile;
 
-      
+
+
       public BlockArchiver(Blockchain blockchain)
       {
         Blockchain = blockchain;
+
+        LogFile = new StreamWriter("logArchiver", false);
       }
 
 
 
       readonly object LOCK_IndexBlockArchiveLoad = new object();
       int IndexBlockArchiveLoad;
-      public int IndexBlockArchive;
 
       public async Task LoadBlocks(
         byte[] hashStopLoading,
         int indexBlockArchive)
       {
+        "Start archive loader".Log(LogFile);
+
+        IsBlockLoadingCompleted = false;
+
         IndexBlockArchiveLoad = indexBlockArchive;
         IndexBlockArchiveQueue = indexBlockArchive;
         HashStopLoading = hashStopLoading;
@@ -65,11 +74,17 @@ namespace BToken.Chaining
 
       async Task RunLoaderInserter()
       {
+        "Start archive inserter".Log(LogFile);
+
         while (true)
         {
           UTXOTable.BlockArchive blockArchive =
             await QueueLoader.ReceiveAsync()
             .ConfigureAwait(false);
+
+          string.Format("inserter receives blockArchive {0}",
+            blockArchive.Index)
+            .Log(LogFile);
 
           if (
             blockArchive.IsInvalid ||
@@ -88,7 +103,7 @@ namespace BToken.Chaining
 
             Blockchain.ValidateHeaders(blockArchive.HeaderRoot);
 
-            Blockchain.InsertBlockArchive(blockArchive);            
+            Blockchain.InsertBlockArchive(blockArchive);
 
             if (blockArchive.CountTX < SIZE_BLOCK_ARCHIVE)
             {
@@ -113,8 +128,13 @@ namespace BToken.Chaining
               Blockchain.CreateImage(IndexBlockArchive);
             }
           }
-          catch (ChainException)
+          catch (ChainException ex)
           {
+            string.Format(
+              "exception when inserting blockArchive {0}: \n{1}",
+              blockArchive.Index, ex.Message)
+              .Log(LogFile);
+
             File.Delete(
               Path.Combine(
                 ArchiveDirectoryBlocks.Name,
@@ -123,7 +143,14 @@ namespace BToken.Chaining
             CountTXsArchive = 0;
             CreateBlockArchive(IndexBlockArchive);
           }
+
+          string.Format("inserted blockArchive {0}",
+            blockArchive.Index)
+            .Log(LogFile);
         }
+
+        string.Format("Blockloading complete")
+          .Log(LogFile);
 
         IsBlockLoadingCompleted = true;
       }
@@ -170,6 +197,10 @@ namespace BToken.Chaining
       {
         Console.WriteLine("Open BlockArchive {0}", indexArchive);
 
+        string.Format("Open BlockArchive {0}",
+          indexArchive)
+          .Log(LogFile);
+
         string pathFileArchive = Path.Combine(
           ArchiveDirectoryBlocks.FullName,
           indexArchive.ToString());
@@ -186,6 +217,10 @@ namespace BToken.Chaining
       {
         Console.WriteLine("Create BlockArchive {0}", indexArchive);
 
+        string.Format("Create BlockArchive {0}",
+          indexArchive)
+          .Log(LogFile);
+
         string pathFileArchive = Path.Combine(
           ArchiveDirectoryBlocks.FullName,
           indexArchive.ToString());
@@ -197,6 +232,12 @@ namespace BToken.Chaining
          FileShare.None,
          bufferSize: 65536);
       }
+
+      public void Dispose()
+      {
+        FileBlockArchive.Dispose();
+      }
+
 
       bool IsBlockLoadingCompleted;
       Dictionary<int, UTXOTable.BlockArchive> QueueBlockArchives =

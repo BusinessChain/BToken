@@ -75,7 +75,7 @@ namespace BToken.Chaining
         const UInt32 ProtocolVersion = 70015;
         IPAddress IPAddress;
         TcpClient TcpClient;
-        Stream Stream;
+        NetworkStream NetworkStream;
 
         const int CommandSize = 12;
         const int LengthSize = 4;
@@ -106,7 +106,7 @@ namespace BToken.Chaining
         {
           TcpClient = tcpClient;
 
-          Stream = tcpClient.GetStream();
+          NetworkStream = tcpClient.GetStream();
 
           Connection = ConnectionType.INBOUND;
 
@@ -148,7 +148,7 @@ namespace BToken.Chaining
             IPAddress,
             Port);
 
-          Stream = TcpClient.GetStream();
+          NetworkStream = TcpClient.GetStream();
 
           await HandshakeAsync();
 
@@ -269,22 +269,22 @@ namespace BToken.Chaining
 
         async Task SendMessage(NetworkMessage message)
         {
-          Stream.Write(MagicBytes, 0, MagicBytes.Length);
+          NetworkStream.Write(MagicBytes, 0, MagicBytes.Length);
 
           byte[] command = Encoding.ASCII.GetBytes(
             message.Command.PadRight(CommandSize, '\0'));
 
-          Stream.Write(command, 0, command.Length);
+          NetworkStream.Write(command, 0, command.Length);
 
           byte[] payloadLength = BitConverter.GetBytes(message.Payload.Length);
-          Stream.Write(payloadLength, 0, payloadLength.Length);
+          NetworkStream.Write(payloadLength, 0, payloadLength.Length);
 
           byte[] checksum = CreateChecksum(
             message.Payload,
             message.Payload.Length);
-          Stream.Write(checksum, 0, checksum.Length);
+          NetworkStream.Write(checksum, 0, checksum.Length);
 
-          await Stream.WriteAsync(
+          await NetworkStream.WriteAsync(
             message.Payload,
             0,
             message.Payload.Length)
@@ -300,19 +300,22 @@ namespace BToken.Chaining
         }
 
 
-
-        byte[] MagicByte = new byte[1];
-
+        
         async Task ReadMessage(
           CancellationToken cancellationToken)
         {
+          byte[] magicByte = new byte[1];
+
           for (int i = 0; i < MagicBytes.Length; i++)
           {
-            await Stream.ReadAsync(MagicByte, 0, 1);
+            await ReadBytes(
+             magicByte,
+             1,
+             cancellationToken);
 
-            if (MagicBytes[i] != MagicByte[0])
+            if (MagicBytes[i] != magicByte[0])
             {
-              i = MagicByte[0] == MagicBytes[0] ? 0 : -1;
+              i = magicByte[0] == MagicBytes[0] ? 0 : -1;
             }
           }
 
@@ -335,7 +338,10 @@ namespace BToken.Chaining
               "Message payload too big (over 32MB)");
           }
 
-          await ReadBytes(Payload, PayloadLength, cancellationToken);
+          await ReadBytes(
+            Payload,
+            PayloadLength,
+            cancellationToken);
 
           uint checksumMessage = BitConverter.ToUInt32(
             MeassageHeader, CommandSize + LengthSize);
@@ -361,7 +367,7 @@ namespace BToken.Chaining
 
           while (bytesToRead > 0)
           {
-            int chunkSize = await Stream.ReadAsync(
+            int chunkSize = await NetworkStream.ReadAsync(
               buffer,
               offset,
               bytesToRead,
@@ -540,7 +546,14 @@ namespace BToken.Chaining
           }
           catch (Exception ex)
           {
-            Dispose(ex.Message);
+            Console.WriteLine(
+             "Peer {0} experienced network error: \n{1}",
+             GetIdentification(), ex.Message);
+
+            string.Format(
+             "Peer {0} experienced network error: \n{1}", 
+             GetIdentification(), ex.Message)
+             .Log(LogFile);
           }
         }
 
@@ -654,7 +667,7 @@ namespace BToken.Chaining
             {
               Header headerNext = await GetHeaders(header);
 
-              if (headerNext == null || height > 100000)
+              if (headerNext == null || height > 10000)
               {
                 Console.WriteLine(
                   "Height of validated header chain {0}\n" +
@@ -830,7 +843,7 @@ namespace BToken.Chaining
 
             SetUTXOSyncComplete();
 
-            Dispose(ex.Message);
+            IsDisposed = true;
 
             return false;
           }
@@ -1100,23 +1113,10 @@ namespace BToken.Chaining
               .IDLE;
           }
         }
-        public void Dispose(string message)
+        public void Dispose()
         {
-          Console.WriteLine(string.Format(
-            "Dispose peer {0}: \n{1}",
-            GetIdentification(),
-            message));
-
-          string.Format(
-            "Dispose peer {0}: \n{1}",
-            GetIdentification(),
-            message)
-            .Log(LogFile);
-
           TcpClient.Dispose();
-
-          IsDisposed = true;
-
+          
           LogFile.Dispose();
 
           DirectoryLogPeersDisposed = Directory.CreateDirectory(

@@ -19,7 +19,7 @@ namespace BToken.Chaining
 
       const int UTXOIMAGE_INTERVAL_SYNC = 500;
       const int UTXOIMAGE_INTERVAL_LISTEN = 50;
-      const int COUNT_PEERS_MAX = 3;
+      const int COUNT_PEERS_MAX = 1;
 
       readonly object LOCK_IsBlockchainLocked = new object();
       bool IsBlockchainLocked;
@@ -33,10 +33,16 @@ namespace BToken.Chaining
       {
         Blockchain = blockchain;
 
-        if(Directory.Exists("logPeers"))
+        try
         {
           Directory.Delete("logPeers", true);
         }
+        catch(Exception ex)
+        {
+          Console.WriteLine(ex.Message);
+        }
+
+        File.Delete("J:\\BlockArchivePartitioned\\0");
 
         LogFile = new StreamWriter("logSynchronizer", false);
       }
@@ -142,6 +148,10 @@ namespace BToken.Chaining
 
           if (headerRoot.HeaderPrevious == headerTip)
           {
+            Console.WriteLine(
+              "Build headerchain from tip {0}",
+              headerTip.Hash.ToHexString());
+
             string.Format(
               "Build headerchain from tip {0}",
               headerTip.Hash.ToHexString())
@@ -157,11 +167,22 @@ namespace BToken.Chaining
             }
             catch (Exception ex)
             {
-              peer.Dispose(string.Format(
+              Console.WriteLine(string.Format(
                 "Exception {0} when syncing with peer {1}: \n{2}",
                 ex.GetType(),
                 peer.GetIdentification(),
                 ex.Message));
+
+              string.Format(
+                "Exception {0} when syncing with peer {1}: \n{2}",
+                ex.GetType(),
+                peer.GetIdentification(),
+                ex.Message)
+                .Log(LogFile);
+
+              peer.IsDisposed = true;
+
+              Blockchain.Archiver.Dispose();
 
               await Blockchain.LoadImage();
             }
@@ -200,11 +221,20 @@ namespace BToken.Chaining
             }
             catch (Exception ex)
             {
-              peer.Dispose(string.Format(
+              Console.WriteLine(string.Format(
                 "Exception {0} when syncing with peer {1}: \n{2}",
                 ex.GetType(),
                 peer.GetIdentification(),
                 ex.Message));
+
+              string.Format(
+                "Exception {0} when syncing with peer {1}: \n{2}",
+                ex.GetType(),
+                peer.GetIdentification(),
+                ex.Message)
+                .Log(LogFile);
+
+              peer.IsDisposed = true;
 
               await Blockchain.LoadImage();
 
@@ -215,7 +245,12 @@ namespace BToken.Chaining
           {
             if (peer.IsInbound())
             {
-              peer.Dispose("Fork weaker than Main.");
+              Console.WriteLine("Fork weaker than Main.");
+
+              string.Format("Fork weaker than Main.")
+                .Log(LogFile);
+
+              peer.IsDisposed = true;
             }
             else
             {
@@ -226,11 +261,20 @@ namespace BToken.Chaining
         }
         catch (Exception ex)
         {
-          peer.Dispose(string.Format(
+          Console.WriteLine(string.Format(
             "Exception {0} when syncing with peer {1}: \n{2}",
             ex.GetType(),
             peer.GetIdentification(),
             ex.Message));
+
+          string.Format(
+            "Exception {0} when syncing with peer {1}: \n{2}",
+            ex.GetType(),
+            peer.GetIdentification(),
+            ex.Message)
+            .Log(LogFile);
+
+          peer.IsDisposed = true;
         }
       }
 
@@ -239,6 +283,8 @@ namespace BToken.Chaining
       readonly object LOCK_IndexBlockArchiveQueue = new object();
       int IndexBlockArchiveDownload;
       int IndexBlockArchiveQueue;
+
+      int CounterException = 0;
 
       async Task SynchronizeUTXO(
         Header headerRoot,
@@ -266,10 +312,23 @@ namespace BToken.Chaining
 
           blockArchive.Index = Blockchain.Archiver.IndexBlockArchive;
 
+          if(CounterException > 30)
+          {
+            CounterException = 0;
+            throw new InvalidOperationException();
+          }
+          CounterException += 1;
+
+          Console.WriteLine("Insert blockArchive {0} in synchronizer", 
+            blockArchive.Index);
+
           Blockchain.InsertBlockArchive(blockArchive);
 
           Blockchain.Archiver.ArchiveBlock(
             blockArchive, UTXOIMAGE_INTERVAL_SYNC);
+
+          Console.WriteLine("Successfully inserted blockArchive {0}",
+            blockArchive.Index);
 
           if (blockArchive.IsLastArchive)
           {
@@ -363,11 +422,10 @@ namespace BToken.Chaining
                     return;
                   }
 
-                  peer =
-                    Peers.Find(p =>
-                    p.IsStatusAwaitingInsertion() &&
+                  peer = Peers.Find(
+                    p => p.IsStatusAwaitingInsertion() &&
                     p.BlockArchivesDownloaded.Peek().Index >
-                    peer.BlockArchive.Index);
+                    blockArchive.Index);
 
                   if (peer != null)
                   {
@@ -433,6 +491,7 @@ namespace BToken.Chaining
           Console.WriteLine("Exception in session \n{0}", ex.Message);
         }
       }
+      
 
 
       TcpListener TcpListener =
@@ -452,7 +511,13 @@ namespace BToken.Chaining
 
           lock (LOCK_Peers)
           {
-            Peers.RemoveAll(p => p.IsDisposed);
+            List<Peer> peersDisposed =
+              Peers.FindAll(p => p.IsDisposed);
+
+            peersDisposed.ForEach(p => {
+              Peers.Remove(p);
+              p.Dispose();
+            });
 
             if (Peers.Count < COUNT_PEERS_MAX)
             {
@@ -506,7 +571,20 @@ namespace BToken.Chaining
           }
           catch (Exception ex)
           {
-            peer.Dispose(ex.Message);
+            Console.WriteLine(string.Format(
+              "Exception {0} when syncing with peer {1}: \n{2}",
+              ex.GetType(),
+              peer.GetIdentification(),
+              ex.Message));
+
+            string.Format(
+              "Exception {0} when syncing with peer {1}: \n{2}",
+              ex.GetType(),
+              peer.GetIdentification(),
+              ex.Message)
+              .Log(LogFile);
+
+            peer.IsDisposed = true;
 
             await Task.Delay(5000);
             continue;
