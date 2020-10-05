@@ -21,6 +21,11 @@ namespace BToken.Chaining
       const int UTXOIMAGE_INTERVAL_LISTEN = 50;
       const int COUNT_PEERS_MAX = 1;
 
+      object LOCK_Peers = new object();
+      List<Peer> Peers = new List<Peer>();
+      object LOCK_PeersLoadBalancing = new object();
+      List<Peer> PeersLoadBalancing = new List<Peer>();
+
       readonly object LOCK_IsBlockchainLocked = new object();
       bool IsBlockchainLocked;
       
@@ -42,7 +47,14 @@ namespace BToken.Chaining
           Console.WriteLine(ex.Message);
         }
 
-        File.Delete("J:\\BlockArchivePartitioned\\0");
+        try
+        {
+          Directory.Delete("J:\\BlockArchivePartitioned", true);
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine(ex.Message);
+        }
 
         LogFile = new StreamWriter("logSynchronizer", false);
       }
@@ -59,29 +71,22 @@ namespace BToken.Chaining
       }
 
                                          
-
-      object LOCK_Peers = new object();
-      List<Peer> Peers = new List<Peer>();
-
+      
       async Task StartPeerSynchronizer()
       {
-        try
+        "Start Peer synchronizer".Log(LogFile);
+
+        Peer peer;
+
+        while (true)
         {
-          "Start Peer synchronizer".Log(LogFile);
+          await Task.Delay(2000).ConfigureAwait(false);
 
-          Peer peer;
+          peer = null;
 
-          while (true)
+          lock (LOCK_Peers)
           {
-            await Task.Delay(2000).ConfigureAwait(false);
-
-            peer = null;
-
-            lock (LOCK_Peers)
-            {
-              peer = Peers.Find(p =>
-                !p.IsSynchronized && p.IsStatusIdle());
-            }
+            peer = Peers.Find(p => !p.IsSynchronized);
 
             if (peer == null)
             {
@@ -100,16 +105,19 @@ namespace BToken.Chaining
 
             peer.SetStatusBusy();
 
-            await SynchronizeWithPeer(peer);
-
-            peer.IsSynchronized = true;
-
-            IsBlockchainLocked = false;
+            Peers.Remove(peer);
           }
-        }
-        catch(Exception ex)
-        {
-          Console.WriteLine("Synchronizer crashed. \n{0}", ex.Message);
+
+          await SynchronizeWithPeer(peer);
+
+          peer.IsSynchronized = true;
+
+          lock (LOCK_Peers)
+          {
+            Peers.Add(peer);
+          }
+
+          IsBlockchainLocked = false;
         }
       }
 
@@ -120,7 +128,7 @@ namespace BToken.Chaining
           peer.GetIdentification());
 
         string.Format(
-          "Synchronize with peer {0}", 
+          "Synchronize with peer {0}",
           peer.GetIdentification())
           .Log(LogFile);
 
@@ -133,7 +141,7 @@ namespace BToken.Chaining
         {
           string.Format(
             "Send getheader to peer {0}, \n" +
-            "locator: {1} ... {2}", 
+            "locator: {1} ... {2}",
             peer.GetIdentification(), 
             locator.First().Hash.ToHexString(), 
             locator.Count > 1 ? headerTip.Hash.ToHexString() : "")
@@ -284,11 +292,9 @@ namespace BToken.Chaining
       int IndexBlockArchiveDownload;
       int IndexBlockArchiveQueue;
 
-      int CounterException = 0;
-
       async Task SynchronizeUTXO(
         Header headerRoot,
-        Peer peerSynchronizing)
+        Peer peer)
       {
         string.Format(
           "Start SynchronizeUTXO, headerRoot {0}",
@@ -299,72 +305,85 @@ namespace BToken.Chaining
         IndexBlockArchiveDownload = 0;
         IndexBlockArchiveQueue = 0;
 
-        Task taskUTXOSyncSessions =
-          StartUTXOSyncSessions(peerSynchronizing);
-
+        Task taskUTXOSyncSessions = StartUTXOSyncSessions(peer);
+        
         while (true)
         {
-          Peer peer = await QueueSynchronizer.ReceiveAsync()
+          peer = await QueueSynchronizer.ReceiveAsync()
             .ConfigureAwait(false);
 
           UTXOTable.BlockArchive blockArchive =
             peer.BlockArchivesDownloaded.Pop();
 
           blockArchive.Index = Blockchain.Archiver.IndexBlockArchive;
-
-          if(CounterException > 30)
+          
+          try
           {
-            CounterException = 0;
-            throw new InvalidOperationException();
+            Blockchain.InsertBlockArchive(blockArchive);
           }
-          CounterException += 1;
-
-          Console.WriteLine("Insert blockArchive {0} in synchronizer", 
-            blockArchive.Index);
-
-          Blockchain.InsertBlockArchive(blockArchive);
+          catch(ChainException)
+          {
+            peer.SetUTXOSyncComplete();
+            peer.IsDisposed = true;
+            break;
+          }
 
           Blockchain.Archiver.ArchiveBlock(
             blockArchive, UTXOIMAGE_INTERVAL_SYNC);
-
-          Console.WriteLine("Successfully inserted blockArchive {0}",
-            blockArchive.Index);
-
+          
           if (blockArchive.IsLastArchive)
           {
             peer.SetUTXOSyncComplete();
-
-            await taskUTXOSyncSessions;
-
-            Peers.ForEach(p => p.SetStatusIdle());
-
-            return;
+            break;
           }
 
           RunUTXOSyncSession(peer);
         }
+
+        await taskUTXOSyncSessions;
       }
       
 
-      async Task StartUTXOSyncSessions(Peer peerSynchronizing)
+      async Task StartUTXOSyncSessions(Peer peer)
       {
-        RunUTXOSyncSession(peerSynchronizing);
+        RunUTXOSyncSession(peer);
+
+        List<Peer> peersLoadBalancingNew;
 
         while (true)
         {
-          lock (LOCK_HeaderLoad)
+          lock (LOCK_PeersLoadBalancing)
           {
-            if (Peers.All(p => p.IsUTXOSyncComplete()))
+            if (
+              peer.IsUTXOSyncComplete() &&
+              PeersLoadBalancing.All(p => p.IsUTXOSyncComplete()))
             {
+              lock(LOCK_Peers)
+              {
+                Peers.AddRange(PeersLoadBalancing);
+              }
+
+              PeersLoadBalancing.Clear();
+
               return;
+            }
+            
+            lock (LOCK_Peers)
+            {
+              peersLoadBalancingNew = 
+                Peers.Where(p => !p.IsDisposed)
+                .ToList();
+
+              Peers = Peers.Except(peersLoadBalancingNew).ToList();
             }
           }
 
-          var peersIdle = new List<Peer>();
-
-          peersIdle = Peers.FindAll(p => p.IsStatusIdle());
-          peersIdle.ForEach(p => p.SetStatusBusy());
-          peersIdle.Select(p => RunUTXOSyncSession(p)).ToList();
+          if (peersLoadBalancingNew.Count > 0)
+          {
+            peersLoadBalancingNew.ForEach(p => p.SetStatusBusy());
+            peersLoadBalancingNew.Select(p => RunUTXOSyncSession(p))
+              .ToList();
+          }
 
           await Task.Delay(1000).ConfigureAwait(false);
         }
@@ -375,6 +394,9 @@ namespace BToken.Chaining
 
       async Task RunUTXOSyncSession(Peer peer)
       {
+        Console.WriteLine("Start UTXO Sync session with peer {0}", 
+          peer.GetIdentification());
+
         try
         {
           string.Format(
@@ -388,7 +410,11 @@ namespace BToken.Chaining
             {
               if (HeaderLoad == null)
               {
-                peer.SetUTXOSyncComplete();
+                lock(LOCK_PeersLoadBalancing)
+                {
+                  peer.SetUTXOSyncComplete();
+                }
+
                 return;
               }
 
@@ -413,16 +439,39 @@ namespace BToken.Chaining
                 peer.GetIdentification())
                 .Log(LogFile);
 
+              if(peer.Command == "notfound")
+              {
+                string.Format(
+                  "{0}: Did not not find block in blockArchive {1}",
+                  peer.GetIdentification(), 
+                  blockArchive.Index)
+                  .Log(LogFile);
+
+                lock(LOCK_PeersLoadBalancing)
+                {
+                  if (!PeersLoadBalancing.Contains(peer))
+                  {
+                    peer.IsDisposed = true;
+                  }
+                }
+              }
+              else
+              {
+                peer.IsDisposed = true;
+              }
+
+              peer.SetUTXOSyncComplete();
+
               while (true)
               {
-                lock (LOCK_Peers)
+                if (PeersLoadBalancing.All(p => p.IsUTXOSyncComplete()))
                 {
-                  if (Peers.All(p => p.IsUTXOSyncComplete()))
-                  {
-                    return;
-                  }
+                  return;
+                }
 
-                  peer = Peers.Find(
+                lock (LOCK_PeersLoadBalancing)
+                {
+                  peer = PeersLoadBalancing.Find(
                     p => p.IsStatusAwaitingInsertion() &&
                     p.BlockArchivesDownloaded.Peek().Index >
                     blockArchive.Index);
@@ -493,44 +542,24 @@ namespace BToken.Chaining
       }
       
 
-
-      TcpListener TcpListener =
-        new TcpListener(IPAddress.Any, Port);
-
+      
       async Task StartPeerGenerator()
       {
         "Start Peer generator".Log(LogFile);
         
-        int countPeersToCreate;
+        int countPeersToCreate = COUNT_PEERS_MAX;
 
         while (true)
         {
-          await Task.Delay(1000).ConfigureAwait(false);
-
-          countPeersToCreate = 0;
-
-          lock (LOCK_Peers)
-          {
-            List<Peer> peersDisposed =
-              Peers.FindAll(p => p.IsDisposed);
-
-            peersDisposed.ForEach(p => {
-              Peers.Remove(p);
-              p.Dispose();
-            });
-
-            if (Peers.Count < COUNT_PEERS_MAX)
-            {
-              countPeersToCreate = COUNT_PEERS_MAX - Peers.Count;
-
-              string.Format(
-                "Connected with {0} peers", Peers.Count)
-                .Log(LogFile);
-            }
-          }
-
           if (countPeersToCreate > 0)
           {
+            string.Format(
+              "Connect with {0} new peers. " +
+              "{1} peers connected currently.", 
+              countPeersToCreate, 
+              Peers.Count)
+              .Log(LogFile);
+
             var createPeerTasks = new Task[countPeersToCreate];
 
             Parallel.For(
@@ -540,11 +569,31 @@ namespace BToken.Chaining
 
             await Task.WhenAll(createPeerTasks);
           }
+
+          lock (LOCK_Peers)
+          {
+            List<Peer> peersDisposed =
+              Peers.FindAll(p => p.IsDisposed);
+
+            peersDisposed.ForEach(p =>
+            {
+              Peers.Remove(p);
+              p.Dispose();
+            });
+
+            countPeersToCreate = peersDisposed.Count;
+          }
+
+          await Task.Delay(1000).ConfigureAwait(false);
         }
       }
 
       async Task CreatePeer()
       {
+        Random rnd = new Random();
+        int workerID = rnd.Next();
+        Console.WriteLine("Worker {0} creates peer", workerID);
+
         while (true)
         {
           IPAddress iPAddress;
@@ -567,7 +616,7 @@ namespace BToken.Chaining
 
           try
           {
-            await peer.Connect().ConfigureAwait(false);
+            await peer.Connect();
           }
           catch (Exception ex)
           {
@@ -595,14 +644,16 @@ namespace BToken.Chaining
             .Log(LogFile);
 
           Console.WriteLine(
-            "Created peer {0}", peer.GetIdentification());
+            "worker {0} Created peer {1}", 
+            workerID,
+            peer.GetIdentification());
+
+          peer.StartMessageListener();
 
           lock (LOCK_Peers)
           {
             Peers.Add(peer);
           }
-
-          peer.StartMessageListener();
 
           return;
         }
@@ -679,6 +730,8 @@ namespace BToken.Chaining
                 
 
       const int PEERS_COUNT_INBOUND = 8;
+      TcpListener TcpListener =
+        new TcpListener(IPAddress.Any, Port);
 
       async Task StartPeerInboundListener()
       {

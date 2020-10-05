@@ -81,7 +81,7 @@ namespace BToken.Chaining
         const int LengthSize = 4;
         const int ChecksumSize = 4;
 
-        string Command;
+        public string Command;
 
         const int SIZE_MESSAGE_PAYLOAD_BUFFER = 0x1000000;
         byte[] Payload = new byte[SIZE_MESSAGE_PAYLOAD_BUFFER];
@@ -546,6 +546,8 @@ namespace BToken.Chaining
           }
           catch (Exception ex)
           {
+            IsDisposed = true;
+
             Console.WriteLine(
              "Peer {0} experienced network error: \n{1}",
              GetIdentification(), ex.Message);
@@ -773,16 +775,7 @@ namespace BToken.Chaining
                 cancellation.Token);
 
               if (Command == "notfound")
-              {
-                string.Format(
-                  "{0}: Receved message notfound",
-                  GetIdentification())
-                  .Log(LogFile);
-
-                SetUTXOSyncComplete();
-
-                CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-
+              {                                
                 return false;
               }
 
@@ -840,10 +833,6 @@ namespace BToken.Chaining
               ex.GetType().Name,
               BlockArchive.Index,
               ex.Message).Log(LogFile);
-
-            SetUTXOSyncComplete();
-
-            IsDisposed = true;
 
             return false;
           }

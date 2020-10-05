@@ -342,9 +342,19 @@ namespace BToken.Chaining
     }
 
 
+    int CounterException = 0;
+
     void InsertBlockArchive(
       UTXOTable.BlockArchive blockArchive)
     {
+      if (CounterException > 20)
+      {
+        CounterException = 0;
+        throw new ChainException(
+          "Test Exception in Blockchain.InsertBlockArchive()");
+      }
+      CounterException += 1;
+
       UTXOTable.InsertBlockArchive(blockArchive);
       InsertHeaders(blockArchive);
     }

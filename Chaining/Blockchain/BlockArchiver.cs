@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
@@ -165,12 +166,36 @@ namespace BToken.Chaining
         UTXOTable.BlockArchive blockArchive,
         int intervalImage)
       {
-        FileBlockArchive.Write(
-          blockArchive.Buffer,
-          0,
-          blockArchive.IndexBuffer);
+        while (true)
+        {
+          try
+          {
+            FileBlockArchive.Write(
+              blockArchive.Buffer,
+              0,
+              blockArchive.IndexBuffer);
 
-        FileBlockArchive.Flush();
+            FileBlockArchive.Flush();
+
+            break;
+          }
+          catch (Exception ex)
+          {
+            string message = string.Format(
+              "Exception {0} when writing blockArchive {1} to " +
+              "file {2}: \n{3} \n" +
+              "Try again in 10 seconds ...",
+              ex.GetType().Name,
+              blockArchive.Index,
+              FileBlockArchive.Name,
+              ex.Message);
+
+            Console.WriteLine(message);
+            message.Log(LogFile);
+
+            Thread.Sleep(10000);
+          }
+        }
 
         CountTXsArchive += blockArchive.CountTX;
 
@@ -188,8 +213,6 @@ namespace BToken.Chaining
           }
 
           CreateBlockArchive(IndexBlockArchive);
-
-          return;
         }
       }
 
@@ -246,6 +269,10 @@ namespace BToken.Chaining
 
       async Task StartLoader()
       {
+        string.Format("Start Loader worker {0}", 
+          Thread.CurrentThread.ManagedThreadId)
+          .Log(LogFile);
+
         UTXOTable.BlockArchive blockArchive = null;
 
       LABEL_LoadBlockArchive:
@@ -269,10 +296,23 @@ namespace BToken.Chaining
           blockArchive.IsInvalid = true;
         }
 
+        string.Format(
+          "Loader worker {0} loaded " +
+          "blockArchive {1} which is {2}",
+          Thread.CurrentThread.ManagedThreadId,
+          blockArchive.Index,
+          blockArchive.IsInvalid ? "Invalid" : "Valid")
+          .Log(LogFile);
+
         while (true)
         {
           if (IsBlockLoadingCompleted)
           {
+            string.Format(
+              "Loader worker {0} exit",
+              Thread.CurrentThread.ManagedThreadId)
+              .Log(LogFile);
+
             return;
           }
 
