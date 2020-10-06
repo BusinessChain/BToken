@@ -50,7 +50,7 @@ namespace BToken.Chaining
         readonly object LOCK_IsExpectingMessageResponse = new object();
         bool IsExpectingMessageResponse;
 
-        BufferBlock<bool> MessageResponseReady =
+        BufferBlock<bool> MessageResponseReady = 
           new BufferBlock<bool>();
         BufferBlock<NetworkMessage> MessageInboundBuffer =
           new BufferBlock<NetworkMessage>();
@@ -548,10 +548,6 @@ namespace BToken.Chaining
           {
             IsDisposed = true;
 
-            Console.WriteLine(
-             "Peer {0} experienced network error: \n{1}",
-             GetIdentification(), ex.Message);
-
             string.Format(
              "Peer {0} experienced network error: \n{1}", 
              GetIdentification(), ex.Message)
@@ -573,8 +569,12 @@ namespace BToken.Chaining
         public async Task<Header> GetHeaders(List<Header> locator)
         {
           string.Format(
-            "{0}: Send GetHeaders message",
-            GetIdentification()).Log(LogFile);
+            "Send getheader to peer {0}, \n" +
+            "locator: {1} ... {2}",
+            GetIdentification(),
+            locator.First().Hash.ToHexString(),
+            locator.Count > 1 ? locator.Last().Hash.ToHexString() : "")
+            .Log(LogFile);
 
           await SendMessage(new GetHeadersMessage(
             locator,
@@ -646,9 +646,11 @@ namespace BToken.Chaining
           int height)
         {
           string.Format(
-            "{0}: Build headerchain, headerRoot: {1}, height: {2}",
+            "{0}: Build headerchain from header: {1}, " +
+            "headerPrevious: {2}, height Root: {3}",
             GetIdentification(),
             header.Hash.ToHexString(),
+            header.HashPrevious.ToHexString(),
             height)
             .Log(LogFile);
 
@@ -671,12 +673,13 @@ namespace BToken.Chaining
 
               if (headerNext == null || height > 10000)
               {
-                Console.WriteLine(
-                  "Height of validated header chain {0}\n" +
+                string.Format(
+                  "Height header chain {0}\n" +
                   "Next headerRoot {1} from peer {2}",
                   height - 1,
                   headerNext.Hash.ToHexString(),
-                  GetIdentification());
+                  GetIdentification())
+                  .Log(LogFile);
 
                 return difficulty;
               }

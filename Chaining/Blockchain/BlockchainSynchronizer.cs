@@ -44,7 +44,7 @@ namespace BToken.Chaining
         }
         catch(Exception ex)
         {
-          Console.WriteLine(ex.Message);
+          ex.Message.Log(LogFile);
         }
 
         try
@@ -53,7 +53,7 @@ namespace BToken.Chaining
         }
         catch (Exception ex)
         {
-          Console.WriteLine(ex.Message);
+          ex.Message.Log(LogFile);
         }
 
         LogFile = new StreamWriter("logSynchronizer", false);
@@ -123,10 +123,6 @@ namespace BToken.Chaining
 
       async Task SynchronizeWithPeer(Peer peer)
       {
-        Console.WriteLine(
-          "Synchronize with peer {0}",
-          peer.GetIdentification());
-
         string.Format(
           "Synchronize with peer {0}",
           peer.GetIdentification())
@@ -156,44 +152,16 @@ namespace BToken.Chaining
 
           if (headerRoot.HeaderPrevious == headerTip)
           {
-            Console.WriteLine(
-              "Build headerchain from tip {0}",
-              headerTip.Hash.ToHexString());
-
             string.Format(
               "Build headerchain from tip {0}",
               headerTip.Hash.ToHexString())
               .Log(LogFile);
-
+            
             await peer.BuildHeaderchain(
               headerRoot,
               Blockchain.Height + 1);
 
-            try
-            {
-              await SynchronizeUTXO(headerRoot, peer);
-            }
-            catch (Exception ex)
-            {
-              Console.WriteLine(string.Format(
-                "Exception {0} when syncing with peer {1}: \n{2}",
-                ex.GetType(),
-                peer.GetIdentification(),
-                ex.Message));
-
-              string.Format(
-                "Exception {0} when syncing with peer {1}: \n{2}",
-                ex.GetType(),
-                peer.GetIdentification(),
-                ex.Message)
-                .Log(LogFile);
-
-              peer.IsDisposed = true;
-
-              Blockchain.Archiver.Dispose();
-
-              await Blockchain.LoadImage();
-            }
+            await SynchronizeUTXO(headerRoot, peer);
 
             return;
           }
@@ -223,38 +191,12 @@ namespace BToken.Chaining
               goto LABEL_StageBranch;
             }
 
-            try
-            {
-              await SynchronizeUTXO(headerRoot, peer);
-            }
-            catch (Exception ex)
-            {
-              Console.WriteLine(string.Format(
-                "Exception {0} when syncing with peer {1}: \n{2}",
-                ex.GetType(),
-                peer.GetIdentification(),
-                ex.Message));
-
-              string.Format(
-                "Exception {0} when syncing with peer {1}: \n{2}",
-                ex.GetType(),
-                peer.GetIdentification(),
-                ex.Message)
-                .Log(LogFile);
-
-              peer.IsDisposed = true;
-
-              await Blockchain.LoadImage();
-
-              return;
-            }
+            await SynchronizeUTXO(headerRoot, peer);
           }
           else if (difficultyFork < difficultyOld)
           {
             if (peer.IsInbound())
             {
-              Console.WriteLine("Fork weaker than Main.");
-
               string.Format("Fork weaker than Main.")
                 .Log(LogFile);
 
@@ -269,12 +211,6 @@ namespace BToken.Chaining
         }
         catch (Exception ex)
         {
-          Console.WriteLine(string.Format(
-            "Exception {0} when syncing with peer {1}: \n{2}",
-            ex.GetType(),
-            peer.GetIdentification(),
-            ex.Message));
-
           string.Format(
             "Exception {0} when syncing with peer {1}: \n{2}",
             ex.GetType(),
@@ -305,42 +241,60 @@ namespace BToken.Chaining
         IndexBlockArchiveDownload = 0;
         IndexBlockArchiveQueue = 0;
 
-        Task taskUTXOSyncSessions = StartUTXOSyncSessions(peer);
-        
-        while (true)
+        try
         {
-          peer = await QueueSynchronizer.ReceiveAsync()
-            .ConfigureAwait(false);
+          Task taskUTXOSyncSessions = StartUTXOSyncSessions(peer);
 
-          UTXOTable.BlockArchive blockArchive =
-            peer.BlockArchivesDownloaded.Pop();
-
-          blockArchive.Index = Blockchain.Archiver.IndexBlockArchive;
-          
-          try
+          while (true)
           {
+            peer = await QueueSynchronizer.ReceiveAsync()
+              .ConfigureAwait(false);
+            // Hier müssen auch die abgekackten peers übergeben werden.
+            // Dann kann der Inserter wissen ob er selbst auch abkacken 
+            // soll oder nicht.
+
+            UTXOTable.BlockArchive blockArchive =
+              peer.BlockArchivesDownloaded.Pop();
+
+            blockArchive.Index = Blockchain.Archiver.IndexBlockArchive;
+
             Blockchain.InsertBlockArchive(blockArchive);
-          }
-          catch(ChainException)
-          {
-            peer.SetUTXOSyncComplete();
-            peer.IsDisposed = true;
-            break;
+
+            Blockchain.Archiver.ArchiveBlock(
+              blockArchive, UTXOIMAGE_INTERVAL_SYNC);
+
+            if (blockArchive.IsLastArchive)
+            {
+              peer.SetUTXOSyncComplete();
+              break;
+            }
+
+            RunUTXOSyncSession(peer);
           }
 
-          Blockchain.Archiver.ArchiveBlock(
-            blockArchive, UTXOIMAGE_INTERVAL_SYNC);
-          
-          if (blockArchive.IsLastArchive)
-          {
-            peer.SetUTXOSyncComplete();
-            break;
-          }
-
-          RunUTXOSyncSession(peer);
+          await taskUTXOSyncSessions;
         }
+        catch (Exception ex)
+        {
+          string.Format(
+            "Exception {0} when syncing with peer {1}: \n{2}",
+            ex.GetType(),
+            peer.GetIdentification(),
+            ex.Message)
+            .Log(LogFile);
 
-        await taskUTXOSyncSessions;
+          peer.SetUTXOSyncComplete();
+          peer.IsDisposed = true;
+
+          Blockchain.Archiver.Dispose();
+
+          await Blockchain.LoadImage();
+
+          string.Format(
+            "Blockchain height {0} after Loading.",
+            Blockchain.Height)
+            .Log(LogFile);
+        }
       }
       
 
@@ -360,6 +314,7 @@ namespace BToken.Chaining
             {
               lock(LOCK_Peers)
               {
+                Peers.Add(peer);
                 Peers.AddRange(PeersLoadBalancing);
               }
 
@@ -394,150 +349,137 @@ namespace BToken.Chaining
 
       async Task RunUTXOSyncSession(Peer peer)
       {
-        Console.WriteLine("Start UTXO Sync session with peer {0}", 
-          peer.GetIdentification());
+        string.Format(
+         "Run UTXO Sync session with peer {0}",
+         peer.GetIdentification())
+         .Log(LogFile);
 
-        try
+        if (peer.BlockArchivesDownloaded.Count == 0)
         {
-          string.Format(
-           "Run UTXO Sync session with peer {0}",
-           peer.GetIdentification())
-           .Log(LogFile);
-
-          if (peer.BlockArchivesDownloaded.Count == 0)
+          lock (LOCK_HeaderLoad)
           {
-            lock (LOCK_HeaderLoad)
+            if (HeaderLoad == null)
             {
-              if (HeaderLoad == null)
+              lock (LOCK_PeersLoadBalancing)
               {
-                lock(LOCK_PeersLoadBalancing)
-                {
-                  peer.SetUTXOSyncComplete();
-                }
+                peer.SetUTXOSyncComplete();
+              }
 
+              return;
+            }
+
+            peer.BlockArchive.Index = IndexBlockArchiveDownload;
+            IndexBlockArchiveDownload += 1;
+
+            peer.CreateInventories(ref HeaderLoad);
+          }
+
+          while (!await peer.TryDownloadBlocks())
+          {
+            var blockArchive = peer.BlockArchive;
+            
+            string.Format(
+              "Failed to download blockArchive {0} with peer {1}",
+              blockArchive.Index,
+              peer.GetIdentification())
+              .Log(LogFile);
+
+            if (peer.Command == "notfound")
+            {
+              string.Format(
+                "{0}: Did not not find block in blockArchive {1}",
+                peer.GetIdentification(),
+                blockArchive.Index)
+                .Log(LogFile);
+
+              lock (LOCK_PeersLoadBalancing)
+              {
+                if (!PeersLoadBalancing.Contains(peer))
+                {
+                  peer.IsDisposed = true;
+                }
+              }
+            }
+            else
+            {
+              peer.IsDisposed = true;
+            }
+
+            peer.SetUTXOSyncComplete();
+
+            while (true)
+            {
+              if (PeersLoadBalancing.All(p => p.IsUTXOSyncComplete()))
+              {
+                // Allenfalls hier peer übergeben
                 return;
               }
 
-              peer.BlockArchive.Index = IndexBlockArchiveDownload;
-              IndexBlockArchiveDownload += 1;
+              lock (LOCK_PeersLoadBalancing)
+              {
+                peer = PeersLoadBalancing.Find(
+                  p => p.IsStatusAwaitingInsertion() &&
+                  p.BlockArchivesDownloaded.Peek().Index >
+                  blockArchive.Index);
 
-              peer.CreateInventories(ref HeaderLoad);
+                if (peer != null)
+                {
+                  peer.BlockArchive = blockArchive;
+                  peer.SetStatusBusy();
+                  break;
+                }
+              }
+
+              await Task.Delay(1000)
+                .ConfigureAwait(false);
             }
-
-            while (!await peer.TryDownloadBlocks())
-            {
-              var blockArchive = peer.BlockArchive;
-
-              Console.WriteLine(
-                "Failed to download blockArchive {0} with peer {1}",
-                blockArchive.Index, 
-                peer.GetIdentification());
-
-              string.Format(
-                "Failed to download blockArchive {0} with peer {1}",
-                blockArchive.Index,
-                peer.GetIdentification())
-                .Log(LogFile);
-
-              if(peer.Command == "notfound")
-              {
-                string.Format(
-                  "{0}: Did not not find block in blockArchive {1}",
-                  peer.GetIdentification(), 
-                  blockArchive.Index)
-                  .Log(LogFile);
-
-                lock(LOCK_PeersLoadBalancing)
-                {
-                  if (!PeersLoadBalancing.Contains(peer))
-                  {
-                    peer.IsDisposed = true;
-                  }
-                }
-              }
-              else
-              {
-                peer.IsDisposed = true;
-              }
-
-              peer.SetUTXOSyncComplete();
-
-              while (true)
-              {
-                if (PeersLoadBalancing.All(p => p.IsUTXOSyncComplete()))
-                {
-                  return;
-                }
-
-                lock (LOCK_PeersLoadBalancing)
-                {
-                  peer = PeersLoadBalancing.Find(
-                    p => p.IsStatusAwaitingInsertion() &&
-                    p.BlockArchivesDownloaded.Peek().Index >
-                    blockArchive.Index);
-
-                  if (peer != null)
-                  {
-                    peer.BlockArchive = blockArchive;
-                    peer.SetStatusBusy();
-                    break;
-                  }
-                }
-
-                await Task.Delay(1000)
-                  .ConfigureAwait(false);
-              }
-            }
-
-            string.Format(
-              "Downloaded blockArchive {0} with {1} blocks from peer {2}",
-              peer.BlockArchive.Index,
-              peer.BlockArchive.Height,
-              peer.GetIdentification())
-              .Log(LogFile);
           }
+
+          string.Format(
+            "Downloaded blockArchive {0} with {1} blocks from peer {2}",
+            peer.BlockArchive.Index,
+            peer.BlockArchive.Height,
+            peer.GetIdentification())
+            .Log(LogFile);
+        }
+
+        lock (LOCK_IndexBlockArchiveQueue)
+        {
+          if (peer.BlockArchivesDownloaded.Peek().Index !=
+            IndexBlockArchiveQueue)
+          {
+            peer.SetStatusAwaitingInsertion();
+            return;
+          }
+        }
+
+        while (true)
+        {
+          string.Format("queueu peer {0}, with blockArchive {1}",
+            peer.GetIdentification(),
+            peer.BlockArchive.Index)
+            .Log(LogFile);
+
+          QueueSynchronizer.Post(peer);
 
           lock (LOCK_IndexBlockArchiveQueue)
           {
-            if (peer.BlockArchivesDownloaded.Peek().Index !=
-              IndexBlockArchiveQueue)
+            IndexBlockArchiveQueue += 1;
+          }
+
+          lock (LOCK_Peers)
+          {
+            peer = Peers.Find(p =>
+            p.IsStatusAwaitingInsertion() &&
+            p.BlockArchivesDownloaded.Peek().Index == IndexBlockArchiveQueue);
+
+            if (peer == null)
             {
-              peer.SetStatusAwaitingInsertion();
               return;
             }
+
+            peer.SetStatusBusy();
           }
-
-          while (true)
-          {
-            Console.WriteLine("queueu peer {0}, with blockArchive {1}",
-              peer.GetIdentification(),
-              peer.BlockArchive.Index);
-
-            QueueSynchronizer.Post(peer);
-
-            lock (LOCK_IndexBlockArchiveQueue)
-            {
-              IndexBlockArchiveQueue += 1;
-            }
-
-            lock (LOCK_Peers)
-            {
-              peer = Peers.Find(p =>
-              p.IsStatusAwaitingInsertion() &&
-              p.BlockArchivesDownloaded.Peek().Index == IndexBlockArchiveQueue);
-
-              if (peer == null)
-              {
-                return;
-              }
-
-              peer.SetStatusBusy();
-            }
-          }
-        }
-        catch(Exception ex)
-        {
-          Console.WriteLine("Exception in session \n{0}", ex.Message);
         }
       }
       
@@ -590,10 +532,6 @@ namespace BToken.Chaining
 
       async Task CreatePeer()
       {
-        Random rnd = new Random();
-        int workerID = rnd.Next();
-        Console.WriteLine("Worker {0} creates peer", workerID);
-
         while (true)
         {
           IPAddress iPAddress;
@@ -604,9 +542,10 @@ namespace BToken.Chaining
           }
           catch (Exception ex)
           {
-            Console.WriteLine(
+            string.Format(
               "Cannot get peer address from dns server: {0}",
-              ex.Message);
+              ex.Message)
+              .Log(LogFile);
 
             await Task.Delay(5000);
             continue;
@@ -620,12 +559,6 @@ namespace BToken.Chaining
           }
           catch (Exception ex)
           {
-            Console.WriteLine(string.Format(
-              "Exception {0} when syncing with peer {1}: \n{2}",
-              ex.GetType(),
-              peer.GetIdentification(),
-              ex.Message));
-
             string.Format(
               "Exception {0} when syncing with peer {1}: \n{2}",
               ex.GetType(),
@@ -642,11 +575,6 @@ namespace BToken.Chaining
           string.Format(
             "Created peer {0}", peer.GetIdentification())
             .Log(LogFile);
-
-          Console.WriteLine(
-            "worker {0} Created peer {1}", 
-            workerID,
-            peer.GetIdentification());
 
           peer.StartMessageListener();
 
@@ -742,8 +670,9 @@ namespace BToken.Chaining
           TcpClient tcpClient = await TcpListener.AcceptTcpClientAsync().
             ConfigureAwait(false);
 
-          Console.WriteLine("Received inbound request from {0}",
-            tcpClient.Client.RemoteEndPoint.ToString());
+          string.Format("Received inbound request from {0}",
+            tcpClient.Client.RemoteEndPoint.ToString())
+            .Log(LogFile);
 
           var peer = new Peer(tcpClient, Blockchain);
 

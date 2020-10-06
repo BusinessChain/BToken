@@ -87,7 +87,7 @@ namespace BToken.Chaining
 
         pathImage = DirectoryImageOld.Name;
       }
-    
+      
       await Archiver.LoadBlocks(
         stopHashLoading,
         indexBlockArchiveImage);
@@ -286,6 +286,7 @@ namespace BToken.Chaining
       uint targetBits = TargetManager.GetNextTargetBits(
           header.HeaderPrevious,
           (uint)height);
+
 
       if (header.NBits != targetBits)
       {

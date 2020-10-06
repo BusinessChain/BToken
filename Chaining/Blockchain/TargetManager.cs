@@ -19,6 +19,7 @@ namespace BToken.Chaining
         if ((height % RETARGETING_BLOCK_INTERVAL) == 0)
         {
           UInt256 nextTarget = GetNextTarget(header);
+          
           return nextTarget.GetCompact();
         }
         else
@@ -28,23 +29,33 @@ namespace BToken.Chaining
       }
       static UInt256 GetNextTarget(Header header)
       {
-        Header headerIntervalStart = GetBlockPrevious(header, RETARGETING_BLOCK_INTERVAL - 1);
-        ulong actualTimespan = Limit(header.UnixTimeSeconds - headerIntervalStart.UnixTimeSeconds);
+        Header headerIntervalStart = GetHeaderPrevious(
+          header, 
+          RETARGETING_BLOCK_INTERVAL - 1);
+        
+        ulong actualTimespan = Limit(
+          header.UnixTimeSeconds - 
+          headerIntervalStart.UnixTimeSeconds);
+
         UInt256 targetOld = UInt256.ParseFromCompact(header.NBits);
 
-        UInt256 targetNew = targetOld.MultiplyBy(actualTimespan).DivideBy(RETARGETING_TIMESPAN_INTERVAL_SECONDS);
+        UInt256 targetNew = targetOld
+          .MultiplyBy(actualTimespan)
+          .DivideBy(RETARGETING_TIMESPAN_INTERVAL_SECONDS);
 
         return UInt256.Min(DIFFICULTY_1_TARGET, targetNew);
       }
-      static Header GetBlockPrevious(Header block, uint depth)
+
+      static Header GetHeaderPrevious(Header header, uint depth)
       {
-        if (depth == 0 || block.HeaderPrevious == null)
+        if (depth == 0 || header.HeaderPrevious == null)
         {
-          return block;
+          return header;
         }
 
-        return GetBlockPrevious(block.HeaderPrevious, --depth);
+        return GetHeaderPrevious(header.HeaderPrevious, --depth);
       }
+
       static ulong Limit(ulong actualTimespan)
       {
         if (actualTimespan < RETARGETING_TIMESPAN_INTERVAL_SECONDS / 4)

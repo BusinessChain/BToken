@@ -145,7 +145,7 @@ namespace BToken.Chaining
             CreateBlockArchive(IndexBlockArchive);
           }
 
-          string.Format("inserted blockArchive {0}",
+          string.Format("Inserted blockArchive {0}.",
             blockArchive.Index)
             .Log(LogFile);
         }
@@ -181,17 +181,14 @@ namespace BToken.Chaining
           }
           catch (Exception ex)
           {
-            string message = string.Format(
+            string.Format(
               "Exception {0} when writing blockArchive {1} to " +
               "file {2}: \n{3} \n" +
               "Try again in 10 seconds ...",
               ex.GetType().Name,
               blockArchive.Index,
               FileBlockArchive.Name,
-              ex.Message);
-
-            Console.WriteLine(message);
-            message.Log(LogFile);
+              ex.Message).Log(LogFile);
 
             Thread.Sleep(10000);
           }
@@ -218,8 +215,6 @@ namespace BToken.Chaining
 
       void OpenBlockArchive(int indexArchive)
       {
-        Console.WriteLine("Open BlockArchive {0}", indexArchive);
-
         string.Format("Open BlockArchive {0}",
           indexArchive)
           .Log(LogFile);
@@ -238,8 +233,6 @@ namespace BToken.Chaining
 
       void CreateBlockArchive(int indexArchive)
       {
-        Console.WriteLine("Create BlockArchive {0}", indexArchive);
-
         string.Format("Create BlockArchive {0}",
           indexArchive)
           .Log(LogFile);

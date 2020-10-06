@@ -24,6 +24,7 @@ namespace BToken
 
       string logString = dateTime + " --- " + message;
 
+      Console.WriteLine(logString);
       logFile.WriteLine(logString);
 
       logFile.Flush();
