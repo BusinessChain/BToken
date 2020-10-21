@@ -31,6 +31,9 @@ namespace BToken.Chaining
     DirectoryInfo DirectoryImageOld =
         Directory.CreateDirectory("image_old");
 
+    readonly object LOCK_IsBlockchainLocked = new object();
+    bool IsBlockchainLocked;
+
 
 
     public Blockchain(
@@ -345,17 +348,35 @@ namespace BToken.Chaining
 
     int CounterException = 0;
 
-    void InsertBlockArchive(
-      UTXOTable.BlockArchive blockArchive)
+    bool TryArchiveBlockArchive(
+      UTXOTable.BlockArchive blockArchive,
+      int intervallImage)
     {
       if (CounterException > 20)
       {
-        CounterException = 0;
-        throw new ChainException(
-          "Test Exception in Blockchain.InsertBlockArchive()");
+        return false;
       }
       CounterException += 1;
 
+      blockArchive.Index = Archiver.IndexBlockArchive;
+
+      try
+      {
+        InsertBlockArchive(blockArchive);
+      }
+      catch (ChainException)
+      {
+        return false;
+      }
+
+      Archiver.ArchiveBlock(blockArchive, intervallImage);
+
+      return true;
+    }
+
+    void InsertBlockArchive(
+      UTXOTable.BlockArchive blockArchive)
+    {
       UTXOTable.InsertBlockArchive(blockArchive);
       InsertHeaders(blockArchive);
     }
@@ -499,5 +520,28 @@ namespace BToken.Chaining
         "Locator does not root in headerchain."));
     }
 
+
+    public bool TryLock()
+    {
+      lock (LOCK_IsBlockchainLocked)
+      {
+        if (IsBlockchainLocked)
+        {
+          return false;
+        }
+
+        IsBlockchainLocked = true;
+      }
+
+      return true;
+    }
+
+    public void ReleaseLock()
+    {
+      lock (LOCK_IsBlockchainLocked)
+      {
+        IsBlockchainLocked = false;
+      }
+    }
   }
 }

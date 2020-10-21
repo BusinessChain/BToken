@@ -97,6 +97,7 @@
     <Compile Include="Chaining\GenesisBlock.cs" />
     <Compile Include="Chaining\Wallet\Wallet.cs" />
     <Compile Include="Chaining\ChainException.cs" />
+    <Compile Include="Chaining\Network.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />

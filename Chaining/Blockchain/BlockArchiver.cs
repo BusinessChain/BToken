@@ -185,10 +185,9 @@ namespace BToken.Chaining
               "Exception {0} when writing blockArchive {1} to " +
               "file {2}: \n{3} \n" +
               "Try again in 10 seconds ...",
-              ex.GetType().Name,
-              blockArchive.Index,
-              FileBlockArchive.Name,
-              ex.Message).Log(LogFile);
+              ex.GetType().Name, blockArchive.Index,
+              FileBlockArchive.Name, ex.Message)
+              .Log(LogFile);
 
             Thread.Sleep(10000);
           }
@@ -215,8 +214,7 @@ namespace BToken.Chaining
 
       void OpenBlockArchive(int indexArchive)
       {
-        string.Format("Open BlockArchive {0}",
-          indexArchive)
+        string.Format("Open BlockArchive {0}", indexArchive)
           .Log(LogFile);
 
         string pathFileArchive = Path.Combine(
@@ -274,19 +272,49 @@ namespace BToken.Chaining
 
         blockArchive.Reset();
 
+        string pathFile = Path.Combine(
+          ArchiveDirectoryBlocks.FullName,
+          blockArchive.Index.ToString());
+
+        byte[] bytesFile;
+
+        while (true)
+        {
+          try
+          {
+            bytesFile = File.ReadAllBytes(pathFile);
+
+            break;
+          }
+          catch (Exception ex)
+          {
+            string.Format(
+              "Exception {0} when reading blockArchive {1} from " +
+              "file {2}: \n{3} \n" +
+              "Try again in 10 seconds ...",
+              ex.GetType().Name,
+              blockArchive.Index,
+              pathFile,
+              ex.Message).Log(LogFile);
+
+            Thread.Sleep(10000);
+          }
+        }
+
         try
         {
-          string pathFile = Path.Combine(
-            ArchiveDirectoryBlocks.FullName,
-            blockArchive.Index.ToString());
-
-          blockArchive.Parse(
-            File.ReadAllBytes(pathFile),
-            HashStopLoading);
+          blockArchive.Parse(bytesFile, HashStopLoading);
         }
-        catch
+        catch(ChainException ex)
         {
           blockArchive.IsInvalid = true;
+
+          string.Format(
+            "Loader throws exception {0} \n" +
+            "when parsing file {1}",
+            pathFile,
+            ex.Message)
+            .Log(LogFile);
         }
 
         string.Format(

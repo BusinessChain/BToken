@@ -41,6 +41,9 @@ namespace BToken.Chaining
 
       public void Reset()
       {
+        IsInvalid = false;
+        IsLastArchive = false;
+
         HeaderTip = null;
         HeaderRoot = null;
         Height = 0;
@@ -287,7 +290,8 @@ namespace BToken.Chaining
         }
         catch (ArgumentOutOfRangeException)
         {
-          throw new ChainException();
+          throw new ChainException(
+            "ArgumentOutOfRangeException thrown in ParseTX.");
         }
       }
 
