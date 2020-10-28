@@ -18,7 +18,6 @@ namespace BToken.Chaining
 
       public int Index;
       public bool IsInvalid;
-      public bool IsLastArchive;
 
       public Header HeaderTip;
       public Header HeaderRoot;
@@ -42,7 +41,6 @@ namespace BToken.Chaining
       public void Reset()
       {
         IsInvalid = false;
-        IsLastArchive = false;
 
         HeaderTip = null;
         HeaderRoot = null;

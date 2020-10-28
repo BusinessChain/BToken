@@ -32,7 +32,7 @@ namespace BToken.Chaining
       readonly object LOCK_Status = new object();
       StatusUTXOSyncSession Status;
 
-      public bool IsDisposed;
+      public bool FlagDispose;
       public bool IsSyncMaster;
       public bool IsSynchronized;
 
@@ -57,8 +57,12 @@ namespace BToken.Chaining
 
       ulong FeeFilterValue;
 
-      const ServiceFlags NetworkServicesRemoteRequired = ServiceFlags.NODE_NONE;
-      const ServiceFlags NetworkServicesLocal = ServiceFlags.NODE_NETWORK;
+      const ServiceFlags NetworkServicesRemoteRequired = 
+        ServiceFlags.NODE_NONE;
+
+      const ServiceFlags NetworkServicesLocal = 
+        ServiceFlags.NODE_NETWORK;
+
       const string UserAgent = "/BToken:0.0.0/";
       const Byte RelayOption = 0x00;
       readonly static ulong Nonce = CreateNonce();
@@ -73,7 +77,7 @@ namespace BToken.Chaining
       public enum ConnectionType { OUTBOUND, INBOUND };
       ConnectionType Connection;
       const UInt32 ProtocolVersion = 70015;
-      IPAddress IPAddress;
+      public IPAddress IPAddress;
       TcpClient TcpClient;
       NetworkStream NetworkStream;
 
@@ -547,7 +551,7 @@ namespace BToken.Chaining
         }
         catch (Exception ex)
         {
-          IsDisposed = true;
+          FlagDispose = true;
 
           string.Format(
            "Peer {0} experienced error " +
@@ -745,13 +749,9 @@ namespace BToken.Chaining
 
           headerLoad = headerLoad.HeaderNext;
 
-          if (headerLoad == null)
-          {
-            BlockArchive.IsLastArchive = true;
-            break;
-          }
-
-        } while (Inventories.Count < CountBlocksLoad);
+        } while (
+        Inventories.Count < CountBlocksLoad 
+        && headerLoad != null);
       }
 
 
@@ -863,7 +863,7 @@ namespace BToken.Chaining
             ex.Message).Log(LogFile);
 
           BlockArchive.IsInvalid = true;
-          IsDisposed = true;
+          FlagDispose = true;
         }
 
         CalculateNewCountBlocks();
@@ -901,6 +901,12 @@ namespace BToken.Chaining
         {
           CountBlocksLoad -= 1;
         }
+      }
+      public void PushBlockArchive(Peer peer)
+      {
+        BlockArchivesDownloaded.Push(BlockArchive);
+        BlockArchive = peer.BlockArchive;
+        Inventories = peer.Inventories;
       }
 
 

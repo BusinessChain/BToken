@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Net;
 using System.Net.Sockets;
@@ -37,16 +38,17 @@ namespace BToken.Chaining
       {
         lock (LOCK_Peers)
         {
-          peer = Peers.Find(p => !p.IsDisposed);
+          peer = Peers.Find(
+            p => !p.FlagDispose && p.IsStatusIdle());
 
           if (peer != null)
           {
-            Peers.Remove(peer);
+            peer.SetStatusBusy();
             return true;
           }
-
-          return false;
         }
+
+        return false;
       }
 
       public bool TryGetPeerNotSynchronized(
@@ -56,11 +58,12 @@ namespace BToken.Chaining
         {
           peer = Peers.Find(p =>
            !p.IsSynchronized &&
-           !p.IsDisposed);
+           !p.FlagDispose &&
+           p.IsStatusIdle());
           
           if(peer != null)
           {
-            Peers.Remove(peer);
+            peer.SetStatusBusy();
             return true;
           }
 
@@ -72,7 +75,7 @@ namespace BToken.Chaining
       {
         lock (LOCK_Peers)
         {
-          Peers.Add(peer);
+          peer.SetStatusIdle();
         }
       }
 
@@ -85,56 +88,100 @@ namespace BToken.Chaining
 
         // StartPeerInboundListener();
 
-        int countPeersToCreate = COUNT_PEERS_MAX;
+        int countPeersToCreate;
 
         while (true)
         {
-          if (countPeersToCreate > 0)
-          {
-            string.Format(
-              "Connect with {0} new peers. " +
-              "{1} peers connected currently.",
-              countPeersToCreate,
-              Peers.Count)
-              .Log(LogFile);
-
-            var createPeerTasks = new Task[countPeersToCreate];
-
-            Parallel.For(
-              0,
-              countPeersToCreate,
-              i => createPeerTasks[i] = CreatePeer());
-
-            await Task.WhenAll(createPeerTasks);
-          }
-
           lock (LOCK_Peers)
           {
-            List<Peer> peersDisposed =
-              Peers.FindAll(p => p.IsDisposed);
+            List<Peer> peersDispose =
+              Peers.FindAll(p => p.FlagDispose);
 
-            peersDisposed.ForEach(p =>
+            peersDispose.ForEach(p =>
             {
               Peers.Remove(p);
               p.Dispose();
             });
 
-            countPeersToCreate = peersDisposed.Count;
+            countPeersToCreate = COUNT_PEERS_MAX - Peers.Count;
           }
 
-          await Task.Delay(1000).ConfigureAwait(false);
+          if (countPeersToCreate > 0)
+          {
+            string.Format(
+              "Connect with {0} new peers.\n" +
+              "{1} peers connected currently.",
+              countPeersToCreate,
+              Peers.Count)
+              .Log(LogFile);
+
+            List<IPAddress> iPAddresses = 
+              RetrieveIPAddresses(countPeersToCreate);
+
+            if(iPAddresses.Count > 0)
+            {
+              var createPeerTasks = new Task[iPAddresses.Count()];
+
+              Parallel.For(
+                0,
+                countPeersToCreate,
+                i => createPeerTasks[i] = CreatePeer(iPAddresses[i]));
+
+              await Task.WhenAll(createPeerTasks);
+            }
+          }
+
+          await Task.Delay(10000).ConfigureAwait(false);
         }
       }
 
-      async Task CreatePeer()
+      List<IPAddress> RetrieveIPAddresses(int countMax)
       {
-        while (true)
-        {
-          IPAddress iPAddress;
+        List<IPAddress> iPAddresses = new List<IPAddress>();
+        bool flagPolledSeedServer = false;
 
+        while(iPAddresses.Count < countMax)
+        {
           try
           {
-            iPAddress = await GetNodeAddress().ConfigureAwait(false);
+            if (SeedNodeIPAddresses.Count == 0)
+            {
+              if(flagPolledSeedServer)
+              {
+                break;
+              }
+
+              DownloadIPAddressesFromSeeds();
+              flagPolledSeedServer = true;
+            }
+
+            if(SeedNodeIPAddresses.Count == 0)
+            {
+              break;
+            }
+
+            int randomIndex = RandomGenerator
+              .Next(SeedNodeIPAddresses.Count);
+
+            IPAddress iPAddress = SeedNodeIPAddresses[randomIndex];
+            SeedNodeIPAddresses.Remove(iPAddress);
+            
+            lock(LOCK_Peers)
+            {
+              if(Peers.Any(
+                p => p.IPAddress.ToString() == iPAddress.ToString()))
+              {
+                continue;
+              }
+            }
+
+            if (iPAddresses.Any(
+              ip => ip.ToString() == iPAddress.ToString()))
+            {
+              continue;
+            }
+
+            iPAddresses.Add(iPAddress);
           }
           catch (Exception ex)
           {
@@ -143,10 +190,17 @@ namespace BToken.Chaining
               ex.Message)
               .Log(LogFile);
 
-            await Task.Delay(5000);
-            continue;
+            break;
           }
+        }
 
+        return iPAddresses;
+      }
+
+      async Task CreatePeer(IPAddress iPAddress)
+      {
+        while (true)
+        {
           var peer = new Peer(Blockchain, iPAddress);
 
           try
@@ -162,7 +216,7 @@ namespace BToken.Chaining
               ex.Message)
               .Log(LogFile);
 
-            peer.IsDisposed = true;
+            peer.FlagDispose = true;
 
             await Task.Delay(5000);
             continue;
@@ -183,72 +237,55 @@ namespace BToken.Chaining
         }
       }
 
-      static async Task<IPAddress> GetNodeAddress()
-      {
-        while (true)
-        {
-          lock (LOCK_IsAddressPoolLocked)
-          {
-            if (!IsAddressPoolLocked)
-            {
-              IsAddressPoolLocked = true;
-              break;
-            }
-          }
 
-          await Task.Delay(100);
-        }
-
-        if (SeedNodeIPAddresses.Count == 0)
-        {
-          DownloadIPAddressesFromSeeds();
-        }
-
-        int randomIndex = RandomGenerator
-          .Next(SeedNodeIPAddresses.Count);
-
-        IPAddress iPAddress = SeedNodeIPAddresses[randomIndex];
-        SeedNodeIPAddresses.Remove(iPAddress);
-
-        lock (LOCK_IsAddressPoolLocked)
-        {
-          IsAddressPoolLocked = false;
-        }
-
-        return iPAddress;
-      }
-
-      static readonly object LOCK_IsAddressPoolLocked = new object();
-      static bool IsAddressPoolLocked;
       static List<IPAddress> SeedNodeIPAddresses = new List<IPAddress>();
       static Random RandomGenerator = new Random();
 
       static void DownloadIPAddressesFromSeeds()
       {
-        try
+        string pathFileSeeds = @"..\..\DNSSeeds";
+        string[] dnsSeeds;
+
+        while(true)
         {
-          string[] dnsSeeds = File.ReadAllLines(@"..\..\DNSSeeds");
-
-          foreach (string dnsSeed in dnsSeeds)
+          try
           {
-            if (dnsSeed.Substring(0, 2) == "//")
-            {
-              continue;
-            }
+            dnsSeeds = File.ReadAllLines(pathFileSeeds);
 
-            IPHostEntry iPHostEntry = Dns.GetHostEntry(dnsSeed);
+            break;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "Exception {0} when reading file with DNS seeds {1} \n" +
+              "{2} \n" +
+              "Try again in 10 seconds ...",
+              ex.GetType().Name,
+              pathFileSeeds,
+              ex.Message);
 
-            SeedNodeIPAddresses.AddRange(iPHostEntry.AddressList);
+            Thread.Sleep(10000);
           }
         }
-        catch
+
+        foreach (string dnsSeed in dnsSeeds)
         {
-          if (SeedNodeIPAddresses.Count == 0)
+          if (dnsSeed.Substring(0, 2) == "//")
           {
-            throw new ChainException("No seed addresses downloaded.");
+            continue;
+          }
+
+          try
+          {
+            SeedNodeIPAddresses.AddRange(
+              Dns.GetHostEntry(dnsSeed).AddressList);
+          }
+          catch
+          {
+            // If error persists, remove seed from file.
+            continue;
           }
         }
-
       }
 
 
