@@ -17,7 +17,7 @@ namespace BToken.Chaining
       const UInt16 Port = 8333;
 
       Blockchain Blockchain;
-      const int COUNT_PEERS_MAX = 1;
+      const int COUNT_PEERS_MAX = 2;
 
       object LOCK_Peers = new object();
       List<Peer> Peers = new List<Peer>();

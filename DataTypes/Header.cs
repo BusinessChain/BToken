@@ -130,7 +130,5 @@ namespace BToken.Chaining
         nBits,
         nonce);
     }
-    
-
   }
 }

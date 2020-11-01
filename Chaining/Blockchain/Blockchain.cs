@@ -23,7 +23,7 @@ namespace BToken.Chaining
     
     UTXOTable UTXOTable;
 
-    BlockchainSynchronizer Synchronizer;
+    NetworkSynchronizer Synchronizer;
     BlockArchiver Archiver;
 
     DirectoryInfo DirectoryImage =
@@ -41,7 +41,7 @@ namespace BToken.Chaining
       byte[] genesisBlockBytes,
       Dictionary<int, byte[]> checkpoints)
     {
-      Synchronizer = new BlockchainSynchronizer(this);
+      Synchronizer = new NetworkSynchronizer(this);
       Archiver = new BlockArchiver(this);
 
       HeaderGenesis = headerGenesis;
@@ -289,8 +289,7 @@ namespace BToken.Chaining
       uint targetBits = TargetManager.GetNextTargetBits(
           header.HeaderPrevious,
           (uint)height);
-
-
+      
       if (header.NBits != targetBits)
       {
         throw new ChainException(
@@ -345,20 +344,14 @@ namespace BToken.Chaining
       }
     }
 
-
-    int CounterException = 0;
-
+    
     bool TryArchiveBlockArchive(
       UTXOTable.BlockArchive blockArchive,
       int intervallImage)
     {
-      if (CounterException > 20)
-      {
-        return false;
-      }
-      CounterException += 1;
-
       blockArchive.Index = Archiver.IndexBlockArchive;
+
+      blockArchive.HeaderRoot.HeaderPrevious = HeaderTip;
 
       try
       {
@@ -389,6 +382,19 @@ namespace BToken.Chaining
       HeaderTip = blockArchive.HeaderTip;
       Difficulty += blockArchive.Difficulty;
       Height += blockArchive.Height;
+
+      Header h = HeaderTip;
+      while (h.HeaderPrevious != null)
+      {
+        h = h.HeaderPrevious;
+      }
+      Console.WriteLine(
+        "Connection to root: {0}",
+        h.Hash.ToHexString());
+
+      Console.WriteLine("Headerchain height {0}, Hash {1}",
+        Height,
+        HeaderTip.Hash.ToHexString());
     }
 
 

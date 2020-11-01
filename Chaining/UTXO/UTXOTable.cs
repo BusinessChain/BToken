@@ -29,10 +29,14 @@ namespace BToken.Chaining
     
     long UTCTimeStartMerger;
 
+    StreamWriter LogFile;
+
 
 
     public UTXOTable(byte[] genesisBlockBytes)
     {
+      LogFile = new StreamWriter("logUTXOTable", false);
+
       Tables = new UTXOIndexCompressed[]{
         TableUInt32,
         TableULong64,
@@ -42,7 +46,9 @@ namespace BToken.Chaining
 
     public void LoadImage(string pathImageRoot)
     {
-      string pathUTXOImage = Path.Combine(pathImageRoot, "UTXOImage");
+      string pathUTXOImage = Path.Combine(
+        pathImageRoot, 
+        "UTXOImage");
 
       for (int c = 0; c < Tables.Length; c += 1)
       {
@@ -265,7 +271,7 @@ namespace BToken.Chaining
 
 
       string logCSV = string.Format(
-        "{0},{1},{2},{3},{4},{5},{6},{7}",
+        "Insertion UTXO Table: {0},{1},{2},{3},{4},{5},{6},{7}",
         blockArchive.Index,
         HeightInserter,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
@@ -275,7 +281,7 @@ namespace BToken.Chaining
         Tables[1].GetMetricsCSV(),
         Tables[2].GetMetricsCSV());
 
-      Console.WriteLine(logCSV);
+      logCSV.Log(LogFile);
     }
   }
 }

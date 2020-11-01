@@ -132,7 +132,7 @@ namespace BToken.Chaining
           catch (ChainException ex)
           {
             string.Format(
-              "exception when inserting blockArchive {0}: \n{1}",
+              "Exception when inserting blockArchive {0}: \n{1}",
               blockArchive.Index, ex.Message)
               .Log(LogFile);
 
@@ -277,35 +277,13 @@ namespace BToken.Chaining
           blockArchive.Index.ToString());
 
         byte[] bytesFile;
-
-        while (true)
-        {
-          try
-          {
-            bytesFile = File.ReadAllBytes(pathFile);
-
-            break;
-          }
-          catch (Exception ex)
-          {
-            string.Format(
-              "Exception {0} when reading blockArchive {1} from " +
-              "file {2}: \n{3} \n" +
-              "Try again in 10 seconds ...",
-              ex.GetType().Name,
-              blockArchive.Index,
-              pathFile,
-              ex.Message).Log(LogFile);
-
-            Thread.Sleep(10000);
-          }
-        }
-
+                
         try
         {
+          bytesFile = File.ReadAllBytes(pathFile);
           blockArchive.Parse(bytesFile, HashStopLoading);
         }
-        catch(ChainException ex)
+        catch(Exception ex)
         {
           blockArchive.IsInvalid = true;
 

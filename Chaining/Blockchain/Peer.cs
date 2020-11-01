@@ -33,7 +33,6 @@ namespace BToken.Chaining
       StatusUTXOSyncSession Status;
 
       public bool FlagDispose;
-      public bool IsSyncMaster;
       public bool IsSynchronized;
 
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 8000;
@@ -653,11 +652,10 @@ namespace BToken.Chaining
         int height)
       {
         string.Format(
-          "{0}: Build headerchain from header: {1}, " +
-          "headerPrevious: {2}, height Root: {3}",
+          "{0}: Build headerchain from header: \n{1}, \n" +
+          "height Root: {2}",
           GetID(),
           header.Hash.ToHexString(),
-          header.HashPrevious.ToHexString(),
           height)
           .Log(LogFile);
 
@@ -670,32 +668,31 @@ namespace BToken.Chaining
           difficulty += header.Difficulty;
           height += 1;
 
-          if (header.HeaderNext != null)
+          if (header.HeaderNext == null)
           {
-            header = header.HeaderNext;
+            //header.HeaderNext = await GetHeaders(header);
+
+            //if (header.HeaderNext == null)
+            //{
+            //  string.Format(
+            //    "Height header chain {0}\n",
+            //    height - 1)
+            //    .Log(LogFile);
+
+            //  return difficulty;
+            //}
+
+
+            string.Format(
+              "Height header chain {0}\n",
+              height - 1)
+              .Log(LogFile);
+
+            return difficulty;
           }
-          else
-          {
-            Header headerNext = await GetHeaders(header);
 
-            if (headerNext == null || height > 10000)
-            {
-              string.Format(
-                "Height header chain {0}\n" +
-                "Next headerRoot {1} from peer {2}",
-                height - 1,
-                headerNext.Hash.ToHexString(),
-                GetID())
-                .Log(LogFile);
-
-              return difficulty;
-            }
-
-            header.HeaderNext = headerNext;
-            header = headerNext;
-          }
+          header = header.HeaderNext;
         }
-
       }
 
 
@@ -758,13 +755,13 @@ namespace BToken.Chaining
       public async Task DownloadBlocks()
       {
         string.Format(
-         "Download {0} blocks {1} ... {2}\n" +
-         "with peer {3}, blockArchive {4}.",
+         "Download {0} blocks from peer {1} in blockArchive {2}: \n" +
+         "{3} ... \n{4}",
          Inventories.Count,
-         Inventories.First().Hash.ToHexString(),
-         Inventories.Count > 1 ? Inventories.Last().Hash.ToHexString() : "",
          GetID(),
-         BlockArchive.Index)
+         BlockArchive.Index,
+         Inventories.First().Hash.ToHexString(),
+         Inventories.Count > 1 ? Inventories.Last().Hash.ToHexString() : "")
          .Log(LogFile);
 
         StopwatchDownload.Restart();
@@ -773,12 +770,7 @@ namespace BToken.Chaining
         {
           var cancellation = new CancellationTokenSource(
               TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-
-          string.Format(
-            "{0}: Send GetDataMessage message",
-            GetID())
-            .Log(LogFile);
-
+          
           await SendMessage(new GetDataMessage(Inventories));
 
           lock (LOCK_IsExpectingMessageResponse)
@@ -787,6 +779,7 @@ namespace BToken.Chaining
           }
 
           BlockArchive.Reset();
+
           int indexBlockMessageReceived = 0;
 
           while (true)
@@ -857,7 +850,7 @@ namespace BToken.Chaining
         catch (Exception ex)
         {
           string.Format(
-            "Exception {0} in download of blockArchive {1}: \n{2}",
+            "Exception {0} in download of blockArchive {1}: \n{2}.",
             ex.GetType().Name,
             BlockArchive.Index,
             ex.Message).Log(LogFile);
@@ -869,7 +862,7 @@ namespace BToken.Chaining
         CalculateNewCountBlocks();
 
         string.Format(
-          "{0}: Downloaded blockArchive {1} in {2}",
+          "{0}: Downloaded blockArchive {1} in {2} ms.",
           GetID(),
           BlockArchive.Index,
           StopwatchDownload.ElapsedMilliseconds)
@@ -902,11 +895,23 @@ namespace BToken.Chaining
           CountBlocksLoad -= 1;
         }
       }
+
       public void PushBlockArchive(Peer peer)
       {
         BlockArchivesDownloaded.Push(BlockArchive);
         BlockArchive = peer.BlockArchive;
         Inventories = peer.Inventories;
+      }
+
+      public bool TryPopBlockArchive()
+      {
+        if (BlockArchivesDownloaded.Any())
+        {
+          BlockArchive = BlockArchivesDownloaded.Pop();
+          return true;
+        }
+
+        return false;
       }
 
 
