@@ -17,7 +17,7 @@ namespace BToken.Chaining
       const UInt16 Port = 8333;
 
       Blockchain Blockchain;
-      const int COUNT_PEERS_MAX = 2;
+      const int COUNT_PEERS_MAX = 6;
 
       object LOCK_Peers = new object();
       List<Peer> Peers = new List<Peer>();
@@ -39,11 +39,11 @@ namespace BToken.Chaining
         lock (LOCK_Peers)
         {
           peer = Peers.Find(
-            p => !p.FlagDispose && p.IsStatusIdle());
+            p => !p.FlagDispose && !p.IsBusy);
 
           if (peer != null)
           {
-            peer.SetStatusBusy();
+            peer.IsBusy = true;
             return true;
           }
         }
@@ -59,11 +59,11 @@ namespace BToken.Chaining
           peer = Peers.Find(p =>
            !p.IsSynchronized &&
            !p.FlagDispose &&
-           p.IsStatusIdle());
+           !p.IsBusy);
           
           if(peer != null)
           {
-            peer.SetStatusBusy();
+            peer.IsBusy = true;
             return true;
           }
 
@@ -75,10 +75,11 @@ namespace BToken.Chaining
       {
         lock (LOCK_Peers)
         {
-          peer.SetStatusIdle();
+          peer.IsBusy = false;
         }
       }
 
+      // verhindern dass mit demselben peer zweimal verbunden wird.
       public async Task Start()
       {
         "Start Network.".Log(LogFile);
@@ -95,7 +96,7 @@ namespace BToken.Chaining
           lock (LOCK_Peers)
           {
             List<Peer> peersDispose =
-              Peers.FindAll(p => p.FlagDispose);
+              Peers.FindAll(p => p.FlagDispose && !p.IsBusy);
 
             peersDispose.ForEach(p =>
             {
@@ -199,41 +200,27 @@ namespace BToken.Chaining
 
       async Task CreatePeer(IPAddress iPAddress)
       {
-        while (true)
+        var peer = new Peer(Blockchain, iPAddress);
+
+        try
         {
-          var peer = new Peer(Blockchain, iPAddress);
-
-          try
-          {
-            await peer.Connect(Port);
-          }
-          catch (Exception ex)
-          {
-            string.Format(
-              "Exception {0} when syncing with peer {1}: \n{2}",
-              ex.GetType(),
-              peer.GetID(),
-              ex.Message)
-              .Log(LogFile);
-
-            peer.FlagDispose = true;
-
-            await Task.Delay(5000);
-            continue;
-          }
-
+          await peer.Connect(Port);
+        }
+        catch (Exception ex)
+        {
           string.Format(
-            "Created peer {0}", peer.GetID())
+            "Exception {0} when connecting with peer {1}: \n{2}",
+            ex.GetType(),
+            peer.GetID(),
+            ex.Message)
             .Log(LogFile);
 
-          peer.StartMessageListener();
+          peer.FlagDispose = true;
+        }
 
-          lock (LOCK_Peers)
-          {
-            Peers.Add(peer);
-          }
-
-          return;
+        lock (LOCK_Peers)
+        {
+          Peers.Add(peer);
         }
       }
 

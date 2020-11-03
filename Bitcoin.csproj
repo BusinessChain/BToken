@@ -101,7 +101,6 @@
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
-    <Compile Include="Chaining\Blockchain\TargetManager.cs" />
     <Compile Include="Chaining\NetworkAddress.cs" />
     <Compile Include="Chaining\Messages\AddressMessage.cs" />
     <Compile Include="Chaining\Messages\FeeFilterMessage.cs" />

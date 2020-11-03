@@ -20,17 +20,8 @@ namespace BToken.Chaining
     public partial class Peer
     {
       Blockchain Blockchain;
-
-      enum StatusUTXOSyncSession
-      {
-        IDLE,
-        BUSY,
-        AWAITING_INSERTION,
-        COMPLETED
-      }
-
-      readonly object LOCK_Status = new object();
-      StatusUTXOSyncSession Status;
+      
+      public bool IsBusy;
 
       public bool FlagDispose;
       public bool IsSynchronized;
@@ -159,6 +150,8 @@ namespace BToken.Chaining
           "Network protocol handshake {0}",
           GetID())
           .Log(LogFile);
+
+        StartMessageListener();
       }
 
       async Task HandshakeAsync(int port)
@@ -652,8 +645,7 @@ namespace BToken.Chaining
         int height)
       {
         string.Format(
-          "{0}: Build headerchain from header: \n{1}, \n" +
-          "height Root: {2}",
+          "{0}: Build headerchain from header: \n{1}",
           GetID(),
           header.Hash.ToHexString(),
           height)
@@ -670,25 +662,17 @@ namespace BToken.Chaining
 
           if (header.HeaderNext == null)
           {
-            //header.HeaderNext = await GetHeaders(header);
+            header.HeaderNext = await GetHeaders(header);
 
-            //if (header.HeaderNext == null)
-            //{
-            //  string.Format(
-            //    "Height header chain {0}\n",
-            //    height - 1)
-            //    .Log(LogFile);
+            if (header.HeaderNext == null)
+            {
+              string.Format(
+                "Height header chain {0}\n",
+                height - 1)
+                .Log(LogFile);
 
-            //  return difficulty;
-            //}
-
-
-            string.Format(
-              "Height header chain {0}\n",
-              height - 1)
-              .Log(LogFile);
-
-            return difficulty;
+              return difficulty;
+            }
           }
 
           header = header.HeaderNext;
@@ -728,8 +712,7 @@ namespace BToken.Chaining
 
         return header;
       }
-
-
+      
 
 
       public void CreateInventories(ref Header headerLoad)
@@ -754,16 +737,6 @@ namespace BToken.Chaining
 
       public async Task DownloadBlocks()
       {
-        string.Format(
-         "Download {0} blocks from peer {1} in blockArchive {2}: \n" +
-         "{3} ... \n{4}",
-         Inventories.Count,
-         GetID(),
-         BlockArchive.Index,
-         Inventories.First().Hash.ToHexString(),
-         Inventories.Count > 1 ? Inventories.Last().Hash.ToHexString() : "")
-         .Log(LogFile);
-
         StopwatchDownload.Restart();
 
         try
@@ -857,13 +830,16 @@ namespace BToken.Chaining
 
           BlockArchive.IsInvalid = true;
           FlagDispose = true;
+
+          return;
         }
 
         CalculateNewCountBlocks();
 
         string.Format(
-          "{0}: Downloaded blockArchive {1} in {2} ms.",
+          "{0}: Downloaded {1} blocks in blockArchive {2} in {3} ms.",
           GetID(),
+          BlockArchive.Height,
           BlockArchive.Index,
           StopwatchDownload.ElapsedMilliseconds)
           .Log(LogFile);
@@ -1052,91 +1028,6 @@ namespace BToken.Chaining
         return IPAddress.ToString();
       }
 
-
-      public void SetUTXOSyncComplete()
-      {
-        string.Format(
-          "{0}: set status UTXOSyncComplete",
-          GetID())
-          .Log(LogFile);
-
-        lock (LOCK_Status)
-        {
-          Status = StatusUTXOSyncSession
-            .COMPLETED;
-        }
-      }
-      public bool IsUTXOSyncComplete()
-      {
-        lock (LOCK_Status)
-        {
-          return Status == StatusUTXOSyncSession
-            .COMPLETED;
-        }
-      }
-      public void SetStatusBusy()
-      {
-        string.Format(
-          "{0}: set status Busy",
-          GetID())
-          .Log(LogFile);
-
-        lock (LOCK_Status)
-        {
-          Status = StatusUTXOSyncSession
-            .BUSY;
-        }
-      }
-      public bool IsStatusBusy()
-      {
-        lock (LOCK_Status)
-        {
-          return Status == StatusUTXOSyncSession
-            .BUSY;
-        }
-      }
-      public void SetStatusAwaitingInsertion()
-      {
-        string.Format(
-          "{0}: set status AwaitingInsertion",
-          GetID())
-          .Log(LogFile);
-
-        lock (LOCK_Status)
-        {
-          Status = StatusUTXOSyncSession
-            .AWAITING_INSERTION;
-        }
-      }
-      public bool IsStatusAwaitingInsertion()
-      {
-        lock (LOCK_Status)
-        {
-          return Status == StatusUTXOSyncSession
-            .AWAITING_INSERTION;
-        }
-      }
-      public void SetStatusIdle()
-      {
-        string.Format(
-          "{0}: set status Idle",
-          GetID())
-          .Log(LogFile);
-
-        lock (LOCK_Status)
-        {
-          Status = StatusUTXOSyncSession
-            .IDLE;
-        }
-      }
-      public bool IsStatusIdle()
-      {
-        lock (LOCK_Status)
-        {
-          return Status == StatusUTXOSyncSession
-            .IDLE;
-        }
-      }
       public void Dispose()
       {
         TcpClient.Dispose();
@@ -1155,7 +1046,6 @@ namespace BToken.Chaining
           DirectoryLogPeersDisposed.FullName,
           GetID()));
       }
-
     }
   }
 }

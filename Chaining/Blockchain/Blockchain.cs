@@ -258,8 +258,7 @@ namespace BToken.Chaining
     {
       if (
         Checkpoints.TryGetValue(
-          height,
-          out byte[] hashCheckpoint) &&
+          height, out byte[] hashCheckpoint) &&
         !hashCheckpoint.IsEqual(header.Hash))
       {
         throw new ChainException(
@@ -286,18 +285,26 @@ namespace BToken.Chaining
           ErrorCode.INVALID);
       }
 
-      uint targetBits = TargetManager.GetNextTargetBits(
-          header.HeaderPrevious,
-          (uint)height);
+      uint targetBitsNew;
+
+      if ((height % RETARGETING_BLOCK_INTERVAL) == 0)
+      {
+        targetBitsNew = GetNextTarget(header)
+          .GetCompact();
+      }
+      else
+      {
+        targetBitsNew = header.NBits;
+      }
       
-      if (header.NBits != targetBits)
+      if (header.NBits != targetBitsNew)
       {
         throw new ChainException(
           string.Format(
             "In header {0}\n nBits {1} not equal to target nBits {2}",
             header.Hash.ToHexString(),
             header.NBits,
-            targetBits),
+            targetBitsNew),
           ErrorCode.INVALID);
       }
     }
@@ -325,6 +332,51 @@ namespace BToken.Chaining
       return timestampsPast[timestampsPast.Count / 2];
     }
 
+    const int RETARGETING_BLOCK_INTERVAL = 2016;
+    const ulong RETARGETING_TIMESPAN_INTERVAL_SECONDS = 14 * 24 * 60 * 60;
+
+    static readonly UInt256 DIFFICULTY_1_TARGET =
+      new UInt256("00000000FFFF0000000000000000000000000000000000000000000000000000");
+
+
+    static UInt256 GetNextTarget(Header header)
+    {
+      Header headerIntervalStart = header;
+      int depth = RETARGETING_BLOCK_INTERVAL;
+
+      while (depth > 0 && headerIntervalStart.HeaderPrevious != null)
+      {
+        headerIntervalStart = headerIntervalStart.HeaderPrevious;
+        depth -= 1;
+      }
+
+      ulong actualTimespan = Limit(
+        header.UnixTimeSeconds -
+        headerIntervalStart.UnixTimeSeconds);
+
+      UInt256 targetOld = UInt256.ParseFromCompact(header.NBits);
+
+      UInt256 targetNew = targetOld
+        .MultiplyBy(actualTimespan)
+        .DivideBy(RETARGETING_TIMESPAN_INTERVAL_SECONDS);
+
+      return UInt256.Min(DIFFICULTY_1_TARGET, targetNew);
+    }
+
+    static ulong Limit(ulong actualTimespan)
+    {
+      if (actualTimespan < RETARGETING_TIMESPAN_INTERVAL_SECONDS / 4)
+      {
+        return RETARGETING_TIMESPAN_INTERVAL_SECONDS / 4;
+      }
+
+      if (actualTimespan > RETARGETING_TIMESPAN_INTERVAL_SECONDS * 4)
+      {
+        return RETARGETING_TIMESPAN_INTERVAL_SECONDS * 4;
+      }
+
+      return actualTimespan;
+    }
 
     void GetStateAtHeader(
       Header headerAncestor,
@@ -350,12 +402,12 @@ namespace BToken.Chaining
       int intervallImage)
     {
       blockArchive.Index = Archiver.IndexBlockArchive;
-
-      blockArchive.HeaderRoot.HeaderPrevious = HeaderTip;
-
+      
       try
       {
-        InsertBlockArchive(blockArchive);
+        InsertBlockArchive(
+          blockArchive,
+          flagValidateHeaders: false);
       }
       catch (ChainException)
       {
@@ -368,8 +420,16 @@ namespace BToken.Chaining
     }
 
     void InsertBlockArchive(
-      UTXOTable.BlockArchive blockArchive)
+      UTXOTable.BlockArchive blockArchive,
+      bool flagValidateHeaders)
     {
+      blockArchive.HeaderRoot.HeaderPrevious = HeaderTip;
+
+      if (flagValidateHeaders)
+      {
+        ValidateHeaders(blockArchive.HeaderRoot);
+      }
+
       UTXOTable.InsertBlockArchive(blockArchive);
       InsertHeaders(blockArchive);
     }
@@ -382,19 +442,6 @@ namespace BToken.Chaining
       HeaderTip = blockArchive.HeaderTip;
       Difficulty += blockArchive.Difficulty;
       Height += blockArchive.Height;
-
-      Header h = HeaderTip;
-      while (h.HeaderPrevious != null)
-      {
-        h = h.HeaderPrevious;
-      }
-      Console.WriteLine(
-        "Connection to root: {0}",
-        h.Hash.ToHexString());
-
-      Console.WriteLine("Headerchain height {0}, Hash {1}",
-        Height,
-        HeaderTip.Hash.ToHexString());
     }
 
 

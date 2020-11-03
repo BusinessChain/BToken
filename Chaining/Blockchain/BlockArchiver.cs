@@ -100,11 +100,9 @@ namespace BToken.Chaining
 
           try
           {
-            blockArchive.HeaderRoot.HeaderPrevious = Blockchain.HeaderTip;
-
-            Blockchain.ValidateHeaders(blockArchive.HeaderRoot);
-
-            Blockchain.InsertBlockArchive(blockArchive);
+            Blockchain.InsertBlockArchive(
+              blockArchive,
+              flagValidateHeaders: true);
 
             if (blockArchive.CountTX < SIZE_BLOCK_ARCHIVE)
             {
