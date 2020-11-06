@@ -289,7 +289,7 @@ namespace BToken.Chaining
 
       if ((height % RETARGETING_BLOCK_INTERVAL) == 0)
       {
-        targetBitsNew = GetNextTarget(header)
+        targetBitsNew = GetNextTarget(header.HeaderPrevious)
           .GetCompact();
       }
       else
@@ -344,10 +344,9 @@ namespace BToken.Chaining
       Header headerIntervalStart = header;
       int depth = RETARGETING_BLOCK_INTERVAL;
 
-      while (depth > 0 && headerIntervalStart.HeaderPrevious != null)
+      while (--depth > 0 && headerIntervalStart.HeaderPrevious != null)
       {
         headerIntervalStart = headerIntervalStart.HeaderPrevious;
-        depth -= 1;
       }
 
       ulong actualTimespan = Limit(

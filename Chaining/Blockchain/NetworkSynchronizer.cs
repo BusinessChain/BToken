@@ -15,16 +15,14 @@ namespace BToken.Chaining
     {
       Network Network;
       Blockchain Blockchain;
-      
+
+      int TIMEOUT_SYNCHRONIZER = 30000;
+
       const int UTXOIMAGE_INTERVAL_SYNC = 500;
       const int UTXOIMAGE_INTERVAL_LISTEN = 50;
-
-      const int TIMEOUT_SYNC_UTXO = 60000;
-
-
+           
       StreamWriter LogFile;
-
-
+      
 
 
       public NetworkSynchronizer(Blockchain blockchain)
@@ -82,10 +80,26 @@ namespace BToken.Chaining
             Blockchain.ReleaseLock();
             continue;
           }
-          
-          await SynchronizeWithPeer(peer);
 
-          peer.IsSynchronized = true;
+          try
+          {
+            await SynchronizeWithPeer(peer);
+
+            peer.IsSynchronized = true;
+          }
+          catch (Exception ex)
+          {
+            string.Format(
+              "Exception {0} when syncing with peer {1}: \n{2}",
+              ex.GetType(),
+              peer.GetID(),
+              ex.Message)
+              .Log(LogFile);
+
+            peer.FlagDispose = true;
+
+            Network.ReleasePeer(peer);
+          }
 
           Blockchain.ReleaseLock();
         }
@@ -103,79 +117,65 @@ namespace BToken.Chaining
         List<Header> locator = Blockchain.GetLocator();
         Header headerTip = locator.Last();
 
-        try
+        Header headerRoot = await peer.GetHeaders(locator);
+
+        if (headerRoot == null)
         {
-          Header headerRoot = await peer.GetHeaders(locator);
-
-          if (headerRoot == null)
-          {
-            return;
-          }
-
-          if (headerRoot.HeaderPrevious == headerTip)
-          {            
-            await peer.BuildHeaderchain(
-              headerRoot,
-              Blockchain.Height + 1);
-
-            await SynchronizeUTXO(headerRoot, peer);
-            
-            return;
-          }
-
-          headerRoot = await peer.SkipDuplicates(
-            headerRoot,
-            locator);
-
-          Blockchain.GetStateAtHeader(
-            headerRoot.HeaderPrevious,
-            out int heightAncestor,
-            out double difficultyAncestor);
-
-          double difficultyFork = difficultyAncestor +
-            await peer.BuildHeaderchain(
-              headerRoot,
-              heightAncestor + 1);
-
-          double difficultyOld = Blockchain.Difficulty;
-
-          if (difficultyFork > difficultyOld)
-          {            
-            if (!await Blockchain.TryLoadImage(
-              heightAncestor,
-              headerRoot.HashPrevious))
-            {
-              goto LABEL_StageBranch;
-            }
-
-            await SynchronizeUTXO(headerRoot, peer);
-          }
-          else if (difficultyFork < difficultyOld)
-          {
-            if (peer.IsInbound())
-            {
-              string.Format("Fork weaker than Main.")
-                .Log(LogFile);
-
-              peer.FlagDispose = true;
-            }
-            else
-            {
-              peer.SendHeaders(
-                new List<Header>() { Blockchain.HeaderTip });
-            }
-          }
+          return;
         }
-        catch (Exception ex)
-        {
-          string.Format(
-            "Exception {0} when syncing with peer {1}: \n{2}",
-            ex.GetType(),
-            peer.GetID(),
-            ex.Message)
-            .Log(LogFile);
 
-          peer.FlagDispose = true;
+        if (headerRoot.HeaderPrevious == headerTip)
+        {
+          await peer.BuildHeaderchain(
+            headerRoot,
+            Blockchain.Height + 1);
+
+          await SynchronizeUTXO(headerRoot, peer);
+
+          return;
+        }
+
+        headerRoot = await peer.SkipDuplicates(
+          headerRoot,
+          locator);
+
+        Blockchain.GetStateAtHeader(
+          headerRoot.HeaderPrevious,
+          out int heightAncestor,
+          out double difficultyAncestor);
+
+        double difficultyFork = difficultyAncestor +
+          await peer.BuildHeaderchain(
+            headerRoot,
+            heightAncestor + 1);
+
+        double difficultyOld = Blockchain.Difficulty;
+
+        if (difficultyFork > difficultyOld)
+        {
+          if (!await Blockchain.TryLoadImage(
+            heightAncestor,
+            headerRoot.HashPrevious))
+          {
+            goto LABEL_StageBranch;
+          }
+
+          await SynchronizeUTXO(headerRoot, peer);
+        }
+        else if (difficultyFork < difficultyOld)
+        {
+          if (peer.IsInbound())
+          {
+            string.Format("Fork weaker than Main.")
+              .Log(LogFile);
+
+            peer.FlagDispose = true;
+          }
+          else
+          {
+            peer.SendHeaders(
+              new List<Header>() { Blockchain.HeaderTip });
+          }
         }
       }
 
@@ -194,7 +194,6 @@ namespace BToken.Chaining
         var peersAwaitingInsertion = new Dictionary<int, Peer>();
         var peersCompleted = new List<Peer>();
 
-        int timeout = 30000;
         var cancellationSynchronizeUTXO = 
           new CancellationTokenSource();
 
@@ -218,13 +217,16 @@ namespace BToken.Chaining
           {
             if(!QueueBlockDownloads.Any() && HeaderLoad == null)
             {
-              "UTXO Synchronization completed.".Log(LogFile);
+              "UTXO Synchronization completed."
+                .Log(LogFile);
             }
             else
             {
               if (!flagTimeoutTriggered)
               {
-                cancellationSynchronizeUTXO.CancelAfter(timeout);
+                cancellationSynchronizeUTXO
+                  .CancelAfter(TIMEOUT_SYNCHRONIZER);
+
                 flagTimeoutTriggered = true;
               }
 
@@ -279,10 +281,6 @@ namespace BToken.Chaining
             {
               peer.FlagDispose = true;
             }
-            else
-            {
-              peersCompleted.Add(peer);
-            }
           }
           else
           {
@@ -321,7 +319,7 @@ namespace BToken.Chaining
               peersAwaitingInsertion.Remove(
                 indexBlockArchiveQueue);
             }
-
+            
             peer.FlagDispose = true;
           }
 
@@ -365,8 +363,16 @@ namespace BToken.Chaining
           if (peer.TryPopBlockArchive())
           {
             peersAwaitingInsertion.Add(
-              peer.BlockArchive.Index, 
+              peer.BlockArchive.Index,
               peer);
+          }
+          else if (peer.FlagDispose == false)
+          {
+            peersCompleted.Add(peer);
+          }
+          else
+          {
+            Network.ReleasePeer(peer);
           }
 
         } while (true);

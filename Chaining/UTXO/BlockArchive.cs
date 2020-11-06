@@ -99,7 +99,7 @@ namespace BToken.Chaining
         StopwatchParse.Stop();
       }
 
-      public void ParseBlockSingle(byte[] buffer, int bufferLength)
+      public bool ParseBlockSingle(byte[] buffer, int bufferLength)
       {
         Array.Copy(
           buffer, 
@@ -114,6 +114,8 @@ namespace BToken.Chaining
         IndexArchiveBuffer += bufferLength;
 
         ParseBlock();
+
+        return true;
       }
 
       void ParseBlock()

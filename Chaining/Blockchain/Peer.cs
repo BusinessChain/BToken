@@ -26,8 +26,8 @@ namespace BToken.Chaining
       public bool FlagDispose;
       public bool IsSynchronized;
 
-      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 8000;
-      const int TIMEOUT_GETHEADERS_MILLISECONDS = 5000;
+      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 3000;
+      const int TIMEOUT_GETHEADERS_MILLISECONDS = 1000;
 
       const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
       Stopwatch StopwatchDownload = new Stopwatch();
@@ -330,8 +330,9 @@ namespace BToken.Chaining
 
         if (PayloadLength > SIZE_MESSAGE_PAYLOAD_BUFFER)
         {
-          throw new ChainException(
-            "Message payload too big (over 32MB)");
+          throw new ChainException(string.Format(
+            "Message payload too big exceeding {0} bytes.",
+            SIZE_MESSAGE_PAYLOAD_BUFFER));
         }
 
         await ReadBytes(
@@ -367,7 +368,8 @@ namespace BToken.Chaining
             buffer,
             offset,
             bytesToRead,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken)
+            .ConfigureAwait(false);
 
           if (chunkSize == 0)
           {
@@ -388,8 +390,7 @@ namespace BToken.Chaining
         {
           while (true)
           {
-            await ReadMessage(default)
-              .ConfigureAwait(false);
+            await ReadMessage(default);
 
             switch (Command)
             {
@@ -664,7 +665,7 @@ namespace BToken.Chaining
           {
             header.HeaderNext = await GetHeaders(header);
 
-            if (header.HeaderNext == null)
+            if (header.HeaderNext == null || height > 200000)
             {
               string.Format(
                 "Height header chain {0}\n",
@@ -785,9 +786,10 @@ namespace BToken.Chaining
               continue;
             }
 
-            BlockArchive.ParseBlockSingle(
-              Payload,
-              PayloadLength);
+            bool isBlockArchiveSplit =
+              BlockArchive.ParseBlockSingle(
+                Payload,
+                PayloadLength);
 
             if (!BlockArchive.HeaderTip.Hash.IsEqual(
               Inventories[indexBlockMessageReceived].Hash))
@@ -804,6 +806,8 @@ namespace BToken.Chaining
             {
               indexBlockMessageReceived += 1;
               StartMessageListener();
+              cancellation.CancelAfter(
+                TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
               continue;
             }
             else
@@ -834,7 +838,7 @@ namespace BToken.Chaining
           return;
         }
 
-        CalculateNewCountBlocks();
+        AdjustCountBlocksLoad();
 
         string.Format(
           "{0}: Downloaded {1} blocks in blockArchive {2} in {3} ms.",
@@ -845,31 +849,23 @@ namespace BToken.Chaining
           .Log(LogFile);
       }
 
-      void CalculateNewCountBlocks()
+      void AdjustCountBlocksLoad()
       {
-        const float safetyFactorTimeout = 3;
-        const float marginFactorResetCountBlocksDownload = 2;
+        int correctionTerm =
+          (int)(CountBlocksLoad *
+          (TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS /
+          StopwatchDownload.ElapsedMilliseconds - 1));
 
-        float ratioTimeoutToDownloadTime =
-          TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS /
-          (1 + StopwatchDownload.ElapsedMilliseconds);
+        if(correctionTerm > 10)
+        {
+          correctionTerm = 10;
+        }
 
-        if (ratioTimeoutToDownloadTime > safetyFactorTimeout)
-        {
-          CountBlocksLoad += 1;
-        }
-        else if (ratioTimeoutToDownloadTime <
-          marginFactorResetCountBlocksDownload)
-        {
-          if (CountBlocksLoad > 1)
-          {
-            CountBlocksLoad >>= 1;
-          }
-        }
-        else if (CountBlocksLoad > 1)
-        {
-          CountBlocksLoad -= 1;
-        }
+        CountBlocksLoad = Math.Min(
+          CountBlocksLoad + correctionTerm,
+          200);
+
+        CountBlocksLoad = Math.Max(CountBlocksLoad, 1);
       }
 
       public void PushBlockArchive(Peer peer)
