@@ -69,7 +69,7 @@ namespace BToken.Chaining
     }
 
 
-    public void InsertBlockArchive(BlockArchive blockArchive)
+    public void InsertBlock(BlockParser blockArchive)
     {
       blockArchive.StopwatchInsertion.Restart();
 
@@ -256,7 +256,7 @@ namespace BToken.Chaining
 
     int HeightInserter;
 
-    void LogInsertion(BlockArchive blockArchive)
+    void LogInsertion(BlockParser blockArchive)
     {
       HeightInserter += blockArchive.Height;
 

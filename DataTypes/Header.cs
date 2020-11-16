@@ -10,7 +10,7 @@ namespace BToken.Chaining
     public Header HeaderPrevious;
     public Header HeaderNext;
     
-    const int COUNT_HEADER_BYTES = 80;
+    public const int COUNT_HEADER_BYTES = 80;
 
     public byte[] Hash;
     public uint Version;

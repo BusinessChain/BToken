@@ -17,7 +17,7 @@ namespace BToken.Chaining
       public int IndexBlockArchive;
 
       byte[] HashStopLoading;
-      const int COUNT_LOADER_TASKS = 1;
+      public const int COUNT_LOADER_TASKS = 1;
       int SIZE_BLOCK_ARCHIVE = 20000;
       const int UTXOIMAGE_INTERVAL_LOADER = 500;
 
@@ -70,8 +70,8 @@ namespace BToken.Chaining
       }
 
 
-      BufferBlock<UTXOTable.BlockArchive> QueueLoader =
-        new BufferBlock<UTXOTable.BlockArchive>();
+      BufferBlock<UTXOTable.BlockParser> QueueLoader =
+        new BufferBlock<UTXOTable.BlockParser>();
 
       async Task RunLoaderInserter()
       {
@@ -79,17 +79,17 @@ namespace BToken.Chaining
 
         while (true)
         {
-          UTXOTable.BlockArchive blockArchive =
+          UTXOTable.BlockParser blockParser =
             await QueueLoader.ReceiveAsync()
             .ConfigureAwait(false);
 
           string.Format("inserter receives blockArchive {0}",
-            blockArchive.Index)
+            blockParser.Index)
             .Log(LogFile);
 
           if (
-            blockArchive.IsInvalid ||
-            !blockArchive.HeaderRoot.HashPrevious.IsEqual(
+            blockParser.IsInvalid ||
+            !blockParser.HeaderRoot.HashPrevious.IsEqual(
               Blockchain.HeaderTip.Hash))
           {
             CountTXsArchive = 0;
@@ -100,13 +100,13 @@ namespace BToken.Chaining
 
           try
           {
-            Blockchain.InsertBlockArchive(
-              blockArchive,
+            Blockchain.InsertBlocks(
+              blockParser,
               flagValidateHeaders: true);
 
-            if (blockArchive.CountTX < SIZE_BLOCK_ARCHIVE)
+            if (blockParser.CountTX < SIZE_BLOCK_ARCHIVE)
             {
-              CountTXsArchive = blockArchive.CountTX;
+              CountTXsArchive = blockParser.CountTX;
               OpenBlockArchive(IndexBlockArchive);
 
               break;
@@ -114,7 +114,7 @@ namespace BToken.Chaining
 
             IndexBlockArchive += 1;
 
-            if (blockArchive.HeaderTip.Hash.IsEqual(HashStopLoading))
+            if (blockParser.HeaderTip.Hash.IsEqual(HashStopLoading))
             {
               CountTXsArchive = 0;
               CreateBlockArchive(IndexBlockArchive);
@@ -131,37 +131,37 @@ namespace BToken.Chaining
           {
             string.Format(
               "Exception when inserting blockArchive {0}: \n{1}",
-              blockArchive.Index, ex.Message)
+              blockParser.Index, ex.Message)
               .Log(LogFile);
 
             File.Delete(
               Path.Combine(
                 ArchiveDirectoryBlocks.Name,
-                blockArchive.Index.ToString()));
+                blockParser.Index.ToString()));
 
             CountTXsArchive = 0;
             CreateBlockArchive(IndexBlockArchive);
           }
 
           string.Format("Inserted blockArchive {0}.",
-            blockArchive.Index)
+            blockParser.Index)
             .Log(LogFile);
         }
 
-        string.Format("Blockloading complete")
+        string.Format("Blockloading completed.")
           .Log(LogFile);
 
         IsBlockLoadingCompleted = true;
       }
 
 
-      List<UTXOTable.BlockArchive> BlockArchives =
-        new List<UTXOTable.BlockArchive>();
+      List<UTXOTable.BlockParser> BlockArchives =
+        new List<UTXOTable.BlockParser>();
       int CountTXsArchive;
       FileStream FileBlockArchive;
 
       public void ArchiveBlock(
-        UTXOTable.BlockArchive blockArchive,
+        UTXOTable.BlockParser blockArchive,
         int intervalImage)
       {
         while (true)
@@ -252,38 +252,47 @@ namespace BToken.Chaining
 
 
       bool IsBlockLoadingCompleted;
-      Dictionary<int, UTXOTable.BlockArchive> QueueBlockArchives =
-        new Dictionary<int, UTXOTable.BlockArchive>();
+      Dictionary<int, UTXOTable.BlockParser> QueueBlockArchives =
+        new Dictionary<int, UTXOTable.BlockParser>();
       readonly object LOCK_QueueBlockArchives = new object();
 
       async Task StartLoader()
       {
-        string.Format("Start Loader worker {0}", 
+        string.Format("Start Loader worker {0}.",
           Thread.CurrentThread.ManagedThreadId)
           .Log(LogFile);
 
-        UTXOTable.BlockArchive blockArchive = null;
+        UTXOTable.BlockParser blockParser = null;
 
       LABEL_LoadBlockArchive:
 
-        LoadBlockArchive(ref blockArchive);
+        if (blockParser == null)
+        {
+          blockParser = Blockchain.GetBlockParser();
+        }
 
-        blockArchive.Reset();
+        lock (LOCK_IndexBlockArchiveLoad)
+        {
+          blockParser.Index = IndexBlockArchiveLoad;
+          IndexBlockArchiveLoad += 1;
+        }
 
         string pathFile = Path.Combine(
           ArchiveDirectoryBlocks.FullName,
-          blockArchive.Index.ToString());
+          blockParser.Index.ToString());
 
         byte[] bytesFile;
                 
         try
         {
           bytesFile = File.ReadAllBytes(pathFile);
-          blockArchive.Parse(bytesFile, HashStopLoading);
+          blockParser.Parse(bytesFile, HashStopLoading);
+
+          blockParser.IsInvalid = false;
         }
         catch(Exception ex)
         {
-          blockArchive.IsInvalid = true;
+          blockParser.IsInvalid = true;
 
           string.Format(
             "Loader throws exception {0} \n" +
@@ -297,8 +306,8 @@ namespace BToken.Chaining
           "Loader worker {0} loaded " +
           "blockArchive {1} which is {2}",
           Thread.CurrentThread.ManagedThreadId,
-          blockArchive.Index,
-          blockArchive.IsInvalid ? "Invalid" : "Valid")
+          blockParser.Index,
+          blockParser.IsInvalid ? "Invalid" : "Valid")
           .Log(LogFile);
 
         while (true)
@@ -315,7 +324,7 @@ namespace BToken.Chaining
 
           lock (LOCK_QueueBlockArchives)
           {
-            if (blockArchive.Index == IndexBlockArchiveQueue)
+            if (blockParser.Index == IndexBlockArchiveQueue)
             {
               break;
             }
@@ -323,15 +332,15 @@ namespace BToken.Chaining
             if (QueueBlockArchives.Count <= COUNT_LOADER_TASKS)
             {
               QueueBlockArchives.Add(
-                blockArchive.Index,
-                blockArchive);
+                blockParser.Index,
+                blockParser);
 
-              if (blockArchive.IsInvalid)
+              if (blockParser.IsInvalid)
               {
                 return;
               }
 
-              blockArchive = null;
+              blockParser = null;
 
               goto LABEL_LoadBlockArchive;
             }
@@ -342,14 +351,14 @@ namespace BToken.Chaining
 
         while (true)
         {
-          QueueLoader.Post(blockArchive);
+          QueueLoader.Post(blockParser);
 
-          if (blockArchive.IsInvalid)
+          if (blockParser.IsInvalid)
           {
             return;
           }
 
-          blockArchive = null;
+          blockParser = null;
 
           lock (LOCK_QueueBlockArchives)
           {
@@ -357,9 +366,9 @@ namespace BToken.Chaining
 
             if (QueueBlockArchives.TryGetValue(
               IndexBlockArchiveQueue,
-              out blockArchive))
+              out blockParser))
             {
-              QueueBlockArchives.Remove(blockArchive.Index);
+              QueueBlockArchives.Remove(blockParser.Index);
             }
             else
             {
@@ -367,38 +376,6 @@ namespace BToken.Chaining
             }
           }
         }
-      }
-
-      readonly object LOCK_BlockArchivesIdle = new object();
-      List<UTXOTable.BlockArchive> BlockArchivesIdle =
-        new List<UTXOTable.BlockArchive>();
-
-      void LoadBlockArchive(
-        ref UTXOTable.BlockArchive blockArchive)
-      {
-        if (blockArchive == null)
-        {
-          lock (LOCK_BlockArchivesIdle)
-          {
-            if (BlockArchivesIdle.Count == 0)
-            {
-              blockArchive = new UTXOTable.BlockArchive();
-            }
-            else
-            {
-              blockArchive = BlockArchivesIdle.Last();
-              BlockArchivesIdle.Remove(blockArchive);
-            }
-          }
-        }
-
-        lock (LOCK_IndexBlockArchiveLoad)
-        {
-          blockArchive.Index = IndexBlockArchiveLoad;
-          IndexBlockArchiveLoad += 1;
-        }
-
-        blockArchive.IndexBuffer = 0;
       }
     }
   }

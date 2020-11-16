@@ -17,7 +17,7 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    public partial class Peer
+    partial class Peer
     {
       Blockchain Blockchain;
       
@@ -25,17 +25,17 @@ namespace BToken.Chaining
 
       public bool FlagDispose;
       public bool IsSynchronized;
+      public bool IsSyncMaster;
 
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 3000;
-      const int TIMEOUT_GETHEADERS_MILLISECONDS = 1000;
+      const int TIMEOUT_GETHEADERS_MILLISECONDS = 1500;
 
       const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
       Stopwatch StopwatchDownload = new Stopwatch();
-      int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
-      public List<Inventory> Inventories = new List<Inventory>();
+      public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
-      public Stack<UTXOTable.BlockArchive> BlockArchivesDownloaded =
-        new Stack<UTXOTable.BlockArchive>();
+      public Stack<UTXOTable.BlockParser> BlockArchivesDownloaded =
+        new Stack<UTXOTable.BlockParser>();
 
       readonly object LOCK_IsExpectingMessageResponse = new object();
       bool IsExpectingMessageResponse;
@@ -383,7 +383,7 @@ namespace BToken.Chaining
       }
 
 
-
+      
       public async Task StartMessageListener()
       {
         try
@@ -554,11 +554,11 @@ namespace BToken.Chaining
            .Log(LogFile);
         }
       }
+      
 
 
-
-      public UTXOTable.BlockArchive BlockArchive =
-        new UTXOTable.BlockArchive();
+      public UTXOTable.BlockParser BlockParser =
+        new UTXOTable.BlockParser();
 
       public async Task<Header> GetHeaders(Header locator)
       {
@@ -602,18 +602,22 @@ namespace BToken.Chaining
           StartMessageListener();
         }
 
-        BlockArchive.Reset();
-
         int indexPayload = 0;
-        int countHeaders = VarInt.GetInt32(Payload, ref indexPayload);
+
+        int countHeaders = VarInt.GetInt32(
+          Payload, 
+          ref indexPayload);
 
         if (countHeaders > 0)
         {
-          BlockArchive.Parse(Payload, indexPayload, PayloadLength);
+          BlockParser.Parse(
+            Payload,
+            PayloadLength,
+            indexPayload);
 
           Header headerLocatorAncestor = locator
             .Find(h => h.Hash.IsEqual(
-              BlockArchive.HeaderRoot.HashPrevious));
+              BlockParser.HeaderRoot.HashPrevious));
 
           if (headerLocatorAncestor == null)
           {
@@ -621,7 +625,7 @@ namespace BToken.Chaining
               "GetHeaders does not connect to locator.");
           }
 
-          BlockArchive.HeaderRoot.HeaderPrevious =
+          BlockParser.HeaderRoot.HeaderPrevious =
             headerLocatorAncestor;
         }
 
@@ -637,7 +641,7 @@ namespace BToken.Chaining
 
         StartMessageListener();
 
-        return BlockArchive.HeaderRoot;
+        return BlockParser.HeaderRoot;
       }
 
 
@@ -713,26 +717,29 @@ namespace BToken.Chaining
 
         return header;
       }
-      
 
 
-      public void CreateInventories(ref Header headerLoad)
+
+      List<Inventory> CreateInventories()
       {
-        BlockArchive.HeaderRoot = headerLoad;
+        var inventories = new List<Inventory>();
 
-        Inventories.Clear();
-
-        do
+        Header header = BlockParser.HeaderRoot;
+        
+        while(true)
         {
-          Inventories.Add(new Inventory(
-            InventoryType.MSG_BLOCK,
-            headerLoad.Hash));
+          inventories.Add(
+            new Inventory(
+              InventoryType.MSG_BLOCK,
+              header.Hash));
 
-          headerLoad = headerLoad.HeaderNext;
+          if(header == BlockParser.HeaderTip)
+          {
+            return inventories;
+          }
 
-        } while (
-        Inventories.Count < CountBlocksLoad 
-        && headerLoad != null);
+          header = header.HeaderNext;
+        }
       }
 
 
@@ -745,16 +752,15 @@ namespace BToken.Chaining
           var cancellation = new CancellationTokenSource(
               TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
           
-          await SendMessage(new GetDataMessage(Inventories));
+          await SendMessage(new GetDataMessage(
+            CreateInventories()));
 
           lock (LOCK_IsExpectingMessageResponse)
           {
             IsExpectingMessageResponse = true;
           }
-
-          BlockArchive.Reset();
-
-          int indexBlockMessageReceived = 0;
+          
+          Header header = BlockParser.HeaderRoot;
 
           while (true)
           {
@@ -767,10 +773,11 @@ namespace BToken.Chaining
               string.Format(
                 "{0}: Did not not find block in blockArchive {1}",
                 GetID(),
-                BlockArchive.Index)
+                BlockParser.Index)
                 .Log(LogFile);
 
-              BlockArchive.IsInvalid = true;
+              FlagDispose = IsSyncMaster;
+              BlockParser.IsInvalid = true;
               return;
             }
 
@@ -786,32 +793,15 @@ namespace BToken.Chaining
               continue;
             }
 
-            bool isBlockArchiveSplit =
-              BlockArchive.ParseBlockSingle(
-                Payload,
-                PayloadLength);
+            BlockParser.ParsePayload(
+              Payload,
+              PayloadLength,
+              ref header);
 
-            if (!BlockArchive.HeaderTip.Hash.IsEqual(
-              Inventories[indexBlockMessageReceived].Hash))
+            if (header == BlockParser.HeaderTip)
             {
-              throw new ChainException(string.Format(
-                "Received unexpected block {0} \n" +
-                "instead expected was {1}.",
-                BlockArchive.HeaderTip.Hash.ToHexString(),
-                Inventories[indexBlockMessageReceived]
-                .Hash.ToHexString()));
-            }
+              BlockParser.IsInvalid = false;
 
-            if (BlockArchive.Height < Inventories.Count)
-            {
-              indexBlockMessageReceived += 1;
-              StartMessageListener();
-              cancellation.CancelAfter(
-                TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-              continue;
-            }
-            else
-            {
               lock (LOCK_IsExpectingMessageResponse)
               {
                 IsExpectingMessageResponse = false;
@@ -822,6 +812,13 @@ namespace BToken.Chaining
               StartMessageListener();
               break;
             }
+
+            header = header.HeaderNext;
+
+            cancellation.CancelAfter(
+              TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
+            StartMessageListener();
           }
         }
         catch (Exception ex)
@@ -829,10 +826,10 @@ namespace BToken.Chaining
           string.Format(
             "Exception {0} in download of blockArchive {1}: \n{2}.",
             ex.GetType().Name,
-            BlockArchive.Index,
+            BlockParser.Index,
             ex.Message).Log(LogFile);
 
-          BlockArchive.IsInvalid = true;
+          BlockParser.IsInvalid = true;
           FlagDispose = true;
 
           return;
@@ -843,18 +840,18 @@ namespace BToken.Chaining
         string.Format(
           "{0}: Downloaded {1} blocks in blockArchive {2} in {3} ms.",
           GetID(),
-          BlockArchive.Height,
-          BlockArchive.Index,
+          BlockParser.Height,
+          BlockParser.Index,
           StopwatchDownload.ElapsedMilliseconds)
           .Log(LogFile);
       }
 
       void AdjustCountBlocksLoad()
       {
-        int correctionTerm =
-          (int)(CountBlocksLoad *
-          (TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS /
-          StopwatchDownload.ElapsedMilliseconds - 1));
+        var ratio = TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS /
+          (double)StopwatchDownload.ElapsedMilliseconds - 1;
+
+        int correctionTerm = (int)(CountBlocksLoad * ratio);
 
         if(correctionTerm > 10)
         {
@@ -863,28 +860,11 @@ namespace BToken.Chaining
 
         CountBlocksLoad = Math.Min(
           CountBlocksLoad + correctionTerm,
-          200);
+          500);
 
         CountBlocksLoad = Math.Max(CountBlocksLoad, 1);
       }
-
-      public void PushBlockArchive(Peer peer)
-      {
-        BlockArchivesDownloaded.Push(BlockArchive);
-        BlockArchive = peer.BlockArchive;
-        Inventories = peer.Inventories;
-      }
-
-      public bool TryPopBlockArchive()
-      {
-        if (BlockArchivesDownloaded.Any())
-        {
-          BlockArchive = BlockArchivesDownloaded.Pop();
-          return true;
-        }
-
-        return false;
-      }
+      
 
 
       //async Task ReceiveHeader(byte[] headerBytes, Peer peer)
