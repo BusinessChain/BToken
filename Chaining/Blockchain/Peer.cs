@@ -28,14 +28,14 @@ namespace BToken.Chaining
       public bool IsSyncMaster;
 
       const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 3000;
-      const int TIMEOUT_GETHEADERS_MILLISECONDS = 1500;
+      const int TIMEOUT_GETHEADERS_MILLISECONDS = 3000;
 
       const int COUNT_BLOCKS_DOWNLOADBATCH_INIT = 1;
       Stopwatch StopwatchDownload = new Stopwatch();
       public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
-      public Stack<UTXOTable.BlockParser> BlockArchivesDownloaded =
-        new Stack<UTXOTable.BlockParser>();
+      public UTXOTable.BlockParser BlockParser = 
+        new UTXOTable.BlockParser();
 
       readonly object LOCK_IsExpectingMessageResponse = new object();
       bool IsExpectingMessageResponse;
@@ -77,7 +77,7 @@ namespace BToken.Chaining
 
       public string Command;
 
-      const int SIZE_MESSAGE_PAYLOAD_BUFFER = 0x1000000;
+      const int SIZE_MESSAGE_PAYLOAD_BUFFER = 0x400000;
       byte[] Payload = new byte[SIZE_MESSAGE_PAYLOAD_BUFFER];
       int PayloadLength;
 
@@ -556,10 +556,7 @@ namespace BToken.Chaining
       }
       
 
-
-      public UTXOTable.BlockParser BlockParser =
-        new UTXOTable.BlockParser();
-
+      
       public async Task<Header> GetHeaders(Header locator)
       {
         return await GetHeaders(
@@ -743,65 +740,88 @@ namespace BToken.Chaining
       }
 
 
-      public async Task DownloadBlocks()
+      public async Task DownloadBlocks(
+        bool flagContinueDownload)
       {
         StopwatchDownload.Restart();
 
+        var cancellation = new CancellationTokenSource(
+            TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+
         try
         {
-          var cancellation = new CancellationTokenSource(
-              TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-          
-          await SendMessage(new GetDataMessage(
-            CreateInventories()));
-
-          lock (LOCK_IsExpectingMessageResponse)
+          if (!flagContinueDownload)
           {
-            IsExpectingMessageResponse = true;
+            await SendMessage(new GetDataMessage(
+              CreateInventories()));
+
+            lock (LOCK_IsExpectingMessageResponse)
+            {
+              IsExpectingMessageResponse = true;
+            }
           }
-          
+
           Header header = BlockParser.HeaderRoot;
 
           while (true)
           {
-            await MessageResponseReady
-              .ReceiveAsync(cancellation.Token)
-              .ConfigureAwait(false);
-
-            if (Command == "notfound")
+            if (flagContinueDownload)
             {
-              string.Format(
-                "{0}: Did not not find block in blockArchive {1}",
-                GetID(),
-                BlockParser.Index)
-                .Log(LogFile);
-
-              FlagDispose = IsSyncMaster;
-              BlockParser.IsInvalid = true;
-              return;
+              flagContinueDownload = false;
             }
-
-            if (Command != "block")
+            else
             {
-              string.Format(
-                "{0}: Received unexpected response message {1}",
-                GetID(),
-                Command)
-                .Log(LogFile);
+              await MessageResponseReady
+                .ReceiveAsync(cancellation.Token)
+                .ConfigureAwait(false);
 
-              StartMessageListener();
-              continue;
+              if (Command == "notfound")
+              {
+                string.Format(
+                  "{0}: Did not not find block in blockArchive {1}",
+                  GetID(),
+                  BlockParser.Index)
+                  .Log(LogFile);
+
+                FlagDispose = IsSyncMaster;
+                return;
+              }
+
+              if (Command != "block")
+              {
+                string.Format(
+                  "{0}: Received unexpected response message {1}",
+                  GetID(),
+                  Command)
+                  .Log(LogFile);
+
+                if (Command == "inv")
+                {
+                  var invMessage = new InvMessage(Payload);
+                  if (invMessage.Inventories.First().IsTX())
+                  {
+                    throw new ChainException(
+                      "Received TX inv message despite TX-disable signaled.");
+                  }
+                }
+
+                StartMessageListener();
+                continue;
+              }
             }
-
+                        
             BlockParser.ParsePayload(
               Payload,
               PayloadLength,
-              ref header);
+              header);
 
-            if (header == BlockParser.HeaderTip)
+            if(BlockParser.IsArchiveBufferOverflow)
             {
-              BlockParser.IsInvalid = false;
+              break;
+            }
 
+            if (BlockParser.HeaderTip == header)
+            {
               lock (LOCK_IsExpectingMessageResponse)
               {
                 IsExpectingMessageResponse = false;
@@ -838,7 +858,7 @@ namespace BToken.Chaining
         AdjustCountBlocksLoad();
 
         string.Format(
-          "{0}: Downloaded {1} blocks in blockArchive {2} in {3} ms.",
+          "{0}: Downloaded {1} blocks in blockParser {2} in {3} ms.",
           GetID(),
           BlockParser.Height,
           BlockParser.Index,
@@ -983,10 +1003,9 @@ namespace BToken.Chaining
 
       //  IsBlockchainLocked = false;
       //}
-
-
-
-
+      
+      
+      
       public async Task SendHeaders(List<Header> headers)
       {
         await SendMessage(new HeadersMessage(headers));

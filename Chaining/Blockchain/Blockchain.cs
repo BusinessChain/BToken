@@ -26,10 +26,11 @@ namespace BToken.Chaining
     NetworkSynchronizer Synchronizer;
     BlockArchiver Archiver;
 
+    string FileNameIndexBlockArchiveImage = "IndexBlockArchive";
     DirectoryInfo DirectoryImage =
-        Directory.CreateDirectory("image");
+      Directory.CreateDirectory("image");
     DirectoryInfo DirectoryImageOld =
-        Directory.CreateDirectory("image_old");
+      Directory.CreateDirectory("image_old");
 
     readonly object LOCK_IsBlockchainLocked = new object();
     bool IsBlockchainLocked;
@@ -68,17 +69,18 @@ namespace BToken.Chaining
       await TryLoadImage(0, new byte[32]);
     }
 
+
+
+    int IndexBlockArchiveImage;
+
     async Task<bool> TryLoadImage(
       int heightMax,
       byte[] stopHashLoading)
     {
       string pathImage = DirectoryImage.Name;
-      int indexBlockArchiveImage;
 
       while (
-        !TryLoadImageFile(
-          pathImage,
-          out indexBlockArchiveImage) ||
+        !TryLoadImageFile(pathImage) ||
         (Height > heightMax && heightMax > 0))
       {
         Initialize();
@@ -93,25 +95,23 @@ namespace BToken.Chaining
       
       await Archiver.LoadBlocks(
         stopHashLoading,
-        indexBlockArchiveImage);
+        IndexBlockArchiveImage);
 
       return heightMax == Height;
     }
 
 
-    bool TryLoadImageFile(
-      string pathImage, 
-      out int indexBlockArchiveImage)
+    bool TryLoadImageFile(string pathImage)
     {
       try
       {
         LoadImageHeaderchain(pathImage);
 
-        indexBlockArchiveImage = BitConverter.ToInt32(
+        IndexBlockArchiveImage = BitConverter.ToInt32(
           File.ReadAllBytes(
             Path.Combine(
               pathImage,
-              nameof(indexBlockArchiveImage))),
+              FileNameIndexBlockArchiveImage)),
           0);
 
         UTXOTable.LoadImage(pathImage);
@@ -122,9 +122,11 @@ namespace BToken.Chaining
 
         return true;
       }
-      catch
+      catch(Exception ex)
       {
-        indexBlockArchiveImage = 0;
+        Console.WriteLine(ex.Message);
+
+        IndexBlockArchiveImage = 0;
         return false;
       }
     }
@@ -174,7 +176,11 @@ namespace BToken.Chaining
     void CreateImage(int indexBlockArchive)
     {
       DirectoryImageOld.Delete(true);
-      DirectoryImage.MoveTo(DirectoryImageOld.Name);
+
+      Directory.Move(
+        DirectoryImage.Name,
+        DirectoryImageOld.Name);
+
       DirectoryImage.Create();
 
       string pathimageHeaderchain = Path.Combine(
@@ -197,6 +203,8 @@ namespace BToken.Chaining
           fileImageHeaderchain.Write(
             headerBytes, 0, headerBytes.Length);
 
+          fileImageHeaderchain.WriteByte(0);
+
           header = header.HeaderNext;
         }
       }
@@ -204,7 +212,7 @@ namespace BToken.Chaining
       File.WriteAllBytes(
         Path.Combine(
           DirectoryImage.Name,
-          nameof(indexBlockArchive)),
+          FileNameIndexBlockArchiveImage),
         BitConverter.GetBytes(indexBlockArchive));
 
       using (FileStream stream = new FileStream(
@@ -397,29 +405,35 @@ namespace BToken.Chaining
 
     
     bool TryArchiveBlocks(
-      UTXOTable.BlockParser blockArchive,
+      UTXOTable.BlockParser blockParser,
       int intervallImage)
     {
-      blockArchive.Index = Archiver.IndexBlockArchive;
-      
       try
       {
         InsertBlocks(
-          blockArchive,
+          blockParser,
+          Archiver.IndexBlockArchive,
           flagValidateHeaders: false);
       }
-      catch (ChainException)
+      catch (ChainException ex)
       {
+        Console.WriteLine(
+          "Exception {0} when inserting blockParser {1}:\n{2}",
+          ex.GetType().Name,
+          blockParser.Index,
+          ex.Message);
+
         return false;
       }
 
-      Archiver.ArchiveBlock(blockArchive, intervallImage);
+      Archiver.ArchiveBlock(blockParser, intervallImage);
 
       return true;
     }
 
     void InsertBlocks(
       UTXOTable.BlockParser blockParser,
+      int indexBlockArchive,
       bool flagValidateHeaders)
     {
       blockParser.HeaderRoot.HeaderPrevious = HeaderTip;
@@ -429,7 +443,11 @@ namespace BToken.Chaining
         ValidateHeaders(blockParser.HeaderRoot);
       }
 
-      UTXOTable.InsertBlock(blockParser);
+      UTXOTable.InsertBlock(
+        blockParser, 
+        indexBlockArchive, 
+        Height);
+
       InsertHeaders(blockParser);
     }
 
@@ -437,8 +455,9 @@ namespace BToken.Chaining
       UTXOTable.BlockParser blockParser)
     {
       HeaderTip.HeaderNext = blockParser.HeaderRoot;
-
       HeaderTip = blockParser.HeaderTip;
+      HeaderTip.HeaderNext = null;
+
       Difficulty += blockParser.Difficulty;
       Height += blockParser.Height;
     }
@@ -599,8 +618,8 @@ namespace BToken.Chaining
 
 
 
-    readonly object LOCK_BlockParsersIdle = new object();
-    Stack<UTXOTable.BlockParser> BlockParsersIdle =
+    readonly object LOCK_ParsersIdle = new object();
+    Stack<UTXOTable.BlockParser> ParsersIdle =
       new Stack<UTXOTable.BlockParser>();
 
     readonly int MaxCountBlockParsersIdle = 
@@ -612,9 +631,9 @@ namespace BToken.Chaining
     {
       try
       {
-        lock(LOCK_BlockParsersIdle)
+        lock(LOCK_ParsersIdle)
         {
-          var blockParser = BlockParsersIdle.Pop();
+          var blockParser = ParsersIdle.Pop();
           blockParser.ClearPayloadData();
           return blockParser;
         }
@@ -626,13 +645,13 @@ namespace BToken.Chaining
     }
 
     void ReleaseBlockParser(
-      UTXOTable.BlockParser blockParser)
+      UTXOTable.BlockParser parser)
     {
-      lock (LOCK_BlockParsersIdle)
+      lock (LOCK_ParsersIdle)
       {
-        if(BlockParsersIdle.Count < MaxCountBlockParsersIdle)
+        if(ParsersIdle.Count < MaxCountBlockParsersIdle)
         {
-          BlockParsersIdle.Push(blockParser);
+          ParsersIdle.Push(parser);
         }
       }
     }

@@ -10,15 +10,17 @@ namespace BToken.Chaining
   {
     public class BlockParser
     {
-      public byte[] ArchiveBuffer = new byte[0x1000000];
-      public int IndexArchiveBuffer;
-      public byte[] Buffer;
-      public int IndexBuffer;
-
       public int Index;
       public bool IsInvalid;
 
+      public byte[] ArchiveBuffer = new byte[0x1000000];
+      public int IndexArchiveBuffer;
+      public bool IsArchiveBufferOverflow;
+      public byte[] Buffer;
+      public int IndexBuffer;
+
       public Header HeaderTipOverflow;
+      public Header HeaderRootOverflow;
       public Header HeaderTip;
       public Header HeaderRoot;
       public double Difficulty;
@@ -144,7 +146,7 @@ namespace BToken.Chaining
       public void ParsePayload(
         byte[] buffer, 
         int bufferLength,
-        ref Header header)
+        Header header)
       {
         byte[] hash =
           SHA256.ComputeHash(
@@ -156,9 +158,10 @@ namespace BToken.Chaining
         if (!hash.IsEqual(header.Hash))
         {
           throw new ChainException(string.Format(
-            "Unexpected block header {0}. \n" +
-            "Excpected of {1}.",
+            "Unexpected block header {0} in blockParser {1}. \n" +
+            "Excpected {2}.",
             hash.ToHexString(),
+            Index,
             header.Hash.ToHexString()));
         }
         
@@ -170,14 +173,20 @@ namespace BToken.Chaining
             ArchiveBuffer,
             IndexArchiveBuffer,
             bufferLength);
+
+          IsArchiveBufferOverflow = false;
         }
         catch (ArgumentException)
         {
-          Console.WriteLine("Overflow archive buffer.");
+          Console.WriteLine(
+            "Overflow archive buffer in blockParser {0}.",
+            Index);
 
+          IsArchiveBufferOverflow = true;
+
+          HeaderRootOverflow = header;
           HeaderTipOverflow = HeaderTip;
-          header = header.HeaderPrevious;
-          HeaderTip = header;
+          HeaderTip = header.HeaderPrevious;
 
           return;
         }
@@ -195,14 +204,13 @@ namespace BToken.Chaining
         StopwatchParse.Stop();
       }
 
-      public bool TryRecoverFromOverflow()
+      public void RecoverFromOverflow()
       {
-        if (HeaderTipOverflow == null)
-        {
-          return false;
-        }
+        IsArchiveBufferOverflow = false;
 
-        HeaderRoot = HeaderTip.HeaderNext;
+        HeaderRoot = HeaderRootOverflow;
+        HeaderRootOverflow = null;
+
         HeaderTip = HeaderTipOverflow;
         HeaderTipOverflow = null;
 
@@ -219,8 +227,6 @@ namespace BToken.Chaining
           Height += 1;
           Difficulty += header.Difficulty;
         }
-
-        return true;
       }
 
       void ParseTXs(

@@ -26,10 +26,10 @@ namespace BToken.Chaining
       Payload = payload.ToArray();
     }
 
-    public InvMessage(NetworkMessage networkMessage) 
+    public InvMessage(byte[] buffer) 
       : base(
-          "inv", 
-          networkMessage.Payload)
+          "inv",
+          buffer)
     {
       int startIndex = 0;
 

@@ -51,5 +51,10 @@ namespace BToken.Chaining
         (InventoryType)type, 
         hash);
     }
+
+    public bool IsTX()
+    {
+      return Type == InventoryType.MSG_TX;
+    }
   }
 }

@@ -1,5 +1,0 @@
-﻿Herr alex lehmann
-15
-CH-5600 Lenzburg	me.allega@gmail.com   
-Web & Programmierung (Software Entwickler)
-.NET, ADO.NET, ASP, ASP.NET, C#, CSS, Datenmodellierung, Datenstrukturen, HTML5, Javascript, MS Visual Studio, Oracle, Web Design, WordPress
