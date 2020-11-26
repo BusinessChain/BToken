@@ -185,14 +185,17 @@ namespace BToken.Chaining
         new List<UTXOTable.BlockParser>();
       List<Peer> PeersDownloading = new List<Peer>();
 
+      int CountMaxDownloadsAwaiting = 3;
+
+      Dictionary<int, 
+        KeyValuePair<UTXOTable.BlockParser, Peer>> DownloadsAwaiting = 
+        new Dictionary<int,
+        KeyValuePair<UTXOTable.BlockParser, Peer>>();
+
       async Task<bool> TrySynchronizeUTXO(
         Header headerRoot,
         Peer peer)
       {
-        var downloadsAwaitingInsertion = new Dictionary<
-          int,
-          KeyValuePair<UTXOTable.BlockParser, Peer>>();
-
         var peersCompleted = new List<Peer>();
 
         var cancellationSynchronizeUTXO = 
@@ -201,6 +204,8 @@ namespace BToken.Chaining
         HeaderLoad = headerRoot;
         IndexBlockArchiveDownload = 0;
         int indexBlockArchiveQueue = 0;
+
+        DownloadsAwaiting.Clear();
         
         TryStartBlockDownload(peer);
 
@@ -287,13 +292,14 @@ namespace BToken.Chaining
                   blockParser,
                   peer);
 
-              downloadsAwaitingInsertion.Add(
+              DownloadsAwaiting.Add(
                 blockParser.Index,
                 downloadAwaitingInsertion);
-
-              if(!blockParser.IsArchiveBufferOverflow)
+              
+              if (!blockParser.IsArchiveBufferOverflow)
               {
                 peer.BlockParser = null;
+
                 TryStartBlockDownload(peer);
               }
 
@@ -329,7 +335,7 @@ namespace BToken.Chaining
                 TryStartBlockDownload(peer);
               }
 
-              if (!downloadsAwaitingInsertion.TryGetValue(
+              if (!DownloadsAwaiting.TryGetValue(
                 indexBlockArchiveQueue,
                 out KeyValuePair<UTXOTable.BlockParser, Peer>
                 downloadAwaitingInsertion))
@@ -339,7 +345,7 @@ namespace BToken.Chaining
 
               isDownloadAwaiting = true;
 
-              downloadsAwaitingInsertion.Remove(
+              DownloadsAwaiting.Remove(
                 indexBlockArchiveQueue);
 
               blockParser = downloadAwaitingInsertion.Key;
@@ -395,35 +401,38 @@ namespace BToken.Chaining
           return true;
         }
 
-        var blockParser = Blockchain.GetBlockParser();
-
-        if (HeaderLoad != null)
+        if (DownloadsAwaiting.Count < CountMaxDownloadsAwaiting)
         {
-          blockParser.Index = IndexBlockArchiveDownload;
-          IndexBlockArchiveDownload += 1;
+          var blockParser = Blockchain.GetBlockParser();
 
-          blockParser.HeaderRoot = HeaderLoad;
-          blockParser.Height = 1;
-          blockParser.Difficulty = HeaderLoad.Difficulty;
-
-          do
+          if (HeaderLoad != null)
           {
-            blockParser.HeaderTip = HeaderLoad;
-            blockParser.Height += 1;
-            blockParser.Difficulty += HeaderLoad.Difficulty;
+            blockParser.Index = IndexBlockArchiveDownload;
+            IndexBlockArchiveDownload += 1;
 
-            HeaderLoad = HeaderLoad.HeaderNext;
-          } while (
-          blockParser.Height < peer.CountBlocksLoad
-          && HeaderLoad != null);
+            blockParser.HeaderRoot = HeaderLoad;
+            blockParser.Height = 0;
+            blockParser.Difficulty = 0.0;
 
-          peer.BlockParser = blockParser;
+            do
+            {
+              blockParser.HeaderTip = HeaderLoad;
+              blockParser.Height += 1;
+              blockParser.Difficulty += HeaderLoad.Difficulty;
 
-          RunBlockDownload(
-            peer,
-            flagContinueDownload: false);
+              HeaderLoad = HeaderLoad.HeaderNext;
+            } while (
+            blockParser.Height < peer.CountBlocksLoad
+            && HeaderLoad != null);
 
-          return true;
+            peer.BlockParser = blockParser;
+
+            RunBlockDownload(
+              peer,
+              flagContinueDownload: false);
+
+            return true;
+          }
         }
 
         Network.ReleasePeer(peer);

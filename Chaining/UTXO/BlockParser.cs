@@ -188,6 +188,8 @@ namespace BToken.Chaining
           HeaderTipOverflow = HeaderTip;
           HeaderTip = header.HeaderPrevious;
 
+          CalculateHeightAndDifficulty();
+
           return;
         }
 
@@ -215,8 +217,13 @@ namespace BToken.Chaining
         HeaderTipOverflow = null;
 
         ClearPayloadData();
+        CalculateHeightAndDifficulty();
+      }
 
+      void CalculateHeightAndDifficulty()
+      {
         var header = HeaderRoot;
+
         Height = 1;
         Difficulty = HeaderRoot.Difficulty;
 

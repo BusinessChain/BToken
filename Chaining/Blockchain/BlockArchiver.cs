@@ -228,10 +228,6 @@ namespace BToken.Chaining
 
       void CreateBlockArchive()
       {
-        string.Format("Create BlockArchive {0}",
-          IndexBlockArchive)
-          .Log(LogFile);
-
         string pathFileArchive = Path.Combine(
           ArchiveDirectoryBlocks.FullName,
           IndexBlockArchive.ToString());

@@ -460,6 +460,9 @@ namespace BToken.Chaining
 
       Difficulty += blockParser.Difficulty;
       Height += blockParser.Height;
+
+      Console.WriteLine("Height {0}, HeaderTip {1}", 
+        Height, HeaderTip.Hash.ToHexString());
     }
 
 

@@ -660,17 +660,19 @@ namespace BToken.Chaining
           Blockchain.ValidateHeader(header, height);
 
           difficulty += header.Difficulty;
-          height += 1;
 
           if (header.HeaderNext == null)
           {
-            header.HeaderNext = await GetHeaders(header);
+            if(height < 200000)
+            {
+              header.HeaderNext = await GetHeaders(header);
+            }
 
-            if (header.HeaderNext == null || height > 200000)
+            if (header.HeaderNext == null)
             {
               string.Format(
                 "Height header chain {0}\n",
-                height - 1)
+                height)
                 .Log(LogFile);
 
               return difficulty;
@@ -678,6 +680,7 @@ namespace BToken.Chaining
           }
 
           header = header.HeaderNext;
+          height += 1;
         }
       }
 
