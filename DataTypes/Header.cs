@@ -3,14 +3,14 @@ using System.Security.Cryptography;
 
 
 
-namespace BToken
+namespace BToken.Chaining
 {
   public class Header
   {
     public Header HeaderPrevious;
     public Header HeaderNext;
     
-    const int COUNT_HEADER_BYTES = 80;
+    public const int COUNT_HEADER_BYTES = 80;
 
     public byte[] Hash;
     public uint Version;
@@ -130,7 +130,5 @@ namespace BToken
         nBits,
         nonce);
     }
-    
-
   }
 }

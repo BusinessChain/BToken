@@ -8,18 +8,19 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    public class BlockArchive
+    public class BlockParser
     {
-      const int SIZE_MESSAGE_ARCHIVE_BUFFER = 0x1000000;
-      public byte[] ArchiveBuffer = new byte[SIZE_MESSAGE_ARCHIVE_BUFFER];
+      public int Index;
+      public bool IsInvalid;
+
+      public byte[] ArchiveBuffer = new byte[0x1000000];
       public int IndexArchiveBuffer;
+      public bool IsArchiveBufferOverflow;
       public byte[] Buffer;
       public int IndexBuffer;
 
-      public int Index;
-      public bool IsInvalid;
-      public bool IsLastArchive;
-
+      public Header HeaderTipOverflow;
+      public Header HeaderRootOverflow;
       public Header HeaderTip;
       public Header HeaderRoot;
       public double Difficulty;
@@ -38,132 +39,215 @@ namespace BToken.Chaining
       public Stopwatch StopwatchInsertion = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
 
-
-      public void Reset()
-      {
-        HeaderTip = null;
-        HeaderRoot = null;
-        Height = 0;
-        Difficulty = 0.0;
-        CountTX = 0;
-
-        IndexBuffer = 0;
-        IndexArchiveBuffer = 0;
-
-        Inputs.Clear();
-        TableUInt32.Table.Clear();
-        TableULong64.Table.Clear();
-        TableUInt32Array.Table.Clear();
-      }
-
-      
+           
 
       readonly byte[] HASH_ZERO = new byte[32];
       public void Parse(byte[] buffer)
       {
-        Parse(buffer, 0, buffer.Length, HASH_ZERO);
+        Parse(
+          buffer, 
+          buffer.Length,
+          0,
+          HASH_ZERO);
       }
 
-      public void Parse(byte[] buffer, int offset, int countBytes)
+      public void Parse(
+        byte[] buffer,
+        int countBytes,
+        int offset)
       {
-        Parse(buffer, offset, countBytes, HASH_ZERO);
+        Parse(
+          buffer,
+          countBytes,
+          offset,
+          HASH_ZERO);
       }
 
       public void Parse(
         byte[] buffer, 
         byte[] hashStopLoading)
       {
-        Parse(buffer, 0, buffer.Length, hashStopLoading);
+        Parse(
+          buffer, 
+          buffer.Length,
+          0,
+          hashStopLoading);
       }
 
       void Parse(
         byte[] buffer, 
-        int offset, 
         int countBytes,
+        int offset,
         byte[] hashStopLoading)
       {
-        StopwatchParse.Reset();
+        StopwatchParse.Restart();
 
         Buffer = buffer;
         IndexBuffer = offset;
-        
-        do
-        {
-          ParseBlock();
-
-        } while (
-          !hashStopLoading.IsEqual(HeaderTip.Hash) &&
-          IndexBuffer < countBytes);
-
-        StopwatchParse.Stop();
-      }
-
-      public void ParseBlockSingle(byte[] buffer, int bufferLength)
-      {
-        Array.Copy(
-          buffer, 
-          0, 
-          ArchiveBuffer, 
-          IndexArchiveBuffer, 
-          bufferLength);
-
-        Buffer = ArchiveBuffer;
-        IndexBuffer = IndexArchiveBuffer;
-
-        IndexArchiveBuffer += bufferLength;
-
-        ParseBlock();
-      }
-
-      void ParseBlock()
-      {
-        StopwatchParse.Start();
-
-
+                
         Header header = Header.ParseHeader(
           Buffer,
           ref IndexBuffer,
           SHA256);
 
-        if(HeaderTip == null)
+        HeaderRoot = header;
+        HeaderTip = header;
+        Height = 1;
+        Difficulty = header.Difficulty;
+
+        ParseTXs(header.MerkleRoot);
+
+        while (
+          IndexBuffer < countBytes &&
+          !hashStopLoading.IsEqual(HeaderTip.Hash))
         {
-          HeaderTip = header;
-          HeaderRoot = header;
-        }
-        else if (!HeaderTip.Hash.IsEqual(
-          header.HashPrevious))
-        {
-          throw new ChainException(
-            string.Format(
-              "headerchain out of order in blockArchive {0}",
-              Index));
-        }
-        else
-        {
+          header = Header.ParseHeader(
+           Buffer,
+           ref IndexBuffer,
+           SHA256);
+
+          if (!HeaderTip.Hash.IsEqual(header.HashPrevious))
+          {
+            throw new ChainException(
+              string.Format(
+                "headerchain out of order in blockArchive {0}",
+                Index));
+          }
+
           header.HeaderPrevious = HeaderTip;
           HeaderTip.HeaderNext = header;
           HeaderTip = header;
+
+          Height += 1;
+          Difficulty += header.Difficulty;
+
+          ParseTXs(header.MerkleRoot);
         }
-
-        Difficulty += header.Difficulty;
-
-        int tXCount = VarInt.GetInt32(Buffer, ref IndexBuffer);
-        
-        if (tXCount > 0)
-        {
-          ParseTXs(tXCount, header.MerkleRoot);
-        }
-
-        CountTX += tXCount;
-        Height += 1;
 
         StopwatchParse.Stop();
       }
 
+
+
+      public void ClearPayloadData()
+      {
+        IndexBuffer = 0;
+        IndexArchiveBuffer = 0;
+
+        CountTX = 0;
+        Inputs.Clear();
+        TableUInt32.Table.Clear();
+        TableULong64.Table.Clear();
+        TableUInt32Array.Table.Clear();
+      }
+
+
+
+      public void ParsePayload(
+        byte[] buffer, 
+        int bufferLength,
+        Header header)
+      {
+        byte[] hash =
+          SHA256.ComputeHash(
+            SHA256.ComputeHash(
+              buffer,
+              0,
+              Header.COUNT_HEADER_BYTES));
+
+        if (!hash.IsEqual(header.Hash))
+        {
+          throw new ChainException(string.Format(
+            "Unexpected block header {0} in blockParser {1}. \n" +
+            "Excpected {2}.",
+            hash.ToHexString(),
+            Index,
+            header.Hash.ToHexString()));
+        }
+        
+        try
+        {
+          Array.Copy(
+            buffer,
+            0,
+            ArchiveBuffer,
+            IndexArchiveBuffer,
+            bufferLength);
+
+          IsArchiveBufferOverflow = false;
+        }
+        catch (ArgumentException)
+        {
+          Console.WriteLine(
+            "Overflow archive buffer in blockParser {0}.",
+            Index);
+
+          IsArchiveBufferOverflow = true;
+
+          HeaderRootOverflow = header;
+          HeaderTipOverflow = HeaderTip;
+          HeaderTip = header.HeaderPrevious;
+
+          CalculateHeightAndDifficulty();
+
+          return;
+        }
+
+        Buffer = ArchiveBuffer;
+        IndexBuffer = IndexArchiveBuffer +
+          Header.COUNT_HEADER_BYTES;
+
+        IndexArchiveBuffer += bufferLength;
+
+        StopwatchParse.Start();
+
+        ParseTXs(header.MerkleRoot);
+
+        StopwatchParse.Stop();
+      }
+
+      public void RecoverFromOverflow()
+      {
+        IsArchiveBufferOverflow = false;
+
+        HeaderRoot = HeaderRootOverflow;
+        HeaderRootOverflow = null;
+
+        HeaderTip = HeaderTipOverflow;
+        HeaderTipOverflow = null;
+
+        ClearPayloadData();
+        CalculateHeightAndDifficulty();
+      }
+
+      void CalculateHeightAndDifficulty()
+      {
+        var header = HeaderRoot;
+
+        Height = 1;
+        Difficulty = HeaderRoot.Difficulty;
+
+        while (header != HeaderTip)
+        {
+          header = header.HeaderNext;
+
+          Height += 1;
+          Difficulty += header.Difficulty;
+        }
+      }
+
       void ParseTXs(
-        int tXCount, 
         byte[] merkleRootHeader)
       {
+        int tXCount = VarInt.GetInt32(
+          Buffer,
+          ref IndexBuffer);
+
+        if(tXCount == 0)
+        {
+          return;
+        }
+
         if (tXCount == 1)
         {
           byte[] tXHash = ParseTX(true);
@@ -173,30 +257,32 @@ namespace BToken.Chaining
             throw new ChainException(
               "Payload merkle root corrupted");
           }
-
-          return;
         }
-
-        int tXsLengthMod2 = tXCount & 1;
-        var merkleList = new byte[tXCount + tXsLengthMod2][];
-
-        merkleList[0] = ParseTX(true);
-
-        for (int t = 1; t < tXCount; t += 1)
+        else
         {
-          merkleList[t] = ParseTX(false);
+          int tXsLengthMod2 = tXCount & 1;
+          var merkleList = new byte[tXCount + tXsLengthMod2][];
+
+          merkleList[0] = ParseTX(true);
+
+          for (int t = 1; t < tXCount; t += 1)
+          {
+            merkleList[t] = ParseTX(false);
+          }
+
+          if (tXsLengthMod2 != 0)
+          {
+            merkleList[tXCount] = merkleList[tXCount - 1];
+          }
+
+          if (!GetRoot(merkleList).IsEqual(merkleRootHeader))
+          {
+            throw new ChainException(
+              "Payload hash unequal with merkle root.");
+          }
         }
 
-        if (tXsLengthMod2 != 0)
-        {
-          merkleList[tXCount] = merkleList[tXCount - 1];
-        }
-
-        if (!GetRoot(merkleList).IsEqual(merkleRootHeader))
-        {
-          throw new ChainException(
-            "Payload hash unequal with merkle root.");
-        }
+        CountTX += tXCount;
       }
 
       byte[] ParseTX(bool isCoinbase)
@@ -288,7 +374,8 @@ namespace BToken.Chaining
         }
         catch (ArgumentOutOfRangeException)
         {
-          throw new ChainException();
+          throw new ChainException(
+            "ArgumentOutOfRangeException thrown in ParseTX.");
         }
       }
 
@@ -328,8 +415,9 @@ namespace BToken.Chaining
           merkleList[i2].CopyTo(leafPair, 0);
           merkleList[i2 + 1].CopyTo(leafPair, HASH_BYTE_SIZE);
 
-          merkleList[i] = SHA256.ComputeHash(
-            SHA256.ComputeHash(leafPair));
+          merkleList[i] = 
+            SHA256.ComputeHash(
+              SHA256.ComputeHash(leafPair));
         }
       }
     }

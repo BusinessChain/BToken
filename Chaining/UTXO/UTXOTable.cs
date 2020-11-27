@@ -29,10 +29,14 @@ namespace BToken.Chaining
     
     long UTCTimeStartMerger;
 
+    StreamWriter LogFile;
+
 
 
     public UTXOTable(byte[] genesisBlockBytes)
     {
+      LogFile = new StreamWriter("logUTXOTable", false);
+
       Tables = new UTXOIndexCompressed[]{
         TableUInt32,
         TableULong64,
@@ -42,10 +46,15 @@ namespace BToken.Chaining
 
     public void LoadImage(string pathImageRoot)
     {
-      string pathUTXOImage = Path.Combine(pathImageRoot, "UTXOImage");
+      string pathUTXOImage = Path.Combine(
+        pathImageRoot, 
+        "UTXOImage");
 
       for (int c = 0; c < Tables.Length; c += 1)
       {
+        Console.WriteLine("Load UTXO Table {0}.",
+          Tables[c].GetType().Name);
+
         Tables[c].Load(pathUTXOImage);
       }
 
@@ -63,27 +72,33 @@ namespace BToken.Chaining
     }
 
 
-    public void InsertBlockArchive(BlockArchive blockArchive)
+    public void InsertBlock(
+      BlockParser blockParser, 
+      int indexArchive, 
+      int height)
     {
-      blockArchive.StopwatchInsertion.Restart();
+      blockParser.StopwatchInsertion.Restart();
 
       InsertUTXOsUInt32(
-        blockArchive.TableUInt32,
-        blockArchive.Index);
+        blockParser.TableUInt32,
+        indexArchive);
 
       InsertUTXOsULong64(
-        blockArchive.TableULong64,
-        blockArchive.Index);
+        blockParser.TableULong64,
+        indexArchive);
 
       InsertUTXOsUInt32Array(
-        blockArchive.TableUInt32Array,
-        blockArchive.Index);
+        blockParser.TableUInt32Array,
+        indexArchive);
 
-      InsertSpendUTXOs(blockArchive.Inputs);
+      InsertSpendUTXOs(blockParser.Inputs);
 
-      blockArchive.StopwatchInsertion.Stop();
+      blockParser.StopwatchInsertion.Stop();
 
-      LogInsertion(blockArchive);
+      LogInsertion(
+        blockParser, 
+        indexArchive, 
+        height);
     }
 
     void InsertUTXO(
@@ -231,8 +246,7 @@ namespace BToken.Chaining
         throw new ChainException(
           string.Format(
             "Referenced TX {0} not found in UTXO table.",
-            inputs[i].TXIDOutput.ToHexString()),
-          ErrorCode.INVALID);
+            inputs[i].TXIDOutput.ToHexString()));
       }
     }
     
@@ -247,35 +261,35 @@ namespace BToken.Chaining
         t.BackupImage(directoryUTXOImage.FullName);
       });
     }
-
-    int HeightInserter;
-
-    void LogInsertion(BlockArchive blockArchive)
+    
+    void LogInsertion(
+      BlockParser blockParser, 
+      int indexArchive, 
+      int height)
     {
-      HeightInserter += blockArchive.Height;
-
       if (UTCTimeStartMerger == 0)
       {
         UTCTimeStartMerger = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
       }
 
       int ratioMergeToParse =
-        (int)((float)blockArchive.StopwatchInsertion.ElapsedTicks * 100
-        / blockArchive.StopwatchParse.ElapsedTicks);
+        (int)((float)blockParser.StopwatchInsertion.ElapsedTicks * 100
+        / blockParser.StopwatchParse.ElapsedTicks);
 
 
       string logCSV = string.Format(
-        "{0},{1},{2},{3},{4},{5},{6},{7}",
-        blockArchive.Index,
-        HeightInserter,
+        "UTXO Table: {0},{1},{2},{3},{4},{5},{6},{7},{8}",
+        blockParser.Index,
+        indexArchive,
+        height + blockParser.Height,
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
         ratioMergeToParse,
-        blockArchive.Inputs.Count,
+        blockParser.Inputs.Count,
         Tables[0].GetMetricsCSV(),
         Tables[1].GetMetricsCSV(),
         Tables[2].GetMetricsCSV());
 
-      Console.WriteLine(logCSV);
+      logCSV.Log(LogFile);
     }
   }
 }
