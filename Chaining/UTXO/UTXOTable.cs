@@ -52,6 +52,9 @@ namespace BToken.Chaining
 
       for (int c = 0; c < Tables.Length; c += 1)
       {
+        Console.WriteLine("Load UTXO Table {0}.",
+          Tables[c].GetType().Name);
+
         Tables[c].Load(pathUTXOImage);
       }
 
@@ -275,7 +278,7 @@ namespace BToken.Chaining
 
 
       string logCSV = string.Format(
-        "Insertion UTXO Table: {0},{1},{2},{3},{4},{5},{6},{7},{8}",
+        "UTXO Table: {0},{1},{2},{3},{4},{5},{6},{7},{8}",
         blockParser.Index,
         indexArchive,
         height + blockParser.Height,

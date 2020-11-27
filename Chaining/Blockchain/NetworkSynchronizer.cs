@@ -18,8 +18,8 @@ namespace BToken.Chaining
 
       int TIMEOUT_SYNCHRONIZER = 30000;
 
-      const int UTXOIMAGE_INTERVAL_SYNC = 50;
-      const int UTXOIMAGE_INTERVAL_LISTEN = 50;
+      const int UTXOIMAGE_INTERVAL_SYNC = 500;
+      const int UTXOIMAGE_INTERVAL_LISTEN = 5;
 
       StreamWriter LogFile;
       
@@ -109,7 +109,7 @@ namespace BToken.Chaining
       LABEL_StageBranch:
         
         List<Header> locator = Blockchain.GetLocator();
-        Header headerTip = locator.Last();
+        Header headerTip = locator.First();
 
         Header headerRoot = await peer.GetHeaders(locator);
 

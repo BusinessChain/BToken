@@ -625,6 +625,10 @@ namespace BToken.Chaining
           BlockParser.HeaderRoot.HeaderPrevious =
             headerLocatorAncestor;
         }
+        else
+        {
+          BlockParser.HeaderRoot = null;
+        }
 
         string.Format(
           "{0}: Received headers message, count = {1}",
@@ -663,7 +667,7 @@ namespace BToken.Chaining
 
           if (header.HeaderNext == null)
           {
-            if(height < 200000)
+            if(height < 2000000)
             {
               header.HeaderNext = await GetHeaders(header);
             }

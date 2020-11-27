@@ -19,7 +19,7 @@ namespace BToken.Chaining
       byte[] HashStopLoading;
       public const int COUNT_LOADER_TASKS = 3;
       int SIZE_BLOCK_ARCHIVE = 20000;
-      const int UTXOIMAGE_INTERVAL_LOADER = 50;
+      const int UTXOIMAGE_INTERVAL_LOADER = 500;
 
       readonly object LOCK_IndexBlockArchiveQueue = new object();
       int IndexBlockArchiveQueue;
