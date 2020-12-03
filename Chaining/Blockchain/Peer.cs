@@ -34,7 +34,7 @@ namespace BToken.Chaining
       Stopwatch StopwatchDownload = new Stopwatch();
       public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
-      public UTXOTable.BlockParser BlockParser = 
+      public UTXOTable.BlockParser BlockParser =
         new UTXOTable.BlockParser();
 
       readonly object LOCK_IsExpectingMessageResponse = new object();
@@ -42,6 +42,7 @@ namespace BToken.Chaining
 
       BufferBlock<bool> MessageResponseReady =
         new BufferBlock<bool>();
+
       BufferBlock<NetworkMessage> MessageInboundBuffer =
         new BufferBlock<NetworkMessage>();
 

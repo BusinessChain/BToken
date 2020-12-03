@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
 
@@ -55,6 +56,7 @@ namespace BToken.Chaining
       
       UTXOTable = new UTXOTable(genesisBlockBytes);
     }
+
 
 
     public async Task Start()
@@ -177,67 +179,119 @@ namespace BToken.Chaining
 
     void CreateImage(int indexBlockArchive)
     {
-      DirectoryImageOld.Delete(true);
-
-      Directory.Move(
-        DirectoryImage.Name,
-        DirectoryImageOld.Name);
-
-      DirectoryImage.Create();
-
-      string pathimageHeaderchain = Path.Combine(
-        DirectoryImage.Name,
-        "ImageHeaderchain");
-
-      using (var fileImageHeaderchain = new FileStream(
-        pathimageHeaderchain,
-        FileMode.Create,
-        FileAccess.Write,
-        FileShare.None,
-        bufferSize: 65536))
+      try
       {
-        Header header = HeaderGenesis.HeaderNext;
-
-        while (header != null)
+        while(true)
         {
-          byte[] headerBytes = header.GetBytes();
+          try
+          {
+            DirectoryImageOld.Delete(true);
+            break;
+          }
+          catch(DirectoryNotFoundException)
+          {
+            break;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "Cannot delete directory old due to {0}:\n{1}",
+              ex.GetType().Name,
+              ex.Message);
 
-          fileImageHeaderchain.Write(
-            headerBytes, 0, headerBytes.Length);
-
-          fileImageHeaderchain.WriteByte(0);
-
-          header = header.HeaderNext;
+            Thread.Sleep(3000);
+          }
         }
-      }
 
-      File.WriteAllBytes(
-        Path.Combine(
+        while (true)
+        {
+          try
+          {
+            Directory.Move(
+              DirectoryImage.Name,
+              DirectoryImageOld.Name);
+
+            break;
+          }
+          catch(DirectoryNotFoundException)
+          {
+            break;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "Cannot move new image to old due to {0}:\n{1}",
+              ex.GetType().Name,
+              ex.Message);
+
+            Thread.Sleep(3000);
+          }
+        }
+
+        DirectoryImage.Create();
+
+        string pathimageHeaderchain = Path.Combine(
           DirectoryImage.Name,
-          FileNameIndexBlockArchiveImage),
-        BitConverter.GetBytes(indexBlockArchive));
+          "ImageHeaderchain");
 
-      using (FileStream stream = new FileStream(
-         Path.Combine(DirectoryImage.Name, "MapBlockHeader"),
-         FileMode.Create,
-         FileAccess.Write))
-      {
-        foreach (KeyValuePair<byte[], int> keyValuePair
-          in MapBlockToArchiveIndex)
+        using (var fileImageHeaderchain =
+          new FileStream(
+            pathimageHeaderchain,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 65536))
         {
-          stream.Write(
-            keyValuePair.Key,
-            0,
-            keyValuePair.Key.Length);
+          Header header = HeaderGenesis.HeaderNext;
 
-          byte[] valueBytes = BitConverter.GetBytes(
-            keyValuePair.Value);
+          while (header != null)
+          {
+            byte[] headerBytes = header.GetBytes();
 
-          stream.Write(valueBytes, 0, valueBytes.Length);
+            fileImageHeaderchain.Write(
+              headerBytes, 0, headerBytes.Length);
+
+            fileImageHeaderchain.WriteByte(0);
+
+            header = header.HeaderNext;
+          }
         }
-      }
 
-      UTXOTable.CreateImage(DirectoryImage.Name);
+        File.WriteAllBytes(
+          Path.Combine(
+            DirectoryImage.Name,
+            FileNameIndexBlockArchiveImage),
+          BitConverter.GetBytes(indexBlockArchive));
+
+        using (FileStream stream = new FileStream(
+           Path.Combine(DirectoryImage.Name, "MapBlockHeader"),
+           FileMode.Create,
+           FileAccess.Write))
+        {
+          foreach (KeyValuePair<byte[], int> keyValuePair
+            in MapBlockToArchiveIndex)
+          {
+            stream.Write(
+              keyValuePair.Key,
+              0,
+              keyValuePair.Key.Length);
+
+            byte[] valueBytes = BitConverter.GetBytes(
+              keyValuePair.Value);
+
+            stream.Write(valueBytes, 0, valueBytes.Length);
+          }
+        }
+
+        UTXOTable.CreateImage(DirectoryImage.Name);
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine(
+          "{0}:\n{1}",
+          ex.GetType().Name,
+          ex.Message);
+      }
     }
     
     void Initialize()
@@ -623,12 +677,7 @@ namespace BToken.Chaining
     readonly object LOCK_ParsersIdle = new object();
     Stack<UTXOTable.BlockParser> ParsersIdle =
       new Stack<UTXOTable.BlockParser>();
-
-    readonly int MaxCountBlockParsersIdle = 
-      2 * Math.Max(
-        BlockArchiver.COUNT_LOADER_TASKS,
-        Network.COUNT_PEERS_MAX);
-
+    
     UTXOTable.BlockParser GetBlockParser()
     {
       try
@@ -636,6 +685,7 @@ namespace BToken.Chaining
         lock(LOCK_ParsersIdle)
         {
           var blockParser = ParsersIdle.Pop();
+
           blockParser.ClearPayloadData();
           return blockParser;
         }
@@ -651,10 +701,7 @@ namespace BToken.Chaining
     {
       lock (LOCK_ParsersIdle)
       {
-        if(ParsersIdle.Count < MaxCountBlockParsersIdle)
-        {
-          ParsersIdle.Push(parser);
-        }
+        ParsersIdle.Push(parser);
       }
     }
   }

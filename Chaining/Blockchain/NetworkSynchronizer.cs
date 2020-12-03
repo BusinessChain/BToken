@@ -55,7 +55,7 @@ namespace BToken.Chaining
       
       async Task StartPeerSynchronizer()
       {
-        "Start Peer synchronizer".Log(LogFile);
+        "Start Peer synchronizer.".Log(LogFile);
         
         while (true)
         {
@@ -273,33 +273,39 @@ namespace BToken.Chaining
           
           PeersDownloading.Remove(peer);
 
-          var blockParser = peer.BlockParser;
-          
-          if (peer.FlagDispose)
+          var parser = peer.BlockParser;
+
+          if (
+            peer.FlagDispose || 
+            peer.Command == "notfound")
           {
-            Network.ReleasePeer(peer);
-          }
-          else if (peer.Command == "notfound")
-          {
-            peersCompleted.Add(peer);
+            peer.BlockParser = Blockchain.GetBlockParser();
+
+            if(peer.FlagDispose)
+            {
+              Network.ReleasePeer(peer);
+            }
+            else
+            {
+              peersCompleted.Add(peer);
+            }
           }
           else
           {
-            if (indexBlockArchiveQueue != blockParser.Index)
+            if (indexBlockArchiveQueue != parser.Index)
             {
               var downloadAwaitingInsertion =
                 new KeyValuePair<UTXOTable.BlockParser, Peer>(
-                  blockParser,
+                  parser,
                   peer);
 
               DownloadsAwaiting.Add(
-                blockParser.Index,
+                parser.Index,
                 downloadAwaitingInsertion);
               
-              if (!blockParser.IsArchiveBufferOverflow)
+              if (!parser.IsArchiveBufferOverflow)
               {
                 peer.BlockParser = null;
-
                 TryStartBlockDownload(peer);
               }
 
@@ -309,14 +315,14 @@ namespace BToken.Chaining
             bool isDownloadAwaiting = false;
 
             if (Blockchain.TryArchiveBlocks(
-              blockParser,
+              parser,
               UTXOIMAGE_INTERVAL_SYNC))
             {
             LABEL_PostProcessArchiveBlocks:
 
-              if (blockParser.IsArchiveBufferOverflow)
+              if (parser.IsArchiveBufferOverflow)
               {
-                blockParser.RecoverFromOverflow();
+                parser.RecoverFromOverflow();
 
                 RunBlockDownload(
                   peer, 
@@ -327,11 +333,8 @@ namespace BToken.Chaining
 
               indexBlockArchiveQueue += 1;
 
-              Blockchain.ReleaseBlockParser(blockParser);
-
               if(!isDownloadAwaiting)
               {
-                peer.BlockParser = null;
                 TryStartBlockDownload(peer);
               }
 
@@ -348,11 +351,11 @@ namespace BToken.Chaining
               DownloadsAwaiting.Remove(
                 indexBlockArchiveQueue);
 
-              blockParser = downloadAwaitingInsertion.Key;
+              parser = downloadAwaitingInsertion.Key;
               peer = downloadAwaitingInsertion.Value;
 
               if (Blockchain.TryArchiveBlocks(
-                blockParser,
+                parser,
                 UTXOIMAGE_INTERVAL_SYNC))
               {
                 goto LABEL_PostProcessArchiveBlocks;
@@ -363,7 +366,7 @@ namespace BToken.Chaining
             Network.ReleasePeer(peer);
           }
 
-          EnqueueParser(blockParser);
+          EnqueueParser(parser);
 
         } while (true);
       }
@@ -389,6 +392,11 @@ namespace BToken.Chaining
       {
         if (QueueParsersInvalid.Any())
         {
+          if(peer.BlockParser != null)
+          {
+            Blockchain.ReleaseBlockParser(peer.BlockParser);
+          }
+
           peer.BlockParser = QueueParsersInvalid.First();
           peer.BlockParser.ClearPayloadData();
 
@@ -401,38 +409,38 @@ namespace BToken.Chaining
           return true;
         }
 
-        if (DownloadsAwaiting.Count < CountMaxDownloadsAwaiting)
+        var parser = peer.BlockParser ??
+          Blockchain.GetBlockParser();
+
+        if (
+          (DownloadsAwaiting.Count < CountMaxDownloadsAwaiting) &&
+          HeaderLoad != null)
         {
-          var blockParser = Blockchain.GetBlockParser();
+          parser.Index = IndexBlockArchiveDownload;
+          IndexBlockArchiveDownload += 1;
 
-          if (HeaderLoad != null)
+          parser.HeaderRoot = HeaderLoad;
+          parser.Height = 0;
+          parser.Difficulty = 0.0;
+
+          do
           {
-            blockParser.Index = IndexBlockArchiveDownload;
-            IndexBlockArchiveDownload += 1;
+            parser.HeaderTip = HeaderLoad;
+            parser.Height += 1;
+            parser.Difficulty += HeaderLoad.Difficulty;
 
-            blockParser.HeaderRoot = HeaderLoad;
-            blockParser.Height = 0;
-            blockParser.Difficulty = 0.0;
+            HeaderLoad = HeaderLoad.HeaderNext;
+          } while (
+          parser.Height < peer.CountBlocksLoad
+          && HeaderLoad != null);
 
-            do
-            {
-              blockParser.HeaderTip = HeaderLoad;
-              blockParser.Height += 1;
-              blockParser.Difficulty += HeaderLoad.Difficulty;
+          peer.BlockParser = parser;
 
-              HeaderLoad = HeaderLoad.HeaderNext;
-            } while (
-            blockParser.Height < peer.CountBlocksLoad
-            && HeaderLoad != null);
+          RunBlockDownload(
+            peer,
+            flagContinueDownload: false);
 
-            peer.BlockParser = blockParser;
-
-            RunBlockDownload(
-              peer,
-              flagContinueDownload: false);
-
-            return true;
-          }
+          return true;
         }
 
         Network.ReleasePeer(peer);

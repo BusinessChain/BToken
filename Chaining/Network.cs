@@ -31,8 +31,7 @@ namespace BToken.Chaining
         Blockchain = blockchain;
         LogFile = new StreamWriter("logNetwork", false);
       }
-
-
+      
       public bool TryGetPeer(
         out Peer peer)
       {

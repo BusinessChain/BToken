@@ -134,6 +134,24 @@ namespace BToken
 
       return prefix;
     }
+    public static int GetInt32(Stream stream, byte[] buffer)
+    {
+      int prefix = stream.ReadByte();
+
+      if (prefix == PREFIX_UINT16)
+      {
+        stream.Read(buffer, 0, 2);
+        return BitConverter.ToUInt16(buffer, 0);
+      }
+
+      if (prefix == PREFIX_UINT32)
+      {
+        stream.Read(buffer, 0, 4);
+        return BitConverter.ToInt32(buffer, 0);
+      }
+
+      return prefix;
+    }
 
     public static UInt64 GetUInt64(byte[] buffer, ref int startIndex)
     {

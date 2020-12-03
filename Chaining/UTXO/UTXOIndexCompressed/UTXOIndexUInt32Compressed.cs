@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace BToken.Chaining
 {
@@ -10,9 +12,14 @@ namespace BToken.Chaining
   {
     class UTXOIndexUInt32Compressed : UTXOIndexCompressed
     {
-      const int COUNT_TABLE_PARTITIONS = 256;
-      public Dictionary<int, uint>[] PrimaryTables = new Dictionary<int, uint>[COUNT_TABLE_PARTITIONS];
-      public Dictionary<byte[], uint>[] CollisionTables = new Dictionary<byte[], uint>[COUNT_TABLE_PARTITIONS];
+      const int COUNT_TABLE_PARTITIONS_MEMORY = 256;
+      const int COUNT_TABLE_PARTITIONS_FILE = 16;
+
+      public Dictionary<int, uint>[] PrimaryTables = 
+        new Dictionary<int, uint>[COUNT_TABLE_PARTITIONS_MEMORY];
+
+      public Dictionary<byte[], uint>[] CollisionTables = 
+        new Dictionary<byte[], uint>[COUNT_TABLE_PARTITIONS_MEMORY];
 
       uint UTXOPrimary;
       uint UTXOCollision;
@@ -42,7 +49,7 @@ namespace BToken.Chaining
       public UTXOIndexUInt32Compressed()
         : base(0, "UInt32")
       {
-        for (int i = 0; i < COUNT_TABLE_PARTITIONS; i += 1)
+        for (int i = 0; i < COUNT_TABLE_PARTITIONS_MEMORY; i += 1)
         {
           CollisionTables[i] = new Dictionary<byte[], uint>(new EqualityComparerByteArray());
           PrimaryTables[i] = new Dictionary<int, uint>();
@@ -59,26 +66,37 @@ namespace BToken.Chaining
         return CollisionTables.Sum(t => t.Count);
       }
 
-      public override bool PrimaryTableContainsKey(int primaryKey)
+      public override bool PrimaryTableContainsKey(
+        int primaryKey)
       {
-        return PrimaryTables[(byte)primaryKey].ContainsKey(primaryKey);
+        return PrimaryTables[(byte)primaryKey]
+          .ContainsKey(primaryKey);
       }
 
-      public override void IncrementCollisionBits(int primaryKey, int collisionAddress)
+      public override void IncrementCollisionBits(
+        int primaryKey, int collisionAddress)
       {
         byte indexTablePartition = (byte)primaryKey;
 
-        uint collisionBits = PrimaryTables[indexTablePartition][primaryKey] & MasksCollisionBitsFull[collisionAddress];
+        uint collisionBits = 
+          PrimaryTables [indexTablePartition][primaryKey] & 
+          MasksCollisionBitsFull[collisionAddress];
+
         if (collisionBits == 0)
         {
-          PrimaryTables[indexTablePartition][primaryKey] |= MasksCollisionBitsOne[collisionAddress];
+          PrimaryTables[indexTablePartition][primaryKey] |= 
+            MasksCollisionBitsOne[collisionAddress];
           return;
         }
 
         if (collisionBits == MasksCollisionBitsOne[collisionAddress])
         {
-          PrimaryTables[indexTablePartition][primaryKey] &= MasksCollisionBitsClear[collisionAddress];
-          PrimaryTables[indexTablePartition][primaryKey] |= MasksCollisionBitsTwo[collisionAddress];
+          PrimaryTables[indexTablePartition][primaryKey] &= 
+            MasksCollisionBitsClear[collisionAddress];
+
+          PrimaryTables[indexTablePartition][primaryKey] |= 
+            MasksCollisionBitsTwo[collisionAddress];
+
           return;
         }
 
@@ -233,8 +251,8 @@ namespace BToken.Chaining
       {
         string directoryPath = Path.Combine(path, Label);
         Directory.CreateDirectory(directoryPath);
-
-        Parallel.For(0, COUNT_TABLE_PARTITIONS, i =>
+        
+        Parallel.For(0, COUNT_TABLE_PARTITIONS_FILE, i =>
         {
           using (FileStream stream = new FileStream(
              Path.Combine(directoryPath, "PrimaryTable" + i),
@@ -242,24 +260,49 @@ namespace BToken.Chaining
              FileAccess.Write,
              FileShare.None))
           {
-            foreach (KeyValuePair<int, uint> keyValuePair in PrimaryTables[i])
+            for(
+              int n = i; 
+              n < COUNT_TABLE_PARTITIONS_MEMORY; 
+              n += COUNT_TABLE_PARTITIONS_FILE)
             {
-              stream.Write(BitConverter.GetBytes(keyValuePair.Key), 0, 4);
-              stream.Write(BitConverter.GetBytes(keyValuePair.Value), 0, 4);
+              var keyValuePairs = PrimaryTables[n].ToArray();
+
+              byte[] bytesLengthArrayKeyValuePairs =
+              VarInt.GetBytes(keyValuePairs.Length).ToArray();
+
+              stream.Write(
+                bytesLengthArrayKeyValuePairs,
+                0,
+                bytesLengthArrayKeyValuePairs.Length);
+
+              for (int k = 0; k < keyValuePairs.Length; k += 1)
+              {
+                stream.Write(
+                  BitConverter.GetBytes(keyValuePairs[k].Key), 
+                  0, 
+                  4);
+
+                stream.Write(
+                  BitConverter.GetBytes(keyValuePairs[k].Value), 
+                  0, 
+                  4);
+              }
             }
           }
         });
 
-        byte[] bufferCollisionTable = new byte[GetCountCollisionTableItems() * (HASH_BYTE_SIZE + sizeof(uint))];
+        byte[] bufferCollisionTable = new byte[
+          GetCountCollisionTableItems() * (HASH_BYTE_SIZE + sizeof(uint))];
         int index = 0;
 
-        for (int i = 0; i < COUNT_TABLE_PARTITIONS; i += 1)
+        for (int i = 0; i < COUNT_TABLE_PARTITIONS_MEMORY; i += 1)
         {
           foreach (KeyValuePair<byte[], uint> keyValuePair in CollisionTables[i])
           {
             keyValuePair.Key.CopyTo(bufferCollisionTable, index);
             index += HASH_BYTE_SIZE;
-            BitConverter.GetBytes(keyValuePair.Value).CopyTo(bufferCollisionTable, index);
+            BitConverter.GetBytes(keyValuePair.Value)
+              .CopyTo(bufferCollisionTable, index);
             index += 4;
           }
         }
@@ -270,21 +313,29 @@ namespace BToken.Chaining
            FileAccess.Write,
            FileShare.None))
         {
-          stream.Write(bufferCollisionTable, 0, bufferCollisionTable.Length);
+          stream.Write(
+            bufferCollisionTable, 
+            0, 
+            bufferCollisionTable.Length);
         }
       }
 
+
       public override void Load(string path)
       {
-        for(int i = 0; i < COUNT_TABLE_PARTITIONS; i += 1)
-        {
-          Console.WriteLine("Load primary table {0}.", i);
+        int exponentCountLoadersPartition = 2;
+        Debug.Assert(exponentCountLoadersPartition < 8);
 
-          LoadPrimaryData(
-            File.ReadAllBytes(
-              Path.Combine(path, Label, "PrimaryTable" + i)),
-            PrimaryTables[i]);
-        }
+        int countLoadersPartition =
+          (int)Math.Pow(
+            2,
+            exponentCountLoadersPartition);
+
+        Parallel.For(0, countLoadersPartition, n => 
+        RunLoaderPartition(
+          n, 
+          countLoadersPartition, 
+          path));
 
         Console.WriteLine("Load collision table.");
 
@@ -292,20 +343,55 @@ namespace BToken.Chaining
           Path.Combine(path, Label, "CollisionTable")));
       }
 
-      void LoadPrimaryData(byte[] buffer, Dictionary<int, uint> table)
+      void RunLoaderPartition(
+        int indexLoaderPartition,
+        int countLoadersPartition,
+        string path)
       {
-        int index = 0;
+        var buffer = new byte[4];
 
-        while (index < buffer.Length)
+        for (
+          int i = indexLoaderPartition;
+          i < COUNT_TABLE_PARTITIONS_FILE;
+          i += countLoadersPartition)
         {
-          int key = BitConverter.ToInt32(buffer, index);
-          index += 4;
-          uint value = BitConverter.ToUInt32(buffer, index);
-          index += 4;
+          Console.WriteLine("Loader {0} loads primary table {1}.",
+            Thread.CurrentThread.ManagedThreadId,
+            i);
 
-          table.Add(key, value);
+          using (FileStream stream = new FileStream(
+             Path.Combine(path, Label, "PrimaryTable" + i),
+             FileMode.Open,
+             FileAccess.Read,
+             FileShare.None,
+             bufferSize: 65536))
+          {
+            for (
+              int p = i;
+              p < COUNT_TABLE_PARTITIONS_MEMORY;
+              p += COUNT_TABLE_PARTITIONS_FILE)
+            {
+              int countItemsPartition = VarInt.GetInt32(
+                stream,
+                buffer);
+
+              while (countItemsPartition > 0)
+              {
+                stream.Read(buffer, 0, 4);
+                int key = BitConverter.ToInt32(buffer, 0);
+
+                stream.Read(buffer, 0, 4);
+                uint value = BitConverter.ToUInt32(buffer, 0);
+
+                PrimaryTables[p].Add(key, value);
+
+                countItemsPartition -= 1;
+              }
+            }
+          }
         }
       }
+
       void LoadCollisionData(byte[] buffer)
       {
         int index = 0;

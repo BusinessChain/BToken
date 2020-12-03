@@ -52,15 +52,17 @@ namespace BToken.Chaining
 
       for (int c = 0; c < Tables.Length; c += 1)
       {
-        Console.WriteLine("Load UTXO Table {0}.",
-          Tables[c].GetType().Name);
+        string.Format("Load UTXO Table {0}.",
+          Tables[c].GetType().Name)
+          .Log(LogFile);
 
         Tables[c].Load(pathUTXOImage);
       }
 
-      Console.WriteLine(
+      string.Format(
         "Load UTXO Image from {0}",
-        pathUTXOImage);
+        pathUTXOImage)
+        .Log(LogFile);
     }
 
     public void Clear()
@@ -124,23 +126,24 @@ namespace BToken.Chaining
       table.AddUTXOAsPrimary(primaryKey);
     }
 
+    KeyValuePair<byte[], uint>[] UTXOsUInt32;
+
     void InsertUTXOsUInt32(
       UTXOIndexUInt32 tableUInt32,
       int indexArchive)
     {
-      KeyValuePair<byte[], uint>[] uTXOsUInt32 = 
-        tableUInt32.Table.ToArray();
+      UTXOsUInt32 = tableUInt32.Table.ToArray();
 
       int i = 0;
 
-      while (i < uTXOsUInt32.Length)
+      while (i < UTXOsUInt32.Length)
       {
         TableUInt32.UTXO =
-          uTXOsUInt32[i].Value |
+          UTXOsUInt32[i].Value |
           ((uint)indexArchive & UTXOIndexUInt32.MaskBatchIndex);
         
         InsertUTXO(
-          uTXOsUInt32[i].Key,
+          UTXOsUInt32[i].Key,
           TableUInt32);
 
         i += 1;
