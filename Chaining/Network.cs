@@ -17,7 +17,7 @@ namespace BToken.Chaining
       const UInt16 Port = 8333;
 
       Blockchain Blockchain;
-      public const int COUNT_PEERS_MAX = 6;
+      public const int COUNT_PEERS_MAX = 4;
 
       object LOCK_Peers = new object();
       List<Peer> Peers = new List<Peer>();
@@ -243,7 +243,7 @@ namespace BToken.Chaining
           catch (Exception ex)
           {
             Console.WriteLine(
-              "Exception {0} when reading file with DNS seeds {1} \n" +
+              "{0} when reading file with DNS seeds {1} \n" +
               "{2} \n" +
               "Try again in 10 seconds ...",
               ex.GetType().Name,

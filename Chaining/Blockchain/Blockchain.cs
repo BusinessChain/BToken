@@ -474,7 +474,7 @@ namespace BToken.Chaining
       catch (ChainException ex)
       {
         Console.WriteLine(
-          "Exception {0} when inserting blockParser {1}:\n{2}",
+          "{0} when inserting blockParser {1}:\n{2}",
           ex.GetType().Name,
           blockParser.Index,
           ex.Message);
@@ -699,6 +699,8 @@ namespace BToken.Chaining
     void ReleaseBlockParser(
       UTXOTable.BlockParser parser)
     {
+      parser.ClearPayloadData();
+
       lock (LOCK_ParsersIdle)
       {
         ParsersIdle.Push(parser);

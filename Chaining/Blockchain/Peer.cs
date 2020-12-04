@@ -651,13 +651,6 @@ namespace BToken.Chaining
         Header header,
         int height)
       {
-        string.Format(
-          "{0}: Build headerchain from header: \n{1}",
-          GetID(),
-          header.Hash.ToHexString(),
-          height)
-          .Log(LogFile);
-
         double difficulty = 0.0;
 
         while (true)
@@ -852,7 +845,7 @@ namespace BToken.Chaining
         catch (Exception ex)
         {
           string.Format(
-            "Exception {0} in download of blockArchive {1}: \n{2}.",
+            "{0} when downloading blockArchive {1}: \n{2}.",
             ex.GetType().Name,
             BlockParser.Index,
             ex.Message).Log(LogFile);

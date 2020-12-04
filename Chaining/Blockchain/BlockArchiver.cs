@@ -19,7 +19,7 @@ namespace BToken.Chaining
       byte[] HashStopLoading;
       public const int COUNT_LOADER_TASKS = 4;
       int SIZE_BLOCK_ARCHIVE = 20000;
-      const int UTXOIMAGE_INTERVAL_LOADER = 500;
+      const int UTXOIMAGE_INTERVAL_LOADER = 50;
 
       readonly object LOCK_IndexBlockArchiveQueue = new object();
       int IndexBlockArchiveQueue;
@@ -122,7 +122,7 @@ namespace BToken.Chaining
           catch(Exception ex)
           {
             Console.WriteLine(
-              "Archive inserter aborted due to exception {0}:\n{1}",
+              "Archive inserter aborted due to {0}:\n{1}",
               ex.GetType().Name,
               ex.Message);
 
@@ -188,7 +188,7 @@ namespace BToken.Chaining
           catch (Exception ex)
           {
             string.Format(
-              "Exception {0} when writing blockArchive {1} to " +
+              "{0} when writing blockArchive {1} to " +
               "file {2}: \n{3} \n" +
               "Try again in 10 seconds ...",
               ex.GetType().Name, blockParser.Index,
