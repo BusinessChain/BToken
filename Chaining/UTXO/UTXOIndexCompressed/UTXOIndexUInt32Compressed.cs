@@ -247,49 +247,65 @@ namespace BToken.Chaining
         areAllOutputpsSpent = (uTXO & MaskAllOutputBitsSpent) == MaskAllOutputBitsSpent;
       }
 
+      Stopwatch Stopwatch = new Stopwatch();
+
+      void WriteFile(int i, string directoryPath)
+      {
+        using (FileStream stream = new FileStream(
+           Path.Combine(directoryPath, "PrimaryTable" + i),
+           FileMode.Create,
+           FileAccess.Write,
+           FileShare.None,
+           bufferSize: 65536))
+        {
+          for (
+            int n = i;
+            n < COUNT_TABLE_PARTITIONS_MEMORY;
+            n += COUNT_TABLE_PARTITIONS_FILE)
+          {
+            var keyValuePairs = PrimaryTables[n].ToArray();
+
+            byte[] bytesLengthArrayKeyValuePairs =
+            VarInt.GetBytes(keyValuePairs.Length).ToArray();
+
+            stream.Write(
+              bytesLengthArrayKeyValuePairs,
+              0,
+              bytesLengthArrayKeyValuePairs.Length);
+
+            for (int k = 0; k < keyValuePairs.Length; k += 1)
+            {
+              stream.Write(
+                BitConverter.GetBytes(keyValuePairs[k].Key),
+                0,
+                4);
+
+              stream.Write(
+                BitConverter.GetBytes(keyValuePairs[k].Value),
+                0,
+                4);
+            }
+          }
+        }
+      }
+
       public override void BackupImage(string path)
       {
         string directoryPath = Path.Combine(path, Label);
         Directory.CreateDirectory(directoryPath);
-        
-        Parallel.For(0, COUNT_TABLE_PARTITIONS_FILE, i =>
-        {
-          using (FileStream stream = new FileStream(
-             Path.Combine(directoryPath, "PrimaryTable" + i),
-             FileMode.Create,
-             FileAccess.Write,
-             FileShare.None))
-          {
-            for(
-              int n = i; 
-              n < COUNT_TABLE_PARTITIONS_MEMORY; 
-              n += COUNT_TABLE_PARTITIONS_FILE)
-            {
-              var keyValuePairs = PrimaryTables[n].ToArray();
 
-              byte[] bytesLengthArrayKeyValuePairs =
-              VarInt.GetBytes(keyValuePairs.Length).ToArray();
+        Stopwatch.Restart();
 
-              stream.Write(
-                bytesLengthArrayKeyValuePairs,
-                0,
-                bytesLengthArrayKeyValuePairs.Length);
+        Parallel.For(
+          0, 
+          COUNT_TABLE_PARTITIONS_FILE, 
+          i => WriteFile(i, directoryPath));
 
-              for (int k = 0; k < keyValuePairs.Length; k += 1)
-              {
-                stream.Write(
-                  BitConverter.GetBytes(keyValuePairs[k].Key), 
-                  0, 
-                  4);
+        Stopwatch.Stop();
 
-                stream.Write(
-                  BitConverter.GetBytes(keyValuePairs[k].Value), 
-                  0, 
-                  4);
-              }
-            }
-          }
-        });
+        Console.WriteLine(
+          "Time store image {0}", 
+          Stopwatch.ElapsedMilliseconds);
 
         byte[] bufferCollisionTable = new byte[
           GetCountCollisionTableItems() * (HASH_BYTE_SIZE + sizeof(uint))];

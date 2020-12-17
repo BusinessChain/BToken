@@ -659,9 +659,9 @@ namespace BToken.Chaining
         }
 
         IsBlockchainLocked = true;
-      }
 
-      return true;
+        return true;
+      }
     }
 
     void ReleaseLock()

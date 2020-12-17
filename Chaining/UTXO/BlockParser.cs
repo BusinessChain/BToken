@@ -13,7 +13,7 @@ namespace BToken.Chaining
       public int Index;
       public bool IsInvalid;
 
-      public byte[] ArchiveBuffer = new byte[0x1000000];
+      public byte[] ArchiveBuffer = new byte[0x2000000];
       public int IndexArchiveBuffer;
       public bool IsArchiveBufferOverflow;
       public byte[] Buffer;
