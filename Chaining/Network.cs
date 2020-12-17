@@ -17,7 +17,7 @@ namespace BToken.Chaining
       const UInt16 Port = 8333;
 
       Blockchain Blockchain;
-      public const int COUNT_PEERS_MAX = 4;
+      public const int COUNT_PEERS_MAX = 6;
 
       object LOCK_Peers = new object();
       List<Peer> Peers = new List<Peer>();
@@ -42,6 +42,7 @@ namespace BToken.Chaining
 
           if (peer != null)
           {
+            Console.WriteLine("Get peer {0}", peer.GetID());
             peer.IsBusy = true;
             return true;
           }
@@ -63,6 +64,7 @@ namespace BToken.Chaining
           if(peer != null)
           {
             peer.IsBusy = true;
+            peer.IsSynchronized = true;
             return true;
           }
 
@@ -72,6 +74,7 @@ namespace BToken.Chaining
 
       public void ReleasePeer(Peer peer)
       {
+        Console.WriteLine("Release peer {0}", peer.GetID());
         lock (LOCK_Peers)
         {
           peer.IsBusy = false;
