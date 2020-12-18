@@ -141,6 +141,29 @@ namespace BToken.Chaining
         TableUInt32Array.Table.Clear();
       }
 
+      public void SetupBlockDownload(
+        int index,
+        ref Header headerLoad,
+        int countMax)
+      {
+        Index = index;
+
+        HeaderRoot = headerLoad;
+        Height = 0;
+        Difficulty = 0.0;
+
+        do
+        {
+          HeaderTip = headerLoad;
+          Height += 1;
+          Difficulty += headerLoad.Difficulty;
+
+          headerLoad = headerLoad.HeaderNext;
+        } while (
+        Height < countMax
+        && headerLoad != null);
+      }
+
 
 
       public void ParsePayload(
@@ -216,7 +239,6 @@ namespace BToken.Chaining
         HeaderTip = HeaderTipOverflow;
         HeaderTipOverflow = null;
 
-        ClearPayloadData();
         CalculateHeightAndDifficulty();
       }
 

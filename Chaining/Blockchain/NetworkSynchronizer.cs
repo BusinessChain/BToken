@@ -221,7 +221,7 @@ namespace BToken.Chaining
               continue;
             }
 
-            if (!PeersDownloading.Any())
+            if (PeersDownloading.Count == 0)
             {
               if (!flagTimeoutTriggered)
               {
@@ -261,7 +261,7 @@ namespace BToken.Chaining
             }
           }
           else 
-          if (!PeersDownloading.Any())
+          if (PeersDownloading.Count == 0)
           {
             return true;
           }
@@ -278,7 +278,6 @@ namespace BToken.Chaining
             (peer.FlagDispose || peer.Command == Peer.COMMAND_NOTFOUND))
           {
             peer.FlagDispose = true;
-            Console.WriteLine("Sync master flag disposed.");
           }
           else if (peer.FlagDispose)
           {
@@ -290,7 +289,7 @@ namespace BToken.Chaining
           }
           else if (peer.Command == Peer.COMMAND_NOTFOUND)
           {
-            peer.BlockParser = Blockchain.GetBlockParser();
+            peer.BlockParser = new UTXOTable.BlockParser();
             peersCompleted.Add(peer);
           }
           else
@@ -335,6 +334,8 @@ namespace BToken.Chaining
             {
             LABEL_PostProcessArchiveBlocks:
 
+              parser.ClearPayloadData();
+
               if (parser.IsArchiveBufferOverflow)
               {
                 parser.RecoverFromOverflow();
@@ -359,9 +360,13 @@ namespace BToken.Chaining
                   Console.WriteLine(
                     "Release peer {0} on line 355",
                     peer.GetID());
-
+                  
                   Network.ReleasePeer(peer);
                 }
+              }
+              else
+              {
+                Blockchain.ReleaseBlockParser(parser);
               }
 
               if (!DownloadsAwaiting.TryGetValue(
@@ -390,6 +395,8 @@ namespace BToken.Chaining
 
             peer.FlagDispose = true;
 
+            Blockchain.ReleaseBlockParser(parser);
+
             if (peer != peerSyncMaster)
             {
               Console.WriteLine(
@@ -411,6 +418,7 @@ namespace BToken.Chaining
           DownloadsAwaiting.Count < CountMaxDownloadsAwaiting &&
           (QueueParsersInvalid.Count > 0 || HeaderLoad != null);
       }
+
       void StartBlockDownload(Peer peer)
       {
         if (QueueParsersInvalid.Any())
@@ -420,45 +428,20 @@ namespace BToken.Chaining
           peer.BlockParser = QueueParsersInvalid.First();
 
           QueueParsersInvalid.RemoveAt(0);
-
-          RunBlockDownload(
-            peer,
-            flagContinueDownload: false);
-
-          return;
         }
-
-        var parser = peer.BlockParser;
-        parser.ClearPayloadData();
-
-        if (
-          (DownloadsAwaiting.Count < CountMaxDownloadsAwaiting) &&
-          HeaderLoad != null)
+        else 
         {
-          parser.Index = IndexBlockArchiveDownload;
+          peer.BlockParser.SetupBlockDownload(
+            IndexBlockArchiveDownload,
+            ref HeaderLoad,
+            peer.CountBlocksLoad);
+
           IndexBlockArchiveDownload += 1;
-
-          parser.HeaderRoot = HeaderLoad;
-          parser.Height = 0;
-          parser.Difficulty = 0.0;
-
-          do
-          {
-            parser.HeaderTip = HeaderLoad;
-            parser.Height += 1;
-            parser.Difficulty += HeaderLoad.Difficulty;
-
-            HeaderLoad = HeaderLoad.HeaderNext;
-          } while (
-          parser.Height < peer.CountBlocksLoad
-          && HeaderLoad != null);
-
-          RunBlockDownload(
-            peer,
-            flagContinueDownload: false);
-
-          return;
         }
+
+        RunBlockDownload(
+          peer,
+          flagContinueDownload: false);
       }
 
       void EnqueueParserInvalid(UTXOTable.BlockParser parser)

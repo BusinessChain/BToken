@@ -556,8 +556,9 @@ namespace BToken.Chaining
           FlagDispose = true;
 
           string.Format(
-           "Peer {0} experienced error " +
-           "in message listener: \n{1}",
+           "Exception {0} in message listener " +
+           "of peer {1} experienced error: \n{2}",
+           ex.GetType().Name,
            GetID(),
            ex.Message)
            .Log(LogFile);
@@ -656,6 +657,8 @@ namespace BToken.Chaining
               return;
             }
 
+            BlockParser.ClearPayloadData();
+
             if (!BlockParser.IsArchiveBufferOverflow)
             {
               break;
@@ -679,7 +682,8 @@ namespace BToken.Chaining
           new List<Header>() { locator });
       }
 
-      public async Task<Header> GetHeaders(List<Header> locator)
+      public async Task<Header> GetHeaders(
+        List<Header> locator)
       {
         string.Format(
           "Send getheader to peer {0}, \n" +
@@ -831,30 +835,7 @@ namespace BToken.Chaining
         return header;
       }
 
-
-
-      List<Inventory> CreateInventories()
-      {
-        var inventories = new List<Inventory>();
-
-        Header header = BlockParser.HeaderRoot;
-
-        while (true)
-        {
-          inventories.Add(
-            new Inventory(
-              InventoryType.MSG_BLOCK,
-              header.Hash));
-
-          if (header == BlockParser.HeaderTip)
-          {
-            return inventories;
-          }
-
-          header = header.HeaderNext;
-        }
-      }
-
+            
       public async Task DownloadBlocks(
         bool flagContinueDownload)
       {
@@ -979,6 +960,28 @@ namespace BToken.Chaining
           BlockParser.Index,
           StopwatchDownload.ElapsedMilliseconds)
           .Log(LogFile);
+      }
+
+      List<Inventory> CreateInventories()
+      {
+        var inventories = new List<Inventory>();
+
+        Header header = BlockParser.HeaderRoot;
+
+        while (true)
+        {
+          inventories.Add(
+            new Inventory(
+              InventoryType.MSG_BLOCK,
+              header.Hash));
+
+          if (header == BlockParser.HeaderTip)
+          {
+            return inventories;
+          }
+
+          header = header.HeaderNext;
+        }
       }
 
       void AdjustCountBlocksLoad()
