@@ -129,7 +129,6 @@
     <Compile Include="Chaining\Messages\VersionMessage.cs" />
     <Compile Include="ProtocolVersion.cs" />
     <Compile Include="Node.cs" />
-    <Compile Include="Chaining\ServiceFlags.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utilities\StringExtensionMethods.cs" />

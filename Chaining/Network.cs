@@ -81,7 +81,6 @@ namespace BToken.Chaining
         }
       }
 
-      // verhindern dass mit demselben peer zweimal verbunden wird.
       public async Task Start()
       {
         "Start Network.".Log(LogFile);
@@ -112,7 +111,7 @@ namespace BToken.Chaining
           if (countPeersToCreate > 0)
           {
             string.Format(
-              "Connect with {0} new peers.\n" +
+              "Connect with {0} new peers. " +
               "{1} peers connected currently.",
               countPeersToCreate,
               Peers.Count)
@@ -141,33 +140,29 @@ namespace BToken.Chaining
       List<IPAddress> RetrieveIPAddresses(int countMax)
       {
         List<IPAddress> iPAddresses = new List<IPAddress>();
-        bool flagPolledSeedServer = false;
 
         while(iPAddresses.Count < countMax)
         {
           try
           {
-            if (SeedNodeIPAddresses.Count == 0)
+            if (AddressPool.Count == 0)
             {
-              if(flagPolledSeedServer)
+              DownloadIPAddressesFromSeeds();
+
+              // delete disposed log files older 24h
+              // any address must not be present in either log file
+
+              if (AddressPool.Count == 0)
               {
                 break;
               }
-
-              DownloadIPAddressesFromSeeds();
-              flagPolledSeedServer = true;
-            }
-
-            if(SeedNodeIPAddresses.Count == 0)
-            {
-              break;
             }
 
             int randomIndex = RandomGenerator
-              .Next(SeedNodeIPAddresses.Count);
+              .Next(AddressPool.Count);
 
-            IPAddress iPAddress = SeedNodeIPAddresses[randomIndex];
-            SeedNodeIPAddresses.Remove(iPAddress);
+            IPAddress iPAddress = AddressPool[randomIndex];
+            AddressPool.Remove(iPAddress);
             
             lock(LOCK_Peers)
             {
@@ -227,7 +222,7 @@ namespace BToken.Chaining
       }
 
 
-      static List<IPAddress> SeedNodeIPAddresses = new List<IPAddress>();
+      static List<IPAddress> AddressPool = new List<IPAddress>();
       static Random RandomGenerator = new Random();
 
       static void DownloadIPAddressesFromSeeds()
@@ -266,7 +261,7 @@ namespace BToken.Chaining
 
           try
           {
-            SeedNodeIPAddresses.AddRange(
+            AddressPool.AddRange(
               Dns.GetHostEntry(dnsSeed).AddressList);
           }
           catch
