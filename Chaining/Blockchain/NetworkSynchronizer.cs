@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+using System.Net;
 using System.Net.Sockets;
 
 namespace BToken.Chaining
@@ -13,7 +14,6 @@ namespace BToken.Chaining
   {
     partial class NetworkSynchronizer
     {
-      Network Network;
       Blockchain Blockchain;
 
       int TIMEOUT_SYNCHRONIZER = 30000;
@@ -22,37 +22,229 @@ namespace BToken.Chaining
       const int UTXOIMAGE_INTERVAL_LISTEN = 5;
 
       StreamWriter LogFile;
-      
+
+      const UInt16 Port = 8333;
+
+      const int COUNT_PEERS_MAX = 6;
+
+      object LOCK_Peers = new object();
+      List<Peer> Peers = new List<Peer>();
+
+      static DirectoryInfo DirectoryLogPeers;
+      static DirectoryInfo DirectoryLogPeersDisposed;
+
 
 
       public NetworkSynchronizer(Blockchain blockchain)
       {
         Blockchain = blockchain;
-        Network = new Network(blockchain);
         
         LogFile = new StreamWriter("logSynchronizer", false);
 
-        try
-        {
-          Directory.Delete("logPeers", true);
-        }
-        catch(Exception ex)
-        {
-          ex.Message.Log(LogFile);
-        }
+        DirectoryLogPeers = Directory.CreateDirectory(
+          "logPeers");
       }
 
 
 
       public void Start()
       {
-        StartPeerSynchronizer();
-        Network.Start();
+        "Start Network.".Log(LogFile);
+
+        StartConnector();
+
+        StartSynchronizer();
+        
+        //"Start listener for inbound connection requests."
+        //  .Log(LogFile);
       }
 
-      
-      
-      async Task StartPeerSynchronizer()
+      async Task StartConnector()
+      {
+        int countPeersToCreate;
+
+        while (true)
+        {
+          lock (LOCK_Peers)
+          {
+            List<Peer> peersDispose =
+              Peers.FindAll(p => p.FlagDispose && !p.IsBusy);
+
+            peersDispose.ForEach(p =>
+            {
+              Peers.Remove(p);
+              p.Dispose();
+            });
+
+            countPeersToCreate = COUNT_PEERS_MAX - Peers.Count;
+          }
+
+          if (countPeersToCreate > 0)
+          {
+            string.Format(
+              "Connect with {0} new peers. " +
+              "{1} peers connected currently.",
+              countPeersToCreate,
+              Peers.Count)
+              .Log(LogFile);
+
+            List<IPAddress> iPAddresses =
+              RetrieveIPAddresses(countPeersToCreate);
+
+            if (iPAddresses.Count > 0)
+            {
+              var createPeerTasks = new Task[iPAddresses.Count()];
+
+              Parallel.For(
+                0,
+                countPeersToCreate,
+                i => createPeerTasks[i] = CreatePeer(iPAddresses[i]));
+
+              await Task.WhenAll(createPeerTasks);
+            }
+          }
+
+          await Task.Delay(10000).ConfigureAwait(false);
+        }
+      }
+
+      List<IPAddress> RetrieveIPAddresses(int countMax)
+      {
+        List<IPAddress> iPAddresses = new List<IPAddress>();
+
+        while (iPAddresses.Count < countMax)
+        {
+          try
+          {
+            if (AddressPool.Count == 0)
+            {
+              DownloadIPAddressesFromSeeds();
+
+              // delete disposed log files older 24h
+              // any address must not be present in either log file
+
+              if (AddressPool.Count == 0)
+              {
+                break;
+              }
+            }
+
+            int randomIndex = RandomGenerator
+              .Next(AddressPool.Count);
+
+            IPAddress iPAddress = AddressPool[randomIndex];
+            AddressPool.Remove(iPAddress);
+
+            lock (LOCK_Peers)
+            {
+              if (Peers.Any(
+                p => p.IPAddress.ToString() == iPAddress.ToString()))
+              {
+                continue;
+              }
+            }
+
+            if (iPAddresses.Any(
+              ip => ip.ToString() == iPAddress.ToString()))
+            {
+              continue;
+            }
+
+            iPAddresses.Add(iPAddress);
+          }
+          catch (Exception ex)
+          {
+            string.Format(
+              "Cannot get peer address from dns server: {0}",
+              ex.Message)
+              .Log(LogFile);
+
+            break;
+          }
+        }
+
+        return iPAddresses;
+      }
+
+      async Task CreatePeer(IPAddress iPAddress)
+      {
+        var peer = new Peer(Blockchain, iPAddress);
+
+        try
+        {
+          await peer.Connect(Port);
+        }
+        catch (Exception ex)
+        {
+          string.Format(
+            "Exception {0} when connecting with peer {1}: \n{2}",
+            ex.GetType(),
+            peer.GetID(),
+            ex.Message)
+            .Log(LogFile);
+
+          peer.FlagDispose = true;
+        }
+
+        lock (LOCK_Peers)
+        {
+          Peers.Add(peer);
+        }
+      }
+
+
+      static List<IPAddress> AddressPool = new List<IPAddress>();
+      static Random RandomGenerator = new Random();
+
+      static void DownloadIPAddressesFromSeeds()
+      {
+        string pathFileSeeds = @"..\..\DNSSeeds";
+        string[] dnsSeeds;
+
+        while (true)
+        {
+          try
+          {
+            dnsSeeds = File.ReadAllLines(pathFileSeeds);
+
+            break;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "{0} when reading file with DNS seeds {1} \n" +
+              "{2} \n" +
+              "Try again in 10 seconds ...",
+              ex.GetType().Name,
+              pathFileSeeds,
+              ex.Message);
+
+            Thread.Sleep(10000);
+          }
+        }
+
+        foreach (string dnsSeed in dnsSeeds)
+        {
+          if (dnsSeed.Substring(0, 2) == "//")
+          {
+            continue;
+          }
+
+          try
+          {
+            AddressPool.AddRange(
+              Dns.GetHostEntry(dnsSeed).AddressList);
+          }
+          catch
+          {
+            // If error persists, remove seed from file.
+            continue;
+          }
+        }
+      }
+
+
+      async Task StartSynchronizer()
       {
         "Start Peer synchronizer.".Log(LogFile);
         
@@ -65,7 +257,7 @@ namespace BToken.Chaining
             continue;
           }
 
-          if (!Network.TryGetPeerNotSynchronized(
+          if (!TryGetPeerNotSynchronized(
             out Peer peer))
           {
             Blockchain.ReleaseLock();
@@ -96,11 +288,42 @@ namespace BToken.Chaining
             peer.FlagDispose = true;
           }
 
-          Network.ReleasePeer(peer);
+          ReleasePeer(peer);
 
           Blockchain.ReleaseLock();
         }
       }
+
+      bool TryGetPeerNotSynchronized(
+        out Peer peer)
+      {
+        lock (LOCK_Peers)
+        {
+          peer = Peers.Find(p =>
+           !p.IsSynchronized &&
+           !p.FlagDispose &&
+           !p.IsBusy);
+
+          if (peer != null)
+          {
+            peer.IsBusy = true;
+            peer.IsSynchronized = true;
+            return true;
+          }
+
+          return false;
+        }
+      }
+
+      void ReleasePeer(Peer peer)
+      {
+        Console.WriteLine("Release peer {0}", peer.GetID());
+        lock (LOCK_Peers)
+        {
+          peer.IsBusy = false;
+        }
+      }
+
 
       async Task SynchronizeWithPeer(Peer peer)
       {
@@ -215,7 +438,7 @@ namespace BToken.Chaining
         {
           if (IsBlockDownloadAvailable())
           {
-            if (Network.TryGetPeer(out peer))
+            if (TryGetPeer(out peer))
             {
               StartBlockDownload(peer);
               continue;
@@ -247,7 +470,7 @@ namespace BToken.Chaining
 
                 QueueParsersInvalid.Clear();
 
-                peersCompleted.ForEach(p => Network.ReleasePeer(p));
+                peersCompleted.ForEach(p => ReleasePeer(p));
                 return false;
               }
             }
@@ -285,7 +508,7 @@ namespace BToken.Chaining
               "Release peer {0} on line 289",
               peer.GetID());
 
-            Network.ReleasePeer(peer);
+            ReleasePeer(peer);
           }
           else if (peer.Command == Peer.COMMAND_NOTFOUND)
           {
@@ -319,7 +542,7 @@ namespace BToken.Chaining
                     "Release peer {0} on line 318",
                     peer.GetID());
 
-                  Network.ReleasePeer(peer);
+                  ReleasePeer(peer);
                 }
               }
 
@@ -361,7 +584,7 @@ namespace BToken.Chaining
                     "Release peer {0} on line 355",
                     peer.GetID());
                   
-                  Network.ReleasePeer(peer);
+                  ReleasePeer(peer);
                 }
               }
               else
@@ -403,7 +626,7 @@ namespace BToken.Chaining
                 "Release peer {0} on line 387",
                 peer.GetID());
 
-              Network.ReleasePeer(peer);
+              ReleasePeer(peer);
             }
           }
 
@@ -411,6 +634,27 @@ namespace BToken.Chaining
 
         } while (true);
       }
+
+      bool TryGetPeer(
+        out Peer peer)
+      {
+        lock (LOCK_Peers)
+        {
+          peer = Peers.Find(
+            p => !p.FlagDispose && !p.IsBusy);
+
+          if (peer != null)
+          {
+            Console.WriteLine("Get peer {0}", peer.GetID());
+            peer.IsBusy = true;
+            return true;
+          }
+        }
+
+        return false;
+      }
+
+
 
       bool IsBlockDownloadAvailable()
       {
@@ -473,6 +717,35 @@ namespace BToken.Chaining
           flagContinueDownload);
 
         QueueSynchronizer.Post(peer);
+      }
+
+
+      const int PEERS_COUNT_INBOUND = 8;
+      TcpListener TcpListener =
+        new TcpListener(IPAddress.Any, Port);
+
+      async Task StartPeerInboundListener()
+      {
+        TcpListener.Start(PEERS_COUNT_INBOUND);
+
+        while (true)
+        {
+          TcpClient tcpClient = await TcpListener.AcceptTcpClientAsync().
+            ConfigureAwait(false);
+
+          string.Format("Received inbound request from {0}",
+            tcpClient.Client.RemoteEndPoint.ToString())
+            .Log(LogFile);
+
+          var peer = new Peer(tcpClient, Blockchain);
+
+          peer.StartMessageListener();
+
+          lock (LOCK_Peers)
+          {
+            Peers.Add(peer);
+          }
+        }
       }
     }
   }
