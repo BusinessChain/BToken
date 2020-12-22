@@ -82,7 +82,7 @@
     <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
     <Compile Include="Chaining\Blockchain\Peer.cs" />
-    <Compile Include="Chaining\Blockchain\NetworkSynchronizer.cs" />
+    <Compile Include="Chaining\Blockchain\BlockchainNetwork.cs" />
     <Compile Include="Chaining\UTXO\BlockParser.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />

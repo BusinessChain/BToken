@@ -12,7 +12,7 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    partial class NetworkSynchronizer
+    partial class BlockchainNetwork
     {
       Blockchain Blockchain;
 
@@ -35,14 +35,19 @@ namespace BToken.Chaining
 
 
 
-      public NetworkSynchronizer(Blockchain blockchain)
+      public BlockchainNetwork(Blockchain blockchain)
       {
         Blockchain = blockchain;
-        
+
         LogFile = new StreamWriter("logSynchronizer", false);
 
         DirectoryLogPeers = Directory.CreateDirectory(
           "logPeers");
+
+        DirectoryLogPeersDisposed = Directory.CreateDirectory(
+          Path.Combine(
+            DirectoryLogPeers.FullName,
+            "disposed"));
       }
 
 
@@ -54,7 +59,7 @@ namespace BToken.Chaining
         StartConnector();
 
         StartSynchronizer();
-        
+
         //"Start listener for inbound connection requests."
         //  .Log(LogFile);
       }
@@ -114,53 +119,50 @@ namespace BToken.Chaining
 
         while (iPAddresses.Count < countMax)
         {
-          try
+          if (AddressPool.Count == 0)
           {
-            if (AddressPool.Count == 0)
-            {
-              DownloadIPAddressesFromSeeds();
-
-              // delete disposed log files older 24h
-              // any address must not be present in either log file
-
-              if (AddressPool.Count == 0)
-              {
-                break;
-              }
-            }
-
-            int randomIndex = RandomGenerator
-              .Next(AddressPool.Count);
-
-            IPAddress iPAddress = AddressPool[randomIndex];
-            AddressPool.Remove(iPAddress);
+            DownloadIPAddressesFromSeeds();
 
             lock (LOCK_Peers)
             {
-              if (Peers.Any(
-                p => p.IPAddress.ToString() == iPAddress.ToString()))
+              AddressPool.RemoveAll(
+                a => Peers.Any(p => p.GetID() == a.ToString()));
+            }
+
+            foreach (FileInfo file in
+              DirectoryLogPeersDisposed.GetFiles())
+            {
+              if (DateTime.Now.Subtract(
+                file.LastAccessTime).TotalHours > 24)
               {
-                continue;
+                file.Delete();
+              }
+              else
+              {
+                AddressPool.RemoveAll(
+                  a => a.ToString() == file.Name);
               }
             }
-
-            if (iPAddresses.Any(
-              ip => ip.ToString() == iPAddress.ToString()))
+                        
+            if (AddressPool.Count == 0)
             {
-              continue;
+              return iPAddresses;
             }
-
-            iPAddresses.Add(iPAddress);
           }
-          catch (Exception ex)
+
+          int randomIndex = RandomGenerator
+            .Next(AddressPool.Count);
+
+          IPAddress iPAddress = AddressPool[randomIndex];
+          AddressPool.Remove(iPAddress);
+          
+          if (iPAddresses.Any(
+            ip => ip.ToString() == iPAddress.ToString()))
           {
-            string.Format(
-              "Cannot get peer address from dns server: {0}",
-              ex.Message)
-              .Log(LogFile);
-
-            break;
+            continue;
           }
+
+          iPAddresses.Add(iPAddress);
         }
 
         return iPAddresses;
@@ -193,10 +195,10 @@ namespace BToken.Chaining
       }
 
 
-      static List<IPAddress> AddressPool = new List<IPAddress>();
-      static Random RandomGenerator = new Random();
+      List<IPAddress> AddressPool = new List<IPAddress>();
+      Random RandomGenerator = new Random();
 
-      static void DownloadIPAddressesFromSeeds()
+      void DownloadIPAddressesFromSeeds()
       {
         string pathFileSeeds = @"..\..\DNSSeeds";
         string[] dnsSeeds;
@@ -230,23 +232,37 @@ namespace BToken.Chaining
             continue;
           }
 
+          IPAddress[] dnsSeedAddresses;
+
           try
           {
-            AddressPool.AddRange(
-              Dns.GetHostEntry(dnsSeed).AddressList);
+            dnsSeedAddresses = 
+              Dns.GetHostEntry(dnsSeed).AddressList;
           }
-          catch
+          catch(Exception ex)
           {
             // If error persists, remove seed from file.
+
+            string.Format(
+              "Cannot get peer address from dns server {0}: \n{1}",
+              dnsSeed,
+              ex.Message)
+              .Log(LogFile);
+
             continue;
           }
+
+          AddressPool = AddressPool.Union(
+            dnsSeedAddresses.Distinct())
+            .ToList();
         }
       }
+    
 
 
       async Task StartSynchronizer()
       {
-        "Start Peer synchronizer.".Log(LogFile);
+        "Start network synchronization.".Log(LogFile);
         
         while (true)
         {
@@ -317,7 +333,6 @@ namespace BToken.Chaining
 
       void ReleasePeer(Peer peer)
       {
-        Console.WriteLine("Release peer {0}", peer.GetID());
         lock (LOCK_Peers)
         {
           peer.IsBusy = false;
@@ -505,7 +520,7 @@ namespace BToken.Chaining
           else if (peer.FlagDispose)
           {
             Console.WriteLine(
-              "Release peer {0} on line 289",
+              "Release peer {0} on line 524",
               peer.GetID());
 
             ReleasePeer(peer);
@@ -739,7 +754,22 @@ namespace BToken.Chaining
 
           var peer = new Peer(tcpClient, Blockchain);
 
-          peer.StartMessageListener();
+          try
+          {
+            peer.StartMessageListener();
+          }
+          catch (Exception ex)
+          {
+            string.Format(
+              "Failed to start listening to inbound peer {0}: " +
+              "\n{1}: {2}",
+              peer.GetID(),
+              ex.GetType().Name,
+              ex.Message)
+              .Log(LogFile);
+
+            continue;
+          }
 
           lock (LOCK_Peers)
           {
