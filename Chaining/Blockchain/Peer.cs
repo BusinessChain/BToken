@@ -113,6 +113,8 @@ namespace BToken.Chaining
         public IPAddress IPAddress;
         TcpClient TcpClient;
         NetworkStream NetworkStream;
+        CancellationTokenSource Cancellation =
+          new CancellationTokenSource();
 
         const int CommandSize = 12;
         const int LengthSize = 4;
@@ -216,7 +218,7 @@ namespace BToken.Chaining
           await SendMessage(versionMessage);
 
           CancellationToken cancellationToken =
-            new CancellationTokenSource(TimeSpan.FromSeconds(3))
+            new CancellationTokenSource(TimeSpan.FromSeconds(5))
             .Token;
 
           bool verAckReceived = false;
@@ -422,285 +424,374 @@ namespace BToken.Chaining
         }
 
 
+        enum StateProtocol
+        {
+          IDLE = 0,
+          AwaitingBlock
+        }
+
+        StateProtocol State;
+        BufferBlock<bool> SignalIsParsingCompleted =
+          new BufferBlock<bool>();
 
         public async Task StartMessageListener()
         {
-          while (true)
+          try
           {
-            await ReadMessage(default);
-
-            switch (Command)
+            while (true)
             {
-              case "ping":
-                await SendMessage(new PongMessage(
-                  BitConverter.ToUInt64(Payload, 0)));
-                break;
+              await ReadMessage(Cancellation.Token);
 
-              case "addr":
-                AddressMessage addressMessage =
-                  new AddressMessage(Payload);
-                break;
+              string.Format(
+                "{0} received message {1}",
+                GetID(),
+                Command)
+                .Log(LogFile);
 
-              case "sendheaders":
-                await SendMessage(new SendHeadersMessage());
+              switch (Command)
+              {
+                case "ping":
+                  await SendMessage(new PongMessage(
+                    BitConverter.ToUInt64(Payload, 0)));
+                  break;
 
-                break;
+                case "addr":
+                  AddressMessage addressMessage =
+                    new AddressMessage(Payload);
+                  break;
 
-              case "feefilter":
-                FeeFilterMessage feeFilterMessage =
-                  new FeeFilterMessage(Payload);
-                FeeFilterValue = feeFilterMessage.FeeFilterValue;
-                break;
+                case "sendheaders":
+                  await SendMessage(new SendHeadersMessage());
 
-              default:
-                lock (LOCK_IsExpectingMessageResponse)
-                {
-                  if (IsExpectingMessageResponse)
+                  break;
+
+                case "feefilter":
+                  FeeFilterMessage feeFilterMessage =
+                    new FeeFilterMessage(Payload);
+                  FeeFilterValue = feeFilterMessage.FeeFilterValue;
+                  break;
+
+                case "block":
+
+                  BlockParser.ParsePayload(
+                    Payload,
+                    PayloadLength);
+
+                  if (State == StateProtocol.AwaitingBlock)
                   {
-                    MessageResponseReady.Post(true);
-                    return;
-                  }
-                }
-
-                switch (Command)
-                {
-                  //case "getdata":
-                  //  var getDataMessage = new GetDataMessage(message);
-
-                  //  getDataMessage.Inventories.ForEach(inv =>
-                  //  {
-                  //    Console.WriteLine("getdata {0}: {1} from {2}",
-                  //      inv.Type,
-                  //      inv.Hash.ToHexString(),
-                  //      GetIdentification());
-                  //  });
-
-                  //  foreach (byte[] block in Blockchain.UTXOTable.GetBlocks(
-                  //    getDataMessage.Inventories
-                  //    .Where(i => i.Type == InventoryType.MSG_BLOCK)
-                  //    .Select(i => i.Hash)))
-                  //  {
-                  //    await SendMessage(
-                  //      new NetworkMessage("block", block));
-                  //  }
-
-                  //  break;
-
-                  //case "getheaders":
-                  //  var getHeadersMessage = new GetHeadersMessage(message);
-
-                  //  Console.WriteLine("received getheaders locator[0] {0} from {1}",
-                  //    getHeadersMessage.HeaderLocator.First().ToHexString(),
-                  //    GetIdentification());
-
-                  //  if (!Network
-                  //    .Headerchain
-                  //    .Synchronizer
-                  //    .GetIsSyncingCompleted())
-                  //  {
-                  //    break;
-                  //  }
-
-                  //  var headers = Network.Headerchain.GetHeaders(
-                  //    getHeadersMessage.HeaderLocator,
-                  //    2000,
-                  //    getHeadersMessage.StopHash);
-
-                  //  await SendMessage(
-                  //    new HeadersMessage(headers));
-
-                  //  Console.WriteLine("sent {0} headers tip {1} to {2}",
-                  //    headers.Count,
-                  //    headers.Any() ? headers.First().HeaderHash.ToHexString() : "",
-                  //    GetIdentification());
-
-                  //  break;
-
-                  //case "inv":
-                  //  var invMessage = new InvMessage(message);
-
-                  //  foreach (Inventory inv in invMessage.Inventories
-                  //    .Where(inv => inv.Type == InventoryType.MSG_BLOCK).ToList())
-                  //  {
-                  //    Console.WriteLine("inv message {0} from {1}",
-                  //         inv.Hash.ToHexString(),
-                  //         GetIdentification());
-
-                  //    if (Network.Headerchain.TryReadHeader(
-                  //      inv.Hash,
-                  //      out Header headerAdvertized))
-                  //    {
-                  //      //Console.WriteLine(
-                  //      //  "Advertized block {0} already in chain",
-                  //      //  inv.Hash.ToHexString());
-
-                  //      break;
-                  //    }
-
-                  //    Headerchain.Synchronizer.LoadBatch();
-                  //    await Headerchain.Synchronizer.DownloadHeaders(channel);
-
-                  //    if (Headerchain.Synchronizer.TryInsertBatch())
-                  //    {
-                  //      if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
-                  //      {
-                  //        Console.WriteLine(
-                  //          //      "Could not synchronize UTXO, with channel {0}",
-                  //          GetIdentification());
-                  //      }
-                  //    }
-                  //    else
-                  //    {
-                  //      Console.WriteLine(
-                  //        "Failed to insert header message from channel {0}",
-                  //        GetIdentification());
-                  //    }
-                  //  }
-
-                  //  break;
-
-                  case "headers":
-
-                    string.Format(
-                      "{0}: Recived headers message.",
-                      GetID())
-                      .Log(LogFile);
-
-                    if (!Blockchain.TryLock())
+                    if (BlockParser.IsParsingCompleted)
                     {
+                      SignalIsParsingCompleted.Post(true);
+
+                      Cancellation = new CancellationTokenSource();
+                      State = StateProtocol.IDLE;
                       break;
                     }
 
-                    StartMessageListener(); 
-                    // Ich muss nicht den Start message listener starten,
-                    // sondern der sollte immer laufen, und dafür  
-                    // prozesse starten wie eben ReceiveHeader.
+                    Cancellation.CancelAfter(
+                      TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
+                  }
+                  else
+                  {
+                    // Received unsolicited block
+                  }
 
-                    await ReceiveHeader();
+                  break;
 
-                    Blockchain.ReleaseLock();
+                case "notfound":
 
-                    // Hier fehlt womöglich ein StartMessageListener
-                    // Insebesondere, allenfalls, wenn Block schon da ist.
+                  Console.WriteLine(
+                    "command notfound is not implemented yet.");
 
-                    break;
+                  break;
+
+                case "inv":
+
+                  var invMessage = new InvMessage(Payload);
+                  if (invMessage.Inventories.First().IsTX())
+                  {
+                    throw new ChainException(
+                      "Received TX inv message despite TX-disable signaled.");
+                  }
+
+                  break;
 
 
-                  default:
-                    break;
-                }
-                break;
+                default:
+                  lock (LOCK_IsExpectingMessageResponse)
+                  {
+                    if (IsExpectingMessageResponse)
+                    {
+                      MessageResponseReady.Post(true);
+                      break;
+                    }
+                  }
+
+                  switch (Command)
+                  {
+                    #region server commands
+                    //case "getdata":
+                    //  var getDataMessage = new GetDataMessage(message);
+
+                    //  getDataMessage.Inventories.ForEach(inv =>
+                    //  {
+                    //    Console.WriteLine("getdata {0}: {1} from {2}",
+                    //      inv.Type,
+                    //      inv.Hash.ToHexString(),
+                    //      GetIdentification());
+                    //  });
+
+                    //  foreach (byte[] block in Blockchain.UTXOTable.GetBlocks(
+                    //    getDataMessage.Inventories
+                    //    .Where(i => i.Type == InventoryType.MSG_BLOCK)
+                    //    .Select(i => i.Hash)))
+                    //  {
+                    //    await SendMessage(
+                    //      new NetworkMessage("block", block));
+                    //  }
+
+                    //  break;
+
+                    //case "getheaders":
+                    //  var getHeadersMessage = new GetHeadersMessage(message);
+
+                    //  Console.WriteLine("received getheaders locator[0] {0} from {1}",
+                    //    getHeadersMessage.HeaderLocator.First().ToHexString(),
+                    //    GetIdentification());
+
+                    //  if (!Network
+                    //    .Headerchain
+                    //    .Synchronizer
+                    //    .GetIsSyncingCompleted())
+                    //  {
+                    //    break;
+                    //  }
+
+                    //  var headers = Network.Headerchain.GetHeaders(
+                    //    getHeadersMessage.HeaderLocator,
+                    //    2000,
+                    //    getHeadersMessage.StopHash);
+
+                    //  await SendMessage(
+                    //    new HeadersMessage(headers));
+
+                    //  Console.WriteLine("sent {0} headers tip {1} to {2}",
+                    //    headers.Count,
+                    //    headers.Any() ? headers.First().HeaderHash.ToHexString() : "",
+                    //    GetIdentification());
+
+                    //  break;
+
+                    //case "inv":
+                    //  var invMessage = new InvMessage(message);
+
+                    //  foreach (Inventory inv in invMessage.Inventories
+                    //    .Where(inv => inv.Type == InventoryType.MSG_BLOCK).ToList())
+                    //  {
+                    //    Console.WriteLine("inv message {0} from {1}",
+                    //         inv.Hash.ToHexString(),
+                    //         GetIdentification());
+
+                    //    if (Network.Headerchain.TryReadHeader(
+                    //      inv.Hash,
+                    //      out Header headerAdvertized))
+                    //    {
+                    //      //Console.WriteLine(
+                    //      //  "Advertized block {0} already in chain",
+                    //      //  inv.Hash.ToHexString());
+
+                    //      break;
+                    //    }
+
+                    //    Headerchain.Synchronizer.LoadBatch();
+                    //    await Headerchain.Synchronizer.DownloadHeaders(channel);
+
+                    //    if (Headerchain.Synchronizer.TryInsertBatch())
+                    //    {
+                    //      if (!await UTXOTable.Synchronizer.TrySynchronize(channel))
+                    //      {
+                    //        Console.WriteLine(
+                    //          //      "Could not synchronize UTXO, with channel {0}",
+                    //          GetIdentification());
+                    //      }
+                    //    }
+                    //    else
+                    //    {
+                    //      Console.WriteLine(
+                    //        "Failed to insert header message from channel {0}",
+                    //        GetIdentification());
+                    //    }
+                    //  }
+
+                    //  break;
+                    #endregion
+                    
+                    case "headers":
+
+                      string.Format(
+                        "{0}: Recived headers message.",
+                        GetID())
+                        .Log(LogFile);
+
+                      ReceiveHeader();
+
+                      break;
+
+
+                    default:
+                      break;
+                  }
+                  break;
+              }
             }
+          }
+          catch(Exception ex)
+          {
+            FlagDispose = true;
+
+            Cancellation.Cancel();
+
+            string.Format(
+             "Peer {0} experienced error " +
+             "in message listener: \n{1}",
+             GetID(),
+             ex.Message)
+             .Log(LogFile);
           }
         }
 
         async Task ReceiveHeader()
         {
-          BlockParser.Parse(
-            Payload,
-            PayloadLength,
-            1);
-
-          Header header = BlockParser.HeaderRoot;
-
-          string.Format(
-            "Received header {0}",
-            header.Hash.ToHexString())
-            .Log(LogFile);
-
-          if (Blockchain.ContainsHeader(header.Hash))
+          if (!Blockchain.TryLock())
           {
-            Header headerContained = Blockchain.HeaderTip;
+            return;
+          }
 
-            var headerDuplicates = new List<byte[]>();
-            int depthDuplicateAcceptedMax = 3;
-            int depthDuplicate = 0;
+          try
+          {
+            BlockParser.Parse(
+              Payload,
+              PayloadLength,
+              1);
 
-            while (depthDuplicate < depthDuplicateAcceptedMax)
+            Header header = BlockParser.HeaderRoot;
+
+            string.Format(
+              "Received header {0}",
+              header.Hash.ToHexString())
+              .Log(LogFile);
+
+            if (Blockchain.ContainsHeader(header.Hash))
             {
-              if (headerContained.Hash.IsEqual(header.Hash))
+              Header headerContained = Blockchain.HeaderTip;
+
+              var headerDuplicates = new List<byte[]>();
+              int depthDuplicateAcceptedMax = 3;
+              int depthDuplicate = 0;
+
+              while (depthDuplicate < depthDuplicateAcceptedMax)
               {
-                if (headerDuplicates.Any(h => h.IsEqual(header.Hash)))
+                if (headerContained.Hash.IsEqual(header.Hash))
                 {
-                  throw new ChainException(
-                    string.Format(
-                      "Received duplicate header {0} more than once.",
-                      header.Hash.ToHexString()));
+                  if (headerDuplicates.Any(h => h.IsEqual(header.Hash)))
+                  {
+                    throw new ChainException(
+                      string.Format(
+                        "Received duplicate header {0} more than once.",
+                        header.Hash.ToHexString()));
+                  }
+
+                  headerDuplicates.Add(header.Hash);
+                  if (headerDuplicates.Count > depthDuplicateAcceptedMax)
+                  {
+                    headerDuplicates = headerDuplicates.Skip(1)
+                      .ToList();
+                  }
+
+                  break;
                 }
 
-                headerDuplicates.Add(header.Hash);
-                if (headerDuplicates.Count > depthDuplicateAcceptedMax)
+                if (headerContained.HeaderPrevious != null)
                 {
-                  headerDuplicates = headerDuplicates.Skip(1)
-                    .ToList();
+                  break;
                 }
 
-                break;
+                headerContained = header.HeaderPrevious;
+                depthDuplicate += 1;
               }
 
-              if (headerContained.HeaderPrevious != null)
+              if (depthDuplicate == depthDuplicateAcceptedMax)
               {
-                break;
+                throw new ChainException(
+                  string.Format(
+                    "Received duplicate header {0} with depth greater than {1}.",
+                    header.Hash.ToHexString(),
+                    depthDuplicateAcceptedMax));
               }
-
-              headerContained = header.HeaderPrevious;
-              depthDuplicate += 1;
             }
-
-            if (depthDuplicate == depthDuplicateAcceptedMax)
+            else
+            if (header.HashPrevious.IsEqual(
+              Blockchain.HeaderTip.Hash))
             {
-              throw new ChainException(
-                string.Format(
-                  "Received duplicate header {0} with depth greater than {1}.",
-                  header.Hash.ToHexString(),
-                  depthDuplicateAcceptedMax));
+              header.HeaderPrevious = Blockchain.HeaderTip;
+
+              Blockchain.ValidateHeaders(header);
+
+              bool flagContinueDownload = false;
+
+              while (true)
+              {
+                await DownloadBlocks(flagContinueDownload);
+
+                if (
+                  FlagDispose ||
+                  Command == COMMAND_NOTFOUND)
+                {
+                  return;
+                }
+
+                if (!Blockchain.TryArchiveBlocks(
+                    BlockParser,
+                    1))
+                {
+                  FlagDispose = true;
+                  return;
+                }
+
+                BlockParser.ClearPayloadData();
+
+                if (!BlockParser.IsArchiveBufferOverflow)
+                {
+                  break;
+                }
+
+                BlockParser.RecoverFromOverflow();
+                flagContinueDownload = true;
+              }
             }
-          }
-          else
-          if (header.HashPrevious.IsEqual(
-            Blockchain.HeaderTip.Hash))
-          {
-            header.HeaderPrevious = Blockchain.HeaderTip;
-
-            Blockchain.ValidateHeaders(header);
-
-            bool flagContinueDownload = false;
-
-            while (true)
+            else
             {
-              await DownloadBlocks(
-                flagContinueDownload);
-
-              if (
-                FlagDispose ||
-                Command == COMMAND_NOTFOUND)
-              {
-                return;
-              }
-
-              if (!Blockchain.TryArchiveBlocks(
-                  BlockParser,
-                  1))
-              {
-                FlagDispose = true;
-                return;
-              }
-
-              BlockParser.ClearPayloadData();
-
-              if (!BlockParser.IsArchiveBufferOverflow)
-              {
-                break;
-              }
-
-              BlockParser.RecoverFromOverflow();
-              flagContinueDownload = true;
+              IsSynchronized = false;
             }
           }
-          else
+          catch(Exception ex)
           {
-            IsSynchronized = false;
+            try
+            {
+              string.Format(
+                "Cancel peer {0} in Received header due to {1}:\n {2}.",
+                GetID(),
+                ex.GetType().Name,
+                ex.Message)
+                .Log(LogFile);
+            }
+            catch (ObjectDisposedException)
+            { }
+
+            Cancellation.Cancel();
           }
+
+          Blockchain.ReleaseLock();
         }
 
 
@@ -744,8 +835,11 @@ namespace BToken.Chaining
               GetID(),
               Command)
               .Log(LogFile);
+          }
 
-            StartMessageListener();
+          lock (LOCK_IsExpectingMessageResponse)
+          {
+            IsExpectingMessageResponse = false;
           }
 
           int indexPayload = 0;
@@ -783,13 +877,6 @@ namespace BToken.Chaining
             "{0}: Received headers message, count = {1}",
             GetID(),
             countHeaders).Log(LogFile);
-
-          lock (LOCK_IsExpectingMessageResponse)
-          {
-            IsExpectingMessageResponse = false;
-          }
-
-          StartMessageListener();
 
           return BlockParser.HeaderRoot;
         }
@@ -870,100 +957,27 @@ namespace BToken.Chaining
         {
           StopwatchDownload.Restart();
 
-          var cancellation = new CancellationTokenSource(
-              TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
-
           try
           {
-            if (!flagContinueDownload)
+            if (flagContinueDownload)
+            {
+              flagContinueDownload = false;
+            }
+            else
             {
               await SendMessage(new GetDataMessage(
                 CreateInventories()));
-
-              lock (LOCK_IsExpectingMessageResponse)
-              {
-                IsExpectingMessageResponse = true;
-              }
             }
-
-            Header header = BlockParser.HeaderRoot;
-
-            while (true)
-            {
-              if (flagContinueDownload)
-              {
-                flagContinueDownload = false;
-              }
-              else
-              {
-                await MessageResponseReady
-                  .ReceiveAsync(cancellation.Token)
-                  .ConfigureAwait(false);
-
-                if (Command == COMMAND_NOTFOUND)
-                {
-                  string.Format(
-                    "{0}: Did not not find block in blockArchive {1}",
-                    GetID(),
-                    BlockParser.Index)
-                    .Log(LogFile);
-
-                  return;
-                }
-
-                if (Command != "block")
-                {
-                  string.Format(
-                    "{0}: Received unexpected response message {1}",
-                    GetID(),
-                    Command)
-                    .Log(LogFile);
-
-                  if (Command == "inv")
-                  {
-                    var invMessage = new InvMessage(Payload);
-                    if (invMessage.Inventories.First().IsTX())
-                    {
-                      throw new ChainException(
-                        "Received TX inv message despite TX-disable signaled.");
-                    }
-                  }
-
-                  StartMessageListener();
-                  continue;
-                }
-              }
-
-              BlockParser.ParsePayload(
-                Payload,
-                PayloadLength,
-                header);
-
-              if (BlockParser.IsArchiveBufferOverflow)
-              {
-                break;
-              }
-
-              if (BlockParser.HeaderTip == header)
-              {
-                lock (LOCK_IsExpectingMessageResponse)
-                {
-                  IsExpectingMessageResponse = false;
-                }
-
-                StopwatchDownload.Stop();
-
-                StartMessageListener();
-                break;
-              }
-
-              header = header.HeaderNext;
-
-              cancellation.CancelAfter(
+            
+            Cancellation.CancelAfter(
                 TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
 
-              StartMessageListener();
-            }
+            State = StateProtocol.AwaitingBlock;
+
+            await SignalIsParsingCompleted
+              .ReceiveAsync(Cancellation.Token)
+              .ConfigureAwait(false);
+
           }
           catch (Exception ex)
           {
@@ -1055,6 +1069,8 @@ namespace BToken.Chaining
           Console.WriteLine(
             "Dispose peer {0}.",
             GetID());
+
+          Cancellation.Cancel();
 
           TcpClient.Dispose();
 

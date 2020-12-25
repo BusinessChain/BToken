@@ -25,7 +25,7 @@ namespace BToken.Chaining
 
       const UInt16 Port = 8333;
 
-      const int COUNT_PEERS_MAX = 6;
+      const int COUNT_PEERS_MAX = 4;
 
       object LOCK_Peers = new object();
       List<Peer> Peers = new List<Peer>();
