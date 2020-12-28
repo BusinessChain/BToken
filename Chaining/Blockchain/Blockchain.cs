@@ -24,7 +24,7 @@ namespace BToken.Chaining
     
     UTXOTable UTXOTable;
 
-    NetworkSynchronizer Synchronizer;
+    BlockchainNetwork Network;
     BlockArchiver Archiver;
 
     string FileNameIndexBlockArchiveImage = "IndexBlockArchive";
@@ -43,7 +43,7 @@ namespace BToken.Chaining
       byte[] genesisBlockBytes,
       Dictionary<int, byte[]> checkpoints)
     {
-      Synchronizer = new NetworkSynchronizer(this);
+      Network = new BlockchainNetwork(this);
       Archiver = new BlockArchiver(this);
 
       HeaderGenesis = headerGenesis;
@@ -63,7 +63,7 @@ namespace BToken.Chaining
     {
       await LoadImage();
 
-      Synchronizer.Start();
+      Network.Start();
     }
 
     async Task LoadImage()

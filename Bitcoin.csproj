@@ -82,7 +82,7 @@
     <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
     <Compile Include="Chaining\Blockchain\Peer.cs" />
-    <Compile Include="Chaining\Blockchain\NetworkSynchronizer.cs" />
+    <Compile Include="Chaining\Blockchain\BlockchainNetwork.cs" />
     <Compile Include="Chaining\UTXO\BlockParser.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
@@ -99,7 +99,6 @@
     <Compile Include="Chaining\GenesisBlock.cs" />
     <Compile Include="Chaining\Wallet\Wallet.cs" />
     <Compile Include="Chaining\ChainException.cs" />
-    <Compile Include="Chaining\Network.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />
@@ -129,7 +128,6 @@
     <Compile Include="Chaining\Messages\VersionMessage.cs" />
     <Compile Include="ProtocolVersion.cs" />
     <Compile Include="Node.cs" />
-    <Compile Include="Chaining\ServiceFlags.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utilities\StringExtensionMethods.cs" />

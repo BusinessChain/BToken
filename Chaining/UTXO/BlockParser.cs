@@ -51,15 +51,27 @@ namespace BToken.Chaining
           HASH_ZERO);
       }
 
-      public void Parse(
+      public void ParseHeaders(
         byte[] buffer,
-        int countBytes,
-        int offset)
+        int countBytes)
       {
+        int indexPayload = 0;
+
+        int countHeaders = VarInt.GetInt32(
+          buffer,
+          ref indexPayload);
+
+        if(countHeaders == 0)
+        {
+          Height = 0;
+          HeaderRoot = null;
+          return;
+        }
+
         Parse(
           buffer,
           countBytes,
-          offset,
+          indexPayload,
           HASH_ZERO);
       }
 
@@ -134,6 +146,8 @@ namespace BToken.Chaining
         IndexBuffer = 0;
         IndexArchiveBuffer = 0;
 
+        Header = null;
+
         CountTX = 0;
         Inputs.Clear();
         TableUInt32.Table.Clear();
@@ -141,12 +155,36 @@ namespace BToken.Chaining
         TableUInt32Array.Table.Clear();
       }
 
+      public void SetupBlockDownload(
+        int index,
+        ref Header headerLoad,
+        int countMax)
+      {
+        Index = index;
 
+        HeaderRoot = headerLoad;
+        Height = 0;
+        Difficulty = 0.0;
+
+        do
+        {
+          HeaderTip = headerLoad;
+          Height += 1;
+          Difficulty += headerLoad.Difficulty;
+
+          headerLoad = headerLoad.HeaderNext;
+        } while (
+        Height < countMax
+        && headerLoad != null);
+      }
+
+
+      public bool AreAllBlockReceived;
+      Header Header;
 
       public void ParsePayload(
         byte[] buffer, 
-        int bufferLength,
-        Header header)
+        int bufferLength)
       {
         byte[] hash =
           SHA256.ComputeHash(
@@ -155,14 +193,23 @@ namespace BToken.Chaining
               0,
               Header.COUNT_HEADER_BYTES));
 
-        if (!hash.IsEqual(header.Hash))
+        Console.WriteLine(
+          "parse block {0}", 
+          hash.ToHexString());
+
+        if(Header == null)
+        {
+          Header = HeaderRoot;
+        }
+
+        if (!hash.IsEqual(Header.Hash))
         {
           throw new ChainException(string.Format(
             "Unexpected block header {0} in blockParser {1}. \n" +
             "Excpected {2}.",
             hash.ToHexString(),
             Index,
-            header.Hash.ToHexString()));
+            Header.Hash.ToHexString()));
         }
         
         try
@@ -184,9 +231,11 @@ namespace BToken.Chaining
 
           IsArchiveBufferOverflow = true;
 
-          HeaderRootOverflow = header;
+          HeaderRootOverflow = Header;
           HeaderTipOverflow = HeaderTip;
-          HeaderTip = header.HeaderPrevious;
+          HeaderTip = Header.HeaderPrevious;
+
+          AreAllBlockReceived = true;
 
           CalculateHeightAndDifficulty();
 
@@ -201,7 +250,10 @@ namespace BToken.Chaining
 
         StopwatchParse.Start();
 
-        ParseTXs(header.MerkleRoot);
+        ParseTXs(Header.MerkleRoot);
+
+        AreAllBlockReceived = Header == HeaderTip;
+        Header = Header.HeaderNext;
 
         StopwatchParse.Stop();
       }
@@ -216,7 +268,6 @@ namespace BToken.Chaining
         HeaderTip = HeaderTipOverflow;
         HeaderTipOverflow = null;
 
-        ClearPayloadData();
         CalculateHeightAndDifficulty();
       }
 
@@ -372,7 +423,7 @@ namespace BToken.Chaining
 
           return tXHash;
         }
-        catch (ArgumentOutOfRangeException)
+        catch (ArgumentOutOfRangeException ex)
         {
           throw new ChainException(
             "ArgumentOutOfRangeException thrown in ParseTX.");
