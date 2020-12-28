@@ -126,7 +126,6 @@
     <Compile Include="Chaining\Messages\RejectMessage.cs" />
     <Compile Include="Chaining\Messages\VerAckMessage.cs" />
     <Compile Include="Chaining\Messages\VersionMessage.cs" />
-    <Compile Include="ProtocolVersion.cs" />
     <Compile Include="Node.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

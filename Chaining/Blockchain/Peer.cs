@@ -831,7 +831,7 @@ namespace BToken.Chaining
               TIMEOUT_GETHEADERS_MILLISECONDS);
 
           await SignalProtocolTaskCompleted
-            .ReceiveAsync()
+            .ReceiveAsync(Cancellation.Token)
             .ConfigureAwait(false);
 
           string.Format(
@@ -877,9 +877,7 @@ namespace BToken.Chaining
             height += 1;
           }
         }
-
-
-
+               
         public async Task<Header> SkipDuplicates(
           Header header, List<Header> locator)
         {
@@ -939,7 +937,7 @@ namespace BToken.Chaining
                 TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
 
             await SignalProtocolTaskCompleted
-              .ReceiveAsync()
+              .ReceiveAsync(Cancellation.Token)
               .ConfigureAwait(false);
           }
           catch (Exception ex)
