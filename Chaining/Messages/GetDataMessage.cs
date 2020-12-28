@@ -40,10 +40,6 @@ namespace BToken.Chaining
     public GetDataMessage(List<Inventory> inventories) 
       : base("getdata")
     {
-      inventories.ForEach(
-        i => Console.WriteLine(
-          "inventory hash " + i.Hash.ToHexString()));
-
       Inventories = inventories;
 
       List<byte> payload = new List<byte>();

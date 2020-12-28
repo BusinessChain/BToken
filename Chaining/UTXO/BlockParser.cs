@@ -51,15 +51,27 @@ namespace BToken.Chaining
           HASH_ZERO);
       }
 
-      public void Parse(
+      public void ParseHeaders(
         byte[] buffer,
-        int countBytes,
-        int offset)
+        int countBytes)
       {
+        int indexPayload = 0;
+
+        int countHeaders = VarInt.GetInt32(
+          buffer,
+          ref indexPayload);
+
+        if(countHeaders == 0)
+        {
+          Height = 0;
+          HeaderRoot = null;
+          return;
+        }
+
         Parse(
           buffer,
           countBytes,
-          offset,
+          indexPayload,
           HASH_ZERO);
       }
 
@@ -167,7 +179,7 @@ namespace BToken.Chaining
       }
 
 
-      public bool IsParsingCompleted;
+      public bool AreAllBlockReceived;
       Header Header;
 
       public void ParsePayload(
@@ -223,7 +235,7 @@ namespace BToken.Chaining
           HeaderTipOverflow = HeaderTip;
           HeaderTip = Header.HeaderPrevious;
 
-          IsParsingCompleted = true;
+          AreAllBlockReceived = true;
 
           CalculateHeightAndDifficulty();
 
@@ -240,7 +252,7 @@ namespace BToken.Chaining
 
         ParseTXs(Header.MerkleRoot);
 
-        IsParsingCompleted = Header == HeaderTip;
+        AreAllBlockReceived = Header == HeaderTip;
         Header = Header.HeaderNext;
 
         StopwatchParse.Stop();

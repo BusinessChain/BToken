@@ -306,6 +306,12 @@ namespace BToken.Chaining
 
         async Task SendMessage(NetworkMessage message)
         {
+          string.Format(
+            "{0} Send message {1}",
+            GetID(),
+            message.Command)
+            .Log(LogFile);
+
           NetworkStream.Write(MagicBytes, 0, MagicBytes.Length);
 
           byte[] command = Encoding.ASCII.GetBytes(
@@ -424,14 +430,16 @@ namespace BToken.Chaining
         }
 
 
+        readonly object LOCK_StateProtocol = new object();
         enum StateProtocol
         {
           IDLE = 0,
-          AwaitingBlock
+          AwaitingBlock,
+          AwaitingHeader
         }
 
         StateProtocol State;
-        BufferBlock<bool> SignalIsParsingCompleted =
+        BufferBlock<bool> SignalProtocolTaskCompleted =
           new BufferBlock<bool>();
 
         public async Task StartMessageListener()
@@ -479,9 +487,9 @@ namespace BToken.Chaining
 
                   if (State == StateProtocol.AwaitingBlock)
                   {
-                    if (BlockParser.IsParsingCompleted)
+                    if (BlockParser.AreAllBlockReceived)
                     {
-                      SignalIsParsingCompleted.Post(true);
+                      SignalProtocolTaskCompleted.Post(true);
 
                       Cancellation = new CancellationTokenSource();
                       State = StateProtocol.IDLE;
@@ -494,6 +502,133 @@ namespace BToken.Chaining
                   else
                   {
                     // Received unsolicited block
+                  }
+
+                  break;
+
+                case "headers":
+
+                  BlockParser.ParseHeaders(
+                    Payload,
+                    PayloadLength);
+
+                  if (State == StateProtocol.AwaitingHeader)
+                  {
+                    if (BlockParser.Height > 0)
+                    {
+                      Header headerLocatorAncestor = Locator
+                        .Find(h => h.Hash.IsEqual(
+                          BlockParser.HeaderRoot.HashPrevious));
+
+                      if (headerLocatorAncestor == null)
+                      {
+                        throw new ChainException(
+                          "GetHeaders does not connect to locator.");
+                      }
+
+                      BlockParser.HeaderRoot.HeaderPrevious =
+                        headerLocatorAncestor;
+                    }
+
+                    Cancellation = new CancellationTokenSource();
+
+                    lock (LOCK_StateProtocol)
+                    {
+                      State = StateProtocol.IDLE;
+                    }
+
+                    SignalProtocolTaskCompleted.Post(true);
+
+                    break;
+                  }
+                  else
+                  {
+                    if (!Blockchain.TryLock())
+                    {
+                      break;
+                    }
+
+                    try
+                    {
+                      Header header = BlockParser.HeaderRoot;
+
+                      string.Format(
+                        "Received unsolicited header {0}",
+                        header.Hash.ToHexString())
+                        .Log(LogFile);
+
+                      if (Blockchain.ContainsHeader(header.Hash))
+                      {
+                        Header headerContained = Blockchain.HeaderTip;
+
+                        var headerDuplicates = new List<byte[]>();
+                        int depthDuplicateAcceptedMax = 3;
+                        int depthDuplicate = 0;
+
+                        while (depthDuplicate < depthDuplicateAcceptedMax)
+                        {
+                          if (headerContained.Hash.IsEqual(header.Hash))
+                          {
+                            if (headerDuplicates.Any(h => h.IsEqual(header.Hash)))
+                            {
+                              throw new ChainException(
+                                string.Format(
+                                  "Received duplicate header {0} more than once.",
+                                  header.Hash.ToHexString()));
+                            }
+
+                            headerDuplicates.Add(header.Hash);
+                            if (headerDuplicates.Count > depthDuplicateAcceptedMax)
+                            {
+                              headerDuplicates = headerDuplicates.Skip(1)
+                                .ToList();
+                            }
+
+                            break;
+                          }
+
+                          if (headerContained.HeaderPrevious != null)
+                          {
+                            break;
+                          }
+
+                          headerContained = header.HeaderPrevious;
+                          depthDuplicate += 1;
+                        }
+
+                        if (depthDuplicate == depthDuplicateAcceptedMax)
+                        {
+                          throw new ChainException(
+                            string.Format(
+                              "Received duplicate header {0} with depth greater than {1}.",
+                              header.Hash.ToHexString(),
+                              depthDuplicateAcceptedMax));
+                        }
+                      }
+                      else
+                      if (header.HashPrevious.IsEqual(
+                        Blockchain.HeaderTip.Hash))
+                      {
+                        header.HeaderPrevious = Blockchain.HeaderTip;
+
+                        Blockchain.ValidateHeaders(header);
+
+                        SynchronizeUTXO(header);
+                        break;
+                      }
+                      else
+                      {
+                        IsSynchronized = false;
+                      }
+                    }
+                    catch (Exception ex)
+                    {
+                      Blockchain.ReleaseLock();
+
+                      throw ex;
+                    }
+                    
+                    Blockchain.ReleaseLock();
                   }
 
                   break;
@@ -625,17 +760,6 @@ namespace BToken.Chaining
 
                     //  break;
                     #endregion
-                    
-                    case "headers":
-
-                      string.Format(
-                        "{0}: Recived headers message.",
-                        GetID())
-                        .Log(LogFile);
-
-                      ReceiveHeader();
-
-                      break;
 
 
                     default:
@@ -657,146 +781,25 @@ namespace BToken.Chaining
              GetID(),
              ex.Message)
              .Log(LogFile);
+
+            if (State == StateProtocol.AwaitingBlock)
+            {
+              SignalProtocolTaskCompleted.Post(false);
+            }
           }
         }
 
-        async Task ReceiveHeader()
+        async Task SynchronizeUTXO(Header header)
         {
-          if (!Blockchain.TryLock())
-          {
-            return;
-          }
-
-          try
-          {
-            BlockParser.Parse(
-              Payload,
-              PayloadLength,
-              1);
-
-            Header header = BlockParser.HeaderRoot;
-
-            string.Format(
-              "Received header {0}",
-              header.Hash.ToHexString())
-              .Log(LogFile);
-
-            if (Blockchain.ContainsHeader(header.Hash))
-            {
-              Header headerContained = Blockchain.HeaderTip;
-
-              var headerDuplicates = new List<byte[]>();
-              int depthDuplicateAcceptedMax = 3;
-              int depthDuplicate = 0;
-
-              while (depthDuplicate < depthDuplicateAcceptedMax)
-              {
-                if (headerContained.Hash.IsEqual(header.Hash))
-                {
-                  if (headerDuplicates.Any(h => h.IsEqual(header.Hash)))
-                  {
-                    throw new ChainException(
-                      string.Format(
-                        "Received duplicate header {0} more than once.",
-                        header.Hash.ToHexString()));
-                  }
-
-                  headerDuplicates.Add(header.Hash);
-                  if (headerDuplicates.Count > depthDuplicateAcceptedMax)
-                  {
-                    headerDuplicates = headerDuplicates.Skip(1)
-                      .ToList();
-                  }
-
-                  break;
-                }
-
-                if (headerContained.HeaderPrevious != null)
-                {
-                  break;
-                }
-
-                headerContained = header.HeaderPrevious;
-                depthDuplicate += 1;
-              }
-
-              if (depthDuplicate == depthDuplicateAcceptedMax)
-              {
-                throw new ChainException(
-                  string.Format(
-                    "Received duplicate header {0} with depth greater than {1}.",
-                    header.Hash.ToHexString(),
-                    depthDuplicateAcceptedMax));
-              }
-            }
-            else
-            if (header.HashPrevious.IsEqual(
-              Blockchain.HeaderTip.Hash))
-            {
-              header.HeaderPrevious = Blockchain.HeaderTip;
-
-              Blockchain.ValidateHeaders(header);
-
-              bool flagContinueDownload = false;
-
-              while (true)
-              {
-                await DownloadBlocks(flagContinueDownload);
-
-                if (
-                  FlagDispose ||
-                  Command == COMMAND_NOTFOUND)
-                {
-                  return;
-                }
-
-                if (!Blockchain.TryArchiveBlocks(
-                    BlockParser,
-                    1))
-                {
-                  FlagDispose = true;
-                  return;
-                }
-
-                BlockParser.ClearPayloadData();
-
-                if (!BlockParser.IsArchiveBufferOverflow)
-                {
-                  break;
-                }
-
-                BlockParser.RecoverFromOverflow();
-                flagContinueDownload = true;
-              }
-            }
-            else
-            {
-              IsSynchronized = false;
-            }
-          }
-          catch(Exception ex)
-          {
-            try
-            {
-              string.Format(
-                "Cancel peer {0} in Received header due to {1}:\n {2}.",
-                GetID(),
-                ex.GetType().Name,
-                ex.Message)
-                .Log(LogFile);
-            }
-            catch (ObjectDisposedException)
-            { }
-
-            Cancellation.Cancel();
-          }
-
+          await Blockchain.Network
+            .TrySynchronizeUTXO(header, this);
+          
           Blockchain.ReleaseLock();
         }
 
-
-
-        public async Task<Header> GetHeaders(Header locator)
+        List<Header> Locator;
+        
+        async Task<Header> GetHeaders(Header locator)
         {
           return await GetHeaders(
             new List<Header>() { locator });
@@ -805,6 +808,8 @@ namespace BToken.Chaining
         public async Task<Header> GetHeaders(
           List<Header> locator)
         {
+          Locator = locator;
+
           string.Format(
             "Send getheader to peer {0}, \n" +
             "locator: {1} ... {2}",
@@ -817,70 +822,26 @@ namespace BToken.Chaining
             locator,
             ProtocolVersion));
 
-          int timeout = TIMEOUT_GETHEADERS_MILLISECONDS;
-          CancellationTokenSource cancellation =
-            new CancellationTokenSource(timeout);
-
-          lock (LOCK_IsExpectingMessageResponse)
+          lock (LOCK_StateProtocol)
           {
-            IsExpectingMessageResponse = true;
+            State = StateProtocol.AwaitingHeader;
           }
+          
+          Cancellation.CancelAfter(
+              TIMEOUT_GETHEADERS_MILLISECONDS);
 
-          while (await MessageResponseReady
-              .ReceiveAsync(cancellation.Token) &&
-              Command != "headers")
-          {
-            string.Format(
-              "{0}: Received unexpected response message {1}",
-              GetID(),
-              Command)
-              .Log(LogFile);
-          }
-
-          lock (LOCK_IsExpectingMessageResponse)
-          {
-            IsExpectingMessageResponse = false;
-          }
-
-          int indexPayload = 0;
-
-          int countHeaders = VarInt.GetInt32(
-            Payload,
-            ref indexPayload);
-
-          if (countHeaders > 0)
-          {
-            BlockParser.Parse(
-              Payload,
-              PayloadLength,
-              indexPayload);
-
-            Header headerLocatorAncestor = locator
-              .Find(h => h.Hash.IsEqual(
-                BlockParser.HeaderRoot.HashPrevious));
-
-            if (headerLocatorAncestor == null)
-            {
-              throw new ChainException(
-                "GetHeaders does not connect to locator.");
-            }
-
-            BlockParser.HeaderRoot.HeaderPrevious =
-              headerLocatorAncestor;
-          }
-          else
-          {
-            BlockParser.HeaderRoot = null;
-          }
+          await SignalProtocolTaskCompleted
+            .ReceiveAsync()
+            .ConfigureAwait(false);
 
           string.Format(
-            "{0}: Received headers message, count = {1}",
+            "{0}: Received {1} headers",
             GetID(),
-            countHeaders).Log(LogFile);
+            BlockParser.Height)
+            .Log(LogFile);
 
           return BlockParser.HeaderRoot;
         }
-
 
         public async Task<double> BuildHeaderchain(
           Header header,
@@ -968,16 +929,18 @@ namespace BToken.Chaining
               await SendMessage(new GetDataMessage(
                 CreateInventories()));
             }
-            
+
+            lock(LOCK_StateProtocol)
+            {
+              State = StateProtocol.AwaitingBlock;
+            }
+
             Cancellation.CancelAfter(
                 TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS);
 
-            State = StateProtocol.AwaitingBlock;
-
-            await SignalIsParsingCompleted
-              .ReceiveAsync(Cancellation.Token)
+            await SignalProtocolTaskCompleted
+              .ReceiveAsync()
               .ConfigureAwait(false);
-
           }
           catch (Exception ex)
           {
@@ -988,7 +951,6 @@ namespace BToken.Chaining
               BlockParser.Index,
               ex.Message).Log(LogFile);
 
-            BlockParser.IsInvalid = true;
             FlagDispose = true;
 
             return;
