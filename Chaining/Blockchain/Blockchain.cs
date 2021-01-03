@@ -23,6 +23,7 @@ namespace BToken.Chaining
     Dictionary<int, List<Header>> HeaderIndex;
     
     UTXOTable UTXOTable;
+    Wallet Wallet;
 
     BlockchainNetwork Network;
     BlockArchiver Archiver;
@@ -35,6 +36,8 @@ namespace BToken.Chaining
 
     readonly object LOCK_IsBlockchainLocked = new object();
     bool IsBlockchainLocked;
+
+    int IndexBlockArchiveImage;
 
 
 
@@ -55,6 +58,8 @@ namespace BToken.Chaining
       UpdateHeaderIndex(headerGenesis);
       
       UTXOTable = new UTXOTable(genesisBlockBytes);
+
+      Wallet = new Wallet();
     }
 
 
@@ -72,9 +77,7 @@ namespace BToken.Chaining
     }
 
 
-
-    int IndexBlockArchiveImage;
-
+    
     async Task<bool> TryLoadImage(
       int heightMax,
       byte[] stopHashLoading)
@@ -505,6 +508,8 @@ namespace BToken.Chaining
         Height);
 
       InsertHeaders(blockParser);
+
+      Wallet.Import(blockParser.Wallet);
     }
 
     void InsertHeaders(

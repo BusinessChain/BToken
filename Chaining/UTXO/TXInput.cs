@@ -16,6 +16,15 @@ namespace BToken.Chaining
       public int OutputIndex;
 
 
+      public TXInput(
+        byte[] tXIDOutput,
+        int outputIndex)
+      {
+        TXIDOutput = tXIDOutput;
+        PrimaryKeyTXIDOutput = BitConverter.ToInt32(tXIDOutput, 0);
+        OutputIndex = outputIndex;
+      }
+
       public TXInput(byte[] buffer, ref int startIndex)
       {
         PrimaryKeyTXIDOutput = BitConverter.ToInt32(buffer, startIndex);

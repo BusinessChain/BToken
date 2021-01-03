@@ -33,6 +33,8 @@ namespace BToken.Chaining
       public UTXOIndexULong64 TableULong64 = new UTXOIndexULong64();
       public UTXOIndexUInt32Array TableUInt32Array = 
         new UTXOIndexUInt32Array();
+
+      public Wallet Wallet = new Wallet();
           
       SHA256 SHA256 = SHA256.Create();
 
@@ -153,6 +155,8 @@ namespace BToken.Chaining
         TableUInt32.Table.Clear();
         TableULong64.Table.Clear();
         TableUInt32Array.Table.Clear();
+
+        Wallet.Clear();
       }
 
       public void SetupBlockDownload(
@@ -374,14 +378,14 @@ namespace BToken.Chaining
             }
           }
 
-          int countTXOutputs = VarInt.GetInt32(Buffer, ref IndexBuffer);
+          int countTXOutputs = VarInt.GetInt32(
+            Buffer, 
+            ref IndexBuffer);
 
-          for (int i = 0; i < countTXOutputs; i += 1)
-          {
-            IndexBuffer += 8; // BYTE_LENGTH_OUTPUT_VALUE
-            int lengthLockingScript = VarInt.GetInt32(Buffer, ref IndexBuffer);
-            IndexBuffer += lengthLockingScript;
-          }
+          Wallet.DetectTXOutputsSpendable(
+            countTXOutputs, 
+            Buffer,
+            ref IndexBuffer);
 
           //if (isWitnessFlagPresent)
           //{
@@ -399,7 +403,9 @@ namespace BToken.Chaining
              Buffer,
              tXStartIndex,
              IndexBuffer - tXStartIndex));
-                   
+          
+          Wallet.CreateTXInputsSignable(tXHash);
+          
           int lengthUTXOBits = COUNT_NON_OUTPUT_BITS + countTXOutputs;
 
           if (LENGTH_BITS_UINT >= lengthUTXOBits)
@@ -423,7 +429,7 @@ namespace BToken.Chaining
 
           return tXHash;
         }
-        catch (ArgumentOutOfRangeException ex)
+        catch (ArgumentOutOfRangeException)
         {
           throw new ChainException(
             "ArgumentOutOfRangeException thrown in ParseTX.");
