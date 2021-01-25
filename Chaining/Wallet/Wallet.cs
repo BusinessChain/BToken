@@ -16,7 +16,7 @@ namespace BToken.Chaining
     byte[] PrivateKey = new byte[] { };
     byte[] PublicKeyHash160;
 
-    List<UTXOTable.TXInput> TXInputsSignable = 
+    List<UTXOTable.TXInput> TXOutputsSpendable = 
       new List<UTXOTable.TXInput>();
 
 
@@ -86,30 +86,58 @@ namespace BToken.Chaining
         }
       }
     }
-
-    public void CreateTXInputsSignable(byte[] hash)
+    
+    public void InsertTX(
+      byte[] hash,
+      List<UTXOTable.TXInput> inputs)
     {
-      for(int i = 0; i < OutputIndexesSpendable.Count; i += 1)
+      OutputIndexesSpendable.ForEach(i =>
       {
-        UTXOTable.TXInput tXInput = new UTXOTable.TXInput(
-          hash,
-          OutputIndexesSpendable[i]);
-
-        TXInputsSignable.Add(tXInput);
-      }
+        TXOutputsSpendable.Add(
+          new UTXOTable.TXInput(hash, i));
+      });
 
       OutputIndexesSpendable.Clear();
+
+      for (int i = 0; i < inputs.Count; i += 1)
+      {
+        if ("61a1d74df7e5f7d3ac37ea908582e5166b1fd53cd6fc15c1b510a8954b7ce62c".ToUpper()
+          == inputs[i].TXIDOutput.ToHexString())
+        { }
+
+        int indexSpend = TXOutputsSpendable.FindIndex(o =>
+        o.TXIDOutput.Equals(inputs[i].TXIDOutput) &&
+        o.OutputIndex == inputs[i].OutputIndex);
+
+        if (indexSpend != -1)
+        {
+          TXOutputsSpendable.RemoveAt(indexSpend);
+        }
+      }
+    }
+    
+    public void SendAnchorToken()
+    {
+      if(TXOutputsSpendable.Count == 0)
+      {
+        return;
+      }
+
+      UTXOTable.TXInput tXInput = TXOutputsSpendable.First();
+      TXOutputsSpendable.RemoveAt(0);
     }
 
     public void Import(Wallet wallet)
     {
-      TXInputsSignable.AddRange(
-        wallet.TXInputsSignable);
+      DetectTXOutputsBeingSpent(wallet);
+
+      TXOutputsSpendable.AddRange(
+        wallet.TXOutputsSpendable);
     }
 
     public void Clear()
     {
-      TXInputsSignable.Clear();
+      TXOutputsSpendable.Clear();
     }
 
     void GeneratePublicKey(string privKey)
@@ -130,9 +158,9 @@ namespace BToken.Chaining
       var b1 = new byte[1] { 0x04 }.Concat(
         publicKeyX.Concat(publicKeyY))
         .ToArray();
-      
-      var b2 = sHA256.ComputeHash(b1);
-      PublicKeyHash160 = rIPEMD160.ComputeHash(b2);
+
+      PublicKeyHash160 = rIPEMD160.ComputeHash(
+        sHA256.ComputeHash(b1));
     }
   }
 }

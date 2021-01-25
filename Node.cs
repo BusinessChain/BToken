@@ -32,13 +32,16 @@ namespace BToken
         Checkpoints);
 
       Wallet = new Wallet();
+
+
+      Crypto crypto = new Crypto();
+
+      crypto.SignatureDemo();
     }
 
     public void Start()
     {
       Blockchain.Start();
-
-      // Wallet.GeneratePublicKey();
     }
   }
 }

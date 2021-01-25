@@ -169,7 +169,7 @@ namespace BToken.Chaining
       FileStream FileBlockArchive;
 
       public void ArchiveBlock(
-        UTXOTable.BlockParser blockParser,
+        Block block,
         int intervalImage)
       {
         while (true)

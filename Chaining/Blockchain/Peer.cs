@@ -76,6 +76,8 @@ namespace BToken.Chaining
         Stopwatch StopwatchDownload = new Stopwatch();
         public int CountBlocksLoad = COUNT_BLOCKS_DOWNLOADBATCH_INIT;
 
+        public BlockDownload BlockDownload;
+
         public UTXOTable.BlockParser BlockParser =
           new UTXOTable.BlockParser();
 
@@ -480,14 +482,19 @@ namespace BToken.Chaining
                   break;
 
                 case "block":
+                  byte[] blockBytes = Payload
+                    .Take(PayloadLength)
+                    .ToArray();
+                  
+                  Block block = BlockParser.ParseBlock(
+                    blockBytes,
+                    0);
 
-                  BlockParser.ParsePayload(
-                    Payload,
-                    PayloadLength);
-
-                  if (State == StateProtocol.AwaitingBlock)
+                  if (State != StateProtocol.AwaitingBlock)
                   {
-                    if (BlockParser.AreAllBlockReceived)
+                    BlockDownload.InsertBlock(block);
+
+                    if (BlockDownload.IsDownloadCompleted)
                     {
                       SignalProtocolTaskCompleted.Post(true);
 

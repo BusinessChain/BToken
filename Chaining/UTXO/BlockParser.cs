@@ -13,11 +13,10 @@ namespace BToken.Chaining
       public int Index;
       public bool IsInvalid;
 
-      public byte[] ArchiveBuffer = new byte[0x2000000];
-      public int IndexArchiveBuffer;
-      public bool IsArchiveBufferOverflow;
       public byte[] Buffer;
       public int IndexBuffer;
+
+      public bool IsBufferOverflow;
 
       public Header HeaderTipOverflow;
       public Header HeaderRootOverflow;
@@ -27,21 +26,12 @@ namespace BToken.Chaining
       public int Height;
 
       public int CountTX;
-
-      public List<TXInput> Inputs = new List<TXInput>();
-      public UTXOIndexUInt32 TableUInt32 = new UTXOIndexUInt32();
-      public UTXOIndexULong64 TableULong64 = new UTXOIndexULong64();
-      public UTXOIndexUInt32Array TableUInt32Array = 
-        new UTXOIndexUInt32Array();
-
-      public Wallet Wallet = new Wallet();
           
       SHA256 SHA256 = SHA256.Create();
 
       public Stopwatch StopwatchInsertion = new Stopwatch();
       public Stopwatch StopwatchParse = new Stopwatch();
-
-           
+                 
 
       readonly byte[] HASH_ZERO = new byte[32];
       public void Parse(byte[] buffer)
@@ -146,125 +136,46 @@ namespace BToken.Chaining
       public void ClearPayloadData()
       {
         IndexBuffer = 0;
-        IndexArchiveBuffer = 0;
 
         Header = null;
 
         CountTX = 0;
-        Inputs.Clear();
-        TableUInt32.Table.Clear();
-        TableULong64.Table.Clear();
-        TableUInt32Array.Table.Clear();
-
-        Wallet.Clear();
-      }
-
-      public void SetupBlockDownload(
-        int index,
-        ref Header headerLoad,
-        int countMax)
-      {
-        Index = index;
-
-        HeaderRoot = headerLoad;
-        Height = 0;
-        Difficulty = 0.0;
-
-        do
-        {
-          HeaderTip = headerLoad;
-          Height += 1;
-          Difficulty += headerLoad.Difficulty;
-
-          headerLoad = headerLoad.HeaderNext;
-        } while (
-        Height < countMax
-        && headerLoad != null);
       }
 
 
-      public bool AreAllBlockReceived;
       Header Header;
 
-      public void ParsePayload(
-        byte[] buffer, 
-        int bufferLength)
+      public Block ParseBlock(
+        byte[] buffer,
+        int startIndex)
       {
-        byte[] hash =
-          SHA256.ComputeHash(
-            SHA256.ComputeHash(
-              buffer,
-              0,
-              Header.COUNT_HEADER_BYTES));
-
-        Console.WriteLine(
-          "parse block {0}", 
-          hash.ToHexString());
-
-        if(Header == null)
-        {
-          Header = HeaderRoot;
-        }
-
-        if (!hash.IsEqual(Header.Hash))
-        {
-          throw new ChainException(string.Format(
-            "Unexpected block header {0} in blockParser {1}. \n" +
-            "Excpected {2}.",
-            hash.ToHexString(),
-            Index,
-            Header.Hash.ToHexString()));
-        }
-        
-        try
-        {
-          Array.Copy(
-            buffer,
-            0,
-            ArchiveBuffer,
-            IndexArchiveBuffer,
-            bufferLength);
-
-          IsArchiveBufferOverflow = false;
-        }
-        catch (ArgumentException)
-        {
-          Console.WriteLine(
-            "Overflow archive buffer in blockParser {0}.",
-            Index);
-
-          IsArchiveBufferOverflow = true;
-
-          HeaderRootOverflow = Header;
-          HeaderTipOverflow = HeaderTip;
-          HeaderTip = Header.HeaderPrevious;
-
-          AreAllBlockReceived = true;
-
-          CalculateHeightAndDifficulty();
-
-          return;
-        }
-
-        Buffer = ArchiveBuffer;
-        IndexBuffer = IndexArchiveBuffer +
-          Header.COUNT_HEADER_BYTES;
-
-        IndexArchiveBuffer += bufferLength;
-
         StopwatchParse.Start();
 
-        ParseTXs(Header.MerkleRoot);
+        Buffer = buffer;
+        IndexBuffer = startIndex;
 
-        AreAllBlockReceived = Header == HeaderTip;
-        Header = Header.HeaderNext;
+        Header = Header.ParseHeader(
+          Buffer,
+          ref IndexBuffer,
+          SHA256);
 
+        Console.WriteLine(
+          "Parse block {0}",
+          Header.Hash.ToHexString());
+
+        List<TX> tXs = ParseTXs(Header.MerkleRoot);
+        
         StopwatchParse.Stop();
+
+        return new Block(
+          Buffer,
+          Header,
+          tXs);
       }
 
       public void RecoverFromOverflow()
       {
-        IsArchiveBufferOverflow = false;
+        IsBufferOverflow = false;
 
         HeaderRoot = HeaderRootOverflow;
         HeaderRootOverflow = null;
@@ -291,23 +202,22 @@ namespace BToken.Chaining
         }
       }
 
-      void ParseTXs(
-        byte[] merkleRootHeader)
+      List<TX> ParseTXs(byte[] hashMerkleRoot)
       {
+        List<TX> tXs = new List<TX>();
+
         int tXCount = VarInt.GetInt32(
           Buffer,
           ref IndexBuffer);
 
-        if(tXCount == 0)
+        if (tXCount == 0)
+        { }
+        else if (tXCount == 1)
         {
-          return;
-        }
+          TX tX = ParseTX(true);
+          tXs.Add(tX);
 
-        if (tXCount == 1)
-        {
-          byte[] tXHash = ParseTX(true);
-
-          if (!tXHash.IsEqual(merkleRootHeader))
+          if (!tX.Hash.IsEqual(hashMerkleRoot))
           {
             throw new ChainException(
               "Payload merkle root corrupted");
@@ -318,11 +228,17 @@ namespace BToken.Chaining
           int tXsLengthMod2 = tXCount & 1;
           var merkleList = new byte[tXCount + tXsLengthMod2][];
 
-          merkleList[0] = ParseTX(true);
+          TX tX = ParseTX(true);
+          tXs.Add(tX);
+
+          merkleList[0] = tX.Hash;
 
           for (int t = 1; t < tXCount; t += 1)
           {
-            merkleList[t] = ParseTX(false);
+            tX = ParseTX(false);
+            tXs.Add(tX);
+
+            merkleList[t] = tX.Hash;
           }
 
           if (tXsLengthMod2 != 0)
@@ -330,18 +246,20 @@ namespace BToken.Chaining
             merkleList[tXCount] = merkleList[tXCount - 1];
           }
 
-          if (!GetRoot(merkleList).IsEqual(merkleRootHeader))
+          if (!GetRoot(merkleList).IsEqual(hashMerkleRoot))
           {
             throw new ChainException(
               "Payload hash unequal with merkle root.");
           }
         }
 
-        CountTX += tXCount;
+        return tXs;
       }
 
-      byte[] ParseTX(bool isCoinbase)
+      TX ParseTX(bool isCoinbase)
       {
+        TX tX = new TX();
+
         try
         {
           int tXStartIndex = IndexBuffer;
@@ -351,7 +269,8 @@ namespace BToken.Chaining
           bool isWitnessFlagPresent = Buffer[IndexBuffer] == 0x00;
           if (isWitnessFlagPresent)
           {
-            throw new NotImplementedException("Parsing of segwit txs not implemented");
+            throw new NotImplementedException(
+              "Parsing of segwit txs not implemented");
             //BufferIndex += 2;
           }
 
@@ -366,26 +285,24 @@ namespace BToken.Chaining
           {
             for (int i = 0; i < countInputs; i += 1)
             {
-              TXInput input = new TXInput(Buffer, ref IndexBuffer);
-
-              if (
-                !TableUInt32.TrySpend(input) &&
-                !TableULong64.TrySpend(input) &&
-                !TableUInt32Array.TrySpend(input))
-              {
-                Inputs.Add(input);
-              }
+              tX.TXInputs.Add(
+                new TXInput(
+                  Buffer, 
+                  ref IndexBuffer));
             }
           }
 
           int countTXOutputs = VarInt.GetInt32(
-            Buffer, 
-            ref IndexBuffer);
-
-          Wallet.DetectTXOutputsSpendable(
-            countTXOutputs, 
             Buffer,
             ref IndexBuffer);
+
+          for (int i = 0; i < countTXOutputs; i += 1)
+          {
+            tX.TXOutputs.Add(
+              new TXOutput(
+                Buffer,
+                ref IndexBuffer));
+          }
 
           //if (isWitnessFlagPresent)
           //{
@@ -397,37 +314,17 @@ namespace BToken.Chaining
           //}
 
           IndexBuffer += 4; //BYTE_LENGTH_LOCK_TIME
-          
-          byte[] tXHash = SHA256.ComputeHash(
+
+          tX.Hash = SHA256.ComputeHash(
            SHA256.ComputeHash(
              Buffer,
              tXStartIndex,
              IndexBuffer - tXStartIndex));
           
-          Wallet.CreateTXInputsSignable(tXHash);
+          int lengthUTXOBits = 
+            COUNT_NON_OUTPUT_BITS + countTXOutputs;
           
-          int lengthUTXOBits = COUNT_NON_OUTPUT_BITS + countTXOutputs;
-
-          if (LENGTH_BITS_UINT >= lengthUTXOBits)
-          {
-            TableUInt32.ParseUTXO(
-              lengthUTXOBits,
-              tXHash);
-          }
-          else if (LENGTH_BITS_ULONG >= lengthUTXOBits)
-          {
-            TableULong64.ParseUTXO(
-              lengthUTXOBits,
-              tXHash);
-          }
-          else
-          {
-            TableUInt32Array.ParseUTXO(
-              lengthUTXOBits,
-              tXHash);
-          }
-
-          return tXHash;
+          return tX;
         }
         catch (ArgumentOutOfRangeException)
         {

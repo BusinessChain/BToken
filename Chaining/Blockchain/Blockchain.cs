@@ -39,6 +39,9 @@ namespace BToken.Chaining
 
     int IndexBlockArchiveImage;
 
+    long UTCTimeStartMerger = 
+      DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
 
 
     public Blockchain(
@@ -69,6 +72,13 @@ namespace BToken.Chaining
       await LoadImage();
 
       Network.Start();
+
+      while(true)
+      {
+        await Task.Delay(10000);
+
+        Wallet.SendAnchorToken();
+      }
     }
 
     async Task LoadImage()
@@ -463,31 +473,26 @@ namespace BToken.Chaining
     }
 
     
-    bool TryArchiveBlocks(
-      UTXOTable.BlockParser blockParser,
-      int intervallImage)
+    public void InsertBlock(Block block)
     {
-      try
-      {
-        InsertBlocks(
-          blockParser,
-          Archiver.IndexBlockArchive,
-          flagValidateHeaders: false);
-      }
-      catch (ChainException ex)
-      {
-        Console.WriteLine(
-          "{0} when inserting blockParser {1}:\n{2}",
-          ex.GetType().Name,
-          blockParser.Index,
-          ex.Message);
+      UTXOTable.InsertBlock(
+        block,
+        Archiver.IndexBlockArchive);
 
-        return false;
-      }
+      block.Header.HeaderPrevious = HeaderTip;
 
-      Archiver.ArchiveBlock(blockParser, intervallImage);
+      HeaderTip.HeaderNext = block.Header;
+      HeaderTip = block.Header;
 
-      return true;
+      Difficulty += HeaderTip.Difficulty;
+      Height += 1;
+
+      string logCSV = string.Format(
+        "UTXO Table: {0},{1},{2},{3}",
+        Archiver.IndexBlockArchive,
+        Height,
+        DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
+        UTXOTable.GetMetricsCSV());
     }
 
     void InsertBlocks(
@@ -504,12 +509,9 @@ namespace BToken.Chaining
 
       UTXOTable.InsertBlock(
         blockParser, 
-        indexBlockArchive, 
-        Height);
+        indexBlockArchive);
 
       InsertHeaders(blockParser);
-
-      Wallet.Import(blockParser.Wallet);
     }
 
     void InsertHeaders(

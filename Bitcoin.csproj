@@ -84,16 +84,16 @@
   <ItemGroup>
     <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
+    <Compile Include="Chaining\Blockchain\BlockDownload.cs" />
     <Compile Include="Chaining\Blockchain\Peer.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainNetwork.cs" />
+    <Compile Include="Chaining\UTXO\Block.cs" />
     <Compile Include="Chaining\UTXO\BlockParser.cs" />
+    <Compile Include="Chaining\UTXO\TX.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexULong64.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexUInt32ArrayCompressed.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexULong64Compressed.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexCompressed.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
+    <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndex.cs" />
+    <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
     <Compile Include="Chaining\UTXO\UTXOTable.cs" />
     <Compile Include="Chaining\Wallet\Base58Encoding.cs" />
     <Compile Include="Chaining\Wallet\Crypto.cs" />

@@ -8,85 +8,96 @@ using Org.BouncyCastle.Asn1.Sec;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
+using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace BToken.Chaining
 {
   class Crypto
   {
-    private void SignatureDemo()
+    public void SignatureDemo()
     {
-      var privateKey = "68040878110175628235481263019639686";
+      var privateKeyDec = "46345897603189110989398136884057307203509669786386043766866535737189931384120";
 
-      var publicKey = GetPublicKeyFromPrivateKeyEx(privateKey);
+      var publicKey = GetPublicKeyFromPrivateKeyEx(privateKeyDec);
 
-      var message = "Hello World!";
+      var message = "22c54790ad2a15b9b02bf3f12955d65a1600c26b7b9528bd07cde6b132a170bd".ToBinary();
 
-      var signature = GetSignature(privateKey, message);
-      Console.WriteLine(signature);
+      var signature = GetSignature(
+          privateKeyDec,
+          message);
 
-      var isvalid = VerifySignature(message, publicKey, signature);
-      Console.WriteLine("Valid signature? " + isvalid);
+      var isvalid = VerifySignature(
+        message,
+        publicKey,
+        signature);
+      
+      Console.WriteLine(
+        "signature {0} \n is {1}",
+        signature.ToHexString(),
+        isvalid ? "valid" : "invalid");
     }
+    
 
-    private void TransactionsDemo()
-    {
-      var privateKey = "68040878110175628235481263019639686";
-      var publicKey = GetPublicKeyFromPrivateKeyEx(privateKey);
-      var transaction = new Transaction();
-      transaction.FromPublicKey = publicKey;
-      transaction.ToPublicKey = "QrSNX7KxzGnQqauPiXKxP58nhukU252RKAmSqg17L8h7BpU984g4mxHck6cLzhArADz2p1xo3BwAsbiaLhQaziyu";
-      transaction.Amount = 10;
-      transaction.Signature = GetSignature(privateKey, transaction.ToString());
-
-      Console.WriteLine("Transaction signature: " + transaction.Signature);
-
-      bool isValidTransaction = VerifySignature(transaction.ToString(), publicKey, transaction.Signature);
-      Console.WriteLine("Valid transaction message: " + isValidTransaction);
-    }
-
-
-    public bool VerifySignature(string message, string publicKey, string signature)
+    public static bool VerifySignature(
+      byte[] message, 
+      byte[] publicKey, 
+      byte[] signature)
     {
       var curve = SecNamedCurves.GetByName("secp256k1");
       var domain = new ECDomainParameters(curve.Curve, curve.G, curve.N, curve.H);
+      
+      var q = curve.Curve.DecodePoint(publicKey);
 
-      var publicKeyBytes = Base58Encoding.Decode(publicKey);
-
-      var q = curve.Curve.DecodePoint(publicKeyBytes);
-
-      var keyParameters = new
-              Org.BouncyCastle.Crypto.Parameters.ECPublicKeyParameters(q,
-              domain);
+      var keyParameters = new ECPublicKeyParameters(
+        q,
+        domain);
 
       ISigner signer = SignerUtilities.GetSigner("SHA-256withECDSA");
 
       signer.Init(false, keyParameters);
-      signer.BlockUpdate(Encoding.ASCII.GetBytes(message), 0, message.Length);
-
-      var signatureBytes = Base58Encoding.Decode(signature);
-
-      return signer.VerifySignature(signatureBytes);
+      signer.BlockUpdate(message, 0, message.Length);
+      
+      return signer.VerifySignature(signature);
     }
 
 
-    public string GetSignature(string privateKey, string message)
+    public byte[] GetSignature(string privateKey, byte[] message)
     {
       var curve = SecNamedCurves.GetByName("secp256k1");
       var domain = new ECDomainParameters(curve.Curve, curve.G, curve.N, curve.H);
 
-      var keyParameters = new
-              ECPrivateKeyParameters(new Org.BouncyCastle.Math.BigInteger(privateKey),
-              domain);
+      var keyParameters = new ECPrivateKeyParameters(
+        new Org.BouncyCastle.Math.BigInteger(privateKey),
+        domain);
 
       ISigner signer = SignerUtilities.GetSigner("SHA-256withECDSA");
 
-      signer.Init(true, keyParameters);
-      signer.BlockUpdate(Encoding.ASCII.GetBytes(message), 0, message.Length);
-      var signature = signer.GenerateSignature();
-      return Base58Encoding.Encode(signature);
+      while(true)
+      {
+        signer.Init(true, keyParameters);
+        signer.BlockUpdate(message, 0, message.Length);
+
+        byte[] signature = signer.GenerateSignature();
+
+        if (IsSValueTooHigh(signature))
+        {
+          continue;
+        }
+
+        return signature;
+      }
     }
 
-    public string GetPublicKeyFromPrivateKeyEx(string privateKey)
+    bool IsSValueTooHigh(byte[] signature)
+    {
+      int lengthR = signature[3];
+      int msbSValue = signature[3 + lengthR + 3];
+
+      return msbSValue > 0x7F;
+    }
+
+    public static byte[] GetPublicKeyFromPrivateKeyEx(string privateKey)
     {
       var curve = SecNamedCurves.GetByName("secp256k1");
 
@@ -100,11 +111,10 @@ namespace BToken.Chaining
       var q = domain.G.Multiply(d);
 
       var publicKey = new ECPublicKeyParameters(q, domain);
-      return Base58Encoding.Encode(publicKey.Q.GetEncoded());
+      return publicKey.Q.GetEncoded();
     }
-
-
-    private string GetPublicKeyFromPrivateKey(string privateKey)
+    
+    private static string GetPublicKeyFromPrivateKey(string privateKey)
     {
       var p = BigInteger.Parse("0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", NumberStyles.HexNumber);
       var b = (BigInteger)7;
