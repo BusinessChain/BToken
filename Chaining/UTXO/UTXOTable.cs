@@ -170,7 +170,7 @@ namespace BToken.Chaining
                   if (tableCollision
                     .TrySpendCollision(tXInput, tablePrimary))
                   {
-                    return;
+                    goto LABEL_LoopNextInput;
                   }
                 }
               }
@@ -189,7 +189,7 @@ namespace BToken.Chaining
                 }
               }
 
-              return;
+              goto LABEL_LoopNextInput;
             }
           }
 
@@ -197,6 +197,8 @@ namespace BToken.Chaining
             string.Format(
               "Referenced TX {0} not found in UTXO table.",
               tXInput.PrimaryKeyTXIDOutput));
+
+        LABEL_LoopNextInput:;
         }
       }
     }
@@ -239,10 +241,9 @@ namespace BToken.Chaining
     public string GetMetricsCSV()
     {
       return
-        Tables[0].GetMetricsCSV() +
-        Tables[1].GetMetricsCSV() +
+        Tables[0].GetMetricsCSV() + "," +
+        Tables[1].GetMetricsCSV() + "," +
         Tables[2].GetMetricsCSV();
-
     }
   }
 }

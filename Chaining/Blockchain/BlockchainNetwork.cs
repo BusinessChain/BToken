@@ -18,7 +18,7 @@ namespace BToken.Chaining
 
       int TIMEOUT_SYNCHRONIZER = 30000;
 
-      const int UTXOIMAGE_INTERVAL_SYNC = 300;
+      const int UTXOIMAGE_INTERVAL_SYNC = 100;
       const int UTXOIMAGE_INTERVAL_LISTEN = 5;
 
       StreamWriter LogFile;
@@ -342,19 +342,19 @@ namespace BToken.Chaining
 
       async Task SynchronizeWithPeer(Peer peer)
       {
-      LABEL_StageBranch:
+      LABEL_SynchronizeWithPeer:
         
-        List<Header> locator = Blockchain.GetLocator();
-        Header headerTip = locator.First();
+        peer.HeaderDownload = new HeaderDownload();
+        peer.HeaderDownload.Locator = Blockchain.GetLocator();
 
-        Header headerRoot = await peer.GetHeaders(locator);
+        Header headerRoot = await peer.GetHeaders();
 
         if (headerRoot == null)
         {
           return;
         }
 
-        if (headerRoot.HeaderPrevious == headerTip)
+        if (headerRoot.HeaderPrevious == Blockchain.HeaderTip)
         {
           await peer.BuildHeaderchain(
             headerRoot,
@@ -365,9 +365,7 @@ namespace BToken.Chaining
           return;
         }
 
-        headerRoot = await peer.SkipDuplicates(
-          headerRoot,
-          locator);
+        headerRoot = await peer.SkipDuplicates(headerRoot);
 
         Blockchain.GetStateAtHeader(
           headerRoot.HeaderPrevious,
@@ -383,11 +381,13 @@ namespace BToken.Chaining
 
         if (difficultyFork > difficultyOld)
         {
-          if (!await Blockchain.TryLoadImage(
-            heightAncestor,
-            headerRoot.HashPrevious))
+          await Blockchain.LoadImage(
+             heightAncestor,
+             headerRoot.HashPrevious);
+
+          if (Blockchain.Height != heightAncestor)
           {
-            goto LABEL_StageBranch;
+            goto LABEL_SynchronizeWithPeer;
           }
 
           if (!await TrySynchronizeUTXO(headerRoot, peer))
@@ -509,7 +509,6 @@ namespace BToken.Chaining
           PeersDownloading.Remove(peer);
 
           var blockDownload = peer.BlockDownload;
-          peer.BlockDownload = null;
 
           if (peer == peerSyncMaster &&
             (peer.FlagDispose || peer.Command == Peer.COMMAND_NOTFOUND))
@@ -526,7 +525,6 @@ namespace BToken.Chaining
           }
           else if (peer.Command == Peer.COMMAND_NOTFOUND)
           {
-            peer.BlockParser = new UTXOTable.BlockParser();
             peersCompleted.Add(peer);
           }
           else
@@ -536,6 +534,8 @@ namespace BToken.Chaining
               DownloadsAwaiting.Add(
                 blockDownload.Index,
                 blockDownload);
+
+              blockDownload.Peer = peer;
 
               if (IsBlockDownloadAvailable())
               {
@@ -579,7 +579,7 @@ namespace BToken.Chaining
 
               if (!DownloadsAwaiting.TryGetValue(
                 indexBlockDownloadQueue,
-                out BlockDownload downloadAwaiting))
+                out blockDownload))
               {
                 continue;
               }
@@ -589,7 +589,7 @@ namespace BToken.Chaining
               DownloadsAwaiting.Remove(
                 indexBlockDownloadQueue);
 
-              peer = downloadAwaiting.Peer;
+              peer = blockDownload.Peer;
 
               if (TryInsertBlocks(blockDownload))
               {
@@ -614,37 +614,38 @@ namespace BToken.Chaining
         } while (true);
       }
 
-
-
-      bool TryInsertBlocks(BlockDownload blockDownload)
+      void StartBlockDownload(Peer peer)
       {
-        foreach (Block block in blockDownload.Blocks)
+        if (QueueDownloadsInvalid.Any())
         {
-          try
-          {
-            Blockchain.InsertBlock(block);
-          }
-          catch (Exception ex)
-          {
-            // TODO: Reorg download, restore utxo
-            Console.WriteLine(
-              "{0} when inserting block {1}:\n {2}" +
-              "TODO: Reorg download, restore utxo",
-              ex.GetType().Name,
-              block.Header.Hash.ToHexString(),
-              ex.Message);
+          peer.BlockDownload = QueueDownloadsInvalid.First();
+          QueueDownloadsInvalid.RemoveAt(0);
+        }
+        else
+        {
+          peer.BlockDownload = new BlockDownload(
+            IndexBlockDownload,
+            ref HeaderLoad,
+            peer.CountBlocksLoad);
 
-            return false;
-          }
-
-          Blockchain.Archiver.ArchiveBlock(
-              block,
-              UTXOIMAGE_INTERVAL_SYNC);
+          IndexBlockDownload += 1;
         }
 
-        return true;
+        RunBlockDownload(
+          peer,
+          flagContinueDownload: false);
       }
 
+      async Task RunBlockDownload(
+        Peer peer,
+        bool flagContinueDownload)
+      {
+        PeersDownloading.Add(peer);
+
+        await peer.DownloadBlocks(flagContinueDownload);
+
+        QueueSynchronizer.Post(peer);
+      }
 
       bool TryGetPeer(
         out Peer peer)
@@ -665,41 +666,11 @@ namespace BToken.Chaining
         return false;
       }
 
-
-
       bool IsBlockDownloadAvailable()
       {
-        return 
+        return
           DownloadsAwaiting.Count < CountMaxDownloadsAwaiting &&
           (QueueDownloadsInvalid.Count > 0 || HeaderLoad != null);
-      }
-
-
-
-      const int TIMEOUT_BLOCKDOWNLOAD_MILLISECONDS = 3000;
-
-
-      void StartBlockDownload(Peer peer)
-      {
-        if (QueueDownloadsInvalid.Any())
-        {
-          peer.BlockDownload = QueueDownloadsInvalid.First();
-
-          QueueDownloadsInvalid.RemoveAt(0);
-        }
-        else
-        {
-          peer.BlockDownload = new BlockDownload(
-            IndexBlockDownload,
-            ref HeaderLoad,
-            peer.CountBlocksLoad);
-
-          IndexBlockDownload += 1;
-        }
-
-        RunBlockDownload(
-          peer,
-          flagContinueDownload: false);
       }
 
       void EnqueueBlockDownloadInvalid(
@@ -718,22 +689,50 @@ namespace BToken.Chaining
             indexdownload,
             download);
         }
+
+        download.IndexHeaderExpected = 0;
+        download.Blocks.Clear();
       }
-      
 
 
-      async Task RunBlockDownload(
-        Peer peer,
-        bool flagContinueDownload)
+
+      bool TryInsertBlocks(BlockDownload blockDownload)
       {
-        PeersDownloading.Add(peer);
+        foreach (Block block in blockDownload.Blocks)
+        {
+          try
+          {
+            Console.WriteLine(
+              "Insert block {0} from download {1}", 
+              block.Header.Hash.ToHexString(),
+              blockDownload.Index);
 
-        await peer.DownloadBlocks(
-          flagContinueDownload);
+            Blockchain.InsertBlock(
+                block,
+                flagValidateHeader: false);
+          }
+          catch (Exception ex)
+          {
+            // TODO: Reorg download, restore utxo
 
-        QueueSynchronizer.Post(peer);
+            Console.WriteLine(
+              "{0} when inserting block {1}:\n {2}" +
+              "TODO: Reorg download, restore utxo",
+              ex.GetType().Name,
+              block.Header.Hash.ToHexString(),
+              ex.Message);
+
+            return false;
+          }
+
+          Blockchain.Archiver.ArchiveBlock(
+              block,
+              UTXOIMAGE_INTERVAL_SYNC);
+        }
+
+        return true;
       }
-      
+          
 
 
       const int PEERS_COUNT_INBOUND = 8;

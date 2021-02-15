@@ -10,22 +10,12 @@ namespace BToken.Chaining
   {
     public class BlockParser
     {
-      public int Index;
-      public bool IsInvalid;
+      public const int COUNT_HEADER_BYTES = 80;
 
       public byte[] Buffer;
       public int IndexBuffer;
-
-      public bool IsBufferOverflow;
-
-      public Header HeaderTipOverflow;
-      public Header HeaderRootOverflow;
-      public Header HeaderTip;
-      public Header HeaderRoot;
-      public double Difficulty;
-      public int Height;
-
-      public int CountTX;
+            
+      public List<Block> Blocks = new List<Block>();
           
       SHA256 SHA256 = SHA256.Create();
 
@@ -33,174 +23,102 @@ namespace BToken.Chaining
       public Stopwatch StopwatchParse = new Stopwatch();
                  
 
-      readonly byte[] HASH_ZERO = new byte[32];
-      public void Parse(byte[] buffer)
-      {
-        Parse(
-          buffer, 
-          buffer.Length,
-          0,
-          HASH_ZERO);
-      }
-
-      public void ParseHeaders(
-        byte[] buffer,
-        int countBytes)
-      {
-        int indexPayload = 0;
-
-        int countHeaders = VarInt.GetInt32(
-          buffer,
-          ref indexPayload);
-
-        if(countHeaders == 0)
-        {
-          Height = 0;
-          HeaderRoot = null;
-          return;
-        }
-
-        Parse(
-          buffer,
-          countBytes,
-          indexPayload,
-          HASH_ZERO);
-      }
-
-      public void Parse(
-        byte[] buffer, 
-        byte[] hashStopLoading)
-      {
-        Parse(
-          buffer, 
-          buffer.Length,
-          0,
-          hashStopLoading);
-      }
-
-      void Parse(
-        byte[] buffer, 
-        int countBytes,
-        int offset,
-        byte[] hashStopLoading)
-      {
-        StopwatchParse.Restart();
-
-        Buffer = buffer;
-        IndexBuffer = offset;
-                
-        Header header = Header.ParseHeader(
-          Buffer,
-          ref IndexBuffer,
-          SHA256);
-
-        HeaderRoot = header;
-        HeaderTip = header;
-        Height = 1;
-        Difficulty = header.Difficulty;
-
-        ParseTXs(header.MerkleRoot);
-
-        while (
-          IndexBuffer < countBytes &&
-          !hashStopLoading.IsEqual(HeaderTip.Hash))
-        {
-          header = Header.ParseHeader(
-           Buffer,
-           ref IndexBuffer,
-           SHA256);
-
-          if (!HeaderTip.Hash.IsEqual(header.HashPrevious))
-          {
-            throw new ChainException(
-              string.Format(
-                "headerchain out of order in blockArchive {0}",
-                Index));
-          }
-
-          header.HeaderPrevious = HeaderTip;
-          HeaderTip.HeaderNext = header;
-          HeaderTip = header;
-
-          Height += 1;
-          Difficulty += header.Difficulty;
-
-          ParseTXs(header.MerkleRoot);
-        }
-
-        StopwatchParse.Stop();
-      }
-
-
-
       public void ClearPayloadData()
       {
         IndexBuffer = 0;
-
-        Header = null;
-
-        CountTX = 0;
       }
 
+      
+      public Block ParseBlock(byte[] buffer)
+      {
+        int startIndex = 0;
 
-      Header Header;
+        return ParseBlock(
+          buffer, 
+          ref startIndex);
+      }
 
       public Block ParseBlock(
         byte[] buffer,
-        int startIndex)
+        ref int startIndex)
       {
-        StopwatchParse.Start();
-
         Buffer = buffer;
         IndexBuffer = startIndex;
 
-        Header = Header.ParseHeader(
+        Header header = ParseHeader(
           Buffer,
-          ref IndexBuffer,
-          SHA256);
+          ref IndexBuffer);
 
-        Console.WriteLine(
-          "Parse block {0}",
-          Header.Hash.ToHexString());
+        List<TX> tXs = ParseTXs(header.MerkleRoot);
 
-        List<TX> tXs = ParseTXs(Header.MerkleRoot);
+        startIndex = IndexBuffer;
         
-        StopwatchParse.Stop();
-
         return new Block(
           Buffer,
-          Header,
+          header,
           tXs);
       }
 
-      public void RecoverFromOverflow()
+      public Header ParseHeader(
+        byte[] buffer,
+        ref int index)
       {
-        IsBufferOverflow = false;
+        byte[] hash =
+          SHA256.ComputeHash(
+            SHA256.ComputeHash(
+              buffer,
+              index,
+              COUNT_HEADER_BYTES));
 
-        HeaderRoot = HeaderRootOverflow;
-        HeaderRootOverflow = null;
+        uint version = BitConverter.ToUInt32(buffer, index);
+        index += 4;
 
-        HeaderTip = HeaderTipOverflow;
-        HeaderTipOverflow = null;
+        byte[] previousHeaderHash = new byte[32];
+        Array.Copy(buffer, index, previousHeaderHash, 0, 32);
+        index += 32;
 
-        CalculateHeightAndDifficulty();
-      }
+        byte[] merkleRootHash = new byte[32];
+        Array.Copy(buffer, index, merkleRootHash, 0, 32);
+        index += 32;
 
-      void CalculateHeightAndDifficulty()
-      {
-        var header = HeaderRoot;
+        uint unixTimeSeconds = BitConverter.ToUInt32(
+          buffer, index);
+        index += 4;
 
-        Height = 1;
-        Difficulty = HeaderRoot.Difficulty;
-
-        while (header != HeaderTip)
+        const long MAX_FUTURE_TIME_SECONDS = 2 * 60 * 60;
+        if (unixTimeSeconds >
+          (DateTimeOffset.UtcNow.ToUnixTimeSeconds() +
+          MAX_FUTURE_TIME_SECONDS))
         {
-          header = header.HeaderNext;
-
-          Height += 1;
-          Difficulty += header.Difficulty;
+          throw new ChainException(
+            string.Format("Timestamp premature {0}",
+              new DateTime(unixTimeSeconds).Date));
         }
+
+        uint nBits = BitConverter.ToUInt32(buffer, index);
+        index += 4;
+
+        if (hash.IsGreaterThan(nBits))
+        {
+          throw new ChainException(
+            string.Format("header hash {0} greater than NBits {1}",
+              hash.ToHexString(),
+              nBits));
+        }
+
+        uint nonce = BitConverter.ToUInt32(buffer, index);
+        index += 4;
+
+        return new Header(
+          hash,
+          version,
+          previousHeaderHash,
+          merkleRootHash,
+          unixTimeSeconds,
+          nBits,
+          nonce);
       }
+
 
       List<TX> ParseTXs(byte[] hashMerkleRoot)
       {

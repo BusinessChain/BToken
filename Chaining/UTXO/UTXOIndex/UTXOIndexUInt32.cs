@@ -51,7 +51,9 @@ namespace BToken.Chaining
       {
         for (int i = 0; i < COUNT_TABLE_PARTITIONS_MEMORY; i += 1)
         {
-          CollisionTables[i] = new Dictionary<byte[], uint>(new EqualityComparerByteArray());
+          CollisionTables[i] = new Dictionary<byte[], uint>(
+            new EqualityComparerByteArray());
+
           PrimaryTables[i] = new Dictionary<int, uint>();
         }
       }
@@ -162,8 +164,12 @@ namespace BToken.Chaining
           tablePrimary.DecrementCollisionBits(Address);
         }
 
-        uint uTXOPrimary = collisionItem.Value | tablePrimary.GetCollisionBits();
-        PrimaryTables[indexTablePartition].Add(tablePrimary.PrimaryKey, uTXOPrimary);
+        uint uTXOPrimary = 
+          collisionItem.Value | tablePrimary.GetCollisionBits();
+
+        PrimaryTables[indexTablePartition].Add(
+          tablePrimary.PrimaryKey, 
+          uTXOPrimary);
       }
 
       public uint UTXO;

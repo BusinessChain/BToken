@@ -94,7 +94,7 @@ namespace BToken.Chaining
       OutputIndexesSpendable.ForEach(i =>
       {
         TXOutputsSpendable.Add(
-          new UTXOTable.TXInput(hash, i));
+          new UTXOTable.TXInput(hash, ref i));
       });
 
       OutputIndexesSpendable.Clear();
@@ -129,7 +129,7 @@ namespace BToken.Chaining
 
     public void Import(Wallet wallet)
     {
-      DetectTXOutputsBeingSpent(wallet);
+      //DetectTXOutputsBeingSpent(wallet);
 
       TXOutputsSpendable.AddRange(
         wallet.TXOutputsSpendable);
