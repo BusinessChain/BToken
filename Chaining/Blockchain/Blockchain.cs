@@ -23,7 +23,6 @@ namespace BToken.Chaining
     Dictionary<int, List<Header>> HeaderIndex;
     
     UTXOTable UTXOTable;
-    Wallet Wallet;
 
     BlockchainNetwork Network;
     BlockArchiver Archiver;
@@ -61,8 +60,6 @@ namespace BToken.Chaining
       UpdateHeaderIndex(headerGenesis);
       
       UTXOTable = new UTXOTable(genesisBlockBytes);
-
-      Wallet = new Wallet();
     }
 
 
@@ -72,13 +69,6 @@ namespace BToken.Chaining
       await LoadImage();
 
       Network.Start();
-
-      while(true)
-      {
-        await Task.Delay(10000);
-
-        Wallet.SendAnchorToken();
-      }
     }
 
     async Task LoadImage()

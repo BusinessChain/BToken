@@ -99,12 +99,13 @@
     <Compile Include="Chaining\UTXO\UTXOTable.cs" />
     <Compile Include="Chaining\Wallet\Base58Encoding.cs" />
     <Compile Include="Chaining\Wallet\Crypto.cs" />
+    <Compile Include="Chaining\Wallet\TXOutputWallet.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Chaining\UTXO\TXInput.cs" />
     <Compile Include="Chaining\UTXO\TXOutput.cs" />
     <Compile Include="Chaining\TXWitness.cs" />
     <Compile Include="Chaining\GenesisBlock.cs" />
-    <Compile Include="Chaining\Wallet\Wallet.cs" />
+    <Compile Include="Chaining\Wallet\WalletUTXO.cs" />
     <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />

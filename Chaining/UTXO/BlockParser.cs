@@ -238,7 +238,9 @@ namespace BToken.Chaining
              Buffer,
              tXStartIndex,
              IndexBuffer - tXStartIndex));
-          
+
+          tX.TXIDShort = BitConverter.ToInt32(tX.Hash, 0);
+
           int lengthUTXOBits = 
             COUNT_NON_OUTPUT_BITS + countTXOutputs;
           

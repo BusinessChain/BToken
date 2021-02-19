@@ -11,13 +11,13 @@ namespace BToken.Chaining
   {
     public struct TXInput
     {
-      public int StartIndexPreviousTXHash;
       public int StartIndexScript;
       public int LengthScript;
-      public int PrimaryKeyTXIDOutput;
-      public int OutputIndex;
 
       public byte[] TXIDOutput;
+      public int TXIDOutputShort;
+      public int OutputIndex;
+
 
 
       //public TXInput(
@@ -32,8 +32,6 @@ namespace BToken.Chaining
 
       public TXInput(byte[] buffer, ref int index)
       {
-        StartIndexPreviousTXHash = index;
-
         TXIDOutput = new byte[HASH_BYTE_SIZE];
 
         Array.Copy(
@@ -43,7 +41,7 @@ namespace BToken.Chaining
           0, 
           HASH_BYTE_SIZE);
 
-        PrimaryKeyTXIDOutput = BitConverter.ToInt32(
+        TXIDOutputShort = BitConverter.ToInt32(
           buffer, 
           index);
 

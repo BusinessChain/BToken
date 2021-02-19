@@ -8,12 +8,12 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    public class TX
+    class TXOutputWallet
     {
-      public byte[] Hash;
+      public byte[] TXID;
       public int TXIDShort;
-      public List<TXInput> TXInputs = new List<TXInput>();
-      public List<TXOutput> TXOutputs = new List<TXOutput>();
+      public int OutputIndex;
+      public ulong Value;
     }
   }
 }

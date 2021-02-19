@@ -78,7 +78,7 @@ namespace BToken.Chaining
       public override void SpendPrimaryUTXO(in TXInput input, out bool areAllOutputpsSpent)
       {
         SpendUTXO(ref UTXOPrimary, input.OutputIndex, out areAllOutputpsSpent);
-        PrimaryTable[input.PrimaryKeyTXIDOutput] = UTXOPrimary;
+        PrimaryTable[input.TXIDOutputShort] = UTXOPrimary;
       }
       public override bool TryGetValueInPrimaryTable(int primaryKey)
       {

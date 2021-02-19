@@ -64,7 +64,7 @@ namespace BToken.Chaining
             if (tablePrimary.AreCollisionBitsFull())
             {
               if (HasCountCollisions(
-                input.PrimaryKeyTXIDOutput,
+                input.TXIDOutputShort,
                 COUNT_COLLISIONS_MAX))
               {
                 return true;

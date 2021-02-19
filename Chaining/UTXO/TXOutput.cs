@@ -12,6 +12,8 @@ namespace BToken.Chaining
     public struct TXOutput
     {
       public ulong Value;
+
+      public byte[] Buffer;
       public int StartIndexScript;
       public int LengthScript;
 
@@ -26,14 +28,15 @@ namespace BToken.Chaining
 
         index += 8;
 
+        Buffer = buffer;
+
         LengthScript = VarInt.GetInt32(
-          buffer,
+          Buffer,
           ref index);
 
         StartIndexScript = index;
         index += LengthScript;
       }
-
     }
   }
 }

@@ -32,6 +32,8 @@ namespace BToken.Chaining
     
     StreamWriter LogFile;
 
+    WalletUTXO Wallet;
+
 
 
     public UTXOTable(byte[] genesisBlockBytes)
@@ -42,6 +44,8 @@ namespace BToken.Chaining
         TableUInt32,
         TableULong64,
         TableUInt32Array };
+
+      Wallet = new WalletUTXO();
     }
              
 
@@ -101,6 +105,7 @@ namespace BToken.Chaining
           {
             InsertUTXO(
               tX.Hash,
+              tX.TXIDShort,
               TableUInt32);
           }
           catch (ArgumentException)
@@ -128,6 +133,7 @@ namespace BToken.Chaining
 
           InsertUTXO(
             tX.Hash,
+            tX.TXIDShort,
             TableULong64);
         }
         else
@@ -146,18 +152,23 @@ namespace BToken.Chaining
 
           InsertUTXO(
             tX.Hash,
+            tX.TXIDShort,
             TableUInt32Array);
         }
+
+        Wallet.DetectTXOutputsSpendable(tX);
       }
 
       foreach (TX tX in block.TXs)
       {
         foreach (TXInput tXInput in tX.TXInputs)
         {
+          bool checkSig = Wallet.TrySpend(tXInput);
+
           foreach (UTXOIndex tablePrimary in Tables)
           {
             if (tablePrimary.TryGetValueInPrimaryTable(
-              tXInput.PrimaryKeyTXIDOutput))
+              tXInput.TXIDOutputShort))
             {
               UTXOIndex tableCollision = null;
 
@@ -196,19 +207,19 @@ namespace BToken.Chaining
           throw new ChainException(
             string.Format(
               "Referenced TX {0} not found in UTXO table.",
-              tXInput.PrimaryKeyTXIDOutput));
+              tXInput.TXIDOutputShort));
 
-        LABEL_LoopNextInput:;
+        LABEL_LoopNextInput:
+          ;
         }
       }
     }
 
     void InsertUTXO(
       byte[] uTXOKey,
+      int primaryKey,
       UTXOIndex table)
     {
-      int primaryKey = BitConverter.ToInt32(uTXOKey, 0);
-
       for (int c = 0; c < Tables.Length; c += 1)
       {
         if (Tables[c].PrimaryTableContainsKey(primaryKey))
