@@ -49,7 +49,8 @@ namespace BToken.Chaining
           Buffer,
           ref IndexBuffer);
 
-        List<TX> tXs = ParseTXs(header.MerkleRoot);
+        List<TX> tXs = ParseTXs(
+          header.MerkleRoot);
 
         startIndex = IndexBuffer;
         
@@ -120,7 +121,8 @@ namespace BToken.Chaining
       }
 
 
-      List<TX> ParseTXs(byte[] hashMerkleRoot)
+      List<TX> ParseTXs(
+        byte[] hashMerkleRoot)
       {
         List<TX> tXs = new List<TX>();
 
@@ -132,7 +134,8 @@ namespace BToken.Chaining
         { }
         else if (tXCount == 1)
         {
-          TX tX = ParseTX(true);
+          TX tX = ParseTX(isCoinbase: true);
+
           tXs.Add(tX);
 
           if (!tX.Hash.IsEqual(hashMerkleRoot))

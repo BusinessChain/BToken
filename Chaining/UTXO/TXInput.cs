@@ -42,7 +42,7 @@ namespace BToken.Chaining
           HASH_BYTE_SIZE);
 
         TXIDOutputShort = BitConverter.ToInt32(
-          buffer, 
+          buffer,
           index);
 
         index += HASH_BYTE_SIZE;

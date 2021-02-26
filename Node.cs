@@ -28,10 +28,6 @@ namespace BToken
         GenesisBlock.Header,
         GenesisBlock.BlockBytes,
         Checkpoints);
-           
-      Crypto crypto = new Crypto();
-
-      crypto.SignatureDemo();
     }
 
     public void Start()

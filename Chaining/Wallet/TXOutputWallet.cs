@@ -14,6 +14,7 @@ namespace BToken.Chaining
       public int TXIDShort;
       public int OutputIndex;
       public ulong Value;
+      public byte[] ScriptPubKey;
     }
   }
 }

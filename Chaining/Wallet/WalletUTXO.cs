@@ -15,45 +15,40 @@ namespace BToken.Chaining
   {
     public class WalletUTXO
     {
-      byte[] PrivateKey = new byte[] { };
+      Crypto Crypto = new Crypto();
+
+      string PrivKeyDec = "46345897603189110989398136884057307203509669786386043766866535737189931384120";
       byte[] PublicKeyHash160;
-
-      List<TXInput> TXOutputsSpendable =
-        new List<TXInput>();
-
-
-      public WalletUTXO()
-      {
-        GeneratePublicKey(
-          "6676D9347D20FEB2E5EA94DE0E6B5AFC3953DFB4C6598FEE0067645980DB7D38");
-      }
-
-
-      byte[] BytesLeftSideScript_P2PKH =
-        new byte[] { 118, 169, 20 };
-
-      byte[] BytesRightSideScript_P2PKH =
-        new byte[] { 136, 172 };
-
-      const int LENGTH_P2PKH_SCRIPT = 25;
-
-      List<TXOutputWallet> TXOutputSpendable = 
-        new List<TXOutputWallet>();
       
+      List<TXOutputWallet> TXOutputsSpendable =
+        new List<TXOutputWallet>();
+
+
+      readonly byte[] PREFIX_OP_RETURN =
+        new byte[] { 0x6A, 0x50 };
+
+      byte[] PREFIX_P2PKH =
+        new byte[] { 0x76, 0xA9, 0x14 };
+
+      byte[] POSTFIX_P2PKH =
+        new byte[] { 0x88, 0xAC };
+
+      const int LENGTH_P2PKH = 25;
+
       public void DetectTXOutputsSpendable(TX tX)
       {
         for (int i = 0; i < tX.TXOutputs.Count; i += 1)
         {
           TXOutput tXOutput = tX.TXOutputs[i];
 
-          if (tXOutput.LengthScript != LENGTH_P2PKH_SCRIPT)
+          if (tXOutput.LengthScript != LENGTH_P2PKH)
           {
             continue;
           }
 
           int indexScript = tXOutput.StartIndexScript;
 
-          if (!BytesLeftSideScript_P2PKH.IsEqual(
+          if (!PREFIX_P2PKH.IsEqual(
             tXOutput.Buffer,
             indexScript))
           {
@@ -71,17 +66,27 @@ namespace BToken.Chaining
 
           indexScript += 20;
 
-          if (BytesRightSideScript_P2PKH.IsEqual(
+          if (POSTFIX_P2PKH.IsEqual(
             tXOutput.Buffer,
             indexScript))
           {
-            TXOutputSpendable.Add(
+            byte[] scriptPubKey = new byte[LENGTH_P2PKH];
+            
+            Array.Copy(
+              tXOutput.Buffer,
+              tXOutput.StartIndexScript,
+              scriptPubKey,
+              0,
+              LENGTH_P2PKH);
+
+            TXOutputsSpendable.Add(
               new TXOutputWallet
               {
                 TXID = tX.Hash,
                 TXIDShort = tX.TXIDShort,
                 OutputIndex = i,
-                Value = tXOutput.Value
+                Value = tXOutput.Value,
+                ScriptPubKey = scriptPubKey
               });
 
             Console.WriteLine(
@@ -97,7 +102,7 @@ namespace BToken.Chaining
       public bool TrySpend(TXInput tXInput)
       {
         TXOutputWallet output = 
-          TXOutputSpendable.Find(o => 
+          TXOutputsSpendable.Find(o => 
           o.TXIDShort == tXInput.TXIDOutputShort &&
           o.OutputIndex == tXInput.OutputIndex);
 
@@ -107,7 +112,7 @@ namespace BToken.Chaining
           return false;
         }
 
-        TXOutputSpendable.Remove(output);
+        TXOutputsSpendable.Remove(output);
 
         Console.WriteLine(
           "Spent output {0} in tx {1} with {2} satoshis.",
@@ -118,15 +123,93 @@ namespace BToken.Chaining
         return true;
       }
 
-      public void SendAnchorToken()
-      {
-        if (TXOutputsSpendable.Count == 0)
-        {
-          return;
-        }
 
-        TXInput tXInput = TXOutputsSpendable.First();
-        TXOutputsSpendable.RemoveAt(0);
+      public void SendAnchorToken(
+        byte[] dataOPReturn, 
+        ulong fee)
+      {
+        TXOutputWallet outputSpendable =
+          TXOutputsSpendable.Find(t => t.Value > fee);
+
+        outputSpendable = new TXOutputWallet
+        {
+          TXID = "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2".ToBinary().Reverse().ToArray(),
+          OutputIndex = 1,
+          ScriptPubKey = "76a914010966776006953d5567439e5e39f86a0d273bee88ac".ToBinary().Reverse().ToArray()
+        };
+
+        if (outputSpendable == null)
+        {
+          throw new ChainException("No spendable output found.");
+        }
+        
+        List<byte> tXRaw = new List<byte>();
+
+        byte[] version = { 0x01, 0x00, 0x00, 0x00 };
+        tXRaw.AddRange(version);
+
+        byte countInputs = 1;
+        tXRaw.Add(countInputs);
+
+        tXRaw.AddRange(outputSpendable.TXID);
+
+        tXRaw.AddRange(BitConverter.GetBytes(
+          outputSpendable.OutputIndex));
+
+        tXRaw.Add(LENGTH_P2PKH);
+
+        tXRaw.AddRange(outputSpendable.ScriptPubKey);
+
+        byte[] sequence = { 0xFF, 0xFF, 0xFF, 0xFF };
+        tXRaw.AddRange(sequence);
+        
+        byte countOutputs = 1; //(byte)(valueChange == 0 ? 1 : 2);
+        tXRaw.Add(countOutputs);
+
+        ulong valueChange = outputSpendable.Value - fee;
+        //tXRaw.AddRange(BitConverter.GetBytes(
+        //  valueChange));
+        tXRaw.AddRange(BitConverter.GetBytes(
+          (ulong)99900000));
+
+        tXRaw.Add(LENGTH_P2PKH);
+
+        tXRaw.AddRange(PREFIX_P2PKH);
+        //tXRaw.AddRange(PublicKeyHash160);
+        tXRaw.AddRange("097072524438d003d23a2f23edb65aae1bb3e469".ToBinary().Reverse());
+        tXRaw.AddRange(POSTFIX_P2PKH);
+
+        byte[] lockTime = new byte[4];
+        tXRaw.AddRange(lockTime);
+
+        byte[] sigHashType = { 0x01, 0x00, 0x00, 0x00 };
+        tXRaw.AddRange(sigHashType);
+
+        Crypto.SignatureDemo();
+
+        Crypto.SignTX(
+          PrivKeyDec,
+          tXRaw.ToArray());
+
+        //byte[] script = PREFIX_OP_RETURN.Concat(data).ToArray();
+        //var tXOutputOPReturn =
+        //  new TXOutput
+        //  {
+        //    Value = 0,
+        //    Buffer = script,
+        //    StartIndexScript = 0,
+        //    LengthScript = script.Length
+        //  };
+      }
+
+
+
+      public WalletUTXO()
+      {
+        SendAnchorToken(new byte[0], 0);
+
+        GeneratePublicKey(
+          "6676D9347D20FEB2E5EA94DE0E6B5AFC3953DFB4C6598FEE0067645980DB7D38");
       }
 
       void GeneratePublicKey(string privKey)

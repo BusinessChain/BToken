@@ -24,6 +24,5 @@ namespace BToken.Chaining
 
       TXs = tXs;
     }
-
   }
 }
