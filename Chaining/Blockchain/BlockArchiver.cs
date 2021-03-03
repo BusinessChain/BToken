@@ -10,16 +10,16 @@ namespace BToken.Chaining
 {
   partial class Blockchain
   {
-    class BlockArchiver
+    partial class BlockArchiver
     {
       Blockchain Blockchain;
 
       public int IndexBlockArchive;
 
-      byte[] HashStopLoading;
-      public const int COUNT_LOADER_TASKS = 6;
+      byte[] HashStopLoadingInclusive;
+      public const int COUNT_LOADER_TASKS = 4;
       int SIZE_BLOCK_ARCHIVE = 20000;
-      const int UTXOIMAGE_INTERVAL_LOADER = 200;
+      const int UTXOIMAGE_INTERVAL_LOADER = 500;
 
       readonly object LOCK_IndexBlockArchiveQueue = new object();
       int IndexBlockArchiveQueue;
@@ -43,17 +43,17 @@ namespace BToken.Chaining
       readonly object LOCK_IndexBlockArchiveLoad = new object();
       int IndexBlockArchiveLoad;
 
-      public async Task LoadBlocks(
-        byte[] hashStopLoading,
+      public async Task<bool> TryLoadBlocks(
+        byte[] hashStopInclusive,
         int indexBlockArchive)
       {
         "Start archive loader".Log(LogFile);
 
-        IsBlockLoadingCompleted = false;
+        IsInserterCompleted = false;
 
         IndexBlockArchiveLoad = indexBlockArchive;
         IndexBlockArchiveQueue = indexBlockArchive;
-        HashStopLoading = hashStopLoading;
+        HashStopLoadingInclusive = hashStopInclusive;
 
         Task inserterTask = RunLoaderInserter();
 
@@ -63,103 +63,92 @@ namespace BToken.Chaining
           0,
           COUNT_LOADER_TASKS,
           i => loaderTasks[i] = StartLoader());
+        
+        await inserterTask;
+
+        IsInserterCompleted = true;
 
         await Task.WhenAll(loaderTasks);
 
-        await inserterTask;
+        return IsInserterSuccess;
       }
       
-      BufferBlock<UTXOTable.BlockParser> QueueLoader =
-        new BufferBlock<UTXOTable.BlockParser>();
+      BufferBlock<BlockArchiveLoad> QueueLoader =
+        new BufferBlock<BlockArchiveLoad>();
+      bool IsInserterSuccess;
 
       async Task RunLoaderInserter()
       {
         "Start archive inserter.".Log(LogFile);
-        
+
+        IsInserterSuccess = true;
+
         while (true)
         {
-          UTXOTable.BlockParser parser = await QueueLoader
+          BlockArchiveLoad blockArchiveLoad = await QueueLoader
             .ReceiveAsync()
             .ConfigureAwait(false);
 
-          IndexBlockArchive = parser.Index;
+          IndexBlockArchive = blockArchiveLoad.Index;
 
           if (
-            parser.IsInvalid ||
-            !parser.HeaderRoot.HashPrevious.IsEqual(
-              Blockchain.HeaderTip.Hash))
+            blockArchiveLoad.IsInvalid ||
+            !Blockchain.HeaderTip.Hash.IsEqual(
+              blockArchiveLoad.Blocks.First().Header.HashPrevious))
           {
-            CountTXsArchive = 0;
             CreateBlockArchive();
-
             break;
           }
 
           try
           {
-            Blockchain.InsertBlocks(
-              parser,
-              parser.Index,
-              flagValidateHeaders: true);
+            foreach (Block block in blockArchiveLoad.Blocks)
+            {
+              Blockchain.InsertBlock(
+                block,
+                flagValidateHeader: true);
+            }
           }
           catch (ChainException ex)
           {
             string.Format(
-              "Exception when inserting blockArchive {0}: \n{1}",
-              parser.Index, ex.Message)
+              "Exception when inserting blockArchiveLoad {0}: \n{1}",
+              blockArchiveLoad.Index,
+              ex.Message)
               .Log(LogFile);
 
             File.Delete(
               Path.Combine(
                 ArchiveDirectoryBlocks.Name,
-                parser.Index.ToString()));
+                blockArchiveLoad.Index.ToString()));
 
-            CountTXsArchive = 0;
-            CreateBlockArchive();
-
-            break;
+            IsInserterSuccess = false;
+            return;
           }
-          catch(Exception ex)
+          
+          if (blockArchiveLoad.CountTX < SIZE_BLOCK_ARCHIVE)
           {
-            Console.WriteLine(
-              "Archive inserter aborted due to {0}:\n{1}",
-              ex.GetType().Name,
-              ex.Message);
+            CountTXsArchive = blockArchiveLoad.CountTX;
+            OpenBlockArchive();
 
             return;
           }
 
-          if (parser.CountTX < SIZE_BLOCK_ARCHIVE)
-          {
-            CountTXsArchive = parser.CountTX;
-            OpenBlockArchive();
-
-            break;
-          }
-
           IndexBlockArchive += 1;
 
-          if (parser.HeaderTip.Hash
-            .IsEqual(HashStopLoading))
+          if (blockArchiveLoad.Blocks.Last().Header.Hash
+            .IsEqual(HashStopLoadingInclusive))
           {
-            CountTXsArchive = 0;
             CreateBlockArchive();
 
-            break;
+            return;
           }
 
           if (IndexBlockArchive % UTXOIMAGE_INTERVAL_LOADER == 0)
           {
             Blockchain.CreateImage(IndexBlockArchive);
           }
-
-          Blockchain.ReleaseBlockParser(parser);
         }
-
-        string.Format("Blockloading completed.")
-          .Log(LogFile);
-
-        IsBlockLoadingCompleted = true;
       }
 
 
@@ -169,7 +158,7 @@ namespace BToken.Chaining
       FileStream FileBlockArchive;
 
       public void ArchiveBlock(
-        UTXOTable.BlockParser blockParser,
+        Block block,
         int intervalImage)
       {
         while (true)
@@ -177,9 +166,9 @@ namespace BToken.Chaining
           try
           {
             FileBlockArchive.Write(
-              blockParser.Buffer,
+              block.Buffer,
               0,
-              blockParser.IndexBuffer);
+              block.Buffer.Length);
 
             FileBlockArchive.Flush();
 
@@ -188,24 +177,24 @@ namespace BToken.Chaining
           catch (Exception ex)
           {
             string.Format(
-              "{0} when writing blockArchive {1} to " +
+              "{0} when writing block {1} to " +
               "file {2}: \n{3} \n" +
               "Try again in 10 seconds ...",
-              ex.GetType().Name, blockParser.Index,
-              FileBlockArchive.Name, ex.Message)
+              ex.GetType().Name, 
+              block.Header.Hash.ToHexString(),
+              FileBlockArchive.Name, 
+              ex.Message)
               .Log(LogFile);
 
             Thread.Sleep(10000);
           }
         }
 
-        CountTXsArchive += blockParser.CountTX;
+        CountTXsArchive += block.TXs.Count;
 
         if (CountTXsArchive >= SIZE_BLOCK_ARCHIVE)
         {
           FileBlockArchive.Dispose();
-
-          CountTXsArchive = 0;
 
           IndexBlockArchive += 1;
 
@@ -249,6 +238,8 @@ namespace BToken.Chaining
          FileAccess.Write,
          FileShare.None,
          bufferSize: 65536);
+
+        CountTXsArchive = 0;
       }
 
       public void Dispose()
@@ -257,45 +248,51 @@ namespace BToken.Chaining
       }
 
 
-      bool IsBlockLoadingCompleted;
-      Dictionary<int, UTXOTable.BlockParser> QueueBlockArchives =
-        new Dictionary<int, UTXOTable.BlockParser>();
+      bool IsInserterCompleted;
+      Dictionary<int, BlockArchiveLoad> QueueBlockArchives =
+        new Dictionary<int, BlockArchiveLoad>();
       readonly object LOCK_QueueBlockArchives = new object();
 
       async Task StartLoader()
       {
-        UTXOTable.BlockParser parser = null;
+        var parser = new UTXOTable.BlockParser();
 
       LABEL_LoadBlockArchive:
 
-        if (parser == null)
-        {
-          parser = Blockchain.GetBlockParser();
-        }
+        var blockArchiveLoad = new BlockArchiveLoad();
 
         lock (LOCK_IndexBlockArchiveLoad)
         {
-          parser.Index = IndexBlockArchiveLoad;
+          blockArchiveLoad.Index = IndexBlockArchiveLoad;
           IndexBlockArchiveLoad += 1;
         }
 
         string pathFile = Path.Combine(
           ArchiveDirectoryBlocks.FullName,
-          parser.Index.ToString());
+          blockArchiveLoad.Index.ToString());
 
-        byte[] bytesFile;
-                
         try
         {
-          bytesFile = File.ReadAllBytes(pathFile);
-          
-          parser.Parse(bytesFile, HashStopLoading);
+          byte[] bytesFile = File.ReadAllBytes(pathFile);
+          int startIndex = 0;
+          Block block;
 
-          parser.IsInvalid = false;
+          do
+          {
+            block = parser.ParseBlock(
+              bytesFile,
+              ref startIndex);
+            
+            blockArchiveLoad.InsertBlock(block);
+          } while (
+          startIndex < bytesFile.Length &&
+          !HashStopLoadingInclusive.IsEqual(block.Header.Hash));
+
+          blockArchiveLoad.IsInvalid = false;
         }
         catch(Exception ex)
         {
-          parser.IsInvalid = true;
+          blockArchiveLoad.IsInvalid = true;
 
           string.Format(
             "Loader throws exception {0} \n" +
@@ -307,14 +304,12 @@ namespace BToken.Chaining
         
         while (true)
         {
-          if (IsBlockLoadingCompleted)
+          if (IsInserterCompleted)
           {
             string.Format(
               "Loader worker {0} exit",
               Thread.CurrentThread.ManagedThreadId)
               .Log(LogFile);
-
-            Blockchain.ReleaseBlockParser(parser);
 
             return;
           }
@@ -323,7 +318,7 @@ namespace BToken.Chaining
           {
             lock (LOCK_QueueBlockArchives)
             {
-              if (parser.Index == IndexBlockArchiveQueue)
+              if (blockArchiveLoad.Index == IndexBlockArchiveQueue)
               {
                 break;
               }
@@ -331,15 +326,13 @@ namespace BToken.Chaining
               if (QueueBlockArchives.Count <= COUNT_LOADER_TASKS)
               {
                 QueueBlockArchives.Add(
-                  parser.Index,
-                  parser);
+                  blockArchiveLoad.Index,
+                  blockArchiveLoad);
 
-                if (parser.IsInvalid)
+                if (blockArchiveLoad.IsInvalid)
                 {
                   return;
                 }
-
-                parser = null;
 
                 goto LABEL_LoadBlockArchive;
               }
@@ -351,14 +344,12 @@ namespace BToken.Chaining
 
         while (true)
         {
-          QueueLoader.Post(parser);
+          QueueLoader.Post(blockArchiveLoad);
 
-          if (parser.IsInvalid)
+          if (blockArchiveLoad.IsInvalid)
           {
             return;
           }
-
-          parser = null;
 
           lock (LOCK_QueueBlockArchives)
           {
@@ -366,9 +357,10 @@ namespace BToken.Chaining
 
             if (QueueBlockArchives.TryGetValue(
               IndexBlockArchiveQueue,
-              out parser))
+              out blockArchiveLoad))
             {
-              QueueBlockArchives.Remove(parser.Index);
+              QueueBlockArchives.Remove(
+                blockArchiveLoad.Index);
             }
             else
             {

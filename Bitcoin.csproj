@@ -56,6 +56,9 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="BouncyCastle.Crypto, Version=1.8.6.0, Culture=neutral, PublicKeyToken=0e99375e54769942">
+      <HintPath>packages\BouncyCastle.1.8.6.1\lib\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
@@ -65,8 +68,8 @@
     <Reference Include="System.Numerics" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.ServiceModel" />
-    <Reference Include="System.Threading.Tasks.Dataflow, Version=4.6.3.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <HintPath>packages\System.Threading.Tasks.Dataflow.4.9.0\lib\netstandard2.0\System.Threading.Tasks.Dataflow.dll</HintPath>
+    <Reference Include="System.Threading.Tasks.Dataflow, Version=5.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>packages\System.Threading.Tasks.Dataflow.5.0.0\lib\net461\System.Threading.Tasks.Dataflow.dll</HintPath>
     </Reference>
     <Reference Include="System.Transactions" />
     <Reference Include="System.Xml.Linq" />
@@ -79,25 +82,30 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Chaining\Blockchain\BlockArchiveLoad.cs" />
     <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
+    <Compile Include="Chaining\Blockchain\BlockDownload.cs" />
+    <Compile Include="Chaining\Blockchain\HeaderDownload.cs" />
     <Compile Include="Chaining\Blockchain\Peer.cs" />
     <Compile Include="Chaining\Blockchain\BlockchainNetwork.cs" />
+    <Compile Include="Chaining\UTXO\Block.cs" />
     <Compile Include="Chaining\UTXO\BlockParser.cs" />
+    <Compile Include="Chaining\UTXO\TX.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32Array.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
     <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexULong64.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexUInt32ArrayCompressed.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexULong64Compressed.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexCompressed.cs" />
-    <Compile Include="Chaining\UTXO\UTXOIndexCompressed\UTXOIndexUInt32Compressed.cs" />
+    <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndex.cs" />
+    <Compile Include="Chaining\UTXO\UTXOIndex\UTXOIndexUInt32.cs" />
     <Compile Include="Chaining\UTXO\UTXOTable.cs" />
+    <Compile Include="Chaining\Wallet\Base58Encoding.cs" />
+    <Compile Include="Chaining\Wallet\Crypto.cs" />
+    <Compile Include="Chaining\Wallet\TXOutputWallet.cs" />
     <Compile Include="Hashing\SECP256K1.cs" />
     <Compile Include="Chaining\UTXO\TXInput.cs" />
     <Compile Include="Chaining\UTXO\TXOutput.cs" />
     <Compile Include="Chaining\TXWitness.cs" />
     <Compile Include="Chaining\GenesisBlock.cs" />
-    <Compile Include="Chaining\Wallet\Wallet.cs" />
+    <Compile Include="Chaining\Wallet\WalletUTXO.cs" />
     <Compile Include="Chaining\ChainException.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />

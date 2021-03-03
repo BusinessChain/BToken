@@ -11,25 +11,57 @@ namespace BToken.Chaining
   {
     public struct TXInput
     {
+      public int StartIndexScript;
+      public int LengthScript;
+
       public byte[] TXIDOutput;
-      public int PrimaryKeyTXIDOutput;
+      public int TXIDOutputShort;
       public int OutputIndex;
 
 
-      public TXInput(byte[] buffer, ref int startIndex)
+
+      //public TXInput(
+      //  byte[] tXIDOutput,
+      //  int outputIndex)
+      //{
+      //  TXIDOutput = tXIDOutput;
+      //  PrimaryKeyTXIDOutput = BitConverter.ToInt32(tXIDOutput, 0);
+      //  OutputIndex = outputIndex;
+      //}
+
+
+      public TXInput(byte[] buffer, ref int index)
       {
-        PrimaryKeyTXIDOutput = BitConverter.ToInt32(buffer, startIndex);
         TXIDOutput = new byte[HASH_BYTE_SIZE];
-        Array.Copy(buffer, startIndex, TXIDOutput, 0, HASH_BYTE_SIZE);
-        startIndex += HASH_BYTE_SIZE;
 
-        OutputIndex = BitConverter.ToInt32(buffer, startIndex);
-        startIndex += 4;
+        Array.Copy(
+          buffer, 
+          index, 
+          TXIDOutput, 
+          0, 
+          HASH_BYTE_SIZE);
 
-        int lengthUnlockingScript = VarInt.GetInt32(buffer, ref startIndex);
-        startIndex += lengthUnlockingScript;
+        TXIDOutputShort = BitConverter.ToInt32(
+          buffer,
+          index);
 
-        startIndex += 4; // sequence
+        index += HASH_BYTE_SIZE;
+
+        OutputIndex = BitConverter.ToInt32(
+          buffer, 
+          index);
+
+        index += 4;
+
+        LengthScript = VarInt.GetInt32(
+          buffer, 
+          ref index);
+
+        StartIndexScript = index;
+
+        index += LengthScript;
+
+        index += 4; // sequence
       }
     }
   }

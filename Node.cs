@@ -13,8 +13,6 @@ namespace BToken
   {
     Blockchain Blockchain;
 
-    Wallet Wallet;
-
     BitcoinGenesisBlock GenesisBlock = new BitcoinGenesisBlock();
 
     Dictionary<int, byte[]> Checkpoints = new Dictionary<int, byte[]>()
@@ -30,15 +28,11 @@ namespace BToken
         GenesisBlock.Header,
         GenesisBlock.BlockBytes,
         Checkpoints);
-
-      Wallet = new Wallet();
     }
 
     public void Start()
     {
       Blockchain.Start();
-
-      // Wallet.GeneratePublicKey();
     }
   }
 }

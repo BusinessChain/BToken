@@ -36,6 +36,11 @@ namespace BToken.Chaining
     readonly object LOCK_IsBlockchainLocked = new object();
     bool IsBlockchainLocked;
 
+    int IndexBlockArchiveImage;
+
+    long UTCTimeStartMerger = 
+      DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
 
 
     public Blockchain(
@@ -68,38 +73,37 @@ namespace BToken.Chaining
 
     async Task LoadImage()
     {
-      await TryLoadImage(0, new byte[32]);
+      await LoadImage(0, new byte[32]);
     }
 
-
-
-    int IndexBlockArchiveImage;
-
-    async Task<bool> TryLoadImage(
+    
+    async Task LoadImage(
       int heightMax,
-      byte[] stopHashLoading)
+      byte[] stopHashInlcusive)
     {
       string pathImage = DirectoryImage.Name;
 
-      while (
-        !TryLoadImageFile(pathImage) ||
-        (Height > heightMax && heightMax > 0))
+      while(true)
       {
         Initialize();
 
-        if (pathImage != DirectoryImage.Name)
+        if (!TryLoadImageFile(pathImage) ||
+        (Height > heightMax && heightMax > 0))
         {
-          break;
+          if (pathImage == DirectoryImage.Name)
+          {
+            pathImage = DirectoryImageOld.Name;
+            continue;
+          }
         }
-
-        pathImage = DirectoryImageOld.Name;
+        
+        if (await Archiver.TryLoadBlocks(
+          stopHashInlcusive,
+          IndexBlockArchiveImage))
+        {
+          return;
+        }
       }
-      
-      await Archiver.LoadBlocks(
-        stopHashLoading,
-        IndexBlockArchiveImage);
-
-      return heightMax == Height;
     }
 
 
@@ -107,8 +111,6 @@ namespace BToken.Chaining
     {
       try
       {
-        Console.WriteLine("Load headerchain image.");
-
         LoadImageHeaderchain(pathImage);
 
         IndexBlockArchiveImage = BitConverter.ToInt32(
@@ -142,22 +144,35 @@ namespace BToken.Chaining
 
       var blockParser = new UTXOTable.BlockParser();
 
-      blockParser.Parse(File.ReadAllBytes(pathFile));
+      int indexBytesHeaderImage = 0;
+      byte[] bytesHeaderImage = File.ReadAllBytes(pathFile);
 
-      Header header = blockParser.HeaderRoot;
-
-      if (!header.HashPrevious.IsEqual(
-        HeaderGenesis.Hash))
+      Header headerPrevious = HeaderGenesis;
+      
+      while(indexBytesHeaderImage < bytesHeaderImage.Length)
       {
-        throw new ChainException(
-          "Header image does not link to genesis header.");
+        Header header = blockParser.ParseHeader(
+         bytesHeaderImage,
+         ref indexBytesHeaderImage);
+
+        if (!header.HashPrevious.IsEqual(
+          headerPrevious.Hash))
+        {
+          throw new ChainException(
+            "Header image does not link to genesis header.");
+        }
+
+        header.HeaderPrevious = headerPrevious;
+
+        ValidateHeader(
+          header, 
+          Height + 1);
+
+        InsertHeader(header);
+
+        headerPrevious = header;
       }
-
-      header.HeaderPrevious = HeaderGenesis;
-
-      ValidateHeaders(header);
-
-      InsertHeaders(blockParser);
+      
     }
 
     void LoadMapBlockToArchiveData(byte[] buffer)
@@ -251,8 +266,6 @@ namespace BToken.Chaining
             fileImageHeaderchain.Write(
               headerBytes, 0, headerBytes.Length);
 
-            fileImageHeaderchain.WriteByte(0);
-
             header = header.HeaderNext;
           }
         }
@@ -320,9 +333,8 @@ namespace BToken.Chaining
 
     void ValidateHeader(Header header, int height)
     {
-      if (
-        Checkpoints.TryGetValue(
-          height, out byte[] hashCheckpoint) &&
+      if (Checkpoints
+        .TryGetValue(height, out byte[] hashCheckpoint) &&
         !hashCheckpoint.IsEqual(header.Hash))
       {
         throw new ChainException(
@@ -460,62 +472,38 @@ namespace BToken.Chaining
     }
 
     
-    bool TryArchiveBlocks(
-      UTXOTable.BlockParser blockParser,
-      int intervallImage)
+    public void InsertBlock(
+      Block block,
+      bool flagValidateHeader)
     {
-      try
+      block.Header.HeaderPrevious = HeaderTip;
+
+      if (flagValidateHeader)
       {
-        InsertBlocks(
-          blockParser,
-          Archiver.IndexBlockArchive,
-          flagValidateHeaders: false);
-      }
-      catch (ChainException ex)
-      {
-        Console.WriteLine(
-          "{0} when inserting blockParser {1}:\n{2}",
-          ex.GetType().Name,
-          blockParser.Index,
-          ex.Message);
-
-        return false;
-      }
-
-      Archiver.ArchiveBlock(blockParser, intervallImage);
-
-      return true;
-    }
-
-    void InsertBlocks(
-      UTXOTable.BlockParser blockParser,
-      int indexBlockArchive,
-      bool flagValidateHeaders)
-    {
-      blockParser.HeaderRoot.HeaderPrevious = HeaderTip;
-
-      if (flagValidateHeaders)
-      {
-        ValidateHeaders(blockParser.HeaderRoot);
+        ValidateHeader(block.Header, Height + 1);
       }
 
       UTXOTable.InsertBlock(
-        blockParser, 
-        indexBlockArchive, 
-        Height);
-
-      InsertHeaders(blockParser);
+        block,
+        Archiver.IndexBlockArchive);
+      
+      InsertHeader(block.Header);
+      
+      Console.WriteLine(
+        "{0},{1},{2},{3}",
+        Height,
+        Archiver.IndexBlockArchive,
+        DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
+        UTXOTable.GetMetricsCSV());
     }
 
-    void InsertHeaders(
-      UTXOTable.BlockParser blockParser)
+    void InsertHeader(Header header)
     {
-      HeaderTip.HeaderNext = blockParser.HeaderRoot;
-      HeaderTip = blockParser.HeaderTip;
-      HeaderTip.HeaderNext = null;
+      HeaderTip.HeaderNext = header;
+      HeaderTip = header;
 
-      Difficulty += blockParser.Difficulty;
-      Height += blockParser.Height;
+      Difficulty += header.Difficulty;
+      Height += 1;
     }
 
 

@@ -16,7 +16,10 @@ namespace BToken
       return new SoapHexBinary(temp).ToString();
     }
 
-    public static bool IsEqual(this byte[] arr1, byte[] arr2, int startIndex2)
+    public static bool IsEqual(
+      this byte[] arr1, 
+      byte[] arr2, 
+      int startIndex2)
     {
       for (int i = 0; i < arr1.Length; i += 1)
       {

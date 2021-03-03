@@ -9,29 +9,34 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    class TXOutput
+    public struct TXOutput
     {
-      public UInt64 Value { get; private set; }
-      public byte[] LockingScript { get; private set; }
+      public ulong Value;
 
-      public TXOutput(UInt64 value)
+      public byte[] Buffer;
+      public int StartIndexScript;
+      public int LengthScript;
+
+
+      public TXOutput(
+        byte[] buffer,
+        ref int index)
       {
-        Value = value;
+        Value = BitConverter.ToUInt64(
+          buffer,
+          index);
+
+        index += 8;
+
+        Buffer = buffer;
+
+        LengthScript = VarInt.GetInt32(
+          Buffer,
+          ref index);
+
+        StartIndexScript = index;
+        index += LengthScript;
       }
-
-      public static TXOutput Parse(byte[] byteStream, ref int startIndex)
-      {
-        UInt64 value = BitConverter.ToUInt64(byteStream, startIndex);
-        startIndex += 8;
-
-        int lockingScriptLength = VarInt.GetInt32(byteStream, ref startIndex);
-        //byte[] lockingScript = new byte[lockingScriptLength];
-        //Array.Copy(byteStream, startIndex, lockingScript, 0, lockingScriptLength);
-        startIndex += lockingScriptLength;
-
-        return new TXOutput(value);
-      }
-
     }
   }
 }
