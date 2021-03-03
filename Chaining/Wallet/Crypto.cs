@@ -17,30 +17,6 @@ namespace BToken.Chaining
   {
     SHA256 SHA256 = SHA256.Create();
 
-    string PrivKeyDec = "46345897603189110989398136884057307203509669786386043766866535737189931384120";
-
-    public void SignatureDemo()
-    {
-      var publicKey = GetPubKeyFromPrivKey(PrivKeyDec);
-
-      var message = "22c54790ad2a15b9b02bf3f12955d65a1600c26b7b9528bd07cde6b132a170bd".ToBinary();
-
-      var signature = GetSignature(
-          PrivKeyDec,
-          message);
-
-      var isvalid = VerifySignature(
-        message,
-        publicKey,
-        signature);
-
-      Console.WriteLine(
-        "signature {0} \n is {1}",
-        signature.ToHexString(),
-        isvalid ? "valid" : "invalid");
-    }
-
-
     bool VerifySignature(
       byte[] message,
       byte[] publicKey,
@@ -67,15 +43,20 @@ namespace BToken.Chaining
       string privKey,
       byte[] tX)
     {
+      byte[] message = SHA256.ComputeHash(
+        tX,
+        0,
+        tX.Length);
+
       byte[] signature = GetSignature(
         privKey,
-        tX);
+        message);
 
       byte[] publicKey = GetPubKeyFromPrivKey(
         privKey);
 
       var isvalid = VerifySignature(
-        tX,
+        message,
         publicKey,
         signature);
 
@@ -85,7 +66,7 @@ namespace BToken.Chaining
         isvalid ? "valid" : "invalid");
     }
 
-    byte[] GetSignature(
+    public byte[] GetSignature(
       string privateKey, 
       byte[] message)
     {
@@ -96,9 +77,7 @@ namespace BToken.Chaining
         curve.G, 
         curve.N, 
         curve.H);
-
-      Console.WriteLine(message.ToHexString());
-
+      
       message = SHA256.ComputeHash(
         message,
         0,
@@ -130,13 +109,13 @@ namespace BToken.Chaining
     bool IsSValueTooHigh(byte[] signature)
     {
       int lengthR = signature[3];
-      int msbSValue = signature[3 + lengthR + 3];
+      int lengthSValue = signature[3 + lengthR + 2];
 
-      return msbSValue > 0x7F;
+      return lengthSValue > 32;
     }
 
-    byte[] GetPubKeyFromPrivKey(
-      string privateKey)
+    public byte[] GetPubKeyFromPrivKey(
+      string privKey)
     {
       var curve = SecNamedCurves.GetByName("secp256k1");
 
@@ -146,7 +125,7 @@ namespace BToken.Chaining
         curve.N, 
         curve.H);
 
-      var d = new Org.BouncyCastle.Math.BigInteger(privateKey);
+      var d = new Org.BouncyCastle.Math.BigInteger(privKey);
       var q = domain.G.Multiply(d);
 
       var publicKey = new ECPublicKeyParameters(q, domain);

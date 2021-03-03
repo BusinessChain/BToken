@@ -33,7 +33,21 @@ namespace BToken.Chaining
       byte[] POSTFIX_P2PKH =
         new byte[] { 0x88, 0xAC };
 
+      byte OP_RETURN = 0x6A;
+
       const int LENGTH_P2PKH = 25;
+
+
+
+      public WalletUTXO()
+      {
+        GeneratePublicKey(
+          "6676D9347D20FEB2E5EA94DE0E6B5AFC3953DFB4C6598FEE0067645980DB7D38");
+
+        SendAnchorToken(
+          "AA55AA55AA55AA55AA55AA55AA55AA55AA55AA55AA55EE11EE11EE11EE11EE11EE11EE11EE11EE11".ToBinary());
+      }
+
 
       public void DetectTXOutputsSpendable(TX tX)
       {
@@ -122,20 +136,21 @@ namespace BToken.Chaining
 
         return true;
       }
-
-
+      
       public void SendAnchorToken(
-        byte[] dataOPReturn, 
-        ulong fee)
+        byte[] dataOPReturn)
       {
+        ulong fee = 49400;
+
         TXOutputWallet outputSpendable =
           TXOutputsSpendable.Find(t => t.Value > fee);
 
         outputSpendable = new TXOutputWallet
         {
-          TXID = "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2".ToBinary().Reverse().ToArray(),
-          OutputIndex = 1,
-          ScriptPubKey = "76a914010966776006953d5567439e5e39f86a0d273bee88ac".ToBinary().Reverse().ToArray()
+          TXID = "391196f04bbf34ee921a6cbc93cfa198729281bd369e486d0377fabbf86c8c2f".ToBinary().ToArray(),
+          OutputIndex = 0,
+          ScriptPubKey = "76a914d4dc5e7b47130caae480d11a325856029f2cd87388ac".ToBinary().Reverse().ToArray(),
+          Value = 50000
         };
 
         if (outputSpendable == null)
@@ -155,6 +170,8 @@ namespace BToken.Chaining
 
         tXRaw.AddRange(BitConverter.GetBytes(
           outputSpendable.OutputIndex));
+        
+        int indexScriptSig = tXRaw.Count;
 
         tXRaw.Add(LENGTH_P2PKH);
 
@@ -163,34 +180,63 @@ namespace BToken.Chaining
         byte[] sequence = { 0xFF, 0xFF, 0xFF, 0xFF };
         tXRaw.AddRange(sequence);
         
-        byte countOutputs = 1; //(byte)(valueChange == 0 ? 1 : 2);
+        byte countOutputs = 2; //(byte)(valueChange == 0 ? 1 : 2);
         tXRaw.Add(countOutputs);
 
         ulong valueChange = outputSpendable.Value - fee;
-        //tXRaw.AddRange(BitConverter.GetBytes(
-        //  valueChange));
         tXRaw.AddRange(BitConverter.GetBytes(
-          (ulong)99900000));
+          valueChange));
 
         tXRaw.Add(LENGTH_P2PKH);
 
         tXRaw.AddRange(PREFIX_P2PKH);
-        //tXRaw.AddRange(PublicKeyHash160);
-        tXRaw.AddRange("097072524438d003d23a2f23edb65aae1bb3e469".ToBinary().Reverse());
+        tXRaw.AddRange(PublicKeyHash160);
         tXRaw.AddRange(POSTFIX_P2PKH);
+
+        tXRaw.AddRange(BitConverter.GetBytes(
+          (ulong)0));
+
+        tXRaw.Add((byte)(dataOPReturn.Length + 2));
+        tXRaw.Add(OP_RETURN);
+        tXRaw.Add((byte)dataOPReturn.Length);
+        tXRaw.AddRange(dataOPReturn);
 
         byte[] lockTime = new byte[4];
         tXRaw.AddRange(lockTime);
 
         byte[] sigHashType = { 0x01, 0x00, 0x00, 0x00 };
         tXRaw.AddRange(sigHashType);
+        
+        byte[] signature = Crypto.GetSignature(
+        PrivKeyDec,
+        tXRaw.ToArray());
 
-        Crypto.SignatureDemo();
+        List<byte> scriptSig = new List<byte>();
+        scriptSig.Add((byte)(signature.Length + 1));
+        scriptSig.AddRange(signature);
+        scriptSig.Add(0x01);
 
-        Crypto.SignTX(
-          PrivKeyDec,
-          tXRaw.ToArray());
+        byte[] publicKey = Crypto.GetPubKeyFromPrivKey(
+          PrivKeyDec);
+        
+        scriptSig.Add((byte)publicKey.Length);
+        scriptSig.AddRange(publicKey);
 
+        var tXRawPreScriptSig = tXRaw.Take(indexScriptSig);
+        var tXRawPostScriptSig = tXRaw.Skip(indexScriptSig + LENGTH_P2PKH + 1);
+
+        tXRaw = tXRawPreScriptSig
+          .Concat(new byte[] { (byte)scriptSig.Count })
+          .Concat(scriptSig)
+          .Concat(tXRawPostScriptSig)
+          .ToList();
+
+        tXRaw.RemoveRange(tXRaw.Count - 4, 4);
+
+        var txArray = tXRaw.ToArray();
+        txArray = txArray.Reverse().ToArray();
+        Console.WriteLine(txArray.ToHexString());
+        
         //byte[] script = PREFIX_OP_RETURN.Concat(data).ToArray();
         //var tXOutputOPReturn =
         //  new TXOutput
@@ -201,17 +247,7 @@ namespace BToken.Chaining
         //    LengthScript = script.Length
         //  };
       }
-
-
-
-      public WalletUTXO()
-      {
-        SendAnchorToken(new byte[0], 0);
-
-        GeneratePublicKey(
-          "6676D9347D20FEB2E5EA94DE0E6B5AFC3953DFB4C6598FEE0067645980DB7D38");
-      }
-
+                 
       void GeneratePublicKey(string privKey)
       {
         var secret = BigInteger.Parse(
