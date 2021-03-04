@@ -279,7 +279,7 @@ namespace BToken.Chaining
           stream.Write(bytes, 0, bytes.Length);
         }
       }
-      public override void Load(string path)
+      public override void LoadImage(string path)
       {
         LoadPrimaryData(File.ReadAllBytes(
           Path.Combine(path, Label, "PrimaryTable")));

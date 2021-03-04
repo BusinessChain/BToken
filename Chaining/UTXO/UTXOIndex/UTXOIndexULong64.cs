@@ -229,7 +229,7 @@ namespace BToken.Chaining
           }
         }
       }
-      public override void Load(string path)
+      public override void LoadImage(string path)
       {
         byte[] buffer = File.ReadAllBytes(
           Path.Combine(path, Label, "PrimaryTable"));

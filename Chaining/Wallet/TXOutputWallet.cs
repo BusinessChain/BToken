@@ -8,13 +8,16 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    class TXOutputWallet
+    partial class WalletUTXO
     {
-      public byte[] TXID;
-      public int TXIDShort;
-      public int OutputIndex;
-      public ulong Value;
-      public byte[] ScriptPubKey;
+      class TXOutputWallet
+      {
+        public byte[] TXID = new byte[HASH_BYTE_SIZE];
+        public int TXIDShort;
+        public int OutputIndex;
+        public ulong Value;
+        public byte[] ScriptPubKey = new byte[LENGTH_P2PKH];
+      }
     }
   }
 }

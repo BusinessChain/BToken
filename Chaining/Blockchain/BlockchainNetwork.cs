@@ -569,10 +569,6 @@ namespace BToken.Chaining
                 }
                 else
                 {
-                  Console.WriteLine(
-                    "Release peer {0} on line 355",
-                    peer.GetID());
-                  
                   ReleasePeer(peer);
                 }
               }

@@ -51,7 +51,7 @@ namespace BToken.Chaining
 
     public void LoadImage(string pathImageRoot)
     {
-      string pathUTXOImage = Path.Combine(
+      string pathImage = Path.Combine(
         pathImageRoot, 
         "UTXOImage");
 
@@ -61,13 +61,15 @@ namespace BToken.Chaining
           Tables[c].GetType().Name)
           .Log(LogFile);
 
-        Tables[c].Load(pathUTXOImage);
+        Tables[c].LoadImage(pathImage);
       }
 
       string.Format(
         "Load UTXO Image from {0}",
-        pathUTXOImage)
+        pathImage)
         .Log(LogFile);
+
+      Wallet.LoadImage(pathImage);
     }
 
     public void Clear()
@@ -247,6 +249,8 @@ namespace BToken.Chaining
       {
         t.BackupImage(directoryUTXOImage.FullName);
       });
+
+      Wallet.CreateImage(directoryUTXOImage.FullName);
     }
 
     public string GetMetricsCSV()

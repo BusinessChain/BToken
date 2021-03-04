@@ -354,7 +354,7 @@ namespace BToken.Chaining
       }
 
 
-      public override void Load(string path)
+      public override void LoadImage(string path)
       {
         int exponentCountLoadersPartition = 2;
         Debug.Assert(exponentCountLoadersPartition < 8);

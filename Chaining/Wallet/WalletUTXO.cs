@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.IO;
 using System.Threading.Tasks;
 using System.Numerics;
 using System.Globalization;
@@ -13,7 +13,7 @@ namespace BToken.Chaining
 {
   partial class UTXOTable
   {
-    public class WalletUTXO
+    partial class WalletUTXO
     {
       Crypto Crypto = new Crypto();
 
@@ -48,6 +48,76 @@ namespace BToken.Chaining
           "AA55AA55AA55AA55AA55AA55AA55AA55AA55AA55AA55EE11EE11EE11EE11EE11EE11EE11EE11EE11".ToBinary());
       }
 
+      public void LoadImage(string pathImage)
+      {
+        string pathFile = Path.Combine(
+          pathImage, "ImageWallet");
+
+        int index = 0;
+        byte[] buffer = File.ReadAllBytes(pathFile);
+
+        while (index < buffer.Length)
+        {
+          var tXOutput = new TXOutputWallet();
+
+          tXOutput.TXID = new byte[HASH_BYTE_SIZE];
+          Array.Copy(buffer, index, tXOutput.TXID, 0, HASH_BYTE_SIZE);
+          index += HASH_BYTE_SIZE;
+
+          tXOutput.TXIDShort = BitConverter.ToInt32(tXOutput.TXID, 0);
+
+          tXOutput.OutputIndex = BitConverter.ToInt32(buffer, index);
+          index += 4;
+
+          tXOutput.Value = BitConverter.ToUInt64(buffer, index);
+          index += 8;
+          
+          tXOutput.ScriptPubKey = new byte[LENGTH_P2PKH];
+          Array.Copy(buffer, index, tXOutput.ScriptPubKey, 0, LENGTH_P2PKH);
+          index += LENGTH_P2PKH;
+
+          TXOutputsSpendable.Add(tXOutput);
+        }
+      }
+
+      public void CreateImage(string pathDirectory)
+      {
+        string pathimageWallet = Path.Combine(
+           pathDirectory,
+           "ImageWallet");
+
+        using (var fileImageWallet =
+          new FileStream(
+            pathimageWallet,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None))
+        {
+          foreach(TXOutputWallet tXOutput in TXOutputsSpendable)
+          {
+            fileImageWallet.Write(
+              tXOutput.TXID, 0, tXOutput.TXID.Length);
+
+
+            byte[] outputIndex = BitConverter.GetBytes(
+              tXOutput.OutputIndex);
+
+            fileImageWallet.Write(
+              outputIndex, 0, outputIndex.Length);
+                      
+
+            byte[] value = BitConverter.GetBytes(
+              tXOutput.Value);
+
+            fileImageWallet.Write(
+              value, 0, value.Length);
+
+
+            fileImageWallet.Write(
+              tXOutput.ScriptPubKey, 0, tXOutput.ScriptPubKey.Length);
+          }
+        }
+      }
 
       public void DetectTXOutputsSpendable(TX tX)
       {

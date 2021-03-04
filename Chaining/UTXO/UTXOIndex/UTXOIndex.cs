@@ -99,7 +99,7 @@ namespace BToken.Chaining
       }
 
       public abstract void BackupImage(string path);
-      public abstract void Load(string pathUTXOImage);
+      public abstract void LoadImage(string pathUTXOImage);
 
       public abstract void Clear();
     }
