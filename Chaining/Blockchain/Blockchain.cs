@@ -88,7 +88,7 @@ namespace BToken.Chaining
         Initialize();
 
         if (!TryLoadImageFile(pathImage) ||
-        (Height > heightMax && heightMax > 0))
+        (heightMax > 0 && Height > heightMax))
         {
           if (pathImage == DirectoryImage.Name)
           {
@@ -472,29 +472,44 @@ namespace BToken.Chaining
     }
 
     
-    public void InsertBlock(
+    public bool TryInsertBlock(
       Block block,
       bool flagValidateHeader)
     {
-      block.Header.HeaderPrevious = HeaderTip;
-
-      if (flagValidateHeader)
+      try
       {
-        ValidateHeader(block.Header, Height + 1);
-      }
+        block.Header.HeaderPrevious = HeaderTip;
 
-      UTXOTable.InsertBlock(
-        block,
-        Archiver.IndexBlockArchive);
-      
-      InsertHeader(block.Header);
-      
-      Console.WriteLine(
-        "{0},{1},{2},{3}",
-        Height,
-        Archiver.IndexBlockArchive,
-        DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
-        UTXOTable.GetMetricsCSV());
+        if (flagValidateHeader)
+        {
+          ValidateHeader(block.Header, Height + 1);
+        }
+
+        UTXOTable.InsertBlock(
+          block,
+          Archiver.IndexBlockArchive);
+
+        InsertHeader(block.Header);
+
+        Console.WriteLine(
+          "{0},{1},{2},{3}",
+          Height,
+          Archiver.IndexBlockArchive,
+          DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
+          UTXOTable.GetMetricsCSV());
+
+        return true;
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine(
+          "{0} when inserting block {1} in blockchain:\n {2}",
+          ex.GetType().Name,
+          block.Header.Hash.ToHexString(),
+          ex.Message);
+
+        return false;
+      }
     }
 
     void InsertHeader(Header header)

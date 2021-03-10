@@ -104,7 +104,7 @@ namespace BToken.Chaining
           {
             foreach (Block block in blockArchiveLoad.Blocks)
             {
-              Blockchain.InsertBlock(
+              Blockchain.TryInsertBlock(
                 block,
                 flagValidateHeader: true);
             }
@@ -207,6 +207,11 @@ namespace BToken.Chaining
         }
       }
 
+      public void Reorganize()
+      {
+        // relocate fork archive and image to main
+      }
+
       void OpenBlockArchive()
       {
         string.Format(
@@ -286,7 +291,8 @@ namespace BToken.Chaining
             blockArchiveLoad.InsertBlock(block);
           } while (
           startIndex < bytesFile.Length &&
-          !HashStopLoadingInclusive.IsEqual(block.Header.Hash));
+          !HashStopLoadingInclusive.IsEqual(
+            block.Header.Hash));
 
           blockArchiveLoad.IsInvalid = false;
         }

@@ -359,8 +359,13 @@ namespace BToken.Chaining
           await peer.BuildHeaderchain(
             headerRoot,
             Blockchain.Height + 1);
-          
-          await TrySynchronizeUTXO(headerRoot, peer);
+
+          if(!await TrySynchronizeUTXO(
+            headerRoot, 
+            peer))
+          {
+            await Blockchain.LoadImage();
+          }
 
           return;
         }
@@ -390,11 +395,19 @@ namespace BToken.Chaining
             goto LABEL_SynchronizeWithPeer;
           }
 
-          if (!await TrySynchronizeUTXO(headerRoot, peer))
-          {
-            Blockchain.Archiver.Dispose();
+          bool dataCorrupted = await TrySynchronizeUTXO(
+            headerRoot, 
+            peer);
 
+          if (
+            dataCorrupted || 
+            Blockchain.Difficulty <= difficultyOld)
+          {
             await Blockchain.LoadImage();
+          }
+          else
+          {
+            Blockchain.Archiver.Reorganize();
           }
         }
         else if (difficultyFork < difficultyOld)
@@ -428,28 +441,30 @@ namespace BToken.Chaining
 
       async Task<bool> TrySynchronizeUTXO(
         Header headerRoot,
-        Peer peer)
+        Peer peerSyncMaster)
       {
         var peersCompleted = new List<Peer>();
+        bool abortSynchronization = false;
 
         var cancellationSynchronizeUTXO =
           new CancellationTokenSource();
 
+        DownloadsAwaiting.Clear();
+        QueueDownloadsInvalid.Clear();
+        
         HeaderLoad = headerRoot;
         IndexBlockDownload = 0;
         int indexBlockDownloadQueue = 0;
 
-        DownloadsAwaiting.Clear();
-
-        Peer peerSyncMaster = peer;
+        Peer peer = peerSyncMaster;
 
         StartBlockDownload(peer);
 
         bool flagTimeoutTriggered = false;
 
-        do
+        while (true)
         {
-          if (IsBlockDownloadAvailable())
+          if (!abortSynchronization && IsBlockDownloadAvailable())
           {
             if (TryGetPeer(out peer))
             {
@@ -480,9 +495,7 @@ namespace BToken.Chaining
               {
                 "Abort UTXO Synchronization due to timeout."
                   .Log(LogFile);
-
-                QueueDownloadsInvalid.Clear();
-
+                
                 peersCompleted.ForEach(p => ReleasePeer(p));
                 return false;
               }
@@ -499,6 +512,12 @@ namespace BToken.Chaining
           else 
           if (PeersDownloading.Count == 0)
           {
+            if(abortSynchronization)
+            {
+              Console.WriteLine("Synchronization aborted.");
+              return false;
+            }
+
             return true;
           }
 
@@ -508,24 +527,36 @@ namespace BToken.Chaining
 
           PeersDownloading.Remove(peer);
 
+          if(abortSynchronization)
+          {
+            ReleasePeer(peer);
+            continue;
+          }
+
           var blockDownload = peer.BlockDownload;
 
-          if (peer == peerSyncMaster &&
-            (peer.FlagDispose || peer.Command == Peer.COMMAND_NOTFOUND))
+          if(
+            peer.FlagDispose || 
+            peer.Command == Peer.COMMAND_NOTFOUND)
           {
-            peer.FlagDispose = true;
-          }
-          else if (peer.FlagDispose)
-          {
-            Console.WriteLine(
-              "Release peer {0} on line 524",
-              peer.GetID());
+            if (peer == peerSyncMaster)
+            {
+              peer.FlagDispose = true;
+            }
+            else if (peer.FlagDispose)
+            {
+              Console.WriteLine(
+                "Release peer {0} on line 524",
+                peer.GetID());
 
-            ReleasePeer(peer);
-          }
-          else if (peer.Command == Peer.COMMAND_NOTFOUND)
-          {
-            peersCompleted.Add(peer);
+              ReleasePeer(peer);
+            }
+            else if (peer.Command == Peer.COMMAND_NOTFOUND)
+            {
+              peersCompleted.Add(peer);
+            }
+
+            EnqueueBlockDownloadInvalid(blockDownload);
           }
           else
           {
@@ -553,61 +584,44 @@ namespace BToken.Chaining
               continue;
             }
 
-            bool isDownloadAwaiting = false;
-
-            if (TryInsertBlocks(blockDownload))
+            if (IsBlockDownloadAvailable())
             {
-            LABEL_PostProcessArchiveBlocks:
+              StartBlockDownload(peer);
+            }
+            else
+            {
+              ReleasePeer(peer);
+            }
+
+            while (true)
+            {
+              if(!TryInsertBlocks(blockDownload))
+              {
+                peer.FlagDispose = true;
+
+                ReleasePeer(peer);
+
+                abortSynchronization = true;
+
+                break;
+              }
               
               indexBlockDownloadQueue += 1;
-
-              if (!isDownloadAwaiting)
-              {
-                if(IsBlockDownloadAvailable())
-                {
-                  StartBlockDownload(peer);
-                }
-                else
-                {
-                  ReleasePeer(peer);
-                }
-              }
 
               if (!DownloadsAwaiting.TryGetValue(
                 indexBlockDownloadQueue,
                 out blockDownload))
               {
-                continue;
+                break;
               }
-
-              isDownloadAwaiting = true;
 
               DownloadsAwaiting.Remove(
                 indexBlockDownloadQueue);
 
               peer = blockDownload.Peer;
-
-              if (TryInsertBlocks(blockDownload))
-              {
-                goto LABEL_PostProcessArchiveBlocks;
-              }
-            }
-            
-            peer.FlagDispose = true;
-
-            if (peer != peerSyncMaster)
-            {
-              Console.WriteLine(
-                "Release peer {0} on line 387",
-                peer.GetID());
-
-              ReleasePeer(peer);
             }
           }
-
-          EnqueueBlockDownloadInvalid(blockDownload);
-
-        } while (true);
+        } 
       }
 
       void StartBlockDownload(Peer peer)
@@ -696,28 +710,15 @@ namespace BToken.Chaining
       {
         foreach (Block block in blockDownload.Blocks)
         {
-          try
+          Console.WriteLine(
+            "Insert block {0} from download {1}",
+            block.Header.Hash.ToHexString(),
+            blockDownload.Index);
+
+          if(!Blockchain.TryInsertBlock(
+              block,
+              flagValidateHeader: false))
           {
-            Console.WriteLine(
-              "Insert block {0} from download {1}", 
-              block.Header.Hash.ToHexString(),
-              blockDownload.Index);
-
-            Blockchain.InsertBlock(
-                block,
-                flagValidateHeader: false);
-          }
-          catch (Exception ex)
-          {
-            // TODO: Reorg download, restore utxo
-
-            Console.WriteLine(
-              "{0} when inserting block {1}:\n {2}" +
-              "TODO: Reorg download, restore utxo",
-              ex.GetType().Name,
-              block.Header.Hash.ToHexString(),
-              ex.Message);
-
             return false;
           }
 
