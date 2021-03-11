@@ -360,7 +360,7 @@ namespace BToken.Chaining
             headerRoot,
             Blockchain.Height + 1);
 
-          if(!await TrySynchronizeUTXO(
+          if(!await SynchronizeUTXO(
             headerRoot, 
             peer))
           {
@@ -395,7 +395,9 @@ namespace BToken.Chaining
             goto LABEL_SynchronizeWithPeer;
           }
 
-          bool dataCorrupted = await TrySynchronizeUTXO(
+          Blockchain.Archiver.Fork();
+
+          bool dataCorrupted = await SynchronizeUTXO(
             headerRoot, 
             peer);
 
@@ -403,6 +405,7 @@ namespace BToken.Chaining
             dataCorrupted || 
             Blockchain.Difficulty <= difficultyOld)
           {
+            Blockchain.Archiver.DismissFork();
             await Blockchain.LoadImage();
           }
           else
@@ -439,7 +442,7 @@ namespace BToken.Chaining
       Dictionary<int, BlockDownload> DownloadsAwaiting =
         new Dictionary<int, BlockDownload>();
 
-      async Task<bool> TrySynchronizeUTXO(
+      async Task<bool> SynchronizeUTXO(
         Header headerRoot,
         Peer peerSyncMaster)
       {
@@ -515,10 +518,10 @@ namespace BToken.Chaining
             if(abortSynchronization)
             {
               Console.WriteLine("Synchronization aborted.");
-              return false;
+              return true;
             }
 
-            return true;
+            return false;
           }
 
           peer = await QueueSynchronizer

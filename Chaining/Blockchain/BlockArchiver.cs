@@ -209,7 +209,7 @@ namespace BToken.Chaining
 
       public void Reorganize()
       {
-        // relocate fork archive and image to main
+        relocate fork archive and image to main
       }
 
       void OpenBlockArchive()

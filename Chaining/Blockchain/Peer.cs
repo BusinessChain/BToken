@@ -703,7 +703,7 @@ namespace BToken.Chaining
         async Task SynchronizeUTXO(Header header)
         {
           await Blockchain.Network
-            .TrySynchronizeUTXO(header, this);
+            .SynchronizeUTXO(header, this);
           
           Blockchain.ReleaseLock();
         }
