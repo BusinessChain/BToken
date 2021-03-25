@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
+using System.Threading.Tasks.Dataflow;
 
 
 
@@ -25,21 +26,38 @@ namespace BToken.Chaining
     UTXOTable UTXOTable;
 
     BlockchainNetwork Network;
-    BlockArchiver Archiver;
+    
+    string NameFork = "Fork";
+    string NameImage = "Image";
+    string NameOld = "Old";
 
     string FileNameIndexBlockArchiveImage = "IndexBlockArchive";
-    DirectoryInfo DirectoryImage =
-      Directory.CreateDirectory("image");
-    DirectoryInfo DirectoryImageOld =
-      Directory.CreateDirectory("image_old");
+    string PathBlockArchive = "J:\\BlockArchivePartitioned";
+    string PathBlockArchiveFork = "J:\\BlockArchivePartitionedFork";
 
     readonly object LOCK_IsBlockchainLocked = new object();
     bool IsBlockchainLocked;
-
-    int IndexBlockArchiveImage;
-
+    
     long UTCTimeStartMerger = 
       DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+         
+
+    public int IndexBlockArchive;
+
+    byte[] HashRootFork;
+    public const int COUNT_LOADER_TASKS = 4;
+    int SIZE_BLOCK_ARCHIVE = 20000;
+    const int UTXOIMAGE_INTERVAL_LOADER = 500;
+
+    readonly object LOCK_IndexBlockArchiveQueue = new object();
+    int IndexBlockArchiveQueue;
+            
+    StreamWriter LogFile;
+
+    readonly object LOCK_IndexBlockArchiveLoad = new object();
+    int IndexBlockArchiveLoad;
+
 
 
 
@@ -49,7 +67,6 @@ namespace BToken.Chaining
       Dictionary<int, byte[]> checkpoints)
     {
       Network = new BlockchainNetwork(this);
-      Archiver = new BlockArchiver(this);
 
       HeaderGenesis = headerGenesis;
       HeaderTip = headerGenesis;
@@ -60,6 +77,11 @@ namespace BToken.Chaining
       UpdateHeaderIndex(headerGenesis);
       
       UTXOTable = new UTXOTable(genesisBlockBytes);
+
+      DirectoryInfo DirectoryBlockArchive =
+          Directory.CreateDirectory(PathBlockArchive);
+
+      LogFile = new StreamWriter("logArchiver", false);
     }
 
 
@@ -71,35 +93,41 @@ namespace BToken.Chaining
       Network.Start();
     }
 
+
+
     async Task LoadImage()
     {
       await LoadImage(0, new byte[32]);
     }
-
-    
+        
     async Task LoadImage(
       int heightMax,
-      byte[] stopHashInlcusive)
+      byte[] hashRootFork)
     {
-      string pathImage = DirectoryImage.Name;
-
+      string pathImage = NameImage;
+      
       while(true)
       {
         Initialize();
 
-        if (!TryLoadImageFile(pathImage) ||
+        if (!TryLoadImageFile(
+          pathImage, 
+          out int indexBlockArchiveImage) ||
         (heightMax > 0 && Height > heightMax))
         {
-          if (pathImage == DirectoryImage.Name)
+          if (pathImage == NameImage)
           {
-            pathImage = DirectoryImageOld.Name;
+            pathImage += NameOld;
+
             continue;
           }
+
+          Initialize();
         }
         
-        if (await Archiver.TryLoadBlocks(
-          stopHashInlcusive,
-          IndexBlockArchiveImage))
+        if (await TryLoadBlocks(
+          hashRootFork,
+          indexBlockArchiveImage))
         {
           return;
         }
@@ -107,13 +135,15 @@ namespace BToken.Chaining
     }
 
 
-    bool TryLoadImageFile(string pathImage)
+    bool TryLoadImageFile(
+      string pathImage, 
+      out int indexBlockArchiveImage)
     {
       try
       {
         LoadImageHeaderchain(pathImage);
 
-        IndexBlockArchiveImage = BitConverter.ToInt32(
+        indexBlockArchiveImage = BitConverter.ToInt32(
           File.ReadAllBytes(
             Path.Combine(
               pathImage,
@@ -132,7 +162,7 @@ namespace BToken.Chaining
       {
         Console.WriteLine(ex.Message);
 
-        IndexBlockArchiveImage = 0;
+        indexBlockArchiveImage = 0;
         return false;
       }
     }
@@ -158,7 +188,7 @@ namespace BToken.Chaining
         if (!header.HashPrevious.IsEqual(
           headerPrevious.Hash))
         {
-          throw new ChainException(
+          throw new ProtocolException(
             "Header image does not link to genesis header.");
         }
 
@@ -191,122 +221,7 @@ namespace BToken.Chaining
         MapBlockToArchiveIndex.Add(key, value);
       }
     }
-
-    void CreateImage(int indexBlockArchive)
-    {
-      try
-      {
-        while(true)
-        {
-          try
-          {
-            DirectoryImageOld.Delete(true);
-            break;
-          }
-          catch(DirectoryNotFoundException)
-          {
-            break;
-          }
-          catch (Exception ex)
-          {
-            Console.WriteLine(
-              "Cannot delete directory old due to {0}:\n{1}",
-              ex.GetType().Name,
-              ex.Message);
-
-            Thread.Sleep(3000);
-          }
-        }
-
-        while (true)
-        {
-          try
-          {
-            Directory.Move(
-              DirectoryImage.Name,
-              DirectoryImageOld.Name);
-
-            break;
-          }
-          catch(DirectoryNotFoundException)
-          {
-            break;
-          }
-          catch (Exception ex)
-          {
-            Console.WriteLine(
-              "Cannot move new image to old due to {0}:\n{1}",
-              ex.GetType().Name,
-              ex.Message);
-
-            Thread.Sleep(3000);
-          }
-        }
-
-        DirectoryImage.Create();
-
-        string pathimageHeaderchain = Path.Combine(
-          DirectoryImage.Name,
-          "ImageHeaderchain");
-
-        using (var fileImageHeaderchain =
-          new FileStream(
-            pathimageHeaderchain,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            bufferSize: 65536))
-        {
-          Header header = HeaderGenesis.HeaderNext;
-
-          while (header != null)
-          {
-            byte[] headerBytes = header.GetBytes();
-
-            fileImageHeaderchain.Write(
-              headerBytes, 0, headerBytes.Length);
-
-            header = header.HeaderNext;
-          }
-        }
-
-        File.WriteAllBytes(
-          Path.Combine(
-            DirectoryImage.Name,
-            FileNameIndexBlockArchiveImage),
-          BitConverter.GetBytes(indexBlockArchive));
-
-        using (FileStream stream = new FileStream(
-           Path.Combine(DirectoryImage.Name, "MapBlockHeader"),
-           FileMode.Create,
-           FileAccess.Write))
-        {
-          foreach (KeyValuePair<byte[], int> keyValuePair
-            in MapBlockToArchiveIndex)
-          {
-            stream.Write(
-              keyValuePair.Key,
-              0,
-              keyValuePair.Key.Length);
-
-            byte[] valueBytes = BitConverter.GetBytes(
-              keyValuePair.Value);
-
-            stream.Write(valueBytes, 0, valueBytes.Length);
-          }
-        }
-
-        UTXOTable.CreateImage(DirectoryImage.Name);
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine(
-          "{0}:\n{1}",
-          ex.GetType().Name,
-          ex.Message);
-      }
-    }
-    
+        
     void Initialize()
     {
       HeaderTip = HeaderGenesis;
@@ -337,7 +252,7 @@ namespace BToken.Chaining
         .TryGetValue(height, out byte[] hashCheckpoint) &&
         !hashCheckpoint.IsEqual(header.Hash))
       {
-        throw new ChainException(
+        throw new ProtocolException(
           string.Format(
             "Header {0} at hight {1} not equal to checkpoint hash {2}",
             header.Hash.ToHexString(),
@@ -351,7 +266,7 @@ namespace BToken.Chaining
 
       if (header.UnixTimeSeconds < medianTimePast)
       {
-        throw new ChainException(
+        throw new ProtocolException(
           string.Format(
             "Header {0} with unix time {1} " +
             "is older than median time past {2}.",
@@ -375,7 +290,7 @@ namespace BToken.Chaining
       
       if (header.NBits != targetBitsNew)
       {
-        throw new ChainException(
+        throw new ProtocolException(
           string.Format(
             "In header {0}\n nBits {1} not equal to target nBits {2}",
             header.Hash.ToHexString(),
@@ -487,14 +402,14 @@ namespace BToken.Chaining
 
         UTXOTable.InsertBlock(
           block,
-          Archiver.IndexBlockArchive);
+          IndexBlockArchive);
 
         InsertHeader(block.Header);
 
         Console.WriteLine(
           "{0},{1},{2},{3}",
           Height,
-          Archiver.IndexBlockArchive,
+          IndexBlockArchive,
           DateTimeOffset.UtcNow.ToUnixTimeSeconds() - UTCTimeStartMerger,
           UTXOTable.GetMetricsCSV());
 
@@ -647,7 +562,7 @@ namespace BToken.Chaining
         }
       }
 
-      throw new ChainException(string.Format(
+      throw new ProtocolException(string.Format(
         "Locator does not root in headerchain."));
     }
 
@@ -677,37 +592,569 @@ namespace BToken.Chaining
 
 
 
-    readonly object LOCK_ParsersIdle = new object();
-    Stack<UTXOTable.BlockParser> ParsersIdle =
-      new Stack<UTXOTable.BlockParser>();
-    
-    UTXOTable.BlockParser GetBlockParser()
+    public async Task<bool> TryLoadBlocks(
+      byte[] hashRootFork,
+      int indexBlockArchive)
     {
-      try
-      {
-        lock(LOCK_ParsersIdle)
-        {
-          var blockParser = ParsersIdle.Pop();
+      "Start archive loader".Log(LogFile);
 
-          blockParser.ClearPayloadData();
-          return blockParser;
+      IsInserterCompleted = false;
+
+      IndexBlockArchiveLoad = indexBlockArchive;
+      IndexBlockArchiveQueue = indexBlockArchive;
+      HashRootFork = hashRootFork;
+
+      Task inserterTask = RunLoaderInserter();
+
+      var loaderTasks = new Task[COUNT_LOADER_TASKS];
+
+      Parallel.For(
+        0,
+        COUNT_LOADER_TASKS,
+        i => loaderTasks[i] = StartLoader());
+
+      await inserterTask;
+
+      IsInserterCompleted = true;
+
+      await Task.WhenAll(loaderTasks);
+
+      return IsInserterSuccess;
+    }
+
+    BufferBlock<BlockLoad> QueueLoader =
+      new BufferBlock<BlockLoad>();
+    bool IsInserterSuccess;
+
+    async Task RunLoaderInserter()
+    {
+      "Start archive inserter.".Log(LogFile);
+
+      IsInserterSuccess = true;
+
+      while (true)
+      {
+        BlockLoad blockLoad = await QueueLoader
+          .ReceiveAsync()
+          .ConfigureAwait(false);
+
+        IndexBlockArchive = blockLoad.Index;
+
+        if (
+          blockLoad.IsInvalid ||
+          !HeaderTip.Hash.IsEqual(
+            blockLoad.Blocks.First().Header.HashPrevious))
+        {
+          CreateBlockArchive();
+          return;
+        }
+
+        foreach (Block block in blockLoad.Blocks)
+        {
+          if (!TryInsertBlock(
+            block,
+            flagValidateHeader: true))
+          {
+            File.Delete(
+              Path.Combine(
+                PathBlockArchive,
+                blockLoad.Index.ToString()));
+
+            IsInserterSuccess = false;
+            return;
+          }
+
+          if (block.Header.Hash.IsEqual(HashRootFork))
+          {
+            FileBlockArchive.Dispose();
+
+            CreateBlockArchive();
+
+            foreach (Block blockArchiveFork in blockLoad.Blocks)
+            {
+              ArchiveBlock(blockArchiveFork, -1);
+
+              if(blockArchiveFork == block)
+              {
+                return;
+              }
+            }
+          }
+        }
+
+        if (blockLoad.CountTX < SIZE_BLOCK_ARCHIVE)
+        {
+          CountTXsArchive = blockLoad.CountTX;
+          OpenBlockArchive();
+
+          return;
+        }
+
+        IndexBlockArchive += 1;
+        
+        if (
+          IndexBlockArchive % UTXOIMAGE_INTERVAL_LOADER == 0)
+        {
+          CreateImage(
+            IndexBlockArchive,
+            NameImage);
         }
       }
-      catch (InvalidOperationException)
-      {
-        return new UTXOTable.BlockParser();
-      }
     }
 
-    void ReleaseBlockParser(
-      UTXOTable.BlockParser parser)
+    int CountTXsArchive;
+    FileStream FileBlockArchive;
+
+    public void ArchiveBlock(
+      Block block,
+      int intervalImage)
     {
-      parser.ClearPayloadData();
-
-      lock (LOCK_ParsersIdle)
+      while (true)
       {
-        ParsersIdle.Push(parser);
+        try
+        {
+          FileBlockArchive.Write(
+            block.Buffer,
+            0,
+            block.Buffer.Length);
+
+          FileBlockArchive.Flush();
+
+          break;
+        }
+        catch (Exception ex)
+        {
+          string.Format(
+            "{0} when writing block {1} to " +
+            "file {2}: \n{3} \n" +
+            "Try again in 10 seconds ...",
+            ex.GetType().Name,
+            block.Header.Hash.ToHexString(),
+            FileBlockArchive.Name,
+            ex.Message)
+            .Log(LogFile);
+
+          Thread.Sleep(10000);
+        }
+      }
+
+      CountTXsArchive += block.TXs.Count;
+
+      if (CountTXsArchive >= SIZE_BLOCK_ARCHIVE)
+      {
+        FileBlockArchive.Dispose();
+
+        IndexBlockArchive += 1;
+
+        if (IndexBlockArchive % intervalImage == 0)
+        {
+          string pathImage = IsFork ? 
+            Path.Combine(NameFork, NameImage) : 
+            NameImage;
+
+          CreateImage(
+            IndexBlockArchive, 
+            pathImage);
+        }
+
+        CreateBlockArchive();
       }
     }
+    
+    void OpenBlockArchive()
+    {
+      string.Format(
+        "Open BlockArchive {0}",
+        IndexBlockArchive)
+        .Log(LogFile);
+
+      string pathFileArchive = Path.Combine(
+        PathBlockArchive,
+        IndexBlockArchive.ToString());
+
+      FileBlockArchive = new FileStream(
+       pathFileArchive,
+       FileMode.Append,
+       FileAccess.Write,
+       FileShare.None,
+       bufferSize: 65536);
+    }
+
+    void CreateImage(
+      int indexBlockArchive,
+      string pathImage)
+    {
+      string pathimageOld = pathImage + NameOld;
+
+      try
+      {
+        while (true)
+        {
+          try
+          {
+            Directory.Delete(pathimageOld, true);
+
+            break;
+          }
+          catch (DirectoryNotFoundException)
+          {
+            break;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "Cannot delete directory old due to {0}:\n{1}",
+              ex.GetType().Name,
+              ex.Message);
+
+            Thread.Sleep(3000);
+          }
+        }
+
+        while (true)
+        {
+          try
+          {
+            Directory.Move(
+              pathImage,
+              pathimageOld);
+
+            break;
+          }
+          catch (DirectoryNotFoundException)
+          {
+            break;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "Cannot move new image to old due to {0}:\n{1}",
+              ex.GetType().Name,
+              ex.Message);
+
+            Thread.Sleep(3000);
+          }
+        }
+
+        Directory.CreateDirectory(pathImage);
+
+        string pathimageHeaderchain = Path.Combine(
+          pathImage,
+          "ImageHeaderchain");
+
+        using (var fileImageHeaderchain =
+          new FileStream(
+            pathimageHeaderchain,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 65536))
+        {
+          Header header = HeaderGenesis.HeaderNext;
+
+          while (header != null)
+          {
+            byte[] headerBytes = header.GetBytes();
+
+            fileImageHeaderchain.Write(
+              headerBytes, 0, headerBytes.Length);
+
+            header = header.HeaderNext;
+          }
+        }
+
+        File.WriteAllBytes(
+          Path.Combine(
+            pathImage,
+            FileNameIndexBlockArchiveImage),
+          BitConverter.GetBytes(indexBlockArchive));
+
+        using (FileStream stream = new FileStream(
+           Path.Combine(pathImage, "MapBlockHeader"),
+           FileMode.Create,
+           FileAccess.Write))
+        {
+          foreach (KeyValuePair<byte[], int> keyValuePair
+            in MapBlockToArchiveIndex)
+          {
+            stream.Write(
+              keyValuePair.Key,
+              0,
+              keyValuePair.Key.Length);
+
+            byte[] valueBytes = BitConverter.GetBytes(
+              keyValuePair.Value);
+
+            stream.Write(valueBytes, 0, valueBytes.Length);
+          }
+        }
+
+        UTXOTable.CreateImage(pathImage);
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine(
+          "{0}:\n{1}",
+          ex.GetType().Name,
+          ex.Message);
+      }
+    }
+
+    void CreateBlockArchive()
+    {
+      string pathFileArchive = Path.Combine(
+        PathBlockArchive,
+        IsFork ? NameFork : "",
+        IndexBlockArchive.ToString());
+
+      FileBlockArchive = new FileStream(
+       pathFileArchive,
+       FileMode.Create,
+       FileAccess.Write,
+       FileShare.None,
+       bufferSize: 65536);
+
+      CountTXsArchive = 0;
+    }
+
+
+    bool IsFork;
+
+    async Task<bool> TryFork(
+      int heightAncestor, 
+      byte[] hashAncestor)
+    {
+      IsFork = true;
+
+      await LoadImage(
+         heightAncestor,
+         hashAncestor);
+
+      if(Height == heightAncestor)
+      {
+        return true;
+      }
+
+      IsFork = false;
+      return false;
+    }
+
+    void DismissFork()
+    {
+      IsFork = false;
+    }
+
+    void Reorganize()
+    {
+      string pathImageFork = Path.Combine(
+        NameFork, 
+        NameImage);
+
+      if(Directory.Exists(pathImageFork))
+      {
+        while (true)
+        {
+          try
+          {
+            Directory.Delete(
+              NameImage,
+              true);
+
+            Directory.Move(
+              pathImageFork,
+              NameImage);
+
+            break;
+          }
+          catch (DirectoryNotFoundException)
+          {
+            break;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "{0} when attempting to delete directory:\n{1}",
+              ex.GetType().Name,
+              ex.Message);
+
+            Thread.Sleep(3000);
+          }
+        }
+
+      }
+      
+      string pathImageForkOld = Path.Combine(
+        NameFork,
+        NameImage,
+        NameOld);
+
+      string pathImageOld = Path.Combine(
+        NameImage,
+        NameOld);
+
+      if (Directory.Exists(pathImageForkOld))
+      {
+        while (true)
+        {
+          try
+          {
+            Directory.Delete(
+              pathImageOld,
+              true);
+
+            Directory.Move(
+              pathImageForkOld,
+              pathImageOld);
+
+            break;
+          }
+          catch (DirectoryNotFoundException)
+          {
+            break;
+          }
+          catch (Exception ex)
+          {
+            Console.WriteLine(
+              "{0} when attempting to delete directory:\n{1}",
+              ex.GetType().Name,
+              ex.Message);
+
+            Thread.Sleep(3000);
+          }
+        }
+      }
+
+      var dirArchiveFork = new DirectoryInfo(PathBlockArchiveFork);
+
+      string filename = Path.GetFileName(FileBlockArchive.Name);
+      FileBlockArchive.Dispose();
+      
+      foreach (FileInfo archiveFork in dirArchiveFork.GetFiles())
+      {
+        archiveFork.MoveTo(PathBlockArchive);
+      }
+
+      OpenBlockArchive();
+
+      Directory.Delete(PathBlockArchiveFork);
+      DismissFork();
+    }
+        
+
+    bool IsInserterCompleted;
+    Dictionary<int, BlockLoad> QueueBlockArchives =
+      new Dictionary<int, BlockLoad>();
+    readonly object LOCK_QueueBlockArchives = new object();
+
+    async Task StartLoader()
+    {
+      var parser = new UTXOTable.BlockParser();
+
+    LABEL_LoadBlockArchive:
+
+      var blockArchiveLoad = new BlockLoad();
+
+      lock (LOCK_IndexBlockArchiveLoad)
+      {
+        blockArchiveLoad.Index = IndexBlockArchiveLoad;
+        IndexBlockArchiveLoad += 1;
+      }
+
+      string pathFile = Path.Combine(
+        PathBlockArchive,
+        blockArchiveLoad.Index.ToString());
+
+      try
+      {
+        byte[] bytesFile = File.ReadAllBytes(pathFile);
+        int startIndex = 0;
+        Block block;
+
+        while (startIndex < bytesFile.Length)
+        {
+          block = parser.ParseBlock(
+            bytesFile,
+            ref startIndex);
+
+          blockArchiveLoad.InsertBlock(block);
+        }
+
+        blockArchiveLoad.IsInvalid = false;
+      }
+      catch (Exception ex)
+      {
+        blockArchiveLoad.IsInvalid = true;
+
+        string.Format(
+          "Loader throws exception {0} \n" +
+          "when parsing file {1}",
+          pathFile,
+          ex.Message)
+          .Log(LogFile);
+      }
+
+      while (true)
+      {
+        if (IsInserterCompleted)
+        {
+          return;
+        }
+
+        if (QueueLoader.Count < COUNT_LOADER_TASKS)
+        {
+          lock (LOCK_QueueBlockArchives)
+          {
+            if (blockArchiveLoad.Index == IndexBlockArchiveQueue)
+            {
+              break;
+            }
+
+            if (QueueBlockArchives.Count <= COUNT_LOADER_TASKS)
+            {
+              QueueBlockArchives.Add(
+                blockArchiveLoad.Index,
+                blockArchiveLoad);
+
+              if (blockArchiveLoad.IsInvalid)
+              {
+                return;
+              }
+
+              goto LABEL_LoadBlockArchive;
+            }
+          }
+        }
+
+        await Task.Delay(2000).ConfigureAwait(false);
+      }
+
+      while (true)
+      {
+        QueueLoader.Post(blockArchiveLoad);
+
+        if (blockArchiveLoad.IsInvalid)
+        {
+          return;
+        }
+
+        lock (LOCK_QueueBlockArchives)
+        {
+          IndexBlockArchiveQueue += 1;
+
+          if (QueueBlockArchives.TryGetValue(
+            IndexBlockArchiveQueue,
+            out blockArchiveLoad))
+          {
+            QueueBlockArchives.Remove(
+              blockArchiveLoad.Index);
+          }
+          else
+          {
+            goto LABEL_LoadBlockArchive;
+          }
+        }
+      }
+    }
+
   }
 }

@@ -360,9 +360,12 @@ namespace BToken.Chaining
             headerRoot,
             Blockchain.Height + 1);
 
-          if(!await TrySynchronizeUTXO(
-            headerRoot, 
-            peer))
+
+          bool dataCorrupted = await SynchronizeUTXO(
+            headerRoot,
+            peer);
+
+          if (dataCorrupted)
           {
             await Blockchain.LoadImage();
           }
@@ -386,16 +389,14 @@ namespace BToken.Chaining
 
         if (difficultyFork > difficultyOld)
         {
-          await Blockchain.LoadImage(
+          if(!await Blockchain.TryFork(
              heightAncestor,
-             headerRoot.HashPrevious);
-
-          if (Blockchain.Height != heightAncestor)
+             headerRoot.HashPrevious))
           {
             goto LABEL_SynchronizeWithPeer;
           }
 
-          bool dataCorrupted = await TrySynchronizeUTXO(
+          bool dataCorrupted = await SynchronizeUTXO(
             headerRoot, 
             peer);
 
@@ -403,11 +404,12 @@ namespace BToken.Chaining
             dataCorrupted || 
             Blockchain.Difficulty <= difficultyOld)
           {
+            Blockchain.DismissFork();
             await Blockchain.LoadImage();
           }
           else
           {
-            Blockchain.Archiver.Reorganize();
+            Blockchain.Reorganize();
           }
         }
         else if (difficultyFork < difficultyOld)
@@ -439,7 +441,7 @@ namespace BToken.Chaining
       Dictionary<int, BlockDownload> DownloadsAwaiting =
         new Dictionary<int, BlockDownload>();
 
-      async Task<bool> TrySynchronizeUTXO(
+      async Task<bool> SynchronizeUTXO(
         Header headerRoot,
         Peer peerSyncMaster)
       {
@@ -515,10 +517,10 @@ namespace BToken.Chaining
             if(abortSynchronization)
             {
               Console.WriteLine("Synchronization aborted.");
-              return false;
+              return true;
             }
 
-            return true;
+            return false;
           }
 
           peer = await QueueSynchronizer
@@ -621,8 +623,33 @@ namespace BToken.Chaining
               peer = blockDownload.Peer;
             }
           }
-        } 
+        }
       }
+           
+      bool TryInsertBlocks(BlockDownload blockDownload)
+      {
+        foreach (Block block in blockDownload.Blocks)
+        {
+          Console.WriteLine(
+            "Insert block {0} from download {1}",
+            block.Header.Hash.ToHexString(),
+            blockDownload.Index);
+
+          if (!Blockchain.TryInsertBlock(
+              block,
+              flagValidateHeader: false))
+          {
+            return false;
+          }
+
+          Blockchain.ArchiveBlock(
+              block,
+              UTXOIMAGE_INTERVAL_SYNC);
+        }
+
+        return true;
+      }
+
 
       void StartBlockDownload(Peer peer)
       {
@@ -634,7 +661,9 @@ namespace BToken.Chaining
         else
         {
           peer.BlockDownload = new BlockDownload(
-            IndexBlockDownload,
+            IndexBlockDownload);
+
+          peer.BlockDownload.LoadHeaders(
             ref HeaderLoad,
             peer.CountBlocksLoad);
 
@@ -686,6 +715,13 @@ namespace BToken.Chaining
       void EnqueueBlockDownloadInvalid(
         BlockDownload download)
       {
+        Console.WriteLine(
+          "Enqueue block download {0}",
+          download.Index);
+
+        download.IndexHeaderExpected = 0;
+        download.Blocks.Clear();
+
         int indexdownload = QueueDownloadsInvalid
           .FindIndex(b => b.Index > download.Index);
 
@@ -699,38 +735,9 @@ namespace BToken.Chaining
             indexdownload,
             download);
         }
-
-        download.IndexHeaderExpected = 0;
-        download.Blocks.Clear();
       }
 
-
-
-      bool TryInsertBlocks(BlockDownload blockDownload)
-      {
-        foreach (Block block in blockDownload.Blocks)
-        {
-          Console.WriteLine(
-            "Insert block {0} from download {1}",
-            block.Header.Hash.ToHexString(),
-            blockDownload.Index);
-
-          if(!Blockchain.TryInsertBlock(
-              block,
-              flagValidateHeader: false))
-          {
-            return false;
-          }
-
-          Blockchain.Archiver.ArchiveBlock(
-              block,
-              UTXOIMAGE_INTERVAL_SYNC);
-        }
-
-        return true;
-      }
-          
-
+    
 
       const int PEERS_COUNT_INBOUND = 8;
       TcpListener TcpListener =

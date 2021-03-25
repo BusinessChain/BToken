@@ -225,7 +225,7 @@ namespace BToken.Chaining
 
         if (outputSpendable == null)
         {
-          throw new ChainException("No spendable output found.");
+          throw new ProtocolException("No spendable output found.");
         }
         
         List<byte> tXRaw = new List<byte>();

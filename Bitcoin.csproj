@@ -82,8 +82,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Chaining\Blockchain\BlockArchiveLoad.cs" />
-    <Compile Include="Chaining\Blockchain\BlockArchiver.cs" />
+    <Compile Include="Chaining\Blockchain\BlockLoad.cs" />
     <Compile Include="Chaining\Blockchain\Blockchain.cs" />
     <Compile Include="Chaining\Blockchain\BlockDownload.cs" />
     <Compile Include="Chaining\Blockchain\HeaderDownload.cs" />
@@ -106,7 +105,7 @@
     <Compile Include="Chaining\TXWitness.cs" />
     <Compile Include="Chaining\GenesisBlock.cs" />
     <Compile Include="Chaining\Wallet\WalletUTXO.cs" />
-    <Compile Include="Chaining\ChainException.cs" />
+    <Compile Include="Chaining\ProtocolException.cs" />
     <Compile Include="Utilities\ByteArrayExtensionMethods.cs" />
     <Compile Include="Utilities\EqualityComparerByteArray.cs" />
     <Compile Include="DataTypes\UInt256.cs" />

@@ -11,19 +11,19 @@ namespace BToken.Chaining
     ORPHAN,
     INVALID };
 
-  class ChainException : Exception
+  class ProtocolException : Exception
   {
     public ErrorCode ErrorCode;
     
 
-    public ChainException()
+    public ProtocolException()
     { }
 
-    public ChainException(string message)
+    public ProtocolException(string message)
         : base(message)
     { }
 
-    public ChainException(
+    public ProtocolException(
       string message, 
       ErrorCode errorCode)
         : base(message)
@@ -31,7 +31,7 @@ namespace BToken.Chaining
       ErrorCode = errorCode;
     }
 
-    public ChainException(string message, Exception inner)
+    public ProtocolException(string message, Exception inner)
         : base(message, inner)
     { }
 
