@@ -28,7 +28,7 @@ namespace BToken.Chaining
 
         if (headerLocatorAncestor == null)
         {
-          throw new ChainException(
+          throw new ProtocolException(
             "GetHeaders does not connect to locator.");
         }
 
@@ -38,7 +38,7 @@ namespace BToken.Chaining
       {
         if (!HeaderTip.Hash.IsEqual(header.HashPrevious))
         {
-          throw new ChainException(
+          throw new ProtocolException(
             string.Format(
               "Header insertion out of order. " +
               "Previous header {0}\n Next header: {1}",

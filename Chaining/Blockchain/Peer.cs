@@ -279,7 +279,7 @@ namespace BToken.Chaining
                       RejectMessage.RejectCode.OBSOLETE,
                       rejectionReason));
 
-                  throw new ChainException(
+                  throw new ProtocolException(
                     "Remote peer rejected: " + rejectionReason);
                 }
 
@@ -289,12 +289,12 @@ namespace BToken.Chaining
               case "reject":
                 RejectMessage rejectMessage = new RejectMessage(Payload);
 
-                throw new ChainException(
+                throw new ProtocolException(
                   string.Format("Peer rejected handshake: '{0}'",
                   rejectMessage.RejectionReason));
 
               default:
-                throw new ChainException(string.Format(
+                throw new ProtocolException(string.Format(
                   "Received improper message '{0}' during handshake session.",
                   Command));
             }
@@ -374,7 +374,7 @@ namespace BToken.Chaining
 
           if (PayloadLength > SIZE_MESSAGE_PAYLOAD_BUFFER)
           {
-            throw new ChainException(string.Format(
+            throw new ProtocolException(string.Format(
               "Message payload too big exceeding {0} bytes.",
               SIZE_MESSAGE_PAYLOAD_BUFFER));
           }
@@ -395,7 +395,7 @@ namespace BToken.Chaining
 
           if (checksumMessage != checksumCalculated)
           {
-            throw new ChainException("Invalid Message checksum.");
+            throw new ProtocolException("Invalid Message checksum.");
           }
         }
 
@@ -417,7 +417,7 @@ namespace BToken.Chaining
 
             if (chunkSize == 0)
             {
-              throw new ChainException(
+              throw new ProtocolException(
                 "Stream returns 0 bytes signifying end of stream.");
             }
 
@@ -562,7 +562,7 @@ namespace BToken.Chaining
                           {
                             if (headerDuplicates.Any(h => h.IsEqual(header.Hash)))
                             {
-                              throw new ChainException(
+                              throw new ProtocolException(
                                 string.Format(
                                   "Received duplicate header {0} more than once.",
                                   header.Hash.ToHexString()));
@@ -589,7 +589,7 @@ namespace BToken.Chaining
 
                         if (depthDuplicate == depthDuplicateAcceptedMax)
                         {
-                          throw new ChainException(
+                          throw new ProtocolException(
                             string.Format(
                               "Received duplicate header {0} with depth greater than {1}.",
                               header.Hash.ToHexString(),
@@ -604,7 +604,11 @@ namespace BToken.Chaining
 
                         Blockchain.ValidateHeaders(header);
 
-                        SynchronizeUTXO(header);
+                        await Blockchain.Network
+                          .SynchronizeUTXO(header, this);
+
+                        Blockchain.ReleaseLock();
+
                         break;
                       }
                       else
@@ -671,7 +675,7 @@ namespace BToken.Chaining
                   var invMessage = new InvMessage(Payload);
                   if (invMessage.Inventories.First().IsTX())
                   {
-                    throw new ChainException(
+                    throw new ProtocolException(
                       "Received TX inv message despite TX-disable signaled.");
                   }
 
@@ -699,15 +703,7 @@ namespace BToken.Chaining
              .Log(LogFile);
           }
         }
-
-        async Task SynchronizeUTXO(Header header)
-        {
-          await Blockchain.Network
-            .SynchronizeUTXO(header, this);
-          
-          Blockchain.ReleaseLock();
-        }
-
+        
         
         async Task<Header> GetHeaders(Header header)
         {
@@ -800,7 +796,7 @@ namespace BToken.Chaining
 
             if (headerAncestor == stopHeader)
             {
-              throw new ChainException(
+              throw new ProtocolException(
                 "Received headers do root in locator more than once.");
             }
 

@@ -91,7 +91,7 @@ namespace BToken.Chaining
           (DateTimeOffset.UtcNow.ToUnixTimeSeconds() +
           MAX_FUTURE_TIME_SECONDS))
         {
-          throw new ChainException(
+          throw new ProtocolException(
             string.Format("Timestamp premature {0}",
               new DateTime(unixTimeSeconds).Date));
         }
@@ -101,7 +101,7 @@ namespace BToken.Chaining
 
         if (hash.IsGreaterThan(nBits))
         {
-          throw new ChainException(
+          throw new ProtocolException(
             string.Format("header hash {0} greater than NBits {1}",
               hash.ToHexString(),
               nBits));
@@ -140,7 +140,7 @@ namespace BToken.Chaining
 
           if (!tX.Hash.IsEqual(hashMerkleRoot))
           {
-            throw new ChainException(
+            throw new ProtocolException(
               "Payload merkle root corrupted");
           }
         }
@@ -169,7 +169,7 @@ namespace BToken.Chaining
 
           if (!GetRoot(merkleList).IsEqual(hashMerkleRoot))
           {
-            throw new ChainException(
+            throw new ProtocolException(
               "Payload hash unequal with merkle root.");
           }
         }
@@ -251,7 +251,7 @@ namespace BToken.Chaining
         }
         catch (ArgumentOutOfRangeException)
         {
-          throw new ChainException(
+          throw new ProtocolException(
             "ArgumentOutOfRangeException thrown in ParseTX.");
         }
       }

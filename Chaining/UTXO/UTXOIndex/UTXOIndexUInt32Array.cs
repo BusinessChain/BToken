@@ -192,7 +192,7 @@ namespace BToken.Chaining
         uint mask = (uint)1 << bitIndex;
         if ((uTXO[uintIndex] & mask) != 0x00)
         {
-          throw new ChainException(
+          throw new ProtocolException(
             string.Format(
               "Output index {0} already spent.",
               outputIndex),

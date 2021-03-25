@@ -23,12 +23,15 @@ namespace BToken.Chaining
         
 
         public BlockDownload(
-          int index,
+          int index)
+        {
+          Index = index;
+        }
+
+        public void LoadHeaders(
           ref Header headerLoad,
           int countMax)
         {
-          Index = index;
-          
           do
           {
             HeadersExpected.Add(headerLoad);
@@ -40,10 +43,15 @@ namespace BToken.Chaining
 
         public void InsertBlock(Block block)
         {
+          Console.WriteLine(
+            "Insert block {0} into download {1}",
+            block.Header.Hash.ToHexString(),
+            Index);
+
           if (!block.Header.Hash.IsEqual(
             HeadersExpected[IndexHeaderExpected].Hash))
           {
-            throw new ChainException(string.Format(
+            throw new ProtocolException(string.Format(
               "Unexpected block header {0} in blockParser {1}. \n" +
               "Excpected {2}.",
               block.Header.Hash.ToHexString(),
